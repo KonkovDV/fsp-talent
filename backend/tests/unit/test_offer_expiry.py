@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from app.services.offers import expire_if_stale
+from app.services.offers import expire_if_stale, expire_stale
 
 
 def _offer(status="pending", expires_at=None):
@@ -22,3 +22,15 @@ def test_fresh_pending_and_terminal_states_stay():
     assert accepted.status == "accepted"
     naive = _offer(expires_at=datetime.now() - timedelta(days=2))
     assert expire_if_stale(naive) is True
+
+
+def test_every_stale_offer_expires_not_only_the_first():
+    now = datetime.now(timezone.utc)
+    rows = [
+        _offer(expires_at=now - timedelta(days=1)),
+        _offer(expires_at=now - timedelta(days=2)),
+        _offer(expires_at=now + timedelta(days=1)),
+        _offer(expires_at=now - timedelta(days=3)),
+    ]
+    assert expire_stale(rows, now) is True
+    assert [row.status for row in rows] == ["expired", "expired", "pending", "expired"]

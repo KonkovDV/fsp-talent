@@ -22,3 +22,12 @@ def expire_if_stale(offer, now: datetime | None = None) -> bool:
         return False
     offer.status = "expired"
     return True
+
+
+def expire_stale(offers, now: datetime | None = None) -> bool:
+    """Expire every stale pending offer. A short-circuit any() would leave the rest pending."""
+    changed = False
+    for offer in offers:
+        if expire_if_stale(offer, now):
+            changed = True
+    return changed

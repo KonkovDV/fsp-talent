@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.models import AccessLog, Employer, Offer, Participant
-from app.services.offers import expire_if_stale
+from app.services.offers import expire_if_stale, expire_stale
 
 router = APIRouter(prefix="/offers", tags=["offers"])
 
@@ -75,7 +75,7 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
 @router.get("/")
 async def list_my_offers(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
     rows = list(await db.scalars(select(Offer).where(Offer.employer_id == _eid(current)).order_by(Offer.created_at.desc())))
-    if any(expire_if_stale(o) for o in rows):
+    if expire_stale(rows):
         await db.commit()
     return [_offer_out(o) for o in rows]
 

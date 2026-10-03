@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.models import ConsentLog, Offer, Participant
 from app.models.participant import Result, Skill
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
-from app.services.offers import expire_if_stale
+from app.services.offers import expire_if_stale, expire_stale
 from app.services.profile import rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
 from app.services.skills import normalize_skill
@@ -153,7 +153,7 @@ async def get_my_offers(current: dict = Depends(get_current_participant), db: As
     rows = list(await db.scalars(
         select(Offer).where(Offer.candidate_id == _pid(current)).options(selectinload(Offer.employer))
         .order_by(Offer.created_at.desc())))
-    changed = any(expire_if_stale(o) for o in rows)
+    changed = expire_stale(rows)
     if changed:
         await db.commit()
     return [{

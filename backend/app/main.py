@@ -13,8 +13,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger(__name__)
 
 
+# These strings are in the repo. A token signed with either of them can be forged by anyone who cloned it.
+_PUBLISHED_SECRETS = frozenset({
+    "change-me-32-chars-minimum-secret",
+    "change-me-use-openssl-rand-hex-32",
+})
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.SECRET_KEY in _PUBLISHED_SECRETS:
+        raise RuntimeError("SECRET_KEY is a published placeholder. Set a private value in .env before starting the API.")
     logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")
     yield
     logger.info("Shutting down")
