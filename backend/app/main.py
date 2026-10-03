@@ -1,69 +1,142 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+"""
+FSP Talent Platform -- FastAPI application entry point.
+
+Middleware stack (outermost to innermost)
+-----------------------------------------
+1. CORSMiddleware          -- allow configured origins
+2. RequestIDMiddleware     -- attach X-Request-ID to every request/response
+3. SlowAPI / Limiter       -- rate limiting (applied per-route via decorator)
+4. Route handlers
+
+Rate limits
+-----------
+* /api/v1/auth/*  : 10 requests/minute per IP  (brute-force protection)
+* Default         : 60 requests/minute per IP
+
+Health check
+------------
+GET /health  ->  {status, version, timestamp}  (no auth required)
+GET /docs    ->  Swagger UI (always enabled; guard with network policy in prod)
+"""
+from __future__ import annotations
+
 import logging
-import time
+import uuid
+from datetime import datetime, timezone
 
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.api.v1 import auth, candidates, employers, offers, participants, public, search
 from app.core.config import settings
-from app.api.v1.router import api_router
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Rate limiter (SlowAPI -- thin wrapper over limits library)
+# ---------------------------------------------------------------------------
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")
-    yield
-    logger.info("Shutting down")
-
+# ---------------------------------------------------------------------------
+# Application factory
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="FSP Talent API",
-    description="LCT-2026: AI-powered talent marketplace for Federal Sports Programming Federation",
-    version=settings.VERSION,
-    lifespan=lifespan,
+    title="FSP Talent Platform",
+    version="0.3.0",
+    description=(
+        "Hiring marketplace for Federation of Sports Programming athletes. "
+        "Privacy-first: employer search results are anonymised; "
+        "contact details released only after candidate acceptance."
+    ),
     docs_url="/docs",
     redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
-# --- Middleware ---
+# Attach SlowAPI state so that per-route @limiter.limit() decorators work
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-@app.middleware("http")
-async def request_timing(request: Request, call_next):
-    start = time.perf_counter()
-    response = await call_next(request)
-    duration_ms = (time.perf_counter() - start) * 1000
-    response.headers["X-Response-Time"] = f"{duration_ms:.1f}ms"
-    if duration_ms > 2000:
-        logger.warning(f"Slow request {request.method} {request.url.path}: {duration_ms:.0f}ms")
-    return response
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Attach a unique request ID to every request and echo it in the response.
+
+    Priority: X-Request-ID header from caller > auto-generated UUID4.
+    Useful for distributed tracing across API gateway logs.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response: Response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
-# --- Routes ---
-app.include_router(api_router)
+app.add_middleware(RequestIDMiddleware)
+
+# ---------------------------------------------------------------------------
+# Routers
+# ---------------------------------------------------------------------------
+
+API_PREFIX = "/api/v1"
+
+app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(participants.router, prefix=API_PREFIX)
+app.include_router(employers.router, prefix=API_PREFIX)
+app.include_router(offers.router, prefix=API_PREFIX)
+app.include_router(candidates.router, prefix=API_PREFIX)
+app.include_router(search.router, prefix=API_PREFIX)
+app.include_router(public.router, prefix=API_PREFIX)
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
 
 
-@app.get("/health", tags=["health"])
-async def health():
-    return {"status": "ok", "version": settings.VERSION, "mode": settings.FSP_MODE}
+@app.get("/health", tags=["infra"], summary="Health check")
+async def health() -> dict:
+    """Lightweight health probe for load-balancer / k8s liveness checks."""
+    return {
+        "status": "ok",
+        "version": app.version,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"Unhandled error on {request.method} {request.url.path}")
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error"},
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    logger.info(
+        "FSP Talent Platform v%s started | mode=%s ai=%s embeddings=%s",
+        app.version,
+        settings.FSP_MODE,
+        settings.AI_ENABLED,
+        settings.EMBEDDINGS_MODE,
     )
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    logger.info("FSP Talent Platform shutting down.")

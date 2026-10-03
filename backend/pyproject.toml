@@ -3,53 +3,81 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "fsp-talent"
-version = "1.1.0"
-description = "LCT-2026: FSP Talent Marketplace"
+name = "fsp-talent-backend"
+version = "0.3.0"
 requires-python = ">=3.12"
+description = "FSP Talent Platform backend -- hiring marketplace for FSP athletes"
+readme = "README.md"
+license = { text = "MIT" }
+
 dependencies = [
-    "fastapi[standard]>=0.115",
+    # Web framework
+    "fastapi[standard]>=0.115,<1.0",
     "uvicorn[standard]>=0.30",
-    "sqlalchemy[asyncio]>=2.0",
-    "asyncpg>=0.29",
+    # Rate limiting
+    "slowapi>=0.1.9",
+    # Database
+    "sqlalchemy[asyncio]>=2.0,<3.0",
     "alembic>=1.13",
+    "asyncpg>=0.29",
     "pgvector>=0.3",
-    "redis[asyncio]>=5.0",
-    "celery[redis]>=5.4",
-    "pydantic>=2.7",
-    "pydantic-settings>=2.3",
-    "python-jose[cryptography]>=3.3",
-    "bcrypt>=4.0",
-    "httpx>=0.27",
+    # Auth & crypto
+    "pyjwt>=2.8",
+    "bcrypt>=4.1",
     "cryptography>=42",
+    # Serialisation
+    "pydantic>=2.7,<3.0",
+    "pydantic-settings>=2.3",
+    # Cache / tasks
+    "redis>=5.0",
+    "celery[redis]>=5.4",
+    # HTTP client (for GigaChat OAuth inside SDK)
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+llm = [
+    # GigaChat SDK -- imported lazily in services/ai/assistant.py
+    # Install with: pip install 'fsp-talent-backend[llm]'
+    "gigachat>=0.1.39",
+]
+security = [
+    # Argon2 password hashing (alternative to bcrypt, stronger defaults)
+    "argon2-cffi>=23.1",
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "httpx>=0.27",
+    "factory-boy>=3.3",
+    "faker>=25.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "types-bcrypt",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
-[project.optional-dependencies]
-test = [
-    "pytest>=8.2",
-    "pytest-asyncio>=0.23",
-    "pytest-cov>=5.0",
-    "httpx>=0.27",
-]
-ai = [
-    "sentence-transformers>=3.0",
-    "torch>=2.3",
-]
-llm = ["gigachat>=0.1.39"]
-dev = ["ruff>=0.4", "mypy>=1.10"]
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+ignore = ["ANN101", "ANN102", "ANN401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--tb=short -q"
 
-[tool.ruff]
-line-length = 120
-target-version = "py312"
-
-[tool.mypy]
-python_version = "3.12"
-strict = false
-ignore_missing_imports = true
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/fsp/mock.py", "tests/*"]
