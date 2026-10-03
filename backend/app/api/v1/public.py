@@ -52,6 +52,9 @@ async def verify_stored(credential_id: uuid.UUID, db: AsyncSession = Depends(get
     vc = await db.get(VerifiableCredential, credential_id)
     if not vc:
         raise HTTPException(404, "Удостоверение не найдено")
+    visible = await db.scalar(select(Participant.id).where(Participant.id == vc.participant_id, *_public_filter()))
+    if not visible:
+        raise HTTPException(404, "Удостоверение не найдено")
     return {"valid": verify_credential(vc.credential_json), "credential": vc.credential_json}
 
 

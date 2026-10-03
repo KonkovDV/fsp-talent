@@ -18,3 +18,6 @@ def test_skills_outrank_discipline_and_declaration_outranks_experience():
     unknown = assign_category([], [])
     assert unknown["primary_role"] == "fullstack"
     assert unknown["grade_source"] == "default"
+    # Contest LCB never becomes an HR grade, including a near-certain top result.
+    rookie = assign_category(["Python", "FastAPI"], [{"discipline": "algorithmic", "lcb": 0.95}], experience_years=1)
+    assert rookie["grade"] == "junior" and rookie["grade_source"] == "experience"

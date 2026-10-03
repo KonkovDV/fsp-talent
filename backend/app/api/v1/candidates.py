@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models import ConsentLog, Offer, Participant
 from app.models.participant import Result, Skill
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
+from app.services.offers import expire_if_stale
 from app.services.profile import rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
 from app.services.skills import normalize_skill
@@ -24,12 +25,6 @@ def _pid(current: dict) -> uuid.UUID:
         return uuid.UUID(current["sub"])
     except ValueError as e:
         raise HTTPException(401, "Invalid token subject") from e
-
-
-def _aware(dt: datetime | None) -> datetime | None:
-    if dt is None or dt.tzinfo is not None:
-        return dt
-    return dt.replace(tzinfo=timezone.utc)
 
 
 @router.get("/me")
@@ -155,14 +150,18 @@ async def get_my_results(current: dict = Depends(get_current_participant), db: A
 
 @router.get("/me/offers")
 async def get_my_offers(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
-    rows = await db.scalars(
+    rows = list(await db.scalars(
         select(Offer).where(Offer.candidate_id == _pid(current)).options(selectinload(Offer.employer))
-        .order_by(Offer.created_at.desc()))
+        .order_by(Offer.created_at.desc())))
+    changed = any(expire_if_stale(o) for o in rows)
+    if changed:
+        await db.commit()
     return [{
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
-        "status": o.status, "created_at": o.created_at.isoformat(), "expires_at": o.expires_at.isoformat(),
+        "status": o.status, "created_at": o.created_at.isoformat(),
+        "expires_at": o.expires_at.isoformat() if o.expires_at else None,
     } for o in rows]
 
 
@@ -178,9 +177,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         raise HTTPException(404, "Оффер не найден")
     if offer.status != "pending":
         raise HTTPException(409, "Оффер уже обработан")
-    expires = _aware(offer.expires_at)
-    if expires and expires < datetime.now(timezone.utc):
-        offer.status = "expired"
+    if expire_if_stale(offer):
         await db.commit()
         raise HTTPException(409, "Срок оффера истёк")
     if body.action == "accept":
@@ -190,5 +187,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:
         offer.status = "rejected"
+        db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
+                          actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     await db.commit()
     return {"status": offer.status}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMyProfile, parseResume, updateMyProfile, updateVisibility } from '../../api/client'
+import { apiError, getMyProfile, parseResume, updateMyProfile, updateVisibility } from '../../api/client'
 import { Eye, EyeOff } from 'lucide-react'
 
 const GRADES = ['', 'junior', 'middle', 'senior', 'lead']
@@ -44,7 +44,7 @@ export default function CandidateProfile() {
       public_profile: publicProfile,
     }),
     onSuccess: () => { setNote('Сохранено'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
-    onError: (error: { response?: { data?: { detail?: string } } }) => setNote(error.response?.data?.detail ?? 'Ошибка сохранения'),
+    onError: (error: unknown) => setNote(apiError(error, 'Ошибка сохранения')),
   })
   const visibility = useMutation({
     mutationFn: (value: boolean) => updateVisibility(value),

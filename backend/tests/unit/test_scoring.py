@@ -50,6 +50,17 @@ def test_rank_ladder_and_small_field_downgrade():
     assert event_quality(1, 100, "russia_championship") > event_quality(1, 100, "regional")
 
 
+def test_more_equal_evidence_raises_the_lower_bound():
+    ref = date(2026, 10, 1)
+    one = compute_discipline_score([ev(1, when=ref)], reference_date=ref)
+    two = compute_discipline_score(
+        [ev(1, when=ref), {**ev(1, when=ref), "id": "same-quality"}], reference_date=ref)
+    assert two["sigma"] < one["sigma"]
+    assert two["confidence"] > one["confidence"]
+    assert two["lcb"] > one["lcb"]
+    assert two["score"] > one["score"]
+
+
 def test_half_life_is_eighteen_months():
     ref = date(2026, 10, 1)
     fresh = event_weight(ref, 1, ref)
