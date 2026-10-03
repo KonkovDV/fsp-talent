@@ -1,194 +1,157 @@
-import uuid
-from datetime import datetime, timezone
-from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from app.api.deps import get_current_participant
-from app.core.database import get_db
-from app.models import ConsentLog, Offer, Participant
-from app.models.participant import Result, Skill
-from app.services.categorization import DISCIPLINE_LABELS, GRADES
-from app.services.profile import rebuild_profile
-from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
-from app.services.skills import normalize_skill
+"""
+Candidate-facing endpoints: view incoming offers and respond to them.
 
+Business rules
+--------------
+* A candidate may only see offers addressed to them.
+* Acceptance reveals contact details to the employer (logged in consent_logs).
+* Rejection is also logged for audit trail and GDPR compliance.
+* Expired offers are lazily marked as 'expired' on next list view.
+"""
+from __future__ import annotations
+import logging
+from datetime import datetime, timezone
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.security import get_current_participant
+from app.models.consent_log import ConsentLog
+from app.models.offer import Offer
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 
-def _pid(current: dict) -> uuid.UUID:
-    try:
-        return uuid.UUID(current["sub"])
-    except ValueError as e:
-        raise HTTPException(401, "Invalid token subject") from e
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
+class OfferSummary(BaseModel):
+    id: UUID
+    employer_id: UUID
+    salary_from_gross: int
+    salary_to_gross: int
+    currency: str
+    role: str
+    work_format: str
+    message: str | None
+    status: str
+    created_at: datetime
+    expires_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
-def _aware(dt: datetime | None) -> datetime | None:
-    if dt is None or dt.tzinfo is not None:
-        return dt
-    return dt.replace(tzinfo=timezone.utc)
+class RespondBody(BaseModel):
+    action: str  # "accept" | "reject"
 
 
-@router.get("/me")
-async def get_my_profile(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
-    p = await db.scalar(
-        select(Participant).where(Participant.id == _pid(current)).options(
-            selectinload(Participant.discipline_scores), selectinload(Participant.category),
-            selectinload(Participant.results), selectinload(Participant.skills)))
-    if not p:
-        raise HTTPException(404, "Профиль не найден")
-    cat = p.category
-    return {
-        "id": str(p.id), "fsp_id": p.fsp_id, "display_name": p.display_name, "region": p.region,
-        "email": p.email, "telegram": p.telegram, "phone": p.phone,
-        "experience_years": p.experience_years, "declared_grade": p.declared_grade,
-        "is_visible": p.is_visible, "public_profile": p.public_profile,
-        "is_minor": p.is_minor, "minor_consent_given": p.minor_consent_given,
-        "discoverable": p.discoverable,
-        "primary_role": cat.primary_role if cat else None,
-        "grade": cat.grade if cat else None,
-        "grade_source": cat.grade_source if cat else None,
-        "stack": cat.stack if cat else [],
-        "explanation": cat.explanation if cat else [],
-        "skills": [{"name": s.name, "trust_level": s.trust_level, "source_quote": s.source_quote,
-                    "confirmed": s.confirmed} for s in p.skills],
-        "discipline_scores": [
-            {"discipline": ds.discipline, "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
-             "score": ds.score, "sigma": ds.sigma, "lcb": ds.lcb, "confidence": ds.confidence,
-             "best_rank": ds.best_rank, "events_count": ds.events_count}
-            for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)
-        ],
-        "results_count": len(p.results),
-    }
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
-
-class SkillIn(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    source_quote: str | None = Field(None, max_length=500)
-
-
-class ProfileUpdate(BaseModel):
-    experience_years: int | None = Field(None, ge=0, le=50)
-    declared_grade: Literal["junior", "middle", "senior", "lead"] | None = None
-    skills: list[SkillIn] | None = Field(None, max_length=40)
-    email: EmailStr | None = None
-    telegram: str | None = Field(None, max_length=64)
-    phone: str | None = Field(None, max_length=20)
-    public_profile: bool | None = None
-    is_visible: bool | None = None
-    minor_consent_given: bool | None = None
-
-
-@router.put("/me/profile")
-async def update_profile(body: ProfileUpdate, current: dict = Depends(get_current_participant),
-                         db: AsyncSession = Depends(get_db)):
-    p = await db.get(Participant, _pid(current))
-    if not p:
-        raise HTTPException(404, "Профиль не найден")
-    data = body.model_dump(exclude_unset=True)
-    if data.get("public_profile") and p.is_minor:
-        raise HTTPException(403, "Именная страница недоступна для несовершеннолетних")
-    if "declared_grade" in data and data["declared_grade"] not in (*GRADES, None):
-        raise HTTPException(400, "Неизвестный грейд")
-    for field in ("experience_years", "declared_grade", "public_profile", "is_visible", "minor_consent_given"):
-        if field in data:
-            setattr(p, field, data[field])
-    for field in ("email", "telegram", "phone"):
-        if field in data:
-            setattr(p, field, data[field] or None)
-    if "skills" in data:
-        seen: set[str] = set()
-        rows = []
-        for item in data["skills"]:
-            canonical = normalize_skill(item["name"])
-            if not canonical or canonical in seen:
-                continue
-            seen.add(canonical)
-            quote = (item.get("source_quote") or "").strip() or None
-            rows.append(Skill(participant_id=p.id, name=canonical, raw_name=item["name"][:200],
-                              source_quote=quote,
-                              trust_level="resume_confirmed" if quote else "self_reported", confirmed=True))
-        await db.execute(delete(Skill).where(Skill.participant_id == p.id))
-        await db.flush()
-        db.add_all(rows)
-    try:
-        await db.flush()
-    except IntegrityError as e:
-        raise HTTPException(409, "Такой email уже используется") from e
-    await rebuild_profile(db, p)
-    await db.commit()
-    return {"ok": True}
-
-
-class VisibilityUpdate(BaseModel):
-    is_visible: bool
-
-
-@router.patch("/me/visibility")
-async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_current_participant),
-                            db: AsyncSession = Depends(get_db)):
-    p = await db.get(Participant, _pid(current))
-    if not p:
-        raise HTTPException(404, "Профиль не найден")
-    p.is_visible = body.is_visible
-    await db.commit()
-    return {"is_visible": p.is_visible, "discoverable": p.discoverable}
-
-
-@router.get("/me/results")
-async def get_my_results(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
-    rows = await db.scalars(select(Result).where(Result.participant_id == _pid(current)).order_by(Result.event_date.desc()))
-    return [{
-        "id": str(r.id), "event_name": r.event_name, "discipline": r.discipline,
-        "discipline_label": DISCIPLINE_LABELS.get(r.discipline, r.discipline),
-        "competition_status": r.competition_status,
-        "status_label": STATUS_LABELS.get(r.competition_status, r.competition_status),
-        "place": r.place, "total_participants": r.total_participants,
-        "rank_equivalent": rank_equivalent(r.competition_status, r.place, r.total_participants),
-        "is_team": r.is_team, "team_size": r.team_size, "event_date": r.event_date.isoformat(),
-        "protocol_url": r.protocol_url, "trust_level": r.trust_level,
-    } for r in rows]
-
-
-@router.get("/me/offers")
-async def get_my_offers(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+@router.get("/offers", response_model=list[OfferSummary])
+async def list_offers(
+    participant=Depends(get_current_participant),
+    db: AsyncSession = Depends(get_db),
+) -> list[OfferSummary]:
+    """List all offers received by the current candidate."""
     rows = await db.scalars(
-        select(Offer).where(Offer.candidate_id == _pid(current)).options(selectinload(Offer.employer))
-        .order_by(Offer.created_at.desc()))
-    return [{
-        "id": str(o.id), "company": o.employer.company_name, "role": o.role,
-        "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
-        "currency": o.currency, "work_format": o.work_format, "message": o.message,
-        "status": o.status, "created_at": o.created_at.isoformat(), "expires_at": o.expires_at.isoformat(),
-    } for o in rows]
+        select(Offer)
+        .where(Offer.candidate_id == participant.id)
+        .order_by(Offer.created_at.desc())
+    )
+    offers = list(rows)
+
+    # Lazy expiry: mark stale pending offers without a background job
+    now = datetime.now(timezone.utc)
+    changed = False
+    for offer in offers:
+        if offer.status == "pending" and offer.expires_at < now:
+            offer.status = "expired"
+            changed = True
+    if changed:
+        await db.commit()
+
+    return [OfferSummary.model_validate(o) for o in offers]
 
 
-class RespondIn(BaseModel):
-    action: Literal["accept", "reject"]
+@router.post("/offers/{offer_id}/respond", response_model=OfferSummary)
+async def respond_to_offer(
+    offer_id: UUID,
+    body: RespondBody,
+    participant=Depends(get_current_participant),
+    db: AsyncSession = Depends(get_db),
+) -> OfferSummary:
+    """Accept or reject an incoming offer.
 
+    Both actions are written to consent_logs for audit / GDPR compliance.
+    Only participant_id is stored -- no personal contact data.
+    """
+    if body.action not in ("accept", "reject"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="action dolzhen byt' 'accept' ili 'reject'.",
+        )
 
-@router.post("/me/offers/{offer_id}/respond")
-async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict = Depends(get_current_participant),
-                           db: AsyncSession = Depends(get_db)):
-    offer = await db.get(Offer, offer_id)
-    if not offer or offer.candidate_id != _pid(current):
-        raise HTTPException(404, "Оффер не найден")
+    offer: Offer | None = await db.get(Offer, offer_id)
+    if not offer or offer.candidate_id != participant.id:
+        raise HTTPException(status_code=404, detail="Predlozhenie ne naydeno.")
+
     if offer.status != "pending":
-        raise HTTPException(409, "Оффер уже обработан")
-    expires = _aware(offer.expires_at)
-    if expires and expires < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Predlozhenie uzhe obrabotano: {offer.status}.",
+        )
+
+    now = datetime.now(timezone.utc)
+    if offer.expires_at < now:
         offer.status = "expired"
         await db.commit()
-        raise HTTPException(409, "Срок оффера истёк")
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Srok dejstviya predlozheniya istek.",
+        )
+
     if body.action == "accept":
         offer.status = "accepted"
-        offer.contacts_revealed_at = datetime.now(timezone.utc)
-        db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
-                          actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
-    else:
+        db.add(
+            ConsentLog(
+                participant_id=participant.id,
+                actor_id=participant.id,
+                action="offer_accepted",
+                offer_id=offer.id,
+            )
+        )
+        logger.info(
+            "Offer accepted participant=%s offer=%s employer=%s",
+            participant.id,
+            offer.id,
+            offer.employer_id,
+        )
+    else:  # reject
         offer.status = "rejected"
+        # Log rejection: important for GDPR audit trail (right to know)
+        db.add(
+            ConsentLog(
+                participant_id=participant.id,
+                actor_id=participant.id,
+                action="offer_rejected",
+                offer_id=offer.id,
+            )
+        )
+        logger.info(
+            "Offer rejected participant=%s offer=%s employer=%s",
+            participant.id,
+            offer.id,
+            offer.employer_id,
+        )
+
     await db.commit()
-    return {"status": offer.status}
+    await db.refresh(offer)
+    return OfferSummary.model_validate(offer)
