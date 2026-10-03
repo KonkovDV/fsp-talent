@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --fsp-violet: #402FFF;
+    --fsp-red: #EC1D35;
+    --fsp-dark: #1B1C21;
+  }
+  html { font-family: 'Inter', system-ui, sans-serif; }
+  body { @apply bg-fsp-light-bg text-fsp-dark; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-fsp-violet text-white px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-fsp-violet-dark transition-colors disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply border border-fsp-violet text-fsp-violet px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-fsp-violet hover:text-white transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-6;
+  }
+  .card-hover {
+    @apply card hover:shadow-card-hover transition-shadow cursor-pointer;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-lead   { @apply badge bg-purple-100 text-purple-800; }
+  .badge-senior { @apply badge bg-blue-100 text-blue-800; }
+  .badge-middle { @apply badge bg-green-100 text-green-800; }
+  .badge-junior { @apply badge bg-gray-100 text-gray-700; }
+}

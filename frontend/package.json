@@ -1,0 +1,39 @@
+{
+  "name": "fsp-talent-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext ts,tsx"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "zustand": "^4.5.4",
+    "@tanstack/react-query": "^5.56.2",
+    "axios": "^1.7.7",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.2",
+    "lucide-react": "^0.447.0",
+    "recharts": "^2.12.7",
+    "react-hook-form": "^7.53.0",
+    "zod": "^3.23.8",
+    "@hookform/resolvers": "^3.9.0",
+    "date-fns": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.5.4",
+    "vite": "^6.0.0",
+    "eslint": "^9.11.1"
+  }
+}

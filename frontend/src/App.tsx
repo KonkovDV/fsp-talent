@@ -1,0 +1,53 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from './store/authStore'
+import Layout from './components/Layout'
+import LandingPage from './pages/LandingPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import CandidateDashboard from './pages/candidate/Dashboard'
+import CandidateProfile from './pages/candidate/Profile'
+import CandidateResults from './pages/candidate/Results'
+import CandidateOffers from './pages/candidate/Offers'
+import EmployerDashboard from './pages/employer/Dashboard'
+import EmployerSearch from './pages/employer/Search'
+import EmployerOffers from './pages/employer/Offers'
+import LeaderboardPage from './pages/LeaderboardPage'
+import PublicProfile from './pages/PublicProfile'
+
+function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'participant' | 'employer' }) {
+  const { token, userRole } = useAuthStore()
+  if (!token) return <Navigate to="/login" replace />
+  if (userRole !== role) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/p/:id" element={<PublicProfile />} />
+
+        {/* Candidate area */}
+        <Route path="/candidate" element={<ProtectedRoute role="participant"><Layout /></ProtectedRoute>}>
+          <Route index element={<CandidateDashboard />} />
+          <Route path="profile" element={<CandidateProfile />} />
+          <Route path="results" element={<CandidateResults />} />
+          <Route path="offers" element={<CandidateOffers />} />
+        </Route>
+
+        {/* Employer area */}
+        <Route path="/employer" element={<ProtectedRoute role="employer"><Layout /></ProtectedRoute>}>
+          <Route index element={<EmployerDashboard />} />
+          <Route path="search" element={<EmployerSearch />} />
+          <Route path="offers" element={<EmployerOffers />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
