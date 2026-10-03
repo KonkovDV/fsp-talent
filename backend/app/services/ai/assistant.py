@@ -2,6 +2,14 @@
 AI assistant (advisor only). Deterministic extraction is always the baseline; an LLM may
 propose extra skills, but each must normalize to the taxonomy and quote the source text
 verbatim, otherwise it is dropped. The candidate confirms every skill before it is used.
+
+GigaChat integration notes
+--------------------------
+* Use `async with GigaChat(...)` — it handles OAuth token refresh and connection pooling.
+* `achat` accepts a `gigachat.models.Chat` model, NOT a plain dict.
+* `GIGACHAT_CREDENTIALS` = client credentials (Base64-encoded client_id:client_secret)
+  from https://developers.sber.ru/studio.
+* Scope GIGACHAT_API_PERS = personal; GIGACHAT_API_CORP = corporate.
 """
 from __future__ import annotations
 import json
@@ -18,24 +26,41 @@ _RESUME_PROMPT = (
     '{"skill": "название", "quote": "точная цитата из текста"}. Цитата должна дословно '
     "встречаться в тексте. Не придумывай навыков, которых нет в тексте."
 )
-_GRADE_WORDS = {"junior": ("junior", "джун", "джуниор", "стажер", "стажёр", "intern"),
-                "middle": ("middle", "мидл"), "senior": ("senior", "сеньор", "синьор"),
-                "lead": ("lead", "тимлид", "лид")}
-_ROLE_WORDS = {"backend": ("backend", "бэкенд", "бекенд"), "frontend": ("frontend", "фронтенд"),
-               "fullstack": ("fullstack", "фулстек", "full-stack"), "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
-               "devops": ("devops", "девопс", "sre"), "security": ("безопасност", "пентест", "security", "иб"),
-               "embedded": ("embedded", "встраиваем", "микроконтроллер"), "mobile": ("mobile", "мобильн", "ios", "android")}
-_DISC_WORDS = {"algorithmic": ("алгоритм", "олимпиад"), "product": ("продуктов", "хакатон"),
-               "security": ("ctf", "кибербез"), "bas": ("бас", "беспилот", "дрон"),
-               "robotics": ("робот",)}
+_GRADE_WORDS = {
+    "junior": ("junior", "джун", "джуниор", "стажер", "стажёр", "intern"),
+    "middle": ("middle", "мидл"),
+    "senior": ("senior", "сеньор", "синьор"),
+    "lead": ("lead", "тимлид", "лид"),
+}
+_ROLE_WORDS = {
+    "backend": ("backend", "бэкенд", "бекенд"),
+    "frontend": ("frontend", "фронтенд"),
+    "fullstack": ("fullstack", "фулстек", "full-stack"),
+    "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
+    "devops": ("devops", "девопс", "sre"),
+    "security": ("безопасност", "пентест", "security", "иб"),
+    "embedded": ("embedded", "встраиваем", "микроконтроллер"),
+    "mobile": ("mobile", "мобильн", "ios", "android"),
+}
+_DISC_WORDS = {
+    "algorithmic": ("алгоритм", "олимпиад"),
+    "product": ("продуктов", "хакатон"),
+    "security": ("ctf", "кибербез"),
+    "bas": ("бас", "беспилот", "дрон"),
+    "robotics": ("робот",),
+}
 
 
-def _word_hit(text: str, words) -> bool:
-    # long words are stems (prefix match), short ones must be whole words
-    return any(re.search(rf"(?<!\w){re.escape(w)}" + (r"(?!\w)" if len(w) <= 4 else ""), text) for w in words)
+def _word_hit(text: str, words: tuple[str, ...]) -> bool:
+    """Stem-aware word match: short words require whole-word boundaries."""
+    return any(
+        re.search(rf"(?<!\w){re.escape(w)}" + (r"(?!\w)" if len(w) <= 4 else ""), text)
+        for w in words
+    )
 
 
 def parse_query(q: str) -> dict:
+    """Parse a free-form employer search query into structured filters."""
     low = q.lower()
     return {
         "skills": sorted({e.skill for e in extract_skills(q)}),
@@ -46,35 +71,74 @@ def parse_query(q: str) -> dict:
 
 
 async def _llm_skills(text: str) -> list[dict]:
+    """Call GigaChat to extract skills from resume text.
+
+    Uses the official gigachat SDK with:
+    - `async with GigaChat(...)` for proper OAuth lifecycle management
+    - `gigachat.models.Chat` + `Messages` + `MessagesRole` instead of plain dicts
+    """
     from gigachat import GigaChat
-    giga = GigaChat(credentials=settings.GIGACHAT_CREDENTIALS, scope=settings.GIGACHAT_SCOPE,
-                    model=settings.GIGACHAT_MODEL, verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL, timeout=30)
-    try:
-        resp = await giga.achat({"messages": [{"role": "system", "content": _RESUME_PROMPT},
-                                              {"role": "user", "content": text[:8000]}],
-                                 "temperature": 0.1})
-    finally:
-        close = getattr(giga, "aclose", None)
-        if close:
-            await close()
-    content = resp.choices[0].message.content
+    from gigachat.models import Chat, Messages, MessagesRole
+
+    async with GigaChat(
+        credentials=settings.GIGACHAT_CREDENTIALS,
+        scope=settings.GIGACHAT_SCOPE,
+        model=settings.GIGACHAT_MODEL,
+        verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL,
+        timeout=30,
+    ) as giga:
+        response = await giga.achat(
+            Chat(
+                messages=[
+                    Messages(role=MessagesRole.SYSTEM, content=_RESUME_PROMPT),
+                    Messages(role=MessagesRole.USER, content=text[:8000]),
+                ],
+                temperature=0.1,
+            )
+        )
+
+    content = response.choices[0].message.content
     match = re.search(r"\[.*\]", content, re.S)
     return json.loads(match.group(0)) if match else []
 
 
 async def parse_resume(text: str) -> dict:
-    found = {e.skill: {"name": e.skill, "source_quote": e.evidence, "source": "rules"} for e in extract_skills(text)}
+    """Parse a candidate resume: rule-based extraction + optional GigaChat augmentation.
+
+    Every LLM-proposed skill must:
+    1. Normalise to the canonical taxonomy.
+    2. Be grounded in a verbatim quote from the source text.
+    Items failing either check are silently rejected (counted in `llm_rejected`).
+    The candidate must confirm each skill before it is stored.
+    """
+    found = {
+        e.skill: {"name": e.skill, "source_quote": e.evidence, "source": "rules"}
+        for e in extract_skills(text)
+    }
     llm_used, rejected = False, 0
+
     if settings.AI_ENABLED and settings.GIGACHAT_CREDENTIALS:
         try:
             for item in await _llm_skills(text):
-                name, quote = normalize_skill(str(item.get("skill", ""))), str(item.get("quote", ""))
+                name = normalize_skill(str(item.get("skill", "")))
+                quote = str(item.get("quote", ""))
                 if name and quote and is_grounded(quote, text):
-                    found.setdefault(name, {"name": name, "source_quote": quote, "source": "llm"})
+                    found.setdefault(
+                        name,
+                        {"name": name, "source_quote": quote, "source": "llm"},
+                    )
                 else:
                     rejected += 1
             llm_used = True
         except Exception:
-            logger.exception("GigaChat call failed, rules-only result returned")
-    return {"skills": sorted(found.values(), key=lambda s: s["name"]), "llm_used": llm_used,
-            "llm_rejected": rejected, "note": "Подтвердите каждый навык перед сохранением"}
+            logger.exception(
+                "GigaChat call failed — returning rules-only result. "
+                "Check GIGACHAT_CREDENTIALS and GIGACHAT_SCOPE settings."
+            )
+
+    return {
+        "skills": sorted(found.values(), key=lambda s: s["name"]),
+        "llm_used": llm_used,
+        "llm_rejected": rejected,
+        "note": "Подтвердите каждый навык перед сохранением",
+    }
