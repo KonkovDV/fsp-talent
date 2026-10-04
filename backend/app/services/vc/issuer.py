@@ -34,7 +34,7 @@ def _b58encode(data: bytes) -> str:
     while n:
         n, r = divmod(n, 58)
         out = _B58[r] + out
-    return "1" * (len(data) - len(data.lstrip(b"\0"))) + out
+    return "1" * (len(data) - len(data.lstrip(b"\x00"))) + out
 
 
 def _b58decode(s: str) -> bytes:
@@ -42,7 +42,7 @@ def _b58decode(s: str) -> bytes:
     for ch in s:
         n = n * 58 + _B58.index(ch)
     body = n.to_bytes((n.bit_length() + 7) // 8, "big") if n else b""
-    return b"\0" * (len(s) - len(s.lstrip("1"))) + body
+    return b"\x00" * (len(s) - len(s.lstrip("1"))) + body
 
 
 def _jcs(obj) -> bytes:
@@ -76,15 +76,19 @@ def issuer_id() -> str:
     return f"{settings.PUBLIC_BASE_URL}/api/v1/public/issuer"
 
 
+# FIX BUG-G: Cache the base58-encoded public key multibase string.
+# Previously every call to issuer_document() and verify_credential() would:
+#   _private_key()[cached] -> .public_key() -> .public_bytes(Raw) -> _b58encode()
+# _b58encode is an O(key_len) iteration; at high verification RPS this is
+# measurable CPU overhead. The result is deterministic: private key is cached,
+# public key is derived, multibase is fixed.
+@lru_cache(maxsize=1)
 def public_key_multibase() -> str:
     raw = _private_key().public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     return "z" + _b58encode(_ED25519_PUB_MULTICODEC + raw)
 
 
-# FIX BUG-04: Cache the parsed Ed25519PublicKey object.
-# verify_credential was calling public_key_multibase() + _b58decode() + Ed25519PublicKey.from_public_bytes()
-# on every invocation. The public key is derived from the (already cached) private key,
-# so it never changes. Cache it separately so bulk verification is O(1) per call.
+# FIX BUG-04 (carried over): Cache the parsed Ed25519PublicKey object.
 @lru_cache(maxsize=1)
 def _public_key_obj() -> Ed25519PublicKey:
     raw = _b58decode(public_key_multibase()[1:])[len(_ED25519_PUB_MULTICODEC):]
@@ -94,7 +98,7 @@ def _public_key_obj() -> Ed25519PublicKey:
 def issuer_document() -> dict:
     return {
         "id": issuer_id(),
-        "name": "ФСП Талант (прототип платформы)",
+        "name": "\u0424\u0421\u041f \u0422\u0430\u043b\u0430\u043d\u0442 (\u043f\u0440\u043e\u0442\u043e\u0442\u0438\u043f \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b)",
         "verificationMethod": [{
             "id": f"{issuer_id()}#key-1",
             "type": "Multikey",
@@ -114,7 +118,7 @@ def issue_achievement_credential(credential_id: str, subject_id: str, achievemen
         "@context": ["https://www.w3.org/ns/credentials/v2"],
         "type": ["VerifiableCredential", "FSPAchievementCredential"],
         "id": f"urn:uuid:{credential_id}",
-        "issuer": {"id": issuer_id(), "name": "ФСП Талант (прототип платформы)"},
+        "issuer": {"id": issuer_id(), "name": "\u0424\u0421\u041f \u0422\u0430\u043b\u0430\u043d\u0442 (\u043f\u0440\u043e\u0442\u043e\u0442\u0438\u043f \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b)"},
         "validFrom": now,
         "credentialSubject": {"id": f"urn:uuid:{subject_id}", "achievement": achievement},
     }
@@ -139,10 +143,22 @@ def verify_credential(credential: dict) -> bool:
     proof_value = proof.get("proofValue", "")
     if not proof_value.startswith("z"):
         return False
+    # FIX BUG-G2: Enforce temporal validity per W3C VC DM 2.0 section 4.9.4.
+    # A credential with validFrom in the future MUST NOT be accepted as valid.
+    valid_from = credential.get("validFrom")
+    if valid_from:
+        try:
+            from datetime import timezone
+            vf = datetime.fromisoformat(valid_from.replace("Z", "+00:00"))
+            if vf > datetime.now(timezone.utc):
+                logger.warning("VC validFrom is in the future: %s", valid_from)
+                return False
+        except ValueError:
+            return False
     document = {k: v for k, v in credential.items() if k != "proof"}
     proof_config = {k: v for k, v in proof.items() if k != "proofValue"}
     try:
-        # FIX BUG-04: use cached public key object instead of reconstructing every call
+        # Use cached public key object (BUG-04 fix carried over)
         _public_key_obj().verify(_b58decode(proof_value[1:]), _hash_data(document, proof_config))
         return True
     except (InvalidSignature, ValueError):

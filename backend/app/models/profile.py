@@ -67,7 +67,14 @@ class ProfileSearchIndex(Base):
     role = Column(String(50))
     grade = Column(String(20))
     region = Column(String(100))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    # FIX BUG-E: onupdate= was missing. Without it, every rebuild_profile UPDATE
+    # leaves updated_at frozen at creation time. Incremental sync and freshness
+    # monitoring cannot detect stale profiles.
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
 
     __table_args__ = (
         Index("ix_psi_skills_tsv", "skills_tsv", postgresql_using="gin"),
