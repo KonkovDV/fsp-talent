@@ -103,7 +103,9 @@
            bg-fsp-electric text-white
            hover:bg-fsp-blue hover:shadow-glow-brand
            active:scale-95;
-    focus-visible:ring-color: #1D82F5;
+  }
+  .btn-primary:focus-visible {
+    --tw-ring-color: #1D82F5;
   }
   /* Danger / CTA — ФСП Red */
   .btn-danger {
