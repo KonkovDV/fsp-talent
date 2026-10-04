@@ -1,9 +1,16 @@
 from datetime import timedelta
+
 import pytest
 from jose import jwt
+
 from app.core.config import settings
 from app.core.security import (
-    create_access_token, create_refresh_token, create_token, decode_token, hash_password, verify_password,
+    create_access_token,
+    create_refresh_token,
+    create_token,
+    decode_token,
+    hash_password,
+    verify_password,
 )
 from app.models.participant import Participant
 

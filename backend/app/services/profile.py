@@ -58,6 +58,10 @@ async def ingest_from_fsp(db: AsyncSession, data: FSPParticipant) -> Participant
 
 
 async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
+    if p.birth_date is not None:
+        p.is_minor = age_on(p.birth_date, date.today()) < 18
+        if p.is_minor:
+            p.public_profile = False
     results = list(await db.scalars(select(Result).where(Result.participant_id == p.id)))
     skills = [s.name for s in await db.scalars(
         select(Skill).where(Skill.participant_id == p.id, Skill.confirmed.is_(True)))]

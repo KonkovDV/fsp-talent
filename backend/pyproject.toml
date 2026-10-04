@@ -51,6 +51,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+# B008: FastAPI ставит Depends() в значения по умолчанию — это контракт фреймворка.
+# DTZ011: date.today() для возраста и давности соревнований — календарная дата, не момент времени.
+ignore = ["B008", "DTZ011"]
 
 [tool.mypy]
 python_version = "3.12"

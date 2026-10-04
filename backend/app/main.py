@@ -24,7 +24,8 @@ _PUBLISHED_SECRETS = frozenset({
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.SECRET_KEY in _PUBLISHED_SECRETS:
-        raise RuntimeError("SECRET_KEY is a published placeholder. Set a private value in .env before starting the API.")
+        raise RuntimeError(
+            "SECRET_KEY is a published placeholder. Set a private value in .env before starting the API.")
     logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")
     yield
     logger.info("Shutting down")

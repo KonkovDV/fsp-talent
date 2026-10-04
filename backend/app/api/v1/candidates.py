@@ -21,12 +21,20 @@ from app.services.skills import normalize_skill
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
+# Privacy switches whose changes are written to consent_logs (152-FZ art. 9, 10.1).
+PRIVACY_FIELDS = ("is_visible", "public_profile")
+
 
 def _pid(current: dict) -> uuid.UUID:
     try:
         return uuid.UUID(current["sub"])
     except ValueError as e:
         raise HTTPException(401, "Invalid token subject") from e
+
+
+def _log_privacy(db: AsyncSession, p: Participant, field: str, value: bool) -> None:
+    db.add(ConsentLog(participant_id=p.id, event_type=f"{field}_{'on' if value else 'off'}",
+                      actor_id=p.id, meta={"field": field, "value": value}))
 
 
 @router.get("/me")
@@ -68,6 +76,11 @@ class SkillIn(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
+    """Self-service profile fields.
+
+    minor_consent_given is deliberately absent: consent of a legal representative cannot be
+    granted by the minor through the same account. It must come from a separate guardian flow.
+    """
     experience_years: int | None = Field(None, ge=0, le=50)
     declared_grade: Literal["junior", "middle", "senior", "lead"] | None = None
     skills: list[SkillIn] | None = Field(None, max_length=40)
@@ -76,7 +89,6 @@ class ProfileUpdate(BaseModel):
     phone: str | None = Field(None, max_length=20)
     public_profile: bool | None = None
     is_visible: bool | None = None
-    minor_consent_given: bool | None = None
 
 
 @router.put("/me/profile")
@@ -90,9 +102,16 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         raise HTTPException(403, "Именная страница недоступна для несовершеннолетних")
     if "declared_grade" in data and data["declared_grade"] not in (*GRADES, None):
         raise HTTPException(400, "Неизвестный грейд")
-    for field in ("experience_years", "declared_grade", "public_profile", "is_visible", "minor_consent_given"):
+    for field in ("experience_years", "declared_grade"):
         if field in data:
             setattr(p, field, data[field])
+    for field in PRIVACY_FIELDS:
+        value = data.get(field)
+        if value is None:  # columns are NOT NULL; null means "leave as is"
+            continue
+        if value != getattr(p, field):
+            _log_privacy(db, p, field, value)
+        setattr(p, field, value)
     for field in ("email", "telegram", "phone"):
         if field in data:
             setattr(p, field, data[field] or None)
@@ -130,6 +149,8 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
     p = await db.get(Participant, _pid(current))
     if not p:
         raise HTTPException(404, "Профиль не найден")
+    if body.is_visible != p.is_visible:
+        _log_privacy(db, p, "is_visible", body.is_visible)
     p.is_visible = body.is_visible
     await db.commit()
     return {"is_visible": p.is_visible, "discoverable": p.discoverable}
@@ -175,7 +196,9 @@ class RespondIn(BaseModel):
 @router.post("/me/offers/{offer_id}/respond")
 async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict = Depends(get_current_participant),
                            db: AsyncSession = Depends(get_db)):
-    offer = await db.get(Offer, offer_id)
+    # Row lock: two concurrent accept/reject requests are serialized, the second one sees
+    # status != pending and gets 409 instead of writing a duplicate consent event.
+    offer = await db.get(Offer, offer_id, with_for_update=True)
     if not offer or offer.candidate_id != _pid(current):
         raise HTTPException(404, "Оффер не найден")
     if offer.status != "pending":

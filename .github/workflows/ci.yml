@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - run: pip install ruff
+      - run: pip install "ruff==0.16.10"
       - run: ruff check backend/app/
 
   test-backend:
@@ -79,7 +79,16 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip when the server is not configured
+        id: gate
+        run: |
+          if [ -z "${{ secrets.DEPLOY_HOST }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: appleboy/ssh-action@v1
+        if: steps.gate.outputs.skip != 'true'
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ubuntu
@@ -87,7 +96,6 @@ jobs:
           script: |
             cd /opt/fsp-talent
             git pull origin main
-            docker compose pull
-            docker compose up -d --no-deps backend frontend worker beat
+            docker compose up -d --build --no-deps backend frontend worker beat
             docker compose exec -T backend alembic upgrade head
             echo "Deployed $(date)"

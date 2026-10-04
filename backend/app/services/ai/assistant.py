@@ -63,7 +63,7 @@ async def _llm_skills(text: str) -> list[dict]:
         if close:
             await close()
     content = resp.choices[0].message.content
-    match = re.search(r"\[.*\]", content, re.S)
+    match = re.search(r"\[.*\]", content, re.DOTALL)
     return json.loads(match.group(0)) if match else []
 
 

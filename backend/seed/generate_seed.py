@@ -1,10 +1,12 @@
 """Idempotent demo data. Participants: FSP001 / test. Employer: hr@yandex.demo / demo12345."""
 import asyncio
 import random
+
 from sqlalchemy import select
+
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
-from app.models import Employer, Participant, Skill
+from app.models import Employer, Participant, Skill, Vacancy
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
 
@@ -63,8 +65,26 @@ async def main() -> None:
             created += 1
             if created % 25 == 0:
                 await db.commit()
+        demo_jobs = [
+            ("hr@yandex.demo", "Backend-разработчик", "backend", "middle", "algorithmic", "I",
+             ["Python", "FastAPI", "PostgreSQL"], 180000, 260000),
+            ("hr@sber.demo", "Специалист по ИБ", "security", "middle", "security", "II",
+             ["Python", "Linux", "Web Security"], 160000, 240000),
+        ]
+        jobs = 0
+        for email, title, role, grade, disc, rank, skills, lo, hi in demo_jobs:
+            employer = await db.scalar(select(Employer).where(Employer.email == email))
+            if employer is None:
+                continue
+            exists = await db.scalar(select(Vacancy.id).where(Vacancy.employer_id == employer.id, Vacancy.title == title))
+            if exists:
+                continue
+            db.add(Vacancy(employer_id=employer.id, title=title, role=role, grade=grade, discipline=disc,
+                           min_rank=rank, skills=skills, salary_from_gross=lo, salary_to_gross=hi,
+                           work_format="remote"))
+            jobs += 1
         await db.commit()
-        print(f"seeded employers={employers} participants={created}")
+        print(f"seeded employers={employers} participants={created} vacancies={jobs}")
 
 
 if __name__ == "__main__":

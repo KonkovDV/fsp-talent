@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
@@ -69,14 +70,20 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
         status="pending", expires_at=datetime.now(UTC) + timedelta(days=14),
     )
     db.add(offer)
-    await db.flush()
+    try:
+        # uq_offers_pending_pair (migration 0002) closes the check-then-insert race.
+        await db.flush()
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(409, "Активный оффер этому кандидату уже есть") from e
     await db.commit()
     return _offer_out(offer)
 
 
 @router.get("/")
 async def list_my_offers(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    rows = list(await db.scalars(select(Offer).where(Offer.employer_id == _eid(current)).order_by(Offer.created_at.desc())))
+    rows = list(await db.scalars(
+        select(Offer).where(Offer.employer_id == _eid(current)).order_by(Offer.created_at.desc())))
     if expire_stale(rows):
         await db.commit()
     return [_offer_out(o) for o in rows]
@@ -85,7 +92,8 @@ async def list_my_offers(current: dict = Depends(get_current_employer), db: Asyn
 @router.post("/{offer_id}/withdraw")
 async def withdraw_offer(offer_id: uuid.UUID, current: dict = Depends(get_current_employer),
                          db: AsyncSession = Depends(get_db)):
-    offer = await db.get(Offer, offer_id)
+    # Same lock as the candidate side: withdraw and accept cannot both win.
+    offer = await db.get(Offer, offer_id, with_for_update=True)
     if not offer or offer.employer_id != _eid(current):
         raise HTTPException(404, "Оффер не найден")
     if offer.status != "pending":

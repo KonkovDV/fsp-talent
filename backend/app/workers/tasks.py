@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import UTC
 from uuid import UUID
 
 from app.workers.celery_app import celery_app
@@ -47,7 +48,7 @@ def compute_embeddings(self, participant_id: str):
 @celery_app.task(name="app.workers.tasks.expire_offers")
 def expire_offers():
     async def _inner():
-        from datetime import UTC, datetime
+        from datetime import datetime
 
         from sqlalchemy import update
 

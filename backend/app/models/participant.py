@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -34,11 +34,21 @@ class Participant(Base):
     category = relationship("CategoryAssignment", back_populates="participant", uselist=False, cascade="all, delete")
     embedding = relationship("ProfileEmbedding", back_populates="participant", uselist=False, cascade="all, delete")
     offers = relationship("Offer", back_populates="candidate", foreign_keys="Offer.candidate_id")
+    applications = relationship("Application", back_populates="candidate")
     consent_logs = relationship("ConsentLog", back_populates="participant")
+
+    def minor_now(self, today: date | None = None) -> bool:
+        """Age from birth_date. The stored is_minor flag is only a fallback before the date is known."""
+        if self.birth_date is None:
+            return bool(self.is_minor)
+        today = today or date.today()
+        birthday = (self.birth_date.month, self.birth_date.day)
+        age = today.year - self.birth_date.year - ((today.month, today.day) < birthday)
+        return age < 18
 
     @property
     def discoverable(self) -> bool:
-        return self.is_visible and (not self.is_minor or self.minor_consent_given)
+        return bool(self.is_visible) and (not self.minor_now() or bool(self.minor_consent_given))
 
 
 class Qualification(Base):

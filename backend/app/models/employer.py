@@ -19,4 +19,5 @@ class Employer(Base):
     subscription_tier = Column(String(20), nullable=False, default="free")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
+    vacancies = relationship("Vacancy", back_populates="employer")
     access_logs = relationship("AccessLog", back_populates="employer")

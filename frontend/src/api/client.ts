@@ -63,6 +63,14 @@ export const getMyEmployerOffers = () => api.get('/offers/')
 export const getOfferContacts = (id: string) => api.get(`/offers/${id}/contacts`)
 export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
 
+export const getMyVacancies = () => api.get('/vacancies/mine')
+export const createVacancy = (data: object) => api.post('/vacancies/', data)
+export const closeVacancy = (id: string) => api.post(`/vacancies/${id}/close`)
+export const vacanciesForMe = () => api.get('/vacancies/for-me')
+export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
+export const vacancyApplications = () => api.get('/vacancies/applications')
+export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
+
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
 export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
