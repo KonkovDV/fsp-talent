@@ -28,6 +28,10 @@ from app.services.vacancies import match_vacancy
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
+# FIX BUG-B: cap the vacancy scan to prevent full-table DoS
+# 500 is enough for demo; production should paginate via cursor.
+_VACANCY_SCAN_LIMIT = 500
+
 
 def _uuid(current: dict) -> uuid.UUID:
     return uuid.UUID(current["sub"])
@@ -134,8 +138,18 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
     needs_guardian = participant.minor_now() and not participant.minor_consent_given
     applied = set(await db.scalars(
         select(Application.vacancy_id).where(Application.candidate_id == participant.id)))
+    # FIX BUG-B: limit scan to _VACANCY_SCAN_LIMIT rows.
+    # Without a LIMIT this query is O(n_vacancies) per request and causes OOM at scale.
+    # Matching is done in Python because the criteria mix FK-joined relations and
+    # per-vacancy skills (JSONB). A future optimisation can push hard filters to SQL
+    # (role, grade, allows_minors) before the Python post-filter.
     rows = list(await db.scalars(
-        select(Vacancy).where(Vacancy.is_open.is_(True)).options(selectinload(Vacancy.employer))))
+        select(Vacancy)
+        .where(Vacancy.is_open.is_(True))
+        .options(selectinload(Vacancy.employer))
+        .order_by(Vacancy.created_at.desc())
+        .limit(_VACANCY_SCAN_LIMIT)
+    ))
     cards = []
     for vacancy in rows:
         hit = match_vacancy(candidate, {

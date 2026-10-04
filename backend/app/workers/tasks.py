@@ -7,6 +7,14 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+# FIX BUG-D: per-participant rebuild lock to prevent concurrent Celery workers
+# from racing on the same DisciplineScore / CategoryAssignment rows.
+# Key pattern: rebuild_lock:{participant_id}, TTL = 10 minutes.
+# If a rebuild is already running, the second task logs and exits cleanly.
+# On retry the lock has expired, so the next attempt proceeds normally.
+_REBUILD_LOCK_TTL = 600  # seconds
+_REBUILD_LOCK_PREFIX = "rebuild_lock:"
+
 
 def run_async(coro):
     loop = asyncio.new_event_loop()
@@ -16,17 +24,48 @@ def run_async(coro):
         loop.close()
 
 
+async def _acquire_rebuild_lock(participant_id: str) -> bool:
+    """Try to set a Redis NX key for this participant. Returns True if lock acquired."""
+    try:
+        from app.core.redis_client import get_redis
+        redis = await get_redis()
+        key = f"{_REBUILD_LOCK_PREFIX}{participant_id}"
+        # SET key 1 NX EX ttl: atomic, returns True when set, None when already exists.
+        acquired = await redis.set(key, "1", nx=True, ex=_REBUILD_LOCK_TTL)
+        return bool(acquired)
+    except Exception:
+        logger.warning("rebuild_lock: Redis unavailable, proceeding without lock")
+        return True  # fail-open: allow the rebuild to run
+
+
+async def _release_rebuild_lock(participant_id: str) -> None:
+    try:
+        from app.core.redis_client import get_redis
+        redis = await get_redis()
+        await redis.delete(f"{_REBUILD_LOCK_PREFIX}{participant_id}")
+    except Exception:
+        logger.warning("rebuild_lock: could not release lock for %s", participant_id)
+
+
 async def _rebuild(participant_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models import Participant
     from app.services.profile import rebuild_profile
-    async with AsyncSessionLocal() as db:
-        participant = await db.get(Participant, UUID(participant_id))
-        if participant is None:
-            logger.info(f"Skip rebuild, participant {participant_id} not found")
-            return
-        await rebuild_profile(db, participant)
-        await db.commit()
+
+    # FIX BUG-D: idempotency guard -- only one rebuild runs per participant at a time.
+    if not await _acquire_rebuild_lock(participant_id):
+        logger.info("rebuild_lock: skipping duplicate rebuild for %s", participant_id)
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            participant = await db.get(Participant, UUID(participant_id))
+            if participant is None:
+                logger.info("Skip rebuild, participant %s not found", participant_id)
+                return
+            await rebuild_profile(db, participant)
+            await db.commit()
+    finally:
+        await _release_rebuild_lock(participant_id)
 
 
 @celery_app.task(name="app.workers.tasks.recompute_scores", bind=True, max_retries=3)
@@ -39,6 +78,9 @@ def recompute_scores(self, participant_id: str):
 
 @celery_app.task(name="app.workers.tasks.compute_embeddings", bind=True, max_retries=3)
 def compute_embeddings(self, participant_id: str):
+    # NOTE: rebuild_profile calls embed() when EMBEDDINGS_MODE != 'off'.
+    # When embeddings are disabled this task is a no-op beyond the score rebuild,
+    # which is safe (idempotent) and cheap.  The lock prevents double work.
     try:
         run_async(_rebuild(participant_id))
     except Exception as exc:
