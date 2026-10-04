@@ -5,9 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_any_auth, get_current_employer, get_current_participant
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
 from app.models import Employer, Participant
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
@@ -22,7 +29,15 @@ class TokenOut(BaseModel):
 
 
 def _tokens(subject: str, role: str) -> TokenOut:
-    return TokenOut(access_token=create_access_token(subject, role), refresh_token=create_refresh_token(subject, role))
+    return TokenOut(
+        access_token=create_access_token(subject, role),
+        refresh_token=create_refresh_token(subject, role),
+    )
+
+
+async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
+    if await too_many(f"auth:{bucket}:{identity.strip().lower()}", limit=limit):
+        raise HTTPException(429, "Слишком много попыток. Подождите минуту.")
 
 
 class ParticipantRegister(BaseModel):
@@ -32,15 +47,11 @@ class ParticipantRegister(BaseModel):
 
 @router.post("/participant/register", response_model=TokenOut, status_code=201)
 async def register_participant(body: ParticipantRegister, db: AsyncSession = Depends(get_db)):
-    # FIX BUG-05: use role-specific bucket prefix to avoid collision with employer register bucket.
-    # auth:register:participant:{id} vs auth:register:employer:{id} are distinct namespaces.
     await _limit("register:participant", body.fsp_id)
     await _limit("register-site", "all", limit=20)
     adapter = get_fsp_adapter()
     if not await adapter.verify_secret(body.fsp_id, body.fsp_secret):
         raise HTTPException(400, "Неверные учётные данные ФСП")
-    # Optimistic check (non-locking): avoids FSP round-trip for already-registered users.
-    # A concurrent duplicate registration is caught below by the IntegrityError handler.
     if await db.scalar(select(Participant).where(Participant.fsp_id == body.fsp_id)):
         raise HTTPException(409, "Участник уже зарегистрирован")
     data = await adapter.fetch_participant(body.fsp_id)
@@ -48,12 +59,6 @@ async def register_participant(body: ParticipantRegister, db: AsyncSession = Dep
         raise HTTPException(400, "Протоколы ФСП не найдены")
     participant = await ingest_from_fsp(db, data)
     await rebuild_profile(db, participant)
-    # FIX BUG-I: TOCTOU race on fsp_id UNIQUE constraint.
-    # Two concurrent requests for the same fsp_id both pass the SELECT check above,
-    # both call ingest_from_fsp, and the second commit raises IntegrityError on the
-    # participants.fsp_id UNIQUE index. Without this handler the caller gets HTTP 500.
-    # Correct response: 409 Conflict. db.rollback() is required before re-raising so
-    # the session is not left in a broken state.
     try:
         await db.commit()
     except IntegrityError:
@@ -62,14 +67,10 @@ async def register_participant(body: ParticipantRegister, db: AsyncSession = Dep
     return _tokens(str(participant.id), "participant")
 
 
-async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
-    # Keyed by account, not by IP: behind nginx every visitor shares one address.
-    if await too_many(f"auth:{bucket}:{identity.strip().lower()}", limit=limit):
-        raise HTTPException(429, "Слишком много попыток. Подождите минуту.")
-
-
 @router.post("/participant/token", response_model=TokenOut)
-async def login_participant(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login_participant(
+    form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
+):
     await _limit("participant", form.username)
     if not await get_fsp_adapter().verify_secret(form.username, form.password):
         raise HTTPException(401, "Неверные учётные данные")
@@ -89,7 +90,6 @@ class EmployerRegister(BaseModel):
 
 @router.post("/employer/register", response_model=TokenOut, status_code=201)
 async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(get_db)):
-    # FIX BUG-05: use role-specific bucket prefix
     await _limit("register:employer", body.email)
     await _limit("register-site", "all", limit=20)
     if await db.scalar(select(Employer).where(Employer.email == body.email)):
@@ -98,12 +98,11 @@ async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(g
         password_hash = hash_password(body.password)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
-    employer = Employer(company_name=body.company_name, email=body.email, password_hash=password_hash,
-                        inn=body.inn, website=body.website)
+    employer = Employer(
+        company_name=body.company_name, email=body.email,
+        password_hash=password_hash, inn=body.inn, website=body.website,
+    )
     db.add(employer)
-    # FIX BUG-I (employer): same TOCTOU race on email UNIQUE constraint.
-    # Two concurrent registrations for the same email both pass the SELECT check;
-    # the second flush raises IntegrityError -> 500 without this handler.
     try:
         await db.flush()
     except IntegrityError:
@@ -114,9 +113,31 @@ async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(g
 
 
 @router.post("/employer/token", response_model=TokenOut)
-async def login_employer(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login_employer(
+    form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
+):
     await _limit("employer", form.username)
     employer = await db.scalar(select(Employer).where(Employer.email == form.username))
     if not employer or not verify_password(form.password, employer.password_hash):
         raise HTTPException(401, "Неверные учётные данные")
     return _tokens(str(employer.id), "employer")
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str = Field(min_length=10)
+
+
+@router.post("/refresh", response_model=TokenOut)
+async def refresh(body: RefreshIn):
+    """Обновить access-токен по refresh-токену (без DB)."""
+    try:
+        payload = decode_refresh_token(body.refresh_token)
+    except ValueError as e:
+        raise HTTPException(401, str(e))
+    return _tokens(payload["sub"], payload["role"])
+
+
+@router.get("/me")
+async def whoami(current: dict = Depends(get_any_auth)):
+    """Токен интроспекция: возвращает sub и role."""
+    return {"sub": current["sub"], "role": current.get("role")}

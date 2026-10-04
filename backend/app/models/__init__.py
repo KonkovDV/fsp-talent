@@ -1,3 +1,4 @@
+from app.models.assessment import TestAnswer, TestQuestion, TestSession
 from app.models.audit import AccessLog, ConsentLog
 from app.models.employer import Employer
 from app.models.offer import Offer
@@ -20,6 +21,9 @@ __all__ = [
     "Qualification",
     "Result",
     "Skill",
+    "TestAnswer",
+    "TestQuestion",
+    "TestSession",
     "Vacancy",
     "VerifiableCredential",
 ]

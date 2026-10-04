@@ -5,7 +5,6 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
-# bcrypt hashes only the first 72 bytes; longer inputs are rejected by bcrypt>=5.
 _BCRYPT_MAX_BYTES = 72
 
 
@@ -47,11 +46,24 @@ def create_refresh_token(subject: str, role: str) -> str:
 
 
 def decode_token(token: str) -> dict:
-    # HS256 only: the configured algorithm must not be able to switch verification to "none".
+    """Decode and validate an ACCESS token."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
     except JWTError as e:
         raise ValueError("Invalid token") from e
     if payload.get("type") != "access":
         raise ValueError("Access token required")
+    return payload
+
+
+def decode_refresh_token(token: str) -> dict:
+    """Decode and validate a REFRESH token."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except JWTError as e:
+        raise ValueError("Invalid refresh token") from e
+    if payload.get("type") != "refresh":
+        raise ValueError("Refresh token required")
+    if "sub" not in payload or "role" not in payload:
+        raise ValueError("Malformed refresh token")
     return payload

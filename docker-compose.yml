@@ -1,5 +1,4 @@
 # Host ports are bound to 127.0.0.1: only nginx (:80) is reachable from the network.
-# PostgreSQL, Redis and the raw API stay local for debugging (smoke test uses 127.0.0.1:8010).
 services:
   backend:
     build: ./backend
@@ -14,6 +13,15 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
+    # FIX: backend was missing healthcheck; worker/beat depend on service_healthy
+    # and would hang forever at startup without it.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
 
   worker:
