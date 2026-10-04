@@ -1,8 +1,8 @@
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -21,8 +21,8 @@ from app.services.skills import normalize_skill
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
-# Privacy switches whose changes are written to consent_logs (152-FZ art. 9, 10.1).
 PRIVACY_FIELDS = ("is_visible", "public_profile")
+_PAGE_SIZE_MAX = 50
 
 
 def _pid(current: dict) -> uuid.UUID:
@@ -83,7 +83,9 @@ class ProfileUpdate(BaseModel):
     """
     experience_years: int | None = Field(None, ge=0, le=50)
     declared_grade: Literal["junior", "middle", "senior", "lead"] | None = None
-    skills: list[SkillIn] | None = Field(None, max_length=40)
+    # FIX (Pydantic v2): max_length on list[T] must use Annotated[], not Field() kwarg.
+    # Old: list[SkillIn] | None = Field(None, max_length=40) -- silently ignored the limit.
+    skills: Annotated[list[SkillIn], Field(max_length=40)] | None = None
     email: EmailStr | None = None
     telegram: str | None = Field(None, max_length=64)
     phone: str | None = Field(None, max_length=20)
@@ -107,7 +109,7 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
             setattr(p, field, data[field])
     for field in PRIVACY_FIELDS:
         value = data.get(field)
-        if value is None:  # columns are NOT NULL; null means "leave as is"
+        if value is None:
             continue
         if value != getattr(p, field):
             _log_privacy(db, p, field, value)
@@ -157,9 +159,19 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
 
 
 @router.get("/me/results")
-async def get_my_results(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+async def get_my_results(
+    limit: int = Query(50, ge=1, le=_PAGE_SIZE_MAX),
+    offset: int = Query(0, ge=0),
+    current: dict = Depends(get_current_participant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Paginated list of FSP results for this participant."""
     rows = await db.scalars(
-        select(Result).where(Result.participant_id == _pid(current)).order_by(Result.event_date.desc()))
+        select(Result)
+        .where(Result.participant_id == _pid(current))
+        .order_by(Result.event_date.desc())
+        .limit(limit).offset(offset)
+    )
     return [{
         "id": str(r.id), "event_name": r.event_name, "discipline": r.discipline,
         "discipline_label": DISCIPLINE_LABELS.get(r.discipline, r.discipline),
@@ -173,10 +185,20 @@ async def get_my_results(current: dict = Depends(get_current_participant), db: A
 
 
 @router.get("/me/offers")
-async def get_my_offers(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+async def get_my_offers(
+    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    offset: int = Query(0, ge=0),
+    current: dict = Depends(get_current_participant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Paginated list of offers sent to this candidate."""
     rows = list(await db.scalars(
-        select(Offer).where(Offer.candidate_id == _pid(current)).options(selectinload(Offer.employer))
-        .order_by(Offer.created_at.desc())))
+        select(Offer)
+        .where(Offer.candidate_id == _pid(current))
+        .options(selectinload(Offer.employer))
+        .order_by(Offer.created_at.desc())
+        .limit(limit).offset(offset)
+    ))
     changed = expire_stale(rows)
     if changed:
         await db.commit()
@@ -196,8 +218,6 @@ class RespondIn(BaseModel):
 @router.post("/me/offers/{offer_id}/respond")
 async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict = Depends(get_current_participant),
                            db: AsyncSession = Depends(get_db)):
-    # Row lock: two concurrent accept/reject requests are serialized, the second one sees
-    # status != pending and gets 409 instead of writing a duplicate consent event.
     offer = await db.get(Offer, offer_id, with_for_update=True)
     if not offer or offer.candidate_id != _pid(current):
         raise HTTPException(404, "Оффер не найден")

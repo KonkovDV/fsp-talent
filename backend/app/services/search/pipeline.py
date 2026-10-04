@@ -9,6 +9,7 @@ a strong algorithmic score must not lift a candidate in a security search.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from sqlalchemy import and_, func, literal, or_, select
@@ -26,8 +27,52 @@ logger = logging.getLogger(__name__)
 
 RRF_K = 60
 POOL_LIMIT = 1000
-# Dense retrieval pool size: wider than lexical to expand recall.
 DENSE_POOL = 300
+
+# ---------------------------------------------------------------------------
+# FIX: tsquery normalization for special-char skill names.
+# PostgreSQL to_tsquery quoted lexemes only allow [a-zA-Z0-9_] and Cyrillic.
+# C++ -> cpp, C# -> csharp, Node.js -> nodejs, etc.
+# This map MUST be consistent with how skills_text is indexed in ProfileSearchIndex;
+# see services/profile.py rebuild_profile where skills_text is set.
+# ---------------------------------------------------------------------------
+_SKILL_TSQUERY_MAP: dict[str, str] = {
+    "C++": "cpp",
+    "C#": "csharp",
+    "Node.js": "nodejs",
+    "Vue.js": "vuejs",
+    "Next.js": "nextjs",
+    "React.js": "reactjs",
+    "Nuxt.js": "nuxtjs",
+    "Three.js": "threejs",
+    "HTML/CSS": "htmlcss",
+    "scikit-learn": "sklearn",
+    "PX4/ArduPilot": "px4 ardupilot",
+    "Prometheus/Grafana": "prometheus grafana",
+    "CI/CD": "cicd",
+    "gRPC": "grpc",
+    "GraphQL": "graphql",
+    "WebAssembly": "wasm",
+    "R": "rlang",
+    "Go": "golang",
+    ".NET": "dotnet",
+    "ASP.NET": "aspnet",
+    "F#": "fsharp",
+    "Qt/C++": "qtcpp",
+}
+
+
+def _normalize_skill_for_tsq(skill: str) -> str:
+    """Return a safe tsquery lexeme string for the skill.
+
+    Checks the explicit map first, then falls back to stripping every character
+    that PostgreSQL rejects inside a quoted tsquery lexeme (anything that is not
+    alphanumeric or Cyrillic). The result is lowercased.
+    """
+    if skill in _SKILL_TSQUERY_MAP:
+        return _SKILL_TSQUERY_MAP[skill].lower()
+    normalized = re.sub(r"[^\w\u0400-\u04ff]", "", skill.lower())
+    return normalized or skill.lower()[:30]
 
 
 def _bucket(place: int, total: int) -> str:
@@ -43,18 +88,30 @@ def _rrf(ranked_ids: list) -> dict:
     return {pid: 1.0 / (RRF_K + i + 1) for i, pid in enumerate(ranked_ids)}
 
 
-def _skill_or_tsquery(names: list[str]) -> str:
-    """Quote skill names so to_tsquery accepts C++, C# and Node.js."""
-    quoted = []
+def _skill_or_tsquery(names: list[str]) -> str | None:
+    """Build a to_tsquery-compatible OR-expression for the given skill names.
+
+    Each skill is normalized to strip characters that are illegal inside
+    PostgreSQL tsquery quoted lexemes (C++ -> cpp, C# -> csharp, Node.js -> nodejs).
+    Multi-token expansions (e.g. 'px4 ardupilot') are split into separate lexemes
+    joined with the OR operator so that each token is matched independently.
+    Returns None when the resulting expression would be empty.
+    """
+    lexemes: list[str] = []
     for name in names:
-        lexeme = name.replace("\\", "").replace("'", "''")
-        if lexeme:
-            quoted.append(f"'{lexeme}'")
-    return " | ".join(quoted)
+        normalized = _normalize_skill_for_tsq(name)
+        if not normalized:
+            continue
+        for token in normalized.split():
+            token = token.replace("'", "")
+            if token:
+                lexemes.append(f"'{token}'")
+    if not lexemes:
+        return None
+    return " | ".join(lexemes)
 
 
 def _safe_uuid(s: object) -> uuid.UUID | None:
-    """Parse a UUID from JSONB without crashing on malformed data."""
     try:
         return uuid.UUID(str(s))
     except (ValueError, AttributeError):
@@ -84,14 +141,6 @@ async def search_candidates(
 
     PSI = ProfileSearchIndex
 
-    # --- FIX BUG-02: Build tsquery from skills and q separately, then OR-combine ---
-    # skills_tsv is a simple-dictionary tsvector over normalized skill tokens.
-    # websearch_to_tsquery handles its own boolean grammar (OR/AND/quotes/-);
-    # passing pre-joined terms would destroy that grammar.
-    # Strategy:
-    #   skill_tsq = to_tsquery over normalized skill lexemes joined with |
-    #   q_tsq     = websearch_to_tsquery over raw user query (preserves operators)
-    #   combined  = skill_tsq || q_tsq
     tsq = None
     if wanted_list or q:
         parts: list = []
@@ -100,19 +149,16 @@ async def search_candidates(
             if skill_q:
                 parts.append(func.to_tsquery("simple", skill_q))
         if q:
-            # websearch_to_tsquery preserves OR / AND / phrase / negation syntax.
             parts.append(func.websearch_to_tsquery("simple", q))
         if len(parts) == 1:
             tsq = parts[0]
-        else:
-            # Combine with tsquery || (OR) operator
-            tsq = parts[0].op("||")(parts[1])
+        elif len(parts) == 2:
+            tsq = parts[0].op("||")( parts[1])
         similarity_text = q or " ".join(wanted_list)
         lex = (func.ts_rank(PSI.skills_tsv, tsq) + func.similarity(PSI.skills_text, similarity_text)).label("lex")
     else:
         lex = literal(0.0).label("lex")
 
-    # Adult if born on or before this calendar day. The stored is_minor flag is only a fallback.
     cutoff = adult_cutoff()
     adult = or_(
         and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
@@ -134,7 +180,6 @@ async def search_candidates(
         if min_rank in RANK_ORDER:
             sub = sub.where(DisciplineScore.best_rank.in_(RANK_ORDER[:RANK_ORDER.index(min_rank) + 1]))
         stmt = stmt.where(Participant.id.in_(sub))
-    # Apply full-text filter when a tsquery was built
     if tsq is not None:
         stmt = stmt.where(PSI.skills_tsv.op("@@")(tsq))
     stmt = stmt.order_by(lex.desc(), max_lcb.c.max_lcb.desc().nulls_last()).limit(POOL_LIMIT)
@@ -145,16 +190,13 @@ async def search_candidates(
     fused: dict[uuid.UUID, float] = {pid: 0.0 for pid in ids_set}
 
     rankings: list[list] = [sorted(ids_set, key=lambda i: -best[i])]
-    if rows:  # lexical ranking = pool order (already sorted by lex desc)
+    if rows:
         rankings.append([r.id for r in rows])
 
     dense_hit: set = set()
     if q and embeddings_enabled():
         vec = await embed(q)
         if vec is not None:
-            # --- FIX BUG-01: Search the ENTIRE embedding table, not just ids_set ---
-            # Dense retrieval expands recall beyond the lexical pool.
-            # The old .where(participant_id.in_(ids)) defeated this entirely.
             dense = list(await db.scalars(
                 select(ProfileEmbedding.participant_id)
                 .join(Participant, Participant.id == ProfileEmbedding.participant_id)
@@ -167,7 +209,6 @@ async def search_candidates(
             ))
             rankings.append(dense)
             dense_hit = set(dense[:20])
-            # Merge dense-only hits into the unified pool
             for pid in dense:
                 if pid not in ids_set:
                     ids_set.add(pid)
@@ -201,7 +242,6 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
                                .order_by(DisciplineScore.lcb.desc())):
         scores.setdefault(ds.participant_id, []).append(ds)
 
-    # --- FIX BUG-06: guard against malformed UUIDs in JSONB top_event_ids ---
     event_ids = [
         uid for lst in scores.values()
         for ds in lst
@@ -214,7 +254,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
     for pid in ordered:
         p = parts.get(pid)
         if p is None:
-            continue  # dense-only hit not yet fetched; skip gracefully
+            continue
         cat, matched = cats.get(pid), sorted(have.get(pid, ()))
         why: list[str] = []
         if wanted:

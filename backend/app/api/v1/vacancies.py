@@ -1,7 +1,8 @@
 import uuid
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -11,15 +12,8 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_employer, get_current_participant
 from app.core.database import get_db
 from app.models import (
-    AccessLog,
-    Application,
-    CategoryAssignment,
-    ConsentLog,
-    DisciplineScore,
-    Employer,
-    Participant,
-    Skill,
-    Vacancy,
+    AccessLog, Application, CategoryAssignment, ConsentLog,
+    DisciplineScore, Employer, Participant, Skill, Vacancy,
 )
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
 from app.services.scoring.engine import RANK_ORDER
@@ -28,9 +22,8 @@ from app.services.vacancies import match_vacancy
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
-# FIX BUG-B: cap the vacancy scan to prevent full-table DoS
-# 500 is enough for demo; production should paginate via cursor.
 _VACANCY_SCAN_LIMIT = 500
+_PAGE_SIZE_MAX = 50
 
 
 def _uuid(current: dict) -> uuid.UUID:
@@ -43,7 +36,8 @@ class VacancyIn(BaseModel):
     grade: str | None = None
     discipline: str | None = None
     min_rank: str | None = None
-    skills: list[str] = Field(default_factory=list, max_length=20)
+    # FIX (Pydantic v2): max_length on list must use Annotated
+    skills: Annotated[list[str], Field(max_length=20)] = Field(default_factory=list)
     salary_from_gross: int | None = Field(None, gt=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, gt=0, le=100_000_000)
     work_format: Literal["remote", "office", "hybrid"] = "remote"
@@ -102,9 +96,19 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
 
 
 @router.get("/mine")
-async def my_vacancies(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    rows = await db.scalars(select(Vacancy).where(Vacancy.employer_id == _uuid(current))
-                            .options(selectinload(Vacancy.employer)).order_by(Vacancy.created_at.desc()))
+async def my_vacancies(
+    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    offset: int = Query(0, ge=0),
+    current: dict = Depends(get_current_employer),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.scalars(
+        select(Vacancy)
+        .where(Vacancy.employer_id == _uuid(current))
+        .options(selectinload(Vacancy.employer))
+        .order_by(Vacancy.created_at.desc())
+        .limit(limit).offset(offset)
+    )
     return [_out(v) for v in rows]
 
 
@@ -138,14 +142,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
     needs_guardian = participant.minor_now() and not participant.minor_consent_given
     applied = set(await db.scalars(
         select(Application.vacancy_id).where(Application.candidate_id == participant.id)))
-    # FIX BUG-B: limit scan to _VACANCY_SCAN_LIMIT rows.
-    # Without a LIMIT this query is O(n_vacancies) per request and causes OOM at scale.
-    # Matching is done in Python because the criteria mix FK-joined relations and
-    # per-vacancy skills (JSONB). A future optimisation can push hard filters to SQL
-    # (role, grade, allows_minors) before the Python post-filter.
     rows = list(await db.scalars(
-        select(Vacancy)
-        .where(Vacancy.is_open.is_(True))
+        select(Vacancy).where(Vacancy.is_open.is_(True))
         .options(selectinload(Vacancy.employer))
         .order_by(Vacancy.created_at.desc())
         .limit(_VACANCY_SCAN_LIMIT)
@@ -203,15 +201,59 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
 
 
 @router.get("/applications")
-async def my_applications(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+async def my_applications(
+    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    offset: int = Query(0, ge=0),
+    current: dict = Depends(get_current_employer),
+    db: AsyncSession = Depends(get_db),
+):
+    """List incoming applications, paginated."""
     rows = list(await db.scalars(
         select(Application).join(Vacancy).where(Vacancy.employer_id == _uuid(current))
-        .options(selectinload(Application.vacancy)).order_by(Application.created_at.desc())))
+        .options(selectinload(Application.vacancy))
+        .order_by(Application.created_at.desc())
+        .limit(limit).offset(offset)
+    ))
     return [{
         "id": str(a.id), "vacancy_id": str(a.vacancy_id), "vacancy_title": a.vacancy.title,
         "candidate_id": str(a.candidate_id), "status": a.status,
         "created_at": a.created_at.isoformat() if a.created_at else None,
+        "viewed_at": a.viewed_at.isoformat() if getattr(a, "viewed_at", None) else None,
     } for a in rows]
+
+
+class ApplicationStatusUpdate(BaseModel):
+    status: Literal["reviewing", "invited", "rejected", "closed"]
+
+
+@router.patch("/applications/{application_id}/status")
+async def update_application_status(
+    application_id: uuid.UUID,
+    body: ApplicationStatusUpdate,
+    current: dict = Depends(get_current_employer),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change application status (employer side).
+
+    Allowed transitions: applied -> reviewing -> invited | rejected | closed
+    Guard: cannot overwrite candidate terminal states (accepted/rejected by candidate).
+    """
+    application = await db.get(Application, application_id, with_for_update=True)
+    if not application:
+        raise HTTPException(404, "Отклик не найден")
+    vacancy = await db.get(Vacancy, application.vacancy_id)
+    if not vacancy or vacancy.employer_id != _uuid(current):
+        raise HTTPException(404, "Отклик не найден")
+    if application.status in ("accepted", "rejected"):
+        raise HTTPException(409, f"Отклик уже закрыт кандидатом: {application.status}")
+    application.status = body.status
+    if getattr(application, "viewed_at", None) is None:
+        try:
+            application.viewed_at = datetime.now(UTC)
+        except AttributeError:
+            pass
+    await db.commit()
+    return {"id": str(application.id), "status": application.status}
 
 
 @router.get("/applications/{application_id}/contacts")
@@ -227,6 +269,11 @@ async def application_contacts(application_id: uuid.UUID, current: dict = Depend
     if not candidate:
         raise HTTPException(404, "Кандидат не найден")
     db.add(AccessLog(employer_id=vacancy.employer_id, participant_id=candidate.id, access_type="application_contacts"))
+    if getattr(application, "viewed_at", None) is None:
+        try:
+            application.viewed_at = datetime.now(UTC)
+        except AttributeError:
+            pass
     await db.commit()
     return {
         "candidate_id": str(candidate.id), "display_name": candidate.display_name,
