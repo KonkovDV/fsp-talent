@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import UTC
+import time
 from uuid import UUID
 
 from app.workers.celery_app import celery_app
@@ -48,14 +48,50 @@ def compute_embeddings(self, participant_id: str):
 @celery_app.task(name="app.workers.tasks.expire_offers")
 def expire_offers():
     async def _inner():
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from sqlalchemy import update
 
         from app.core.database import AsyncSessionLocal
         from app.models.offer import Offer
         async with AsyncSessionLocal() as db:
-            await db.execute(update(Offer).where(
-                Offer.status == "pending", Offer.expires_at < datetime.now(UTC)).values(status="expired"))
+            await db.execute(
+                update(Offer)
+                .where(Offer.status == "pending", Offer.expires_at < datetime.now(UTC))
+                .values(status="expired"),
+            )
             await db.commit()
     run_async(_inner())
+
+
+@celery_app.task(name="app.workers.tasks.watchdog_stuck_tasks")
+def watchdog_stuck_tasks():
+    """Revoke tasks running longer than task_soft_time_limit (300 s).
+
+    Belt-and-suspenders: Celery's soft/hard time limits already send SIGTERM/SIGKILL
+    automatically, but if a C-extension or blocking OS call absorbs those signals the
+    watchdog ensures the slot is eventually freed.  Runs every 5 minutes via beat.
+    """
+    threshold = celery_app.conf.task_soft_time_limit or 300
+    now = time.time()
+    try:
+        active = celery_app.control.inspect(timeout=5).active() or {}
+    except Exception:
+        logger.exception("Watchdog: worker inspect failed")
+        return
+    revoked = []
+    for worker, tasks in active.items():
+        for task in tasks:
+            t_start = task.get("time_start")
+            if t_start and (now - t_start) > threshold:
+                celery_app.control.revoke(task["id"], terminate=True, signal="SIGKILL")
+                revoked.append({
+                    "id": task["id"],
+                    "name": task.get("name"),
+                    "worker": worker,
+                    "running_s": round(now - t_start),
+                })
+    if revoked:
+        logger.warning("Watchdog revoked %d stuck task(s): %s", len(revoked), revoked)
+    else:
+        logger.info("Watchdog: no stuck tasks (threshold=%ds)", threshold)

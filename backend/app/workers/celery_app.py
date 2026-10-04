@@ -14,15 +14,24 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="Europe/Moscow",
     enable_utc=True,
+    # Individual task time limits: SIGTERM at 5 min, SIGKILL at 6 min.
+    # These fire automatically per task; the watchdog below is a belt-and-suspenders backstop.
+    task_soft_time_limit=300,
+    task_time_limit=360,
     task_routes={
-        "app.workers.tasks.recompute_scores": {"queue": "scoring"},
-        "app.workers.tasks.compute_embeddings": {"queue": "embeddings"},
-        "app.workers.tasks.expire_offers": {"queue": "maintenance"},
+        "app.workers.tasks.recompute_scores":    {"queue": "scoring"},
+        "app.workers.tasks.compute_embeddings":  {"queue": "embeddings"},
+        "app.workers.tasks.expire_offers":        {"queue": "maintenance"},
+        "app.workers.tasks.watchdog_stuck_tasks": {"queue": "maintenance"},
     },
     beat_schedule={
         "expire-offers-hourly": {
             "task": "app.workers.tasks.expire_offers",
             "schedule": 3600,
+        },
+        "watchdog-stuck-tasks": {
+            "task": "app.workers.tasks.watchdog_stuck_tasks",
+            "schedule": 300,  # every 5 min
         },
     },
 )

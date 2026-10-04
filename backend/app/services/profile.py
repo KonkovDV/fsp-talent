@@ -52,16 +52,15 @@ async def ingest_from_fsp(db: AsyncSession, data: FSPParticipant) -> Participant
             "eventDate": r.event_date.isoformat(),
             "rankEquivalent": rank_equivalent(r.competition_status, r.place, r.total_participants),
         })
-        db.add(VerifiableCredential(id=vc_id, participant_id=p.id, result_id=res.id, credential_json=credential,
-                                    proof_hex=credential["proof"]["proofValue"]))
+        db.add(VerifiableCredential(
+            id=vc_id, participant_id=p.id, result_id=res.id,
+            credential_json=credential,
+            proof_value=credential["proof"]["proofValue"],
+        ))
     return p
 
 
 async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
-    if p.birth_date is not None:
-        p.is_minor = age_on(p.birth_date, date.today()) < 18
-        if p.is_minor:
-            p.public_profile = False
     results = list(await db.scalars(select(Result).where(Result.participant_id == p.id)))
     skills = [s.name for s in await db.scalars(
         select(Skill).where(Skill.participant_id == p.id, Skill.confirmed.is_(True)))]
