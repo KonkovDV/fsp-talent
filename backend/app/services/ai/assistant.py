@@ -1,5 +1,4 @@
-"""
-AI assistant (advisor only). Deterministic extraction is always the baseline; an LLM may
+"""AI assistant (advisor only). Deterministic extraction is always the baseline; an LLM may
 propose extra skills, but each must normalize to the taxonomy and quote the source text
 verbatim, otherwise it is dropped. The candidate confirms every skill before it is used.
 """
@@ -20,24 +19,49 @@ _RESUME_PROMPT = (
     '{"skill": "название", "quote": "точная цитата из текста"}. Цитата должна дословно '
     "встречаться в тексте. Не придумывай навыков, которых нет в тексте."
 )
-_GRADE_WORDS = {"junior": ("junior", "джун", "джуниор", "стажер", "стажёр", "intern"),
-                "middle": ("middle", "мидл"), "senior": ("senior", "сеньор", "синьор"),
-                "lead": ("lead", "тимлид", "лид")}
-_ROLE_WORDS = {"backend": ("backend", "бэкенд", "бекенд"), "frontend": ("frontend", "фронтенд"),
-               "fullstack": ("fullstack", "фулстек", "full-stack"),
-               "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
-               "devops": ("devops", "девопс", "sre"),
-               "security": ("безопасност", "пентест", "security", "иб"),
-               "embedded": ("embedded", "встраиваем", "микроконтроллер"),
-               "mobile": ("mobile", "мобильн", "ios", "android")}
-_DISC_WORDS = {"algorithmic": ("алгоритм", "олимпиад"), "product": ("продуктов", "хакатон"),
-               "security": ("ctf", "кибербез"), "bas": ("бас", "беспилот", "дрон"),
-               "robotics": ("робот",)}
+_GRADE_WORDS = {
+    "junior": ("junior", "джун", "джуниор", "стажер", "стажёр", "intern"),
+    "middle": ("middle", "мидл"),
+    "senior": ("senior", "сеньор", "синьор"),
+    "lead": ("lead", "тимлид", "лид"),
+}
+_ROLE_WORDS = {
+    "backend": ("backend", "бэкенд", "бекенд"),
+    "frontend": ("frontend", "фронтенд"),
+    "fullstack": ("fullstack", "фулстек", "full-stack"),
+    "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
+    "devops": ("devops", "девопс", "sre"),
+    "security": ("безопасност", "пентест", "security", "иб"),
+    "embedded": ("embedded", "встраиваем", "микроконтроллер"),
+    "mobile": ("mobile", "мобильн", "ios", "android"),
+}
+_DISC_WORDS = {
+    "algorithmic": ("алгоритм", "олимпиад"),
+    "product": ("продуктов", "хакатон"),
+    "security": ("ctf", "кибербез"),
+    "bas": ("бас", "беспилот", "дрон"),
+    "robotics": ("робот",),
+}
+
+# Matches a word whose final character is Cyrillic (i.e. a morphological stem).
+_CYR_END = re.compile(r"[а-яёА-ЯЁ]$")
 
 
 def _word_hit(text: str, words) -> bool:
-    # long words are stems (prefix match), short ones must be whole words
-    return any(re.search(rf"(?<!\w){re.escape(w)}" + (r"(?!\w)" if len(w) <= 4 else ""), text) for w in words)
+    """Match any of `words` against `text` (caller should lower-case `text` first).
+
+    * Cyrillic-ending tokens are morphological stems — only the left boundary is
+      enforced, so "алгоритм" matches "алгоритмическое".
+    * All other tokens (ASCII words, abbreviations) require a strict right boundary,
+      so "security" does NOT match "insecurity" or "cybersecurity".
+    """
+    return any(
+        re.search(
+            rf"(?<!\w){re.escape(w)}" + ("" if _CYR_END.search(w) else r"(?!\w)"),
+            text,
+        )
+        for w in words
+    )
 
 
 def parse_query(q: str) -> dict:
@@ -52,12 +76,24 @@ def parse_query(q: str) -> dict:
 
 async def _llm_skills(text: str) -> list[dict]:
     from gigachat import GigaChat
-    giga = GigaChat(credentials=settings.GIGACHAT_CREDENTIALS, scope=settings.GIGACHAT_SCOPE,
-                    model=settings.GIGACHAT_MODEL, verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL, timeout=30)
+
+    giga = GigaChat(
+        credentials=settings.GIGACHAT_CREDENTIALS,
+        scope=settings.GIGACHAT_SCOPE,
+        model=settings.GIGACHAT_MODEL,
+        verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL,
+        timeout=30,
+    )
     try:
-        resp = await giga.achat({"messages": [{"role": "system", "content": _RESUME_PROMPT},
-                                              {"role": "user", "content": text[:8000]}],
-                                 "temperature": 0.1})
+        resp = await giga.achat(
+            {
+                "messages": [
+                    {"role": "system", "content": _RESUME_PROMPT},
+                    {"role": "user", "content": text[:8000]},
+                ],
+                "temperature": 0.1,
+            }
+        )
     finally:
         close = getattr(giga, "aclose", None)
         if close:
@@ -81,5 +117,9 @@ async def parse_resume(text: str) -> dict:
             llm_used = True
         except Exception:
             logger.exception("GigaChat call failed, rules-only result returned")
-    return {"skills": sorted(found.values(), key=lambda s: s["name"]), "llm_used": llm_used,
-            "llm_rejected": rejected, "note": "Подтвердите каждый навык перед сохранением"}
+    return {
+        "skills": sorted(found.values(), key=lambda s: s["name"]),
+        "llm_used": llm_used,
+        "llm_rejected": rejected,
+        "note": "Подтвердите каждый навык перед сохранением",
+    }
