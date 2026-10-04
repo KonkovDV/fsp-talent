@@ -2,47 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─────────────────────────────────────────────
-   @layer base — CSS custom properties (OKLCH)
-   ───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   ФСП TALENT — Design System v3.0
+   Palette: Navy #0A1F5C · Blue #1B3FA0 · Electric #1D82F5
+            Red #D42330 · Gold #F0A500
+   Hue reference (OKLCH): blue=258, red=22, gold=72
+   ═══════════════════════════════════════════════════════════════ */
+
 @layer base {
-  /* Dark theme (default) */
+  /* ── Dark theme (default) ─────────────────────────────────── */
   :root, [data-theme="dark"] {
-    /* Brand */
-    --brand:        0.55 0.24 275;
-    --brand-dim:    0.40 0.20 275;
-    --brand-bright: 0.70 0.22 275;
-    /* Surfaces */
-    --surface-0:    0.12 0.01 260;
-    --surface-1:    0.16 0.01 260;
-    --surface-2:    0.20 0.01 260;
-    --surface-3:    0.26 0.01 260;
+    /* Brand — ФСП Blue */
+    --brand:        0.42 0.18 258;
+    --brand-dim:    0.28 0.14 258;
+    --brand-bright: 0.62 0.20 238;
+    /* Accent red */
+    --accent-red:   0.52 0.22 22;
+    /* Accent gold */
+    --accent-gold:  0.78 0.17 72;
+    /* Surfaces — navy-tinted dark */
+    --surface-0:    0.11 0.02 258;
+    --surface-1:    0.15 0.02 258;
+    --surface-2:    0.19 0.02 258;
+    --surface-3:    0.25 0.02 258;
     /* Text */
-    --text-primary:   0.95 0 0;
-    --text-secondary: 0.70 0.01 260;
-    --text-muted:     0.50 0.01 260;
+    --text-primary:   0.96 0 0;
+    --text-secondary: 0.72 0.02 258;
+    --text-muted:     0.52 0.02 258;
     /* Borders */
-    --border:       0.30 0.01 260;
-    --border-strong:0.45 0.01 260;
+    --border:       0.28 0.03 258;
+    --border-strong:0.42 0.05 258;
     /* Score track */
-    --score-track:  0.22 0.01 260;
+    --score-track:  0.20 0.02 258;
+    /* Nav */
+    --nav-bg:       0.13 0.06 258;
   }
 
-  /* Light theme */
+  /* ── Light theme ──────────────────────────────────────────── */
   [data-theme="light"] {
-    --brand:        0.50 0.24 275;
-    --brand-dim:    0.95 0.06 275;
-    --brand-bright: 0.40 0.26 275;
+    --brand:        0.40 0.18 258;
+    --brand-dim:    0.92 0.05 258;
+    --brand-bright: 0.35 0.20 258;
+    --accent-red:   0.50 0.22 22;
+    --accent-gold:  0.72 0.17 72;
     --surface-0:    0.98 0 0;
-    --surface-1:    0.96 0 0;
-    --surface-2:    0.92 0 0;
-    --surface-3:    0.88 0 0;
-    --text-primary:   0.15 0 0;
-    --text-secondary: 0.40 0 0;
-    --text-muted:     0.60 0 0;
-    --border:       0.85 0 0;
-    --border-strong:0.75 0 0;
-    --score-track:  0.90 0 0;
+    --surface-1:    0.96 0.005 258;
+    --surface-2:    0.92 0.008 258;
+    --surface-3:    0.87 0.010 258;
+    --text-primary:   0.12 0.02 258;
+    --text-secondary: 0.35 0.04 258;
+    --text-muted:     0.55 0.03 258;
+    --border:       0.85 0.01 258;
+    --border-strong:0.72 0.02 258;
+    --score-track:  0.90 0.01 258;
+    --nav-bg:       0.13 0.06 258;
   }
 
   html {
@@ -63,11 +76,10 @@
   /* Skip link */
   .skip-link {
     @apply sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4
-           focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-xl
-           focus:bg-brand focus:text-white focus:outline-none;
+           focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg
+           focus:bg-fsp-electric focus:text-white focus:outline-none;
   }
 
-  /* Reduced motion — kill all animations */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -76,91 +88,129 @@
   }
 }
 
-/* ─────────────────────────────────────────────
-   @layer components — reusable blocks
-   ───────────────────────────────────────────── */
 @layer components {
-  /* ── Buttons ── */
+  /* ═══ BUTTONS ══════════════════════════════════════════════ */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl
-           font-semibold transition-all duration-200 select-none
+    @apply inline-flex items-center justify-center gap-2 font-semibold
+           transition-all duration-200 select-none
            focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-brand focus-visible:ring-offset-2
-           focus-visible:ring-offset-surface-0
+           focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0
            disabled:opacity-40 disabled:pointer-events-none;
   }
+  /* Primary — ФСП Electric Blue */
   .btn-primary {
-    @apply btn px-5 py-2.5 text-sm bg-brand text-white
-           hover:bg-brand-bright hover:shadow-glow-brand active:scale-95;
+    @apply btn px-5 py-2.5 text-sm rounded-md
+           bg-fsp-electric text-white
+           hover:bg-fsp-blue hover:shadow-glow-brand
+           active:scale-95;
+    focus-visible:ring-color: #1D82F5;
   }
+  /* Danger / CTA — ФСП Red */
+  .btn-danger {
+    @apply btn px-5 py-2.5 text-sm rounded-md
+           bg-fsp-red text-white
+           hover:brightness-110 hover:shadow-glow-red
+           active:scale-95;
+  }
+  /* Secondary — outlined */
   .btn-secondary {
-    @apply btn px-5 py-2.5 text-sm border border-border text-text-primary
-           hover:border-border-strong hover:bg-surface-2 active:scale-95;
+    @apply btn px-5 py-2.5 text-sm rounded-md
+           border-2 border-fsp-electric text-fsp-electric
+           hover:bg-fsp-electric hover:text-white
+           active:scale-95;
+  }
+  /* Secondary white (for dark navy backgrounds) */
+  .btn-secondary-white {
+    @apply btn px-5 py-2.5 text-sm rounded-md
+           border-2 border-white/70 text-white
+           hover:bg-white/15
+           active:scale-95;
   }
   .btn-ghost {
-    @apply btn px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-2;
+    @apply btn px-3 py-2 text-sm rounded-md text-text-secondary
+           hover:text-text-primary hover:bg-surface-2;
+  }
+  /* Nav ghost — white text on dark navy */
+  .btn-nav {
+    @apply btn px-3 py-1.5 text-sm rounded-md text-white/80
+           hover:text-white hover:bg-white/10;
   }
 
-  /* ── Cards ── */
+  /* ═══ CARDS ════════════════════════════════════════════════ */
   .card {
-    @apply bg-surface-1 rounded-2xl border border-border p-6
+    @apply bg-surface-1 rounded-lg border border-border p-6
            shadow-card;
   }
   .card-hover {
     @apply card cursor-pointer transition-all duration-200
-           hover:border-border-strong hover:shadow-card-hover
+           hover:border-brand/50 hover:shadow-card-hover
            hover:-translate-y-0.5;
   }
   .card-interactive {
     @apply card-hover active:translate-y-0 active:shadow-card;
   }
+  /* ФСП style — blue left accent border */
+  .card-fsp {
+    @apply card border-l-4 border-l-fsp-electric border-t-border
+           border-r-border border-b-border;
+  }
+  .card-fsp-red {
+    @apply card border-l-4 border-l-fsp-red border-t-border
+           border-r-border border-b-border;
+  }
+  .card-fsp-gold {
+    @apply card border-l-4 border-l-fsp-gold border-t-border
+           border-r-border border-b-border;
+  }
 
-  /* ── Badges ── */
+  /* ═══ BADGES ═══════════════════════════════════════════════ */
   .badge {
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
-           text-xs font-semibold;
+           text-xs font-bold tracking-wide uppercase;
   }
-  .badge-brand  { @apply badge bg-brand/20 text-brand-bright border border-brand/30; }
-  .badge-lead   { @apply badge bg-purple-500/20 text-purple-300 border border-purple-500/30; }
-  .badge-senior { @apply badge bg-blue-500/20 text-blue-300 border border-blue-500/30; }
-  .badge-middle { @apply badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30; }
-  .badge-junior { @apply badge bg-surface-3 text-text-secondary border border-border; }
-  .badge-mc     { @apply badge bg-yellow-500/20 text-yellow-300 border border-yellow-500/30; }
-  .badge-kmc    { @apply badge bg-orange-500/20 text-orange-300 border border-orange-500/30; }
-  .badge-vc     { @apply badge bg-emerald-500/15 text-emerald-300 border border-emerald-500/25; }
+  /* Grade badges — ФСП palette */
+  .badge-brand  { @apply badge bg-fsp-electric/20 text-fsp-electric  border border-fsp-electric/40; }
+  .badge-lead   { @apply badge bg-fsp-gold/20    text-fsp-gold      border border-fsp-gold/50; }
+  .badge-senior { @apply badge bg-fsp-electric/25 text-fsp-electric  border border-fsp-electric/50; }
+  .badge-middle { @apply badge bg-fsp-blue/20    text-fsp-light     border border-fsp-blue/40; }
+  .badge-junior { @apply badge bg-surface-3      text-text-secondary border border-border; }
+  /* ФСП Sport rank badges */
+  .badge-mc     { @apply badge bg-fsp-gold/25   text-fsp-gold     border border-fsp-gold/60; }     /* МС */
+  .badge-kmc    { @apply badge bg-fsp-red/20    text-fsp-red      border border-fsp-red/40; }      /* КМС */
+  .badge-vc     { @apply badge bg-fsp-navy/60   text-fsp-light    border border-fsp-electric/30; } /* ВС */
 
-  /* ── Glass nav ── */
-  .glass-nav {
-    @apply backdrop-blur-xl bg-surface-0/80 border-b border-border;
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    backdrop-filter: blur(20px) saturate(180%);
+  /* ═══ NAVIGATION ════════════════════════════════════════════ */
+  /* Solid navy — official ФСП style */
+  .fsp-nav {
+    background: #0A1F5C;
+    box-shadow: 0 2px 16px rgba(10,31,92,0.45);
   }
+  /* Keep glass-nav as alias for backward compat */
+  .glass-nav { @apply fsp-nav; }
 
-  /* ── Score bar ── */
+  /* ═══ SCORE BARS ════════════════════════════════════════════ */
   .score-bar-track {
-    @apply relative h-1.5 rounded-full overflow-hidden;
+    @apply relative h-2 rounded-full overflow-hidden;
     background: oklch(var(--score-track));
   }
-  .score-bar-fill {
-    @apply h-full rounded-full transition-all duration-700 ease-out;
-  }
-  .score-bar-mu    { @apply score-bar-fill bg-gradient-to-r from-blue-600 to-cyan-400; }
-  .score-bar-lcb   { @apply score-bar-fill bg-gradient-to-r from-emerald-600 to-emerald-400; }
+  .score-bar-fill  { @apply h-full rounded-full transition-all duration-700 ease-out; }
+  /* Mu — ФСП Gold */
+  .score-bar-mu  { @apply score-bar-fill; background: linear-gradient(90deg, #C47F00, #F0A500, #FFD04A); }
+  /* LCB — ФСП Electric Blue */
+  .score-bar-lcb { @apply score-bar-fill; background: linear-gradient(90deg, #1B3FA0, #1D82F5, #5BADFF); }
 
-  /* ── Form inputs ── */
+  /* ═══ FORM INPUTS ═══════════════════════════════════════════ */
   .input {
-    @apply w-full bg-surface-2 border border-border rounded-xl px-4 py-2.5
+    @apply w-full bg-surface-2 border border-border rounded-md px-4 py-2.5
            text-sm text-text-primary placeholder:text-text-muted
-           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
+           focus:outline-none focus:ring-2 focus:ring-fsp-electric focus:border-transparent
            transition-colors duration-150;
   }
-  .select {
-    @apply input appearance-none cursor-pointer;
-  }
+  .select { @apply input appearance-none cursor-pointer; }
 
-  /* ── Skeleton ── */
+  /* ═══ SKELETON ══════════════════════════════════════════════ */
   .skeleton {
-    @apply rounded-xl bg-surface-2 relative overflow-hidden;
+    @apply rounded-lg bg-surface-2 relative overflow-hidden;
   }
   .skeleton::after {
     content: '';
@@ -170,52 +220,82 @@
     animation: shimmer 2s infinite;
   }
 
-  /* ── Stat card ── */
-  .stat-card {
-    @apply card flex flex-col gap-2;
-  }
-  .stat-card-value {
-    @apply text-3xl font-bold tabular-nums;
-  }
-  .stat-card-label {
-    @apply text-xs font-medium uppercase tracking-widest text-text-muted;
-  }
-  .stat-card-delta {
-    @apply text-xs font-medium;
-  }
+  /* ═══ STAT CARDS ════════════════════════════════════════════ */
+  .stat-card       { @apply card-fsp flex flex-col gap-2; }
+  .stat-card-value { @apply text-3xl font-black tabular-nums text-fsp-electric; }
+  .stat-card-label { @apply text-2xs font-bold uppercase tracking-widest text-text-muted; }
+  .stat-card-delta { @apply text-xs font-semibold; }
 
-  /* ── Chip / filter tag ── */
+  /* ═══ CHIPS / FILTER TAGS ═══════════════════════════════════ */
   .chip {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full
-           text-xs font-medium border cursor-pointer select-none
+           text-xs font-semibold border cursor-pointer select-none
            transition-all duration-150;
   }
-  .chip-default {
-    @apply chip bg-surface-2 border-border text-text-secondary
-           hover:border-border-strong hover:text-text-primary;
+  .chip-default { @apply chip bg-surface-2 border-border text-text-secondary hover:border-fsp-electric/50 hover:text-fsp-electric; }
+  .chip-active  { @apply chip bg-fsp-electric/20 border-fsp-electric/60 text-fsp-electric; }
+
+  /* ═══ DIVIDER ═══════════════════════════════════════════════ */
+  .fsp-divider {
+    @apply h-px w-full;
+    background: linear-gradient(90deg, transparent, oklch(var(--border-strong)), transparent);
   }
-  .chip-active {
-    @apply chip bg-brand/20 border-brand/50 text-brand-bright;
+
+  /* ═══ HERO DIAGONAL STRIPE ══════════════════════════════════ */
+  .hero-stripe {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(150deg, #0A1F5C 0%, #1B3FA0 55%, #1D82F5 100%);
+    clip-path: polygon(0 0, 100% 0, 100% 75%, 0 100%);
+    z-index: 0;
+  }
+
+  /* ═══ FSP LOGO DIAMOND ═══════════════════════════════════════ */
+  .fsp-diamond {
+    @apply inline-flex items-center justify-center rounded-sm
+           text-white font-black;
+    background: linear-gradient(135deg, #D42330, #FF4D5A);
+    transform: rotate(45deg);
+  }
+  .fsp-diamond-inner {
+    display: block;
+    transform: rotate(-45deg);
   }
 }
 
-/* ─────────────────────────────────────────────
-   @layer utilities — atomic helpers
-   ───────────────────────────────────────────── */
 @layer utilities {
-  .text-gradient-brand {
-    background: linear-gradient(135deg, oklch(0.7 0.22 275), oklch(0.75 0.18 200));
+  /* ── Gradients ── */
+  .text-gradient-fsp {
+    background: linear-gradient(135deg, #1D82F5, #5BADFF);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+  .text-gradient-gold {
+    background: linear-gradient(90deg, #F0A500, #FFD04A);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #1D82F5, #5BADFF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  /* ── Grid background ── */
   .bg-grid {
-    background-image: linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),
-                      linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);
+    background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
     background-size: 32px 32px;
   }
-  .glow-brand { box-shadow: 0 0 24px oklch(0.6 0.25 275 / 0.3); }
-  .glow-score { box-shadow: 0 0 16px oklch(0.8 0.15 200 / 0.35); }
-  .text-balance { text-wrap: balance; }
-  .tabular { font-variant-numeric: tabular-nums; }
+  /* ── Glows ── */
+  .glow-brand  { box-shadow: 0 0 24px rgba(27,63,160,0.55); }
+  .glow-red    { box-shadow: 0 0 20px rgba(212,35,48,0.45); }
+  .glow-gold   { box-shadow: 0 0 16px rgba(240,165,0,0.45); }
+  .glow-score  { box-shadow: 0 0 16px rgba(29,130,245,0.4); }
+  /* ── Type ── */
+  .text-balance  { text-wrap: balance; }
+  .tabular       { font-variant-numeric: tabular-nums; }
+  .font-display  { font-family: 'Montserrat', 'Inter', system-ui, sans-serif; font-weight: 900; }
 }

@@ -1,7 +1,45 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { LogOut, Sun, Moon } from 'lucide-react'
+import { LogOut, Sun, Moon, LayoutDashboard, User, Trophy, Gift, Briefcase, Search, FileText } from 'lucide-react'
 import { useState, useEffect } from 'react'
+
+/** ФСП diamond logo mark */
+function FspLogo({ size = 28 }: { size?: number }) {
+  return (
+    <div className="flex items-center gap-2.5 select-none" aria-hidden>
+      <div
+        style={{
+          width: size, height: size,
+          background: 'linear-gradient(135deg, #D42330, #FF4D5A)',
+          clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ color: '#fff', fontWeight: 900, fontSize: size * 0.35, letterSpacing: '-0.03em' }}>Ф</span>
+      </div>
+      <div className="flex flex-col" style={{ lineHeight: 1 }}>
+        <span style={{ color: '#fff', fontWeight: 900, fontSize: 13, letterSpacing: '0.04em' }}>ФСП</span>
+        <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: 9, letterSpacing: '0.08em' }}>ТАЛАНТ</span>
+      </div>
+    </div>
+  )
+}
+
+const CANDIDATE_LINKS = [
+  { to: '/candidate',           label: 'Обзор',      end: true,  Icon: LayoutDashboard },
+  { to: '/candidate/profile',   label: 'Профиль',    end: false, Icon: User },
+  { to: '/candidate/results',   label: 'Результаты', end: false, Icon: Trophy },
+  { to: '/candidate/offers',    label: 'Офферы',     end: false, Icon: Gift },
+  { to: '/candidate/vacancies', label: 'Вакансии',   end: false, Icon: Briefcase },
+]
+
+const EMPLOYER_LINKS = [
+  { to: '/employer',           label: 'Дашборд',  end: true,  Icon: LayoutDashboard },
+  { to: '/employer/search',    label: 'Поиск',    end: false, Icon: Search },
+  { to: '/employer/offers',    label: 'Офферы',   end: false, Icon: Gift },
+  { to: '/employer/vacancies', label: 'Вакансии', end: false, Icon: FileText },
+]
 
 export default function Layout() {
   const { userRole, logout } = useAuthStore()
@@ -13,83 +51,80 @@ export default function Layout() {
   }, [dark])
 
   const handleLogout = () => { logout(); navigate('/') }
-
-  const candidateLinks = [
-    { to: '/candidate',           label: 'Обзор',      end: true },
-    { to: '/candidate/profile',   label: 'Профиль' },
-    { to: '/candidate/results',   label: 'Результаты' },
-    { to: '/candidate/offers',    label: 'Офферы' },
-    { to: '/candidate/vacancies', label: 'Вакансии' },
-  ]
-
-  const employerLinks = [
-    { to: '/employer',            label: 'Дашборд', end: true },
-    { to: '/employer/search',     label: 'Поиск' },
-    { to: '/employer/offers',     label: 'Офферы' },
-    { to: '/employer/vacancies',  label: 'Вакансии' },
-  ]
-
-  const links = userRole === 'participant' ? candidateLinks : employerLinks
+  const links = userRole === 'participant' ? CANDIDATE_LINKS : EMPLOYER_LINKS
 
   return (
     <div className="min-h-dvh flex flex-col bg-surface-0">
-      {/* Glass header */}
-      <header className="glass-nav sticky top-0 z-40" role="banner">
+
+      {/* ── ФСП Navy Header ─────────────────────────────────── */}
+      <header className="fsp-nav sticky top-0 z-40" role="banner">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-8">
-            <a href="/" className="flex items-center gap-2 select-none" aria-label="FSP Talent — главная">
-              <div className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center text-white text-xs font-bold glow-brand">
-                F
-              </div>
-              <span className="text-sm font-bold text-text-primary">FSP Talent</span>
+
+          {/* Logo + Nav */}
+          <div className="flex items-center gap-6">
+            <a href="/" aria-label="ФСП Талант — главная">
+              <FspLogo size={28} />
             </a>
 
             {/* Nav links */}
-            <nav className="hidden md:flex items-center gap-0.5" aria-label="Главная навигация">
-              {links.map(l => (
+            <nav className="hidden md:flex items-center gap-0.5" aria-label="Разделы">
+              {links.map(({ to, label, end, Icon }) => (
                 <NavLink
-                  key={l.to}
-                  to={l.to}
-                  end={l.end}
+                  key={to}
+                  to={to}
+                  end={end}
                   className={({ isActive }) =>
-                    `px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                    `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-150 ${
                       isActive
-                        ? 'bg-brand/20 text-brand-bright'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-2'
+                        ? 'bg-white/20 text-white'
+                        : 'text-white/65 hover:text-white hover:bg-white/10'
                     }`
                   }
                 >
-                  {l.label}
+                  <Icon size={13} aria-hidden />
+                  {label}
                 </NavLink>
               ))}
             </nav>
           </div>
 
           {/* Right controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setDark(d => !d)}
-              className="btn-ghost w-8 h-8 p-0 rounded-lg"
+              className="btn-nav w-8 h-8 p-0"
               aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
             >
-              {dark ? <Sun size={15}/> : <Moon size={15}/>}
+              {dark ? <Sun size={14} /> : <Moon size={14} />}
             </button>
             <button
               onClick={handleLogout}
-              className="btn-ghost text-xs gap-1.5"
+              className="btn-nav text-xs gap-1.5"
               aria-label="Выйти"
             >
-              <LogOut size={14}/> Выйти
+              <LogOut size={13} /> Выйти
             </button>
           </div>
         </div>
+
+        {/* ── Red accent underline ── */}
+        <div style={{ height: 2, background: 'linear-gradient(90deg, #D42330, #FF4D5A, #D42330)' }} aria-hidden />
       </header>
 
       {/* Content */}
       <main id="main" className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8" tabIndex={-1}>
         <Outlet />
       </main>
+
+      {/* ── Footer strip ── */}
+      <footer style={{ background: '#0A1F5C', borderTop: '1px solid rgba(255,255,255,0.1)' }} className="py-3">
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+          <FspLogo size={22} />
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+            &copy; 2026 Федерация спортивного программирования · контакты только после согласия
+          </p>
+        </div>
+      </footer>
     </div>
   )
 }
