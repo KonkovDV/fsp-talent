@@ -158,7 +158,8 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
 
 @router.get("/me/results")
 async def get_my_results(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
-    rows = await db.scalars(select(Result).where(Result.participant_id == _pid(current)).order_by(Result.event_date.desc()))
+    rows = await db.scalars(
+        select(Result).where(Result.participant_id == _pid(current)).order_by(Result.event_date.desc()))
     return [{
         "id": str(r.id), "event_name": r.event_name, "discipline": r.discipline,
         "discipline_label": DISCIPLINE_LABELS.get(r.discipline, r.discipline),

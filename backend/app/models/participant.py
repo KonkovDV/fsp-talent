@@ -42,7 +42,8 @@ class Participant(Base):
         if self.birth_date is None:
             return bool(self.is_minor)
         today = today or date.today()
-        age = today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
+        birthday = (self.birth_date.month, self.birth_date.day)
+        age = today.year - self.birth_date.year - ((today.month, today.day) < birthday)
         return age < 18
 
     @property

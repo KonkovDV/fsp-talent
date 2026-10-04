@@ -82,7 +82,8 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
 
 @router.get("/")
 async def list_my_offers(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    rows = list(await db.scalars(select(Offer).where(Offer.employer_id == _eid(current)).order_by(Offer.created_at.desc())))
+    rows = list(await db.scalars(
+        select(Offer).where(Offer.employer_id == _eid(current)).order_by(Offer.created_at.desc())))
     if expire_stale(rows):
         await db.commit()
     return [_offer_out(o) for o in rows]
@@ -117,5 +118,6 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
     await db.commit()
     return {
         "candidate_id": str(candidate.id), "display_name": candidate.display_name,
-        "email": candidate.email, "telegram": candidate.telegram, "phone": candidate.phone, "region": candidate.region,
+        "email": candidate.email, "telegram": candidate.telegram,
+        "phone": candidate.phone, "region": candidate.region,
     }

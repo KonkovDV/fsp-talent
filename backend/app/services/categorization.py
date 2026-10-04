@@ -76,8 +76,8 @@ def assign_category(
     if role_votes[best_skill_role] >= MIN_SKILLS_FOR_ROLE:
         role = best_skill_role
         count = role_votes[role]
-        explanation.append(
-            f"Роль по навыкам: {count} {_ru_word(count, 'подтверждённый навык', 'подтверждённых навыка', 'подтверждённых навыков')} направления {role}")
+        skills_word = _ru_word(count, "подтверждённый навык", "подтверждённых навыка", "подтверждённых навыков")
+        explanation.append(f"Роль по навыкам: {count} {skills_word} направления {role}")
     elif best_disc:
         role = DISCIPLINE_ROLE_MAP.get(best_disc["discipline"], "fullstack")
         explanation.append(f"Роль по дисциплине ФСП: {DISCIPLINE_LABELS.get(best_disc['discipline'], '')}")

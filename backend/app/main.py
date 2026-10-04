@@ -24,7 +24,8 @@ _PUBLISHED_SECRETS = frozenset({
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.SECRET_KEY in _PUBLISHED_SECRETS:
-        raise RuntimeError("SECRET_KEY is a published placeholder. Set a private value in .env before starting the API.")
+        raise RuntimeError(
+            "SECRET_KEY is a published placeholder. Set a private value in .env before starting the API.")
     logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")
     yield
     logger.info("Shutting down")
@@ -39,7 +40,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
@@ -61,7 +61,6 @@ async def request_timing(request: Request, call_next):
     return response
 
 
-# --- Routes ---
 app.include_router(api_router)
 
 

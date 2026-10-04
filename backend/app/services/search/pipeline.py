@@ -27,7 +27,8 @@ POOL_LIMIT = 1000
 
 def _bucket(place: int, total: int) -> str:
     p = percentile(place, total)
-    for threshold, label in ((0.99, "топ-1%"), (0.95, "топ-5%"), (0.90, "топ-10%"), (0.75, "топ-25%"), (0.50, "топ-50%")):
+    for threshold, label in ((0.99, "топ-1%"), (0.95, "топ-5%"), (0.90, "топ-10%"),
+                             (0.75, "топ-25%"), (0.50, "топ-50%")):
         if p >= threshold:
             return label
     return "участие"
@@ -118,8 +119,8 @@ async def search_candidates(
     have: dict[uuid.UUID, set[str]] = {}
     if wanted:
         for pid, name in await db.execute(
-                select(Skill.participant_id, Skill.name).where(Skill.participant_id.in_(ids), Skill.confirmed.is_(True),
-                                                               Skill.name.in_(wanted))):
+                select(Skill.participant_id, Skill.name).where(
+                    Skill.participant_id.in_(ids), Skill.confirmed.is_(True), Skill.name.in_(wanted))):
             have.setdefault(pid, set()).add(name)
 
     ordered = sorted(ids, key=lambda i: (-len(have.get(i, ())), -fused[i], -best[i], str(i)))[:limit]
@@ -151,9 +152,11 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
                          "year": r.event_date.year, "bucket": _bucket(r.place, r.total_participants),
                          "team": r.team_size > 1}
                         for e in ds.top_event_ids if (r := results.get(uuid.UUID(e)))]
-            disciplines.append({"discipline": ds.discipline, "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
+            disciplines.append({"discipline": ds.discipline,
+                                "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
                                 "score": ds.score, "lcb": ds.lcb, "confidence": ds.confidence,
-                                "best_rank": ds.best_rank, "events_count": ds.events_count, "evidence": evidence})
+                                "best_rank": ds.best_rank, "events_count": ds.events_count,
+                                "evidence": evidence})
         if disciplines:
             top = next((d for d in disciplines if d["discipline"] == discipline_filter), disciplines[0])
             if top["best_rank"]:

@@ -121,7 +121,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
     if not participant:
         raise HTTPException(404, "Профиль не найден")
     category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == participant.id))
-    skills = list(await db.scalars(select(Skill.name).where(Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
+    skills = list(await db.scalars(select(Skill.name).where(
+        Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
     scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
     candidate = {
         "role": category.primary_role if category else None,
@@ -131,8 +132,10 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         "is_minor": participant.minor_now(),
     }
     needs_guardian = participant.minor_now() and not participant.minor_consent_given
-    applied = set(await db.scalars(select(Application.vacancy_id).where(Application.candidate_id == participant.id)))
-    rows = list(await db.scalars(select(Vacancy).where(Vacancy.is_open.is_(True)).options(selectinload(Vacancy.employer))))
+    applied = set(await db.scalars(
+        select(Application.vacancy_id).where(Application.candidate_id == participant.id)))
+    rows = list(await db.scalars(
+        select(Vacancy).where(Vacancy.is_open.is_(True)).options(selectinload(Vacancy.employer))))
     cards = []
     for vacancy in rows:
         hit = match_vacancy(candidate, {
@@ -157,7 +160,8 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
     if participant.minor_now() and not participant.minor_consent_given:
         raise HTTPException(403, "Для отклика нужно согласие законного представителя")
     category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == participant.id))
-    skills = list(await db.scalars(select(Skill.name).where(Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
+    skills = list(await db.scalars(select(Skill.name).where(
+        Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
     scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
     hit = match_vacancy({
         "role": category.primary_role if category else None,
