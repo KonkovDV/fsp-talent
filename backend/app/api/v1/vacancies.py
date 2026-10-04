@@ -12,8 +12,15 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_employer, get_current_participant
 from app.core.database import get_db
 from app.models import (
-    AccessLog, Application, CategoryAssignment, ConsentLog,
-    DisciplineScore, Employer, Participant, Skill, Vacancy,
+    AccessLog,
+    Application,
+    CategoryAssignment,
+    ConsentLog,
+    DisciplineScore,
+    Employer,
+    Participant,
+    Skill,
+    Vacancy,
 )
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
 from app.services.scoring.engine import RANK_ORDER

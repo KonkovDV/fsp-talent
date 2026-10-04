@@ -25,6 +25,7 @@ class Participant(Base):
     public_profile = Column(Boolean, nullable=False, default=False)
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
+    grade_locked_until = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     # FIX BUG-03: updated_at must have a default= as well as onupdate=.
     # Without default=, the column is NULL after INSERT, which causes ORDER BY updated_at

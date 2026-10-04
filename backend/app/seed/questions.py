@@ -19,7 +19,8 @@ QUESTIONS: list[dict[str, Any]] = [
     # ===== BACKEND =====
     {"discipline": "backend", "target_grade": "junior", "difficulty": -1.0,
      "question_text": "Что возвращает `len([1, 2, 3])` в Python?",
-     "options": [{"id": "a", "text": "2"}, {"id": "b", "text": "3"}, {"id": "c", "text": "4"}, {"id": "d", "text": "0"}],
+     "options": [{"id": "a", "text": "2"}, {"id": "b", "text": "3"},
+                 {"id": "c", "text": "4"}, {"id": "d", "text": "0"}],
      "correct_option": "b"},
     {"discipline": "backend", "target_grade": "junior", "difficulty": -0.5,
      "question_text": "Что такое SQL-инъекция и как от неё защититься?",
@@ -56,7 +57,8 @@ QUESTIONS: list[dict[str, Any]] = [
     # ===== FRONTEND =====
     {"discipline": "frontend", "target_grade": "junior", "difficulty": -0.6,
      "question_text": "Какой хук React для побочных эффектов?",
-     "options": [{"id": "a", "text": "useState"}, {"id": "b", "text": "useEffect"}, {"id": "c", "text": "useRef"}, {"id": "d", "text": "useMemo"}],
+     "options": [{"id": "a", "text": "useState"}, {"id": "b", "text": "useEffect"},
+                 {"id": "c", "text": "useRef"}, {"id": "d", "text": "useMemo"}],
      "correct_option": "b"},
     {"discipline": "frontend", "target_grade": "middle", "difficulty": 0.3,
      "question_text": "Чем отличается useMemo от useCallback?",
@@ -162,7 +164,10 @@ QUESTIONS: list[dict[str, Any]] = [
     {"discipline": "mobile", "target_grade": "senior", "difficulty": 1.0,
      "question_text": "Как реализовать offline-first архитектуру в мобильном приложении?",
      "options": [
-         {"id": "a", "text": "Local DB (Room/SQLite) как источник правды, синхронизация через conflict resolution (временные метки/CRDT)"},
+         {"id": "a", "text": (
+             "Local DB (Room/SQLite) как источник правды, синхронизация через "
+             "conflict resolution (временные метки/CRDT)"
+         )},
          {"id": "b", "text": "Кэширование HTTP через OkHttp cache"},
          {"id": "c", "text": "Хранение данных в SharedPreferences"},
          {"id": "d", "text": "Только онлайн; отключать функции offline"}],
@@ -179,7 +184,10 @@ QUESTIONS: list[dict[str, Any]] = [
     {"discipline": "fullstack", "target_grade": "middle", "difficulty": 0.5,
      "question_text": "Что такое CORS и как его настроить правильно?",
      "options": [
-         {"id": "a", "text": "Механизм браузера, ограничивающий cross-origin запросы; настройка через Access-Control-Allow-Origin хедер"},
+         {"id": "a", "text": (
+             "Механизм браузера, ограничивающий cross-origin запросы; "
+             "настройка через Access-Control-Allow-Origin"
+         )},
          {"id": "b", "text": "Файерволл для HTTP"},
          {"id": "c", "text": "Сертификат для защиты данных"},
          {"id": "d", "text": "CDN протокол"}],
@@ -187,7 +195,10 @@ QUESTIONS: list[dict[str, Any]] = [
     {"discipline": "fullstack", "target_grade": "senior", "difficulty": 1.1,
      "question_text": "WebSockets vs SSE vs Long Polling: когда что выбирать?",
      "options": [
-         {"id": "a", "text": "WS: full-duplex реалтайм; SSE: server-push + простой HTTP, авто-reconnect; Long Polling: поддержка прокси"},
+         {"id": "a", "text": (
+             "WS: full-duplex реалтайм; SSE: server-push и простой HTTP; "
+             "Long Polling: поддержка прокси"
+         )},
          {"id": "b", "text": "WS всегда лучше; остальные устарели"},
          {"id": "c", "text": "SSE для мобильных, WS для десктопа"},
          {"id": "d", "text": "Long Polling является стандартом 2026 года"}],
@@ -196,9 +207,10 @@ QUESTIONS: list[dict[str, Any]] = [
 
 
 async def seed_questions() -> None:
+    from sqlalchemy import func, select
+
     from app.core.database import AsyncSessionLocal
     from app.models.assessment import TestQuestion
-    from sqlalchemy import func, select
 
     async with AsyncSessionLocal() as db:
         count_result = await db.execute(select(func.count()).select_from(TestQuestion))

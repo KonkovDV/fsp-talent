@@ -229,11 +229,8 @@ async def submit_answers(
     session.grade_assigned = grade_assigned
 
     participant = await db.get(Participant, participant_id)
-    if participant is not None:
-        old_grade = getattr(participant, "grade", None)
-        participant.grade = grade_assigned  # type: ignore[assignment]
-        if old_grade != grade_assigned:
-            participant.grade_locked_until = datetime.now(UTC) + timedelta(days=GRADE_COOLDOWN_DAYS)  # type: ignore[assignment]
+    if participant is not None and participant.grade_locked_until is None:
+        participant.grade_locked_until = datetime.now(UTC) + timedelta(days=GRADE_COOLDOWN_DAYS)
 
     await db.flush()
     return session

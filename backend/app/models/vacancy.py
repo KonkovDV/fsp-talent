@@ -44,6 +44,7 @@ class Application(Base):
     vacancy_id = Column(UUID(as_uuid=True), ForeignKey("vacancies.id"), nullable=False, index=True)
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("participants.id"), nullable=False, index=True)
     status = Column(String(20), nullable=False, default="applied")
+    viewed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     vacancy = relationship("Vacancy", back_populates="applications")
     candidate = relationship("Participant", back_populates="applications")

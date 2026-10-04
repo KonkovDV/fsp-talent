@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_any_auth, get_current_employer, get_current_participant
+from app.api.deps import get_any_auth
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.core.security import (

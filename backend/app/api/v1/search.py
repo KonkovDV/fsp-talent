@@ -24,7 +24,7 @@ async def search(
     db: AsyncSession = Depends(get_db),
 ):
     employer_id = current["sub"]
-    if await too_many(f"search:candidates:{employer_id}", limit=_SEARCH_RATE, window=60):
+    if await too_many(f"search:candidates:{employer_id}", limit=_SEARCH_RATE, window_seconds=60):
         raise HTTPException(
             status_code=429,
             detail="Слишком много запросов. Подождите минуту.",

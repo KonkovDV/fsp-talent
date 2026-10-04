@@ -9,7 +9,6 @@ a strong algorithmic score must not lift a candidate in a security search.
 from __future__ import annotations
 
 import logging
-import re
 import uuid
 
 from sqlalchemy import and_, func, literal, or_, select
@@ -29,51 +28,6 @@ RRF_K = 60
 POOL_LIMIT = 1000
 DENSE_POOL = 300
 
-# ---------------------------------------------------------------------------
-# FIX: tsquery normalization for special-char skill names.
-# PostgreSQL to_tsquery quoted lexemes only allow [a-zA-Z0-9_] and Cyrillic.
-# C++ -> cpp, C# -> csharp, Node.js -> nodejs, etc.
-# This map MUST be consistent with how skills_text is indexed in ProfileSearchIndex;
-# see services/profile.py rebuild_profile where skills_text is set.
-# ---------------------------------------------------------------------------
-_SKILL_TSQUERY_MAP: dict[str, str] = {
-    "C++": "cpp",
-    "C#": "csharp",
-    "Node.js": "nodejs",
-    "Vue.js": "vuejs",
-    "Next.js": "nextjs",
-    "React.js": "reactjs",
-    "Nuxt.js": "nuxtjs",
-    "Three.js": "threejs",
-    "HTML/CSS": "htmlcss",
-    "scikit-learn": "sklearn",
-    "PX4/ArduPilot": "px4 ardupilot",
-    "Prometheus/Grafana": "prometheus grafana",
-    "CI/CD": "cicd",
-    "gRPC": "grpc",
-    "GraphQL": "graphql",
-    "WebAssembly": "wasm",
-    "R": "rlang",
-    "Go": "golang",
-    ".NET": "dotnet",
-    "ASP.NET": "aspnet",
-    "F#": "fsharp",
-    "Qt/C++": "qtcpp",
-}
-
-
-def _normalize_skill_for_tsq(skill: str) -> str:
-    """Return a safe tsquery lexeme string for the skill.
-
-    Checks the explicit map first, then falls back to stripping every character
-    that PostgreSQL rejects inside a quoted tsquery lexeme (anything that is not
-    alphanumeric or Cyrillic). The result is lowercased.
-    """
-    if skill in _SKILL_TSQUERY_MAP:
-        return _SKILL_TSQUERY_MAP[skill].lower()
-    normalized = re.sub(r"[^\w\u0400-\u04ff]", "", skill.lower())
-    return normalized or skill.lower()[:30]
-
 
 def _bucket(place: int, total: int) -> str:
     p = percentile(place, total)
@@ -89,26 +43,17 @@ def _rrf(ranked_ids: list) -> dict:
 
 
 def _skill_or_tsquery(names: list[str]) -> str | None:
-    """Build a to_tsquery-compatible OR-expression for the given skill names.
+    """Quote skill names so to_tsquery accepts C++, C# and Node.js.
 
-    Each skill is normalized to strip characters that are illegal inside
-    PostgreSQL tsquery quoted lexemes (C++ -> cpp, C# -> csharp, Node.js -> nodejs).
-    Multi-token expansions (e.g. 'px4 ardupilot') are split into separate lexemes
-    joined with the OR operator so that each token is matched independently.
-    Returns None when the resulting expression would be empty.
+    The simple-dictionary tsvector keeps the same tokens the parser extracts
+    from the stored skill text. Renaming C++ to cpp would miss that index.
     """
-    lexemes: list[str] = []
+    quoted = []
     for name in names:
-        normalized = _normalize_skill_for_tsq(name)
-        if not normalized:
-            continue
-        for token in normalized.split():
-            token = token.replace("'", "")
-            if token:
-                lexemes.append(f"'{token}'")
-    if not lexemes:
-        return None
-    return " | ".join(lexemes)
+        lexeme = name.replace("\\", "").replace("'", "''")
+        if lexeme:
+            quoted.append(f"'{lexeme}'")
+    return " | ".join(quoted) or None
 
 
 def _safe_uuid(s: object) -> uuid.UUID | None:

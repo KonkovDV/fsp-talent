@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -16,6 +16,8 @@ class Employer(Base):
     password_hash = Column(String(200), nullable=False)
     inn = Column(String(12))
     website = Column(String(200))
+    description = Column(Text)
+    industry = Column(String(200))
     subscription_tier = Column(String(20), nullable=False, default="free")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
