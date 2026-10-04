@@ -38,14 +38,14 @@ async def register_participant(body: ParticipantRegister, db: AsyncSession = Dep
     await _limit("register-site", "all", limit=20)
     adapter = get_fsp_adapter()
     if not await adapter.verify_secret(body.fsp_id, body.fsp_secret):
-        raise HTTPException(400, "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0435 \u0443\u0447\u0451\u0442\u043d\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435 \u0424\u0421\u041f")
+        raise HTTPException(400, "Неверные учётные данные ФСП")
     # Optimistic check (non-locking): avoids FSP round-trip for already-registered users.
     # A concurrent duplicate registration is caught below by the IntegrityError handler.
     if await db.scalar(select(Participant).where(Participant.fsp_id == body.fsp_id)):
-        raise HTTPException(409, "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a \u0443\u0436\u0435 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u043d")
+        raise HTTPException(409, "Участник уже зарегистрирован")
     data = await adapter.fetch_participant(body.fsp_id)
     if data is None:
-        raise HTTPException(400, "\u041f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u044b \u0424\u0421\u041f \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b")
+        raise HTTPException(400, "Протоколы ФСП не найдены")
     participant = await ingest_from_fsp(db, data)
     await rebuild_profile(db, participant)
     # FIX BUG-I: TOCTOU race on fsp_id UNIQUE constraint.
@@ -58,24 +58,24 @@ async def register_participant(body: ParticipantRegister, db: AsyncSession = Dep
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(409, "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a \u0443\u0436\u0435 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u043d")
+        raise HTTPException(409, "Участник уже зарегистрирован")
     return _tokens(str(participant.id), "participant")
 
 
 async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
     # Keyed by account, not by IP: behind nginx every visitor shares one address.
     if await too_many(f"auth:{bucket}:{identity.strip().lower()}", limit=limit):
-        raise HTTPException(429, "\u0421\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u043d\u043e\u0433\u043e \u043f\u043e\u043f\u044b\u0442\u043e\u043a. \u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435 \u043c\u0438\u043d\u0443\u0442\u0443.")
+        raise HTTPException(429, "Слишком много попыток. Подождите минуту.")
 
 
 @router.post("/participant/token", response_model=TokenOut)
 async def login_participant(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     await _limit("participant", form.username)
     if not await get_fsp_adapter().verify_secret(form.username, form.password):
-        raise HTTPException(401, "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0435 \u0443\u0447\u0451\u0442\u043d\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435")
+        raise HTTPException(401, "Неверные учётные данные")
     participant = await db.scalar(select(Participant).where(Participant.fsp_id == form.username))
     if not participant:
-        raise HTTPException(401, "\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u0443\u0439\u0442\u0435\u0441\u044c")
+        raise HTTPException(401, "Сначала зарегистрируйтесь")
     return _tokens(str(participant.id), "participant")
 
 
@@ -93,7 +93,7 @@ async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(g
     await _limit("register:employer", body.email)
     await _limit("register-site", "all", limit=20)
     if await db.scalar(select(Employer).where(Employer.email == body.email)):
-        raise HTTPException(409, "Email \u0443\u0436\u0435 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u043d")
+        raise HTTPException(409, "Email уже зарегистрирован")
     try:
         password_hash = hash_password(body.password)
     except ValueError as e:
@@ -108,7 +108,7 @@ async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(g
         await db.flush()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(409, "Email \u0443\u0436\u0435 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u043d")
+        raise HTTPException(409, "Email уже зарегистрирован")
     await db.commit()
     return _tokens(str(employer.id), "employer")
 
@@ -118,5 +118,5 @@ async def login_employer(form: OAuth2PasswordRequestForm = Depends(), db: AsyncS
     await _limit("employer", form.username)
     employer = await db.scalar(select(Employer).where(Employer.email == form.username))
     if not employer or not verify_password(form.password, employer.password_hash):
-        raise HTTPException(401, "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0435 \u0443\u0447\u0451\u0442\u043d\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435")
+        raise HTTPException(401, "Неверные учётные данные")
     return _tokens(str(employer.id), "employer")

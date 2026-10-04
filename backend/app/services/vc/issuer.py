@@ -98,7 +98,7 @@ def _public_key_obj() -> Ed25519PublicKey:
 def issuer_document() -> dict:
     return {
         "id": issuer_id(),
-        "name": "\u0424\u0421\u041f \u0422\u0430\u043b\u0430\u043d\u0442 (\u043f\u0440\u043e\u0442\u043e\u0442\u0438\u043f \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b)",
+        "name": "ФСП Талант (прототип платформы)",
         "verificationMethod": [{
             "id": f"{issuer_id()}#key-1",
             "type": "Multikey",
@@ -118,7 +118,7 @@ def issue_achievement_credential(credential_id: str, subject_id: str, achievemen
         "@context": ["https://www.w3.org/ns/credentials/v2"],
         "type": ["VerifiableCredential", "FSPAchievementCredential"],
         "id": f"urn:uuid:{credential_id}",
-        "issuer": {"id": issuer_id(), "name": "\u0424\u0421\u041f \u0422\u0430\u043b\u0430\u043d\u0442 (\u043f\u0440\u043e\u0442\u043e\u0442\u0438\u043f \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b)"},
+        "issuer": {"id": issuer_id(), "name": "ФСП Талант (прототип платформы)"},
         "validFrom": now,
         "credentialSubject": {"id": f"urn:uuid:{subject_id}", "achievement": achievement},
     }
@@ -146,14 +146,16 @@ def verify_credential(credential: dict) -> bool:
     # FIX BUG-G2: Enforce temporal validity per W3C VC DM 2.0 section 4.9.4.
     # A credential with validFrom in the future MUST NOT be accepted as valid.
     valid_from = credential.get("validFrom")
-    if valid_from:
+    if valid_from is not None:
+        if not isinstance(valid_from, str):
+            return False
         try:
-            from datetime import timezone
             vf = datetime.fromisoformat(valid_from.replace("Z", "+00:00"))
-            if vf > datetime.now(timezone.utc):
-                logger.warning("VC validFrom is in the future: %s", valid_from)
-                return False
         except ValueError:
+            return False
+        if vf.tzinfo is None:
+            vf = vf.replace(tzinfo=UTC)
+        if vf > datetime.now(UTC):
             return False
     document = {k: v for k, v in credential.items() if k != "proof"}
     proof_config = {k: v for k, v in proof.items() if k != "proofValue"}
