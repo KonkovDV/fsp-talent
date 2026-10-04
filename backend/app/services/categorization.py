@@ -5,7 +5,9 @@ Grade and the FSP-verified level are independent axes: grade comes from experien
 (or the candidate's own declaration), never from competition results.
 """
 from __future__ import annotations
+
 from typing import TypedDict
+
 from app.services.skills import ROLES, roles_for
 
 RULES_VERSION = "v2.0.0"
@@ -75,7 +77,8 @@ def assign_category(
         role = best_skill_role
         count = role_votes[role]
         explanation.append(
-            f"Роль по навыкам: {count} {_ru_word(count, 'подтверждённый навык', 'подтверждённых навыка', 'подтверждённых навыков')} направления {role}")
+            f"Роль по навыкам: {count} "
+            f"{_ru_word(count, 'подтверждённый навык', 'подтверждённых навыка', 'подтверждённых навыков')} направления {role}")
     elif best_disc:
         role = DISCIPLINE_ROLE_MAP.get(best_disc["discipline"], "fullstack")
         explanation.append(f"Роль по дисциплине ФСП: {DISCIPLINE_LABELS.get(best_disc['discipline'], '')}")

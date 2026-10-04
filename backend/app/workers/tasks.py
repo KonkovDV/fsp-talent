@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from uuid import UUID
+
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -46,12 +47,14 @@ def compute_embeddings(self, participant_id: str):
 @celery_app.task(name="app.workers.tasks.expire_offers")
 def expire_offers():
     async def _inner():
-        from datetime import datetime, timezone
+        from datetime import UTC, datetime
+
         from sqlalchemy import update
+
         from app.core.database import AsyncSessionLocal
         from app.models.offer import Offer
         async with AsyncSessionLocal() as db:
             await db.execute(update(Offer).where(
-                Offer.status == "pending", Offer.expires_at < datetime.now(timezone.utc)).values(status="expired"))
+                Offer.status == "pending", Offer.expires_at < datetime.now(UTC)).values(status="expired"))
             await db.commit()
     run_async(_inner())

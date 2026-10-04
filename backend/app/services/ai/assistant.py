@@ -4,9 +4,11 @@ propose extra skills, but each must normalize to the taxonomy and quote the sour
 verbatim, otherwise it is dropped. The candidate confirms every skill before it is used.
 """
 from __future__ import annotations
+
 import json
 import logging
 import re
+
 from app.core.config import settings
 from app.services.categorization import GRADES
 from app.services.skills import ROLES, extract_skills, is_grounded, normalize_skill
@@ -22,9 +24,12 @@ _GRADE_WORDS = {"junior": ("junior", "джун", "джуниор", "стажер
                 "middle": ("middle", "мидл"), "senior": ("senior", "сеньор", "синьор"),
                 "lead": ("lead", "тимлид", "лид")}
 _ROLE_WORDS = {"backend": ("backend", "бэкенд", "бекенд"), "frontend": ("frontend", "фронтенд"),
-               "fullstack": ("fullstack", "фулстек", "full-stack"), "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
-               "devops": ("devops", "девопс", "sre"), "security": ("безопасност", "пентест", "security", "иб"),
-               "embedded": ("embedded", "встраиваем", "микроконтроллер"), "mobile": ("mobile", "мобильн", "ios", "android")}
+               "fullstack": ("fullstack", "фулстек", "full-stack"),
+               "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
+               "devops": ("devops", "девопс", "sre"),
+               "security": ("безопасност", "пентест", "security", "иб"),
+               "embedded": ("embedded", "встраиваем", "микроконтроллер"),
+               "mobile": ("mobile", "мобильн", "ios", "android")}
 _DISC_WORDS = {"algorithmic": ("алгоритм", "олимпиад"), "product": ("продуктов", "хакатон"),
                "security": ("ctf", "кибербез"), "bas": ("бас", "беспилот", "дрон"),
                "robotics": ("робот",)}

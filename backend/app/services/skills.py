@@ -5,6 +5,7 @@ Every extracted skill carries the exact substring of the source text it came fro
 so any extraction (rule-based or LLM) can be verified mechanically.
 """
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from functools import lru_cache

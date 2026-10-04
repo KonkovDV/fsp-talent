@@ -4,9 +4,12 @@ pseudo-random fallback vectors would inject noise into ranking, so without a rea
 model the dense stage is simply skipped.
 """
 from __future__ import annotations
+
 import logging
 from functools import lru_cache
+
 from anyio import to_thread
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)

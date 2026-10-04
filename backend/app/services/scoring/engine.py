@@ -18,6 +18,7 @@ Team results reduce evidence weight (wider sigma) instead of lowering the level.
 All constants are expert priors; any change must bump VERSION.
 """
 from __future__ import annotations
+
 import math
 from datetime import date
 from typing import TypedDict

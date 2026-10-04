@@ -5,10 +5,12 @@ MockFSPAdapter serves two hand-written demo profiles (FSP001, FSP002) and determ
 generates synthetic protocols for FSP1000..FSP1999 (used by the seed script). Same id -> same data.
 """
 from __future__ import annotations
+
 import random
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Optional, Protocol
+
 from app.core.config import settings
 
 TEAM_DISCIPLINES = {"product", "security", "bas", "robotics"}
@@ -71,15 +73,16 @@ _FIRST_M = ["Алексей", "Дмитрий", "Иван", "Артём", "Ни�
 _FIRST_F = ["Анна", "Мария", "Екатерина", "Софья", "Дарья", "Полина", "Алина", "Виктория", "Ксения", "Елена"]
 _LAST = ["Смирнов", "Кузнецов", "Попов", "Васильев", "Соколов", "Морозов", "Волков", "Лебедев", "Козлов",
          "Новиков", "Фёдоров", "Орлов", "Зайцев", "Павлов", "Семёнов"]
-_REGIONS = ["Москва", "Санкт-Петербург", "Новосибирская область", "Республика Татарстан", "Свердловская область",
-            "Нижегородская область", "Самарская область", "Томская область", "Краснодарский край",
-            "Чувашская Республика", "Приморский край", "Пермский край"]
-_STATUSES = [("russia_championship", 0.12), ("russia_cup", 0.10), ("russia_youth", 0.10), ("all_russian", 0.18),
-             ("federal_district", 0.18), ("regional", 0.22), ("other", 0.10)]
+_REGIONS = ["Москва", "Санкт-Петербург", "Новосибирская область", "Республика Татарстан",
+            "Свердловская область", "Нижегородская область", "Самарская область",
+            "Томская область", "Краснодарский край", "Чувашская Республика",
+            "Приморский край", "Пермский край"]
+_STATUSES = [("russia_championship", 0.12), ("russia_cup", 0.10), ("russia_youth", 0.10),
+             ("all_russian", 0.18), ("federal_district", 0.18), ("regional", 0.22), ("other", 0.10)]
 _FIELD_SIZE = {"russia_championship": (60, 220), "russia_cup": (40, 160), "russia_youth": (40, 160),
                "all_russian": (30, 140), "federal_district": (20, 90), "regional": (10, 60), "other": (8, 40)}
-_DISC_LABEL = {"algorithmic": "алгоритмическое", "product": "продуктовое", "security": "системы ИБ",
-               "bas": "БАС", "robotics": "робототехника"}
+_DISC_LABEL = {"algorithmic": "алгоритмическое", "product": "продуктовое",
+               "security": "системы ИБ", "bas": "БАС", "robotics": "робототехника"}
 
 
 def _generate(fsp_id: str) -> FSPParticipant:
