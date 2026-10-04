@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Code2, Shield, Trophy, Zap, ArrowRight, Medal, Lock, CheckCircle2 } from 'lucide-react'
+import { Code2, Shield, Trophy, ArrowRight, Medal, Lock, CheckCircle2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 /** ФСП diamond logo — standalone for landing */
