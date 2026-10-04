@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import get_db
 from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from app.models import Employer, Participant

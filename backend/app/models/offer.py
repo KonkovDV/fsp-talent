@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -20,8 +22,8 @@ class Offer(Base):
     status = Column(String(20), nullable=False, default="pending")
     contacts_revealed_at = Column(DateTime(timezone=True))
     employer_viewed_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     expires_at = Column(DateTime(timezone=True),
-                        default=lambda: datetime.now(timezone.utc) + timedelta(days=14))
+                        default=lambda: datetime.now(UTC) + timedelta(days=14))
     employer = relationship("Employer", back_populates="offers")
     candidate = relationship("Participant", back_populates="offers", foreign_keys=[candidate_id])

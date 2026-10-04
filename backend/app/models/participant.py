@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -23,8 +25,8 @@ class Participant(Base):
     public_profile = Column(Boolean, nullable=False, default=False)
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC))
     qualifications = relationship("Qualification", back_populates="participant", cascade="all, delete")
     results = relationship("Result", back_populates="participant")
     skills = relationship("Skill", back_populates="participant", cascade="all, delete")
@@ -69,7 +71,7 @@ class Result(Base):
     protocol_url = Column(String(500))
     trust_level = Column(String(20), nullable=False, default="verified_fsp")
     raw_data = Column(JSONB, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="results")
 
 
@@ -83,6 +85,6 @@ class Skill(Base):
     source_quote = Column(Text)
     trust_level = Column(String(20), nullable=False, default="self_reported")
     confirmed = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="skills")
     __table_args__ = (UniqueConstraint("participant_id", "name", name="uq_participant_skill"),)

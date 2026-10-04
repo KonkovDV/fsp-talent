@@ -1,10 +1,12 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.models import AccessLog, Employer, Offer, Participant
@@ -64,7 +66,7 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
         employer_id=employer.id, candidate_id=candidate.id,
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         currency=body.currency, role=body.role, work_format=body.work_format, message=body.message,
-        status="pending", expires_at=datetime.now(timezone.utc) + timedelta(days=14),
+        status="pending", expires_at=datetime.now(UTC) + timedelta(days=14),
     )
     db.add(offer)
     await db.flush()
@@ -108,5 +110,6 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
     await db.commit()
     return {
         "candidate_id": str(candidate.id), "display_name": candidate.display_name,
-        "email": candidate.email, "telegram": candidate.telegram, "phone": candidate.phone, "region": candidate.region,
+        "email": candidate.email, "telegram": candidate.telegram,
+        "phone": candidate.phone, "region": candidate.region,
     }

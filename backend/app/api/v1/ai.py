@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+
 from app.api.deps import get_current_employer, get_current_participant
 from app.services.ai.assistant import parse_query, parse_resume
 

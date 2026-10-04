@@ -1,12 +1,14 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.api.deps import get_current_participant
 from app.core.database import get_db
 from app.models import ConsentLog, Offer, Participant
@@ -135,7 +137,8 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
 
 @router.get("/me/results")
 async def get_my_results(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
-    rows = await db.scalars(select(Result).where(Result.participant_id == _pid(current)).order_by(Result.event_date.desc()))
+    rows = await db.scalars(
+        select(Result).where(Result.participant_id == _pid(current)).order_by(Result.event_date.desc()))
     return [{
         "id": str(r.id), "event_name": r.event_name, "discipline": r.discipline,
         "discipline_label": DISCIPLINE_LABELS.get(r.discipline, r.discipline),
@@ -182,7 +185,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         raise HTTPException(409, "Срок оффера истёк")
     if body.action == "accept":
         offer.status = "accepted"
-        offer.contacts_revealed_at = datetime.now(timezone.utc)
+        offer.contacts_revealed_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:

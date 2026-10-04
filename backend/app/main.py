@@ -1,13 +1,14 @@
+import logging
+import time
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-import logging
-import time
 
-from app.core.config import settings
 from app.api.v1.router import api_router
+from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -38,7 +39,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
@@ -60,7 +60,6 @@ async def request_timing(request: Request, call_next):
     return response
 
 
-# --- Routes ---
 app.include_router(api_router)
 
 
