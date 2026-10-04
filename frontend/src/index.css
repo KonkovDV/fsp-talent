@@ -2,36 +2,220 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────
+   @layer base — CSS custom properties (OKLCH)
+   ───────────────────────────────────────────── */
 @layer base {
-  :root {
-    --fsp-violet: #402FFF;
-    --fsp-red: #EC1D35;
-    --fsp-dark: #1B1C21;
+  /* Dark theme (default) */
+  :root, [data-theme="dark"] {
+    /* Brand */
+    --brand:        0.55 0.24 275;
+    --brand-dim:    0.40 0.20 275;
+    --brand-bright: 0.70 0.22 275;
+    /* Surfaces */
+    --surface-0:    0.12 0.01 260;
+    --surface-1:    0.16 0.01 260;
+    --surface-2:    0.20 0.01 260;
+    --surface-3:    0.26 0.01 260;
+    /* Text */
+    --text-primary:   0.95 0 0;
+    --text-secondary: 0.70 0.01 260;
+    --text-muted:     0.50 0.01 260;
+    /* Borders */
+    --border:       0.30 0.01 260;
+    --border-strong:0.45 0.01 260;
+    /* Score track */
+    --score-track:  0.22 0.01 260;
   }
-  html { font-family: 'Inter', system-ui, sans-serif; }
-  body { @apply bg-fsp-light-bg text-fsp-dark; }
+
+  /* Light theme */
+  [data-theme="light"] {
+    --brand:        0.50 0.24 275;
+    --brand-dim:    0.95 0.06 275;
+    --brand-bright: 0.40 0.26 275;
+    --surface-0:    0.98 0 0;
+    --surface-1:    0.96 0 0;
+    --surface-2:    0.92 0 0;
+    --surface-3:    0.88 0 0;
+    --text-primary:   0.15 0 0;
+    --text-secondary: 0.40 0 0;
+    --text-muted:     0.60 0 0;
+    --border:       0.85 0 0;
+    --border-strong:0.75 0 0;
+    --score-track:  0.90 0 0;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-surface-0 text-text-primary;
+    min-height: 100dvh;
+  }
+
+  /* Skip link */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4
+           focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-xl
+           focus:bg-brand focus:text-white focus:outline-none;
+  }
+
+  /* Reduced motion — kill all animations */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
+/* ─────────────────────────────────────────────
+   @layer components — reusable blocks
+   ───────────────────────────────────────────── */
 @layer components {
+  /* ── Buttons ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           font-semibold transition-all duration-200 select-none
+           focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-brand focus-visible:ring-offset-2
+           focus-visible:ring-offset-surface-0
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
   .btn-primary {
-    @apply bg-fsp-violet text-white px-5 py-2.5 rounded-xl font-semibold
-           hover:bg-fsp-violet-dark transition-colors disabled:opacity-50;
+    @apply btn px-5 py-2.5 text-sm bg-brand text-white
+           hover:bg-brand-bright hover:shadow-glow-brand active:scale-95;
   }
   .btn-secondary {
-    @apply border border-fsp-violet text-fsp-violet px-5 py-2.5 rounded-xl font-semibold
-           hover:bg-fsp-violet hover:text-white transition-colors;
+    @apply btn px-5 py-2.5 text-sm border border-border text-text-primary
+           hover:border-border-strong hover:bg-surface-2 active:scale-95;
   }
+  .btn-ghost {
+    @apply btn px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-2;
+  }
+
+  /* ── Cards ── */
   .card {
-    @apply bg-white rounded-2xl shadow-card p-6;
+    @apply bg-surface-1 rounded-2xl border border-border p-6
+           shadow-card;
   }
   .card-hover {
-    @apply card hover:shadow-card-hover transition-shadow cursor-pointer;
+    @apply card cursor-pointer transition-all duration-200
+           hover:border-border-strong hover:shadow-card-hover
+           hover:-translate-y-0.5;
   }
+  .card-interactive {
+    @apply card-hover active:translate-y-0 active:shadow-card;
+  }
+
+  /* ── Badges ── */
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
+           text-xs font-semibold;
   }
-  .badge-lead   { @apply badge bg-purple-100 text-purple-800; }
-  .badge-senior { @apply badge bg-blue-100 text-blue-800; }
-  .badge-middle { @apply badge bg-green-100 text-green-800; }
-  .badge-junior { @apply badge bg-gray-100 text-gray-700; }
+  .badge-brand  { @apply badge bg-brand/20 text-brand-bright border border-brand/30; }
+  .badge-lead   { @apply badge bg-purple-500/20 text-purple-300 border border-purple-500/30; }
+  .badge-senior { @apply badge bg-blue-500/20 text-blue-300 border border-blue-500/30; }
+  .badge-middle { @apply badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30; }
+  .badge-junior { @apply badge bg-surface-3 text-text-secondary border border-border; }
+  .badge-mc     { @apply badge bg-yellow-500/20 text-yellow-300 border border-yellow-500/30; }
+  .badge-kmc    { @apply badge bg-orange-500/20 text-orange-300 border border-orange-500/30; }
+  .badge-vc     { @apply badge bg-emerald-500/15 text-emerald-300 border border-emerald-500/25; }
+
+  /* ── Glass nav ── */
+  .glass-nav {
+    @apply backdrop-blur-xl bg-surface-0/80 border-b border-border;
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  /* ── Score bar ── */
+  .score-bar-track {
+    @apply relative h-1.5 rounded-full overflow-hidden;
+    background: oklch(var(--score-track));
+  }
+  .score-bar-fill {
+    @apply h-full rounded-full transition-all duration-700 ease-out;
+  }
+  .score-bar-mu    { @apply score-bar-fill bg-gradient-to-r from-blue-600 to-cyan-400; }
+  .score-bar-lcb   { @apply score-bar-fill bg-gradient-to-r from-emerald-600 to-emerald-400; }
+
+  /* ── Form inputs ── */
+  .input {
+    @apply w-full bg-surface-2 border border-border rounded-xl px-4 py-2.5
+           text-sm text-text-primary placeholder:text-text-muted
+           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
+           transition-colors duration-150;
+  }
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+
+  /* ── Skeleton ── */
+  .skeleton {
+    @apply rounded-xl bg-surface-2 relative overflow-hidden;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent 0%, oklch(var(--surface-3)) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  /* ── Stat card ── */
+  .stat-card {
+    @apply card flex flex-col gap-2;
+  }
+  .stat-card-value {
+    @apply text-3xl font-bold tabular-nums;
+  }
+  .stat-card-label {
+    @apply text-xs font-medium uppercase tracking-widest text-text-muted;
+  }
+  .stat-card-delta {
+    @apply text-xs font-medium;
+  }
+
+  /* ── Chip / filter tag ── */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full
+           text-xs font-medium border cursor-pointer select-none
+           transition-all duration-150;
+  }
+  .chip-default {
+    @apply chip bg-surface-2 border-border text-text-secondary
+           hover:border-border-strong hover:text-text-primary;
+  }
+  .chip-active {
+    @apply chip bg-brand/20 border-brand/50 text-brand-bright;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   @layer utilities — atomic helpers
+   ───────────────────────────────────────────── */
+@layer utilities {
+  .text-gradient-brand {
+    background: linear-gradient(135deg, oklch(0.7 0.22 275), oklch(0.75 0.18 200));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .bg-grid {
+    background-image: linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),
+                      linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);
+    background-size: 32px 32px;
+  }
+  .glow-brand { box-shadow: 0 0 24px oklch(0.6 0.25 275 / 0.3); }
+  .glow-score { box-shadow: 0 0 16px oklch(0.8 0.15 200 / 0.35); }
+  .text-balance { text-wrap: balance; }
+  .tabular { font-variant-numeric: tabular-nums; }
 }

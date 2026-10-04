@@ -1,70 +1,185 @@
 import { useQuery } from '@tanstack/react-query'
 import { getMyProfile, getMyOffers } from '../../api/client'
 import GradeRadar from '../../components/GradeRadar'
+import ScoreBar from '../../components/ScoreBar'
 import { roleRu } from '../../labels'
-import { Trophy, Briefcase, Eye } from 'lucide-react'
+import { Trophy, Briefcase, Eye, TrendingUp, ShieldCheck } from 'lucide-react'
 
-const GRADE_CLASS: Record<string, string> = { lead: 'badge-lead', senior: 'badge-senior', middle: 'badge-middle', junior: 'badge-junior' }
-const SOURCE: Record<string, string> = { declared: 'указан вами', experience: 'по опыту', default: 'опыт не указан' }
+const GRADE_BADGE: Record<string, string> = {
+  lead:   'badge-lead',
+  senior: 'badge-senior',
+  middle: 'badge-middle',
+  junior: 'badge-junior',
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  declared:   'указан вами',
+  experience: 'по опыту',
+  default:    'не указан',
+}
 
 export default function CandidateDashboard() {
-  const { data: profile, isLoading } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
-  const { data: offers = [] } = useQuery({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ['myProfile'],
+    queryFn:  () => getMyProfile().then(r => r.data),
+  })
+  const { data: offers = [] } = useQuery({
+    queryKey: ['myOffers'],
+    queryFn:  () => getMyOffers().then(r => r.data),
+  })
 
-  if (isLoading) return <div className="animate-pulse h-64 bg-gray-100 rounded-2xl" />
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="skeleton h-8 w-40" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="skeleton h-28" />)}
+        </div>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="skeleton h-64" />
+          <div className="skeleton h-64" />
+        </div>
+      </div>
+    )
+  }
   if (!profile) return null
 
-  const pending = offers.filter((o: { status: string }) => o.status === 'pending').length
+  const pending  = (offers as { status: string }[]).filter(o => o.status === 'pending').length
+  const topDisc  = profile.discipline_scores?.[0]
+
+  const stats = [
+    {
+      icon: Trophy,
+      label: 'Дисциплины ФСП',
+      value: profile.discipline_scores?.length ?? 0,
+      accent: 'text-yellow-400',
+      bg: 'bg-yellow-500/10',
+      delta: null,
+    },
+    {
+      icon: Briefcase,
+      label: 'Новые офферы',
+      value: pending,
+      accent: 'text-cyan-400',
+      bg: 'bg-cyan-500/10',
+      delta: pending > 0 ? `+${pending} ждут` : null,
+    },
+    {
+      icon: Eye,
+      label: 'В поиске',
+      value: profile.discoverable ? 'да' : 'нет',
+      accent: profile.discoverable ? 'text-emerald-400' : 'text-text-muted',
+      bg: profile.discoverable ? 'bg-emerald-500/10' : 'bg-surface-2',
+      delta: null,
+    },
+    {
+      icon: TrendingUp,
+      label: 'Байесовский μ',
+      value: topDisc ? (topDisc.mu ?? topDisc.lcb)?.toFixed(2) : '—',
+      accent: 'text-brand-bright',
+      bg: 'bg-brand/10',
+      delta: topDisc ? `LCB ${topDisc.lcb?.toFixed(2)}` : null,
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-fsp-dark">Кабинет</h1>
-      <div className="grid sm:grid-cols-3 gap-4">
-        {[
-          { icon: Trophy, label: 'Дисциплины ФСП', value: profile.discipline_scores?.length ?? 0 },
-          { icon: Briefcase, label: 'Новые офферы', value: pending },
-          { icon: Eye, label: 'В поиске', value: profile.discoverable ? 'да' : 'нет' },
-        ].map(({ icon: Icon, label, value }) => (
-          <div key={label} className="card flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-fsp-violet/10 flex items-center justify-center">
-              <Icon size={20} className="text-fsp-violet" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{label}</p>
-              <p className="text-xl font-bold text-fsp-dark">{value}</p>
-            </div>
-          </div>
-        ))}
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Кабинет</h1>
+          {profile.scoring_version && (
+            <p className="text-xs text-text-muted mt-1">scoring {profile.scoring_version}</p>
+          )}
+        </div>
+        {profile.grade && (
+          <span className={GRADE_BADGE[profile.grade] ?? 'badge-junior'}>{profile.grade}</span>
+        )}
       </div>
 
+      {/* Stats grid */}
+      <section aria-label="Статистика">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map(({ icon: Icon, label, value, accent, bg, delta }) => (
+            <div key={label} className="stat-card">
+              <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+                <Icon size={18} className={accent} aria-hidden />
+              </div>
+              <p className={`stat-card-value ${accent}`}>{value}</p>
+              <p className="stat-card-label">{label}</p>
+              {delta && <p className="stat-card-delta text-text-muted">{delta}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Main content */}
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Подтверждено ФСП</h2>
-            {profile.grade && <span className={GRADE_CLASS[profile.grade]}>{profile.grade}</span>}
+        {/* Discipline scores */}
+        <section className="card space-y-5" aria-labelledby="scores-heading">
+          <div className="flex items-center justify-between">
+            <h2 id="scores-heading" className="font-semibold text-text-primary">Дисциплинарные скоры</h2>
+            <ShieldCheck size={16} className="text-text-muted" />
           </div>
-          <p className="text-xs text-gray-500 mb-2">Грейд {SOURCE[profile.grade_source] ?? profile.grade_source} и не выводится из результатов соревнований.</p>
+          {(profile.discipline_scores ?? []).length > 0 ? (
+            <div className="space-y-5">
+              {(profile.discipline_scores ?? []).map((ds: {
+                discipline: string; label: string;
+                mu?: number; lcb: number; sigma?: number; best_rank: string | null
+              }) => (
+                <div key={ds.discipline} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-text-primary">{ds.label}</p>
+                    {ds.best_rank && <span className="badge-kmc text-2xs">{ds.best_rank}</span>}
+                  </div>
+                  <ScoreBar mu={ds.mu ?? ds.lcb} lcb={ds.lcb} sigma={ds.sigma} compact />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted">Результаты соревнований не добавлены.</p>
+          )}
           <GradeRadar scores={profile.discipline_scores ?? []} />
-        </div>
-        <div className="card">
-          <h2 className="font-semibold mb-4">Навыки и роль</h2>
-          <div className="flex flex-wrap gap-2">
+        </section>
+
+        {/* Profile / skills */}
+        <section className="card space-y-5" aria-labelledby="profile-heading">
+          <h2 id="profile-heading" className="font-semibold text-text-primary">Навыки и роль</h2>
+
+          <div className="flex flex-wrap gap-1.5">
             {(profile.stack ?? []).map((sk: string) => (
-              <span key={sk} className="px-3 py-1 bg-fsp-violet/10 text-fsp-violet rounded-lg text-sm font-medium">{sk}</span>
+              <span key={sk} className="chip chip-active">{sk}</span>
             ))}
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 space-y-1">
-            <p className="text-sm text-gray-500">Роль: <span className="font-medium text-fsp-dark">{roleRu(profile.primary_role)}</span></p>
-            <p className="text-sm text-gray-500">Регион: <span className="font-medium text-fsp-dark">{profile.region ?? '—'}</span></p>
-            {(profile.explanation ?? []).map((line: string) => <p key={line} className="text-sm text-gray-500">{line}</p>)}
-          </div>
-          <div className="mt-4 space-y-1">
-            {(profile.discipline_scores ?? []).map((ds: { discipline: string; label: string; lcb: number; best_rank: string | null }) => (
-              <p key={ds.discipline} className="text-sm font-mono">
-                {ds.label}: LCB {ds.lcb.toFixed(2)}{ds.best_rank ? ` · ${ds.best_rank}` : ''}
-              </p>
-            ))}
-          </div>
-        </div>
+
+          <dl className="space-y-2 text-sm">
+            <div className="flex gap-2">
+              <dt className="text-text-muted w-24 shrink-0">Роль</dt>
+              <dd className="font-medium text-text-primary">{roleRu(profile.primary_role)}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-text-muted w-24 shrink-0">Грейд</dt>
+              <dd className="font-medium text-text-primary">
+                {profile.grade ?? '—'}
+                {profile.grade_source && (
+                  <span className="text-text-muted font-normal ml-1">({SOURCE_LABEL[profile.grade_source] ?? profile.grade_source})</span>
+                )}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-text-muted w-24 shrink-0">Регион</dt>
+              <dd className="font-medium text-text-primary">{profile.region ?? '—'}</dd>
+            </div>
+          </dl>
+
+          {(profile.explanation ?? []).length > 0 && (
+            <div className="space-y-1 pt-2 border-t border-border">
+              {(profile.explanation as string[]).map(line => (
+                <p key={line} className="text-xs text-text-muted">{line}</p>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )
