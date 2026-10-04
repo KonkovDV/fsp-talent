@@ -32,7 +32,9 @@ class ParticipantRegister(BaseModel):
 
 @router.post("/participant/register", response_model=TokenOut, status_code=201)
 async def register_participant(body: ParticipantRegister, db: AsyncSession = Depends(get_db)):
-    await _limit("register", body.fsp_id)
+    # FIX BUG-05: use role-specific bucket prefix to avoid collision with employer register bucket.
+    # auth:register:participant:{id} vs auth:register:employer:{id} are distinct namespaces.
+    await _limit("register:participant", body.fsp_id)
     await _limit("register-site", "all", limit=20)
     adapter = get_fsp_adapter()
     if not await adapter.verify_secret(body.fsp_id, body.fsp_secret):
@@ -75,7 +77,8 @@ class EmployerRegister(BaseModel):
 
 @router.post("/employer/register", response_model=TokenOut, status_code=201)
 async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(get_db)):
-    await _limit("register", body.email)
+    # FIX BUG-05: use role-specific bucket prefix
+    await _limit("register:employer", body.email)
     await _limit("register-site", "all", limit=20)
     if await db.scalar(select(Employer).where(Employer.email == body.email)):
         raise HTTPException(409, "Email уже зарегистрирован")

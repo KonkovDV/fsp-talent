@@ -26,7 +26,14 @@ class Participant(Base):
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC))
+    # FIX BUG-03: updated_at must have a default= as well as onupdate=.
+    # Without default=, the column is NULL after INSERT, which causes ORDER BY updated_at
+    # to place new participants at an arbitrary position (NULLS FIRST in ascending order).
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
     qualifications = relationship("Qualification", back_populates="participant", cascade="all, delete")
     results = relationship("Result", back_populates="participant")
     skills = relationship("Skill", back_populates="participant", cascade="all, delete")

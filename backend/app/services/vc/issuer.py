@@ -41,7 +41,7 @@ def _b58decode(s: str) -> bytes:
     n = 0
     for ch in s:
         n = n * 58 + _B58.index(ch)
-    body = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    body = n.to_bytes((n.bit_length() + 7) // 8, "big") if n else b""
     return b"\0" * (len(s) - len(s.lstrip("1"))) + body
 
 
@@ -79,6 +79,16 @@ def issuer_id() -> str:
 def public_key_multibase() -> str:
     raw = _private_key().public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     return "z" + _b58encode(_ED25519_PUB_MULTICODEC + raw)
+
+
+# FIX BUG-04: Cache the parsed Ed25519PublicKey object.
+# verify_credential was calling public_key_multibase() + _b58decode() + Ed25519PublicKey.from_public_bytes()
+# on every invocation. The public key is derived from the (already cached) private key,
+# so it never changes. Cache it separately so bulk verification is O(1) per call.
+@lru_cache(maxsize=1)
+def _public_key_obj() -> Ed25519PublicKey:
+    raw = _b58decode(public_key_multibase()[1:])[len(_ED25519_PUB_MULTICODEC):]
+    return Ed25519PublicKey.from_public_bytes(raw)
 
 
 def issuer_document() -> dict:
@@ -132,9 +142,8 @@ def verify_credential(credential: dict) -> bool:
     document = {k: v for k, v in credential.items() if k != "proof"}
     proof_config = {k: v for k, v in proof.items() if k != "proofValue"}
     try:
-        raw_pub = _b58decode(public_key_multibase()[1:])[len(_ED25519_PUB_MULTICODEC):]
-        Ed25519PublicKey.from_public_bytes(raw_pub).verify(_b58decode(proof_value[1:]),
-                                                           _hash_data(document, proof_config))
+        # FIX BUG-04: use cached public key object instead of reconstructing every call
+        _public_key_obj().verify(_b58decode(proof_value[1:]), _hash_data(document, proof_config))
         return True
     except (InvalidSignature, ValueError):
         return False
