@@ -47,10 +47,11 @@ def create_refresh_token(subject: str, role: str) -> str:
 
 
 def decode_token(token: str) -> dict:
+    # HS256 only: the configured algorithm must not be able to switch verification to "none".
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
     except JWTError as e:
-        raise ValueError(f"Invalid token: {e}") from e
+        raise ValueError("Invalid token") from e
     if payload.get("type") != "access":
         raise ValueError("Access token required")
     return payload

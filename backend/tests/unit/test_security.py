@@ -1,4 +1,6 @@
-from datetime import timedelta
+import base64
+import json
+from datetime import date, timedelta
 
 import pytest
 from jose import jwt
@@ -13,6 +15,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.participant import Participant
+from app.services.profile import adult_cutoff, born_adult
 
 
 def test_access_token_round_trip_and_refresh_is_rejected():
@@ -49,6 +52,23 @@ def test_discoverable_hides_minors_without_consent_and_hidden_profiles():
     assert Participant(is_visible=True, is_minor=True, minor_consent_given=True).discoverable
     assert not Participant(is_visible=True, is_minor=True, minor_consent_given=False).discoverable
     assert not Participant(is_visible=False, is_minor=False, minor_consent_given=False).discoverable
+
+
+def test_unsigned_token_is_rejected():
+    def segment(obj: dict) -> str:
+        raw = json.dumps(obj, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    unsigned = f"{segment({'alg': 'none', 'typ': 'JWT'})}.{segment({'sub': 'person-1', 'type': 'access'})}."
+    with pytest.raises(ValueError, match="Invalid token"):
+        decode_token(unsigned)
+
+
+def test_birth_date_not_the_stored_flag_decides_adulthood():
+    assert adult_cutoff(date(2024, 2, 29)) == date(2006, 2, 28)
+    assert not born_adult(date(2012, 5, 1), is_minor=False, today=date(2026, 10, 4))
+    assert born_adult(date(2000, 1, 1), is_minor=True, today=date(2026, 10, 4))
+    assert not born_adult(None, is_minor=True, today=date(2026, 10, 4))
 
 
 def test_settings_secret_is_the_signing_key():

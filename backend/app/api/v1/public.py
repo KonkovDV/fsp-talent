@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -9,13 +9,20 @@ from app.core.database import get_db
 from app.models import Participant, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.profile import adult_cutoff
 from app.services.vc.issuer import issuer_document, verify_credential
 
 router = APIRouter(prefix="/public", tags=["public"])
 
 
 def _public_filter():
-    return (Participant.public_profile.is_(True), Participant.is_minor.is_(False))
+    """Named page, leaderboard and public credentials. A minor stays off even if the flag is stale."""
+    cutoff = adult_cutoff()
+    adult = or_(
+        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
+        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
+    )
+    return (Participant.public_profile.is_(True), adult)
 
 
 @router.get("/issuer")

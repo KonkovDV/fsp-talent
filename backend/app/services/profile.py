@@ -21,6 +21,22 @@ def age_on(birth: date, ref: date) -> int:
     return ref.year - birth.year - ((ref.month, ref.day) < (birth.month, birth.day))
 
 
+def adult_cutoff(today: date | None = None) -> date:
+    """Last birth date that is already 18 on `today`. 29 February falls back to 28 February."""
+    today = today or date.today()
+    try:
+        return today.replace(year=today.year - 18)
+    except ValueError:
+        return date(today.year - 18, 2, 28)
+
+
+def born_adult(birth: date | None, is_minor: bool, today: date | None = None) -> bool:
+    """Birth date wins over the stored flag. The flag is only used when the date is unknown."""
+    if birth is None:
+        return not is_minor
+    return birth <= adult_cutoff(today)
+
+
 async def ingest_from_fsp(db: AsyncSession, data: FSPParticipant) -> Participant:
     p = Participant(
         fsp_id=data.fsp_id, display_name=data.display_name, region=data.region,
@@ -61,6 +77,10 @@ async def ingest_from_fsp(db: AsyncSession, data: FSPParticipant) -> Participant
 
 
 async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
+    if p.birth_date is not None:
+        p.is_minor = age_on(p.birth_date, date.today()) < 18
+        if p.is_minor:
+            p.public_profile = False
     results = list(await db.scalars(select(Result).where(Result.participant_id == p.id)))
     skills = [s.name for s in await db.scalars(
         select(Skill).where(Skill.participant_id == p.id, Skill.confirmed.is_(True)))]

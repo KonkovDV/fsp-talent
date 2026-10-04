@@ -98,7 +98,7 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     if not p:
         raise HTTPException(404, "Профиль не найден")
     data = body.model_dump(exclude_unset=True)
-    if data.get("public_profile") and p.is_minor:
+    if data.get("public_profile") and p.minor_now():
         raise HTTPException(403, "Именная страница недоступна для несовершеннолетних")
     if "declared_grade" in data and data["declared_grade"] not in (*GRADES, None):
         raise HTTPException(400, "Неизвестный грейд")

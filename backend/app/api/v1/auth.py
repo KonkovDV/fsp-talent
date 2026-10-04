@@ -32,6 +32,8 @@ class ParticipantRegister(BaseModel):
 
 @router.post("/participant/register", response_model=TokenOut, status_code=201)
 async def register_participant(body: ParticipantRegister, db: AsyncSession = Depends(get_db)):
+    await _limit("register", body.fsp_id)
+    await _limit("register-site", "all", limit=20)
     adapter = get_fsp_adapter()
     if not await adapter.verify_secret(body.fsp_id, body.fsp_secret):
         raise HTTPException(400, "Неверные учётные данные ФСП")
@@ -46,10 +48,10 @@ async def register_participant(body: ParticipantRegister, db: AsyncSession = Dep
     return _tokens(str(participant.id), "participant")
 
 
-async def _limit(bucket: str, identity: str) -> None:
+async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
     # Keyed by account, not by IP: behind nginx every visitor shares one address.
-    if await too_many(f"auth:{bucket}:{identity.strip().lower()}"):
-        raise HTTPException(429, "Слишком много попыток входа. Подождите минуту.")
+    if await too_many(f"auth:{bucket}:{identity.strip().lower()}", limit=limit):
+        raise HTTPException(429, "Слишком много попыток. Подождите минуту.")
 
 
 @router.post("/participant/token", response_model=TokenOut)
@@ -73,6 +75,8 @@ class EmployerRegister(BaseModel):
 
 @router.post("/employer/register", response_model=TokenOut, status_code=201)
 async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(get_db)):
+    await _limit("register", body.email)
+    await _limit("register-site", "all", limit=20)
     if await db.scalar(select(Employer).where(Employer.email == body.email)):
         raise HTTPException(409, "Email уже зарегистрирован")
     try:
