@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import Column, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -15,6 +17,7 @@ class Employer(Base):
     inn = Column(String(12))
     website = Column(String(200))
     subscription_tier = Column(String(20), nullable=False, default="free")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
+    vacancies = relationship("Vacancy", back_populates="employer")
     access_logs = relationship("AccessLog", back_populates="employer")

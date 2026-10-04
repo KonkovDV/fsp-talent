@@ -4,9 +4,11 @@ propose extra skills, but each must normalize to the taxonomy and quote the sour
 verbatim, otherwise it is dropped. The candidate confirms every skill before it is used.
 """
 from __future__ import annotations
+
 import json
 import logging
 import re
+
 from app.core.config import settings
 from app.services.categorization import GRADES
 from app.services.skills import ROLES, extract_skills, is_grounded, normalize_skill
@@ -58,7 +60,7 @@ async def _llm_skills(text: str) -> list[dict]:
         if close:
             await close()
     content = resp.choices[0].message.content
-    match = re.search(r"\[.*\]", content, re.S)
+    match = re.search(r"\[.*\]", content, re.DOTALL)
     return json.loads(match.group(0)) if match else []
 
 

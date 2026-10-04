@@ -7,10 +7,12 @@ the README documents). Same id -> same data. Ids outside the range are rejected,
 register unseeded synthetic identities with the public demo secret.
 """
 from __future__ import annotations
+
 import random
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Optional, Protocol
+from typing import Protocol
+
 from app.core.config import settings
 
 TEAM_DISCIPLINES = {"product", "security", "bas", "robotics"}
@@ -29,9 +31,9 @@ class FSPResult:
     is_team: bool
     team_size: int
     event_date: date
-    regions_count: Optional[int] = None
+    regions_count: int | None = None
     role: str = "participant"
-    protocol_url: Optional[str] = None
+    protocol_url: str | None = None
     trust_level: str = "verified_fsp"
 
 
@@ -46,7 +48,7 @@ class FSPParticipant:
 
 
 class FSPAdapter(Protocol):
-    async def fetch_participant(self, fsp_id: str) -> Optional[FSPParticipant]: ...
+    async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None: ...
     async def verify_secret(self, fsp_id: str, secret: str) -> bool: ...
 
 
@@ -121,7 +123,7 @@ def _status_name(status: str) -> str:
 
 
 class MockFSPAdapter:
-    async def fetch_participant(self, fsp_id: str) -> Optional[FSPParticipant]:
+    async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None:
         if fsp_id in DEMO:
             return DEMO[fsp_id]
         if fsp_id.startswith("FSP") and fsp_id[3:].isdigit() and int(fsp_id[3:]) in GENERATED_RANGE:
@@ -135,7 +137,7 @@ class MockFSPAdapter:
 class RealFSPAdapter:
     """Placeholder until the FSP API specification is provided by the case holder."""
 
-    async def fetch_participant(self, fsp_id: str) -> Optional[FSPParticipant]:
+    async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None:
         raise NotImplementedError("FSP API specification not available yet")
 
     async def verify_secret(self, fsp_id: str, secret: str) -> bool:

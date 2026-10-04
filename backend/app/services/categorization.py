@@ -5,7 +5,9 @@ Grade and the FSP-verified level are independent axes: grade comes from experien
 (or the candidate's own declaration), never from competition results.
 """
 from __future__ import annotations
+
 from typing import TypedDict
+
 from app.services.skills import ROLES, roles_for
 
 RULES_VERSION = "v2.0.0"

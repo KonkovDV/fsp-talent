@@ -1,9 +1,13 @@
 """Single code path that turns FSP protocols + confirmed skills into a searchable profile."""
 from __future__ import annotations
+
 import uuid
 from datetime import date
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 from app.models import Participant, Result, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, profile_text
@@ -11,7 +15,6 @@ from app.services.categorization import DISCIPLINE_LABELS, assign_category
 from app.services.fsp.mock import FSPParticipant
 from app.services.scoring.engine import compute_discipline_score, rank_equivalent
 from app.services.vc.issuer import issue_achievement_credential
-from app.core.config import settings
 
 
 def age_on(birth: date, ref: date) -> int:
@@ -55,6 +58,10 @@ async def ingest_from_fsp(db: AsyncSession, data: FSPParticipant) -> Participant
 
 
 async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
+    if p.birth_date is not None:
+        p.is_minor = age_on(p.birth_date, date.today()) < 18
+        if p.is_minor:
+            p.public_profile = False
     results = list(await db.scalars(select(Result).where(Result.participant_id == p.id)))
     skills = [s.name for s in await db.scalars(
         select(Skill).where(Skill.participant_id == p.id, Skill.confirmed.is_(True)))]

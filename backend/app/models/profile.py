@@ -1,9 +1,11 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import Column, Computed, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB, TSVECTOR
-from sqlalchemy.orm import relationship
+from datetime import UTC, datetime
+
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column, Computed, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -22,7 +24,7 @@ class DisciplineScore(Base):
     best_rank = Column(String(10))
     top_event_ids = Column(JSONB, nullable=False, default=list)
     scoring_version = Column(String(20), nullable=False)
-    computed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    computed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="discipline_scores")
     __table_args__ = (UniqueConstraint("participant_id", "discipline", name="uq_participant_discipline"),)
 
@@ -38,7 +40,7 @@ class CategoryAssignment(Base):
     stack = Column(JSONB, nullable=False, default=list)
     explanation = Column(JSONB, nullable=False, default=list)
     rules_version = Column(String(20), nullable=False, default="v2.0.0")
-    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="category")
 
 
@@ -47,7 +49,7 @@ class ProfileEmbedding(Base):
     participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), primary_key=True)
     embedding = Column(Vector(1024), nullable=False)
     model_version = Column(String(100), nullable=False)
-    computed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    computed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="embedding")
 
     __table_args__ = (
@@ -65,7 +67,7 @@ class ProfileSearchIndex(Base):
     role = Column(String(50))
     grade = Column(String(20))
     region = Column(String(100))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     __table_args__ = (
         Index("ix_psi_skills_tsv", "skills_tsv", postgresql_using="gin"),

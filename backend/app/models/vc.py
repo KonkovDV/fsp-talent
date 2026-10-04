@@ -1,7 +1,9 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import Column, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+
 from app.core.database import Base
 
 
@@ -13,4 +15,4 @@ class VerifiableCredential(Base):
     result_id = Column(UUID(as_uuid=True), ForeignKey("results.id"), nullable=True)
     credential_json = Column(JSONB, nullable=False)
     proof_hex = Column(String(200), nullable=False)
-    issued_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    issued_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

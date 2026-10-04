@@ -4,7 +4,9 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import get_db
+from app.core.ratelimit import too_many
 from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from app.models import Employer, Participant
 from app.services.fsp.mock import get_fsp_adapter
@@ -44,8 +46,15 @@ async def register_participant(body: ParticipantRegister, db: AsyncSession = Dep
     return _tokens(str(participant.id), "participant")
 
 
+async def _limit(bucket: str, identity: str) -> None:
+    # Keyed by account, not by IP: behind nginx every visitor shares one address.
+    if await too_many(f"auth:{bucket}:{identity.strip().lower()}"):
+        raise HTTPException(429, "Слишком много попыток входа. Подождите минуту.")
+
+
 @router.post("/participant/token", response_model=TokenOut)
 async def login_participant(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    await _limit("participant", form.username)
     if not await get_fsp_adapter().verify_secret(form.username, form.password):
         raise HTTPException(401, "Неверные учётные данные")
     participant = await db.scalar(select(Participant).where(Participant.fsp_id == form.username))
@@ -83,6 +92,7 @@ async def register_employer(body: EmployerRegister, db: AsyncSession = Depends(g
 
 @router.post("/employer/token", response_model=TokenOut)
 async def login_employer(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    await _limit("employer", form.username)
     employer = await db.scalar(select(Employer).where(Employer.email == form.username))
     if not employer or not verify_password(form.password, employer.password_hash):
         raise HTTPException(401, "Неверные учётные данные")

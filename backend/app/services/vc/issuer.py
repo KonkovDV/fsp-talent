@@ -8,15 +8,18 @@ Canonicalization: sorted keys, compact separators, UTF-8. This matches RFC 8785 
 credentials without floats and astral-plane keys, which holds for everything issued here.
 """
 from __future__ import annotations
+
 import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
+
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -96,7 +99,7 @@ def _hash_data(document: dict, proof_config: dict) -> bytes:
 
 
 def issue_achievement_credential(credential_id: str, subject_id: str, achievement: dict) -> dict:
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    now = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     document = {
         "@context": ["https://www.w3.org/ns/credentials/v2"],
         "type": ["VerifiableCredential", "FSPAchievementCredential"],

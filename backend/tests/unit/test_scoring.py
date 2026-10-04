@@ -1,7 +1,13 @@
 from datetime import date
+
 import pytest
+
 from app.services.scoring.engine import (
-    compute_discipline_score, event_quality, event_weight, percentile, rank_equivalent,
+    compute_discipline_score,
+    event_quality,
+    event_weight,
+    percentile,
+    rank_equivalent,
 )
 
 

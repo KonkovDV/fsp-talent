@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, date, datetime
+
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -23,8 +25,8 @@ class Participant(Base):
     public_profile = Column(Boolean, nullable=False, default=False)
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC))
     qualifications = relationship("Qualification", back_populates="participant", cascade="all, delete")
     results = relationship("Result", back_populates="participant")
     skills = relationship("Skill", back_populates="participant", cascade="all, delete")
@@ -32,11 +34,20 @@ class Participant(Base):
     category = relationship("CategoryAssignment", back_populates="participant", uselist=False, cascade="all, delete")
     embedding = relationship("ProfileEmbedding", back_populates="participant", uselist=False, cascade="all, delete")
     offers = relationship("Offer", back_populates="candidate", foreign_keys="Offer.candidate_id")
+    applications = relationship("Application", back_populates="candidate")
     consent_logs = relationship("ConsentLog", back_populates="participant")
+
+    def minor_now(self, today: date | None = None) -> bool:
+        """Age from birth_date. The stored is_minor flag is only a fallback before the date is known."""
+        if self.birth_date is None:
+            return bool(self.is_minor)
+        today = today or date.today()
+        age = today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
+        return age < 18
 
     @property
     def discoverable(self) -> bool:
-        return self.is_visible and (not self.is_minor or self.minor_consent_given)
+        return bool(self.is_visible) and (not self.minor_now() or bool(self.minor_consent_given))
 
 
 class Qualification(Base):
@@ -69,7 +80,7 @@ class Result(Base):
     protocol_url = Column(String(500))
     trust_level = Column(String(20), nullable=False, default="verified_fsp")
     raw_data = Column(JSONB, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="results")
 
 
@@ -83,6 +94,6 @@ class Skill(Base):
     source_quote = Column(Text)
     trust_level = Column(String(20), nullable=False, default="self_reported")
     confirmed = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="skills")
     __table_args__ = (UniqueConstraint("participant_id", "name", name="uq_participant_skill"),)

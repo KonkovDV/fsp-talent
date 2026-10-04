@@ -1,0 +1,217 @@
+import uuid
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.deps import get_current_employer, get_current_participant
+from app.core.database import get_db
+from app.models import (
+    AccessLog,
+    Application,
+    CategoryAssignment,
+    ConsentLog,
+    DisciplineScore,
+    Employer,
+    Participant,
+    Skill,
+    Vacancy,
+)
+from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
+from app.services.scoring.engine import RANK_ORDER
+from app.services.skills import normalize_skill
+from app.services.vacancies import match_vacancy
+
+router = APIRouter(prefix="/vacancies", tags=["vacancies"])
+
+
+def _uuid(current: dict) -> uuid.UUID:
+    return uuid.UUID(current["sub"])
+
+
+class VacancyIn(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    role: str | None = None
+    grade: str | None = None
+    discipline: str | None = None
+    min_rank: str | None = None
+    skills: list[str] = Field(default_factory=list, max_length=20)
+    salary_from_gross: int | None = Field(None, gt=0, le=100_000_000)
+    salary_to_gross: int | None = Field(None, gt=0, le=100_000_000)
+    work_format: Literal["remote", "office", "hybrid"] = "remote"
+    allows_minors: bool = False
+
+    @model_validator(mode="after")
+    def _range(self):
+        if self.role and self.role not in ROLES:
+            raise ValueError("Неизвестная роль")
+        if self.grade and self.grade not in GRADES:
+            raise ValueError("Неизвестный грейд")
+        if self.discipline and self.discipline not in DISCIPLINE_LABELS:
+            raise ValueError("Неизвестная дисциплина")
+        if self.min_rank and self.min_rank not in RANK_ORDER:
+            raise ValueError("Неизвестный разряд")
+        if self.salary_from_gross and self.salary_to_gross and self.salary_to_gross < self.salary_from_gross:
+            raise ValueError("Верхняя граница зарплаты меньше нижней")
+        return self
+
+
+def _out(v: Vacancy, extra: dict | None = None) -> dict:
+    card = {
+        "id": str(v.id), "title": v.title, "role": v.role, "grade": v.grade,
+        "discipline": v.discipline, "min_rank": v.min_rank, "skills": v.skills or [],
+        "salary_from": v.salary_from_gross, "salary_to": v.salary_to_gross,
+        "work_format": v.work_format, "allows_minors": v.allows_minors, "is_open": v.is_open,
+        "company": v.employer.company_name if v.employer else None,
+    }
+    if extra:
+        card.update(extra)
+    return card
+
+
+@router.post("/", status_code=201)
+async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_employer),
+                         db: AsyncSession = Depends(get_db)):
+    employer = await db.get(Employer, _uuid(current))
+    if not employer:
+        raise HTTPException(404, "Работодатель не найден")
+    skills = []
+    for raw in body.skills:
+        name = normalize_skill(raw)
+        if name and name not in skills:
+            skills.append(name)
+    vacancy = Vacancy(
+        employer_id=employer.id, title=body.title, role=body.role, grade=body.grade,
+        discipline=body.discipline, min_rank=body.min_rank, skills=skills,
+        salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
+        work_format=body.work_format, allows_minors=body.allows_minors,
+    )
+    db.add(vacancy)
+    await db.flush()
+    vacancy.employer = employer
+    await db.commit()
+    return _out(vacancy)
+
+
+@router.get("/mine")
+async def my_vacancies(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    rows = await db.scalars(select(Vacancy).where(Vacancy.employer_id == _uuid(current))
+                            .options(selectinload(Vacancy.employer)).order_by(Vacancy.created_at.desc()))
+    return [_out(v) for v in rows]
+
+
+@router.post("/{vacancy_id}/close")
+async def close_vacancy(vacancy_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                        db: AsyncSession = Depends(get_db)):
+    vacancy = await db.get(Vacancy, vacancy_id)
+    if not vacancy or vacancy.employer_id != _uuid(current):
+        raise HTTPException(404, "Вакансия не найдена")
+    vacancy.is_open = False
+    await db.commit()
+    return {"is_open": False}
+
+
+@router.get("/for-me")
+async def vacancies_for_me(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    participant = await db.get(Participant, _uuid(current))
+    if not participant:
+        raise HTTPException(404, "Профиль не найден")
+    category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == participant.id))
+    skills = list(await db.scalars(select(Skill.name).where(Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
+    scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
+    candidate = {
+        "role": category.primary_role if category else None,
+        "grade": category.grade if category else None,
+        "skills": skills,
+        "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
+        "is_minor": participant.minor_now(),
+    }
+    needs_guardian = participant.minor_now() and not participant.minor_consent_given
+    applied = set(await db.scalars(select(Application.vacancy_id).where(Application.candidate_id == participant.id)))
+    rows = list(await db.scalars(select(Vacancy).where(Vacancy.is_open.is_(True)).options(selectinload(Vacancy.employer))))
+    cards = []
+    for vacancy in rows:
+        hit = match_vacancy(candidate, {
+            "role": vacancy.role, "grade": vacancy.grade, "discipline": vacancy.discipline,
+            "min_rank": vacancy.min_rank, "skills": vacancy.skills or [],
+            "allows_minors": vacancy.allows_minors, "is_open": vacancy.is_open,
+        })
+        if hit is None:
+            continue
+        cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied, "can_apply": not needs_guardian}))
+    cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+    return cards
+
+
+@router.post("/{vacancy_id}/apply", status_code=201)
+async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                db: AsyncSession = Depends(get_db)):
+    participant = await db.get(Participant, _uuid(current))
+    vacancy = await db.get(Vacancy, vacancy_id)
+    if not participant or not vacancy or not vacancy.is_open:
+        raise HTTPException(404, "Вакансия не найдена")
+    if participant.minor_now() and not participant.minor_consent_given:
+        raise HTTPException(403, "Для отклика нужно согласие законного представителя")
+    category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == participant.id))
+    skills = list(await db.scalars(select(Skill.name).where(Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
+    scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
+    hit = match_vacancy({
+        "role": category.primary_role if category else None,
+        "grade": category.grade if category else None,
+        "skills": skills,
+        "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
+        "is_minor": participant.minor_now(),
+    }, {
+        "role": vacancy.role, "grade": vacancy.grade, "discipline": vacancy.discipline,
+        "min_rank": vacancy.min_rank, "skills": vacancy.skills or [],
+        "allows_minors": vacancy.allows_minors, "is_open": True,
+    })
+    if hit is None:
+        raise HTTPException(403, "Профиль не подходит под условия вакансии")
+    db.add(Application(vacancy_id=vacancy.id, candidate_id=participant.id, status="applied"))
+    db.add(ConsentLog(participant_id=participant.id, event_type="vacancy_applied", actor_id=participant.id,
+                      meta={"vacancy_id": str(vacancy.id)}))
+    try:
+        await db.flush()
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(409, "Отклик на эту вакансию уже есть") from e
+    await db.commit()
+    return {"status": "applied"}
+
+
+@router.get("/applications")
+async def my_applications(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    rows = list(await db.scalars(
+        select(Application).join(Vacancy).where(Vacancy.employer_id == _uuid(current))
+        .options(selectinload(Application.vacancy)).order_by(Application.created_at.desc())))
+    return [{
+        "id": str(a.id), "vacancy_id": str(a.vacancy_id), "vacancy_title": a.vacancy.title,
+        "candidate_id": str(a.candidate_id), "status": a.status,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    } for a in rows]
+
+
+@router.get("/applications/{application_id}/contacts")
+async def application_contacts(application_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                               db: AsyncSession = Depends(get_db)):
+    application = await db.get(Application, application_id)
+    if not application:
+        raise HTTPException(404, "Отклик не найден")
+    vacancy = await db.get(Vacancy, application.vacancy_id)
+    if not vacancy or vacancy.employer_id != _uuid(current):
+        raise HTTPException(404, "Отклик не найден")
+    candidate = await db.get(Participant, application.candidate_id)
+    if not candidate:
+        raise HTTPException(404, "Кандидат не найден")
+    db.add(AccessLog(employer_id=vacancy.employer_id, participant_id=candidate.id, access_type="application_contacts"))
+    await db.commit()
+    return {
+        "candidate_id": str(candidate.id), "display_name": candidate.display_name,
+        "email": candidate.email, "telegram": candidate.telegram, "phone": candidate.phone,
+        "region": candidate.region,
+    }

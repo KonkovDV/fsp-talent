@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import Column, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -14,7 +16,7 @@ class ConsentLog(Base):
     event_type = Column(String(50), nullable=False)
     actor_id = Column(UUID(as_uuid=True), nullable=False)
     ip_hash = Column(String(64))
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     meta = Column(JSONB, nullable=False, default=dict)
     participant = relationship("Participant", back_populates="consent_logs")
 
@@ -25,5 +27,5 @@ class AccessLog(Base):
     employer_id = Column(UUID(as_uuid=True), ForeignKey("employers.id"), nullable=False)
     participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id"), nullable=False)
     access_type = Column(String(50), nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     employer = relationship("Employer", back_populates="access_logs")

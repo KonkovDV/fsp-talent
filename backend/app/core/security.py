@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import bcrypt
-from jose import jwt, JWTError
+from jose import JWTError, jwt
+
 from app.core.config import settings
 
 # bcrypt hashes only the first 72 bytes; longer inputs are rejected by bcrypt>=5.
@@ -26,7 +28,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_token(data: dict, expire_minutes: int) -> str:
     payload = data.copy()
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
+    payload["exp"] = datetime.now(UTC) + timedelta(minutes=expire_minutes)
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

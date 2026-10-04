@@ -13,12 +13,14 @@ export default function Layout() {
     { to: '/candidate/profile', label: 'Профиль' },
     { to: '/candidate/results', label: 'Результаты' },
     { to: '/candidate/offers', label: 'Офферы' },
+    { to: '/candidate/vacancies', label: 'Вакансии' },
   ]
 
   const employerLinks = [
     { to: '/employer', label: 'Дашборд', end: true },
     { to: '/employer/search', label: 'Поиск' },
     { to: '/employer/offers', label: 'Офферы' },
+    { to: '/employer/vacancies', label: 'Вакансии' },
   ]
 
   const links = userRole === 'participant' ? candidateLinks : employerLinks

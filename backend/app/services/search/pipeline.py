@@ -7,9 +7,13 @@ When a discipline is selected, the quality signal (max LCB) is computed inside t
 a strong algorithmic score must not lift a candidate in a security search.
 """
 from __future__ import annotations
+
 import uuid
-from sqlalchemy import func, literal, or_, select
+from datetime import date
+
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models import Participant, Result, Skill
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, embeddings_enabled
@@ -60,11 +64,22 @@ async def search_candidates(
     else:
         lex = literal(0.0).label("lex")
 
+    # Adult if born on or before this calendar day. Keeps search correct after a birthday
+    # even when the stored is_minor flag has not been rebuilt yet.
+    today = date.today()
+    try:
+        adult_cutoff = today.replace(year=today.year - 18)
+    except ValueError:
+        adult_cutoff = date(today.year - 18, 2, 28)
+    adult = or_(
+        and_(Participant.birth_date.is_not(None), Participant.birth_date <= adult_cutoff),
+        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
+    )
     stmt = (select(Participant.id, func.coalesce(max_lcb.c.max_lcb, 0.0).label("max_lcb"), lex)
             .join(PSI, PSI.participant_id == Participant.id)
             .outerjoin(max_lcb, max_lcb.c.participant_id == Participant.id)
             .where(Participant.is_visible.is_(True),
-                   or_(Participant.is_minor.is_(False), Participant.minor_consent_given.is_(True))))
+                   or_(adult, Participant.minor_consent_given.is_(True))))
     if role:
         stmt = stmt.where(PSI.role == role)
     if grade:
