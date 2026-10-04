@@ -42,7 +42,7 @@ export default function LeaderboardPage() {
               }`}>#{r.rank}</span>
               <div className="flex-1">
                 <p className="font-semibold">{r.display_name}</p>
-                <p className="text-sm text-gray-500">{r.region} · {r.label ?? r.discipline}</p>
+                <p className="text-sm text-text-muted">{r.region} · {r.label ?? r.discipline}</p>
               </div>
               {r.best_rank && <span className="badge bg-amber-50 text-amber-800">{r.best_rank}</span>}
               {r.grade && <span className={GRADE_CLASS[r.grade] ?? 'badge'}>{r.grade}</span>}

@@ -56,7 +56,7 @@ export default function EmployerVacancies() {
         {vacancies.map((v: { id: string; title: string; is_open: boolean; skills: string[] }) => (
           <li key={v.id} className="card flex items-center justify-between">
             <span>{v.title} · {v.skills.join(', ')} · {v.is_open ? 'открыта' : 'закрыта'}</span>
-            {v.is_open && <button className="text-sm text-gray-500" onClick={() => close.mutate(v.id)}>Закрыть</button>}
+            {v.is_open && <button className="text-sm text-text-muted" onClick={() => close.mutate(v.id)}>Закрыть</button>}
           </li>
         ))}
       </ul>

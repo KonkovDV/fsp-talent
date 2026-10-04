@@ -3,10 +3,10 @@ import { Code2, Shield, Trophy, Zap, Star, ArrowRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 const STATS = [
-  { value: '12 400+', label: 'участников ФСП' },
-  { value: '340+',    label: 'работодателей' },
-  { value: '5',       label: 'дисциплин' },
-  { value: '98%',     label: 'анонимность до оффера' },
+  { value: '5', label: 'дисциплин ФСП' },
+  { value: '2 оси', label: 'грейд и уровень' },
+  { value: 'VC 2.0', label: 'подпись платформы' },
+  { value: '152-ФЗ', label: 'контакты после согласия' },
 ]
 
 const FEATURES = [

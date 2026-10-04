@@ -24,11 +24,11 @@ export default function CandidateOffers() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-semibold">{o.company}</p>
-              <p className="text-sm text-gray-500">{o.role} · {FORMAT[o.work_format] ?? o.work_format}</p>
+              <p className="text-sm text-text-muted">{o.role} · {FORMAT[o.work_format] ?? o.work_format}</p>
               <p className="text-sm text-fsp-violet font-medium mt-1 font-mono">
                 {o.salary_from.toLocaleString('ru-RU')} — {o.salary_to.toLocaleString('ru-RU')} {o.currency}
               </p>
-              {o.message && <p className="text-sm text-gray-600 mt-2">{o.message}</p>}
+              {o.message && <p className="text-sm text-text-secondary mt-2">{o.message}</p>}
             </div>
             <span className="badge bg-gray-100 text-gray-700">{STATUS[o.status] ?? o.status}</span>
           </div>

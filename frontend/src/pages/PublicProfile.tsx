@@ -63,7 +63,7 @@ export default function PublicProfile() {
               {(profile.display_name ?? 'У')[0]}
             </div>
             <h1 className="text-lg font-bold">{profile.display_name}</h1>
-            <p className="text-sm text-gray-500 mt-1">{profile.region}</p>
+            <p className="text-sm text-text-muted mt-1">{profile.region}</p>
             <div className="mt-3">
               <span className="badge bg-fsp-violet/10 text-fsp-violet">{roleRu(profile.primary_role)}</span>{' '}
               <span className="badge bg-gray-100 text-gray-700">{profile.grade}</span>
@@ -81,7 +81,7 @@ export default function PublicProfile() {
         <div className="md:col-span-2 space-y-4">
           <div className="card">
             <h2 className="font-semibold mb-1">Уровень по дисциплинам ФСП</h2>
-            <p className="text-xs text-gray-500 mb-3">График — средний уровень после сжатия. Ранжирование идёт по нижней границе.</p>
+            <p className="text-xs text-text-muted mb-3">График — средний уровень после сжатия. Ранжирование идёт по нижней границе.</p>
             <GradeRadar scores={profile.discipline_scores ?? []} />
             <div className="mt-3 space-y-1">
               {(profile.discipline_scores ?? []).map((ds: { discipline: string; label: string; lcb: number; best_rank: string | null }) => (

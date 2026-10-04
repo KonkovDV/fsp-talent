@@ -27,7 +27,7 @@ export default function CandidateResults() {
             <Medal size={20} className="text-amber-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-fsp-dark truncate">{r.event_name}</p>
+            <p className="font-semibold text-text-primary truncate">{r.event_name}</p>
             <div className="flex flex-wrap gap-2 mt-1">
               <span className={`badge ${STATUS_COLOR[r.competition_status] ?? 'bg-gray-100 text-gray-700'}`}>{r.status_label}</span>
               <span className="badge bg-fsp-violet/10 text-fsp-violet">{r.discipline_label}</span>

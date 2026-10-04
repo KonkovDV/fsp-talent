@@ -31,7 +31,7 @@ export default function EmployerOffers() {
         <div key={offer.id} className="card flex items-center justify-between gap-4">
           <div>
             <p className="font-semibold">{offer.role}</p>
-            <p className="text-sm text-gray-500 font-mono">
+            <p className="text-sm text-text-muted font-mono">
               {offer.salary_from.toLocaleString('ru-RU')}–{offer.salary_to.toLocaleString('ru-RU')} {offer.currency} · {offer.work_format}
             </p>
           </div>
@@ -52,7 +52,7 @@ export default function EmployerOffers() {
           <p className="text-sm">Email: {contacts.email ?? '—'}</p>
           <p className="text-sm">Telegram: {contacts.telegram ?? '—'}</p>
           <p className="text-sm">Телефон: {contacts.phone ?? '—'}</p>
-          <p className="text-sm text-gray-500">{contacts.region}</p>
+          <p className="text-sm text-text-muted">{contacts.region}</p>
         </div>
       )}
       {!isLoading && offers.length === 0 && <div className="card text-center text-gray-400 py-12">Офферов пока нет</div>}

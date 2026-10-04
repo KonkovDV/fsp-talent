@@ -125,14 +125,18 @@ export default function CandidateDashboard() {
             <div className="space-y-5">
               {(profile.discipline_scores ?? []).map((ds: {
                 discipline: string; label: string;
-                mu?: number; lcb: number; sigma?: number; best_rank: string | null
+                score?: number; mu?: number; lcb: number; sigma?: number; best_rank: string | null
               }) => (
                 <div key={ds.discipline} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-text-primary">{ds.label}</p>
-                    {ds.best_rank && <span className="badge-kmc text-2xs">{ds.best_rank}</span>}
+                    {ds.best_rank && (
+                      <span className={`text-2xs ${ds.best_rank.includes('КМС') ? 'badge-kmc' : ds.best_rank.includes('МС') ? 'badge-mc' : 'badge-junior'}`}>
+                        {ds.best_rank}
+                      </span>
+                    )}
                   </div>
-                  <ScoreBar mu={ds.mu ?? ds.lcb} lcb={ds.lcb} sigma={ds.sigma} compact />
+                  <ScoreBar mu={ds.score ?? ds.mu ?? ds.lcb} lcb={ds.lcb} sigma={ds.sigma} compact />
                 </div>
               ))}
             </div>

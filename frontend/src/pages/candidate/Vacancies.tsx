@@ -31,15 +31,15 @@ export default function CandidateVacancies() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Вакансии под профиль</h1>
-      <p className="text-sm text-gray-500">Отклик — это согласие показать контакты работодателю этой вакансии.</p>
-      {cards.length === 0 && <p className="text-gray-500">Подходящих открытых вакансий нет.</p>}
+      <p className="text-sm text-text-muted">Отклик — это согласие показать контакты работодателю этой вакансии.</p>
+      {cards.length === 0 && <p className="text-text-muted">Подходящих открытых вакансий нет.</p>}
       {apply.isError && <p className="text-sm text-fsp-red">{apiError(apply.error, 'Не удалось откликнуться')}</p>}
       {cards.map(card => (
         <article key={card.id} className="card space-y-2">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="font-semibold">{card.title}</h2>
-              <p className="text-sm text-gray-500">{card.company} · {roleRu(card.role)} · {card.grade ?? 'грейд не задан'} · {card.work_format}</p>
+              <p className="text-sm text-text-muted">{card.company} · {roleRu(card.role)} · {card.grade ?? 'грейд не задан'} · {card.work_format}</p>
             </div>
             <button disabled={card.applied || !card.can_apply || apply.isPending} onClick={() => apply.mutate(card.id)}
               className="btn-primary text-sm disabled:opacity-50">
@@ -49,7 +49,7 @@ export default function CandidateVacancies() {
           {(card.salary_from || card.salary_to) && (
             <p className="text-sm">{card.salary_from?.toLocaleString('ru-RU')}–{card.salary_to?.toLocaleString('ru-RU')} ₽</p>
           )}
-          <ul className="text-sm text-gray-600">{card.why.map(line => <li key={line}>{line}</li>)}</ul>
+          <ul className="text-sm text-text-secondary">{card.why.map(line => <li key={line}>{line}</li>)}</ul>
         </article>
       ))}
     </div>

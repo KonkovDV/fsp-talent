@@ -19,7 +19,7 @@ export default function EmployerDashboard() {
           </div>
           <div>
             <p className="font-semibold">Поиск кандидатов</p>
-            <p className="text-sm text-gray-500">Анонимные карточки, фильтр по роли, грейду и разряду</p>
+            <p className="text-sm text-text-muted">Анонимные карточки, фильтр по роли, грейду и разряду</p>
           </div>
         </Link>
         <Link to="/employer/offers" className="card-hover flex items-center gap-4">
@@ -28,7 +28,7 @@ export default function EmployerDashboard() {
           </div>
           <div>
             <p className="font-semibold">Мои офферы</p>
-            <p className="text-sm text-gray-500">{pending} ожидают · {accepted} приняты</p>
+            <p className="text-sm text-text-muted">{pending} ожидают · {accepted} приняты</p>
           </div>
         </Link>
       </div>

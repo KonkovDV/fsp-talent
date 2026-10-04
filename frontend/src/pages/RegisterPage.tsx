@@ -48,10 +48,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-fsp-light-bg">
+    <div className="min-h-dvh flex items-center justify-center bg-surface-0">
       <div className="card w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-2">Регистрация</h1>
-        <p className="text-gray-500 text-sm mb-6">
+        <h1 className="text-2xl font-bold text-text-primary mb-2">Регистрация</h1>
+        <p className="text-text-muted text-sm mb-6">
           {role === 'participant' ? 'Участник ФСП' : 'Работодатель'} ·{' '}
           <Link to={`/register?role=${role === 'participant' ? 'employer' : 'participant'}`}
             className="text-fsp-violet hover:underline">переключить</Link>
@@ -59,37 +59,33 @@ export default function RegisterPage() {
         {role === 'participant' ? (
           <form onSubmit={hp(onParticipant)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ID ФСП</label>
-              <input {...rp('fsp_id')} placeholder="FSP001"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" />
+              <label className="block text-sm font-medium text-text-secondary mb-1">ID ФСП</label>
+              <input {...rp('fsp_id')} placeholder="FSP001" className="input" />
               {ep.fsp_id && <p className="text-fsp-red text-xs mt-1">{ep.fsp_id.message as string}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Секрет ФСП</label>
-              <input type="password" {...rp('fsp_secret')} placeholder="из личного кабинета ФСП"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" />
+              <label className="block text-sm font-medium text-text-secondary mb-1">Секрет ФСП</label>
+              <input type="password" {...rp('fsp_secret')} placeholder="из личного кабинета ФСП" className="input" />
               {ep.fsp_secret && <p className="text-fsp-red text-xs mt-1">{ep.fsp_secret.message as string}</p>}
             </div>
             {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2">{error}</p>}
             <button type="submit" disabled={ip} className="btn-primary w-full">
               {ip ? 'Создание...' : 'Создать аккаунт'}
             </button>
-            <p className="text-xs text-gray-400 text-center">Demo: FSP001 / test</p>
+            <p className="text-xs text-text-muted text-center">Demo: FSP001 / test</p>
           </form>
         ) : (
           <form onSubmit={he(onEmployer)} className="space-y-4">
             {[['company_name','Название компании'], ['email','Email'], ['inn','ИНН (необязательно)']]
               .map(([field, label]) => (
               <div key={field}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                <input {...re(field as any)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" />
+                <label className="block text-sm font-medium text-text-secondary mb-1">{label}</label>
+                <input {...re(field as any)} className="input" />
               </div>
             ))}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
-              <input type="password" {...re('password')}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" />
+              <label className="block text-sm font-medium text-text-secondary mb-1">Пароль</label>
+              <input type="password" {...re('password')} className="input" />
               {ee.password && <p className="text-fsp-red text-xs mt-1">{ee.password.message as string}</p>}
             </div>
             {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2">{error}</p>}
@@ -98,7 +94,7 @@ export default function RegisterPage() {
             </button>
           </form>
         )}
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center text-sm text-text-muted mt-4">
           Есть аккаунт? <Link to="/login" className="text-fsp-violet hover:underline">Войти</Link>
         </p>
       </div>

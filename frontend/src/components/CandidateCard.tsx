@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import ScoreBar from './ScoreBar'
-import { ROLE_RU, DISC_RU } from '../labels'
+import { ROLE_RU } from '../labels'
 import { Trophy, MapPin, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 
 export interface CandidateCardData {
@@ -34,8 +34,8 @@ const GRADE_BADGE: Record<string, string> = {
 
 function rankBadgeClass(rank: string | null): string {
   if (!rank) return ''
-  if (rank.includes('МС'))  return 'badge-mc'
   if (rank.includes('КМС')) return 'badge-kmc'
+  if (rank.includes('МС')) return 'badge-mc'
   return 'badge-junior'
 }
 

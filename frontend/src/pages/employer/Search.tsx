@@ -71,7 +71,7 @@ export default function EmployerSearch() {
     ...c,
     disciplines: (c.disciplines ?? []).map((d: any) => ({
       ...d,
-      mu:  d.mu  ?? d.lcb ?? 0,
+      mu:  d.score ?? d.mu ?? d.lcb ?? 0,
       lcb: d.lcb ?? 0,
     })),
   }))

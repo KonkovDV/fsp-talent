@@ -66,7 +66,7 @@ export default function CandidateProfile() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{profile.display_name}</h1>
-          <p className="text-sm text-gray-500">{profile.fsp_id} · {profile.region ?? '—'}</p>
+          <p className="text-sm text-text-muted">{profile.fsp_id} · {profile.region ?? '—'}</p>
         </div>
         <button onClick={() => visibility.mutate(!profile.is_visible)}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${profile.is_visible ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -120,8 +120,8 @@ export default function CandidateProfile() {
           <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-secondary text-sm">Разобрать резюме</button>
           <button onClick={() => save.mutate()} className="btn-primary text-sm">{save.isPending ? 'Сохраняем…' : 'Сохранить'}</button>
         </div>
-        {note && <p className="text-sm text-gray-600">{note}</p>}
-        <div className="text-sm text-gray-500">
+        {note && <p className="text-sm text-text-secondary">{note}</p>}
+        <div className="text-sm text-text-muted">
           <p>Роль: {profile.primary_role} · грейд: {profile.grade} ({profile.grade_source})</p>
           <ul className="mt-1">{(profile.explanation ?? []).map((line: string) => <li key={line}>{line}</li>)}</ul>
         </div>
