@@ -148,13 +148,17 @@ def test_rank_equivalent_world():
 
 
 def test_rank_equivalent_russia_cup():
+    # Лестница: 1 → МС, 2–3 → КМС, 4–8 → I, 9–16 → II, 17–32 → III.
     assert rank_equivalent("russia_cup", 1, 50) == "МС"
     assert rank_equivalent("russia_cup", 2, 50) == "КМС"
-    assert rank_equivalent("russia_cup", 4, 50) == "КМС"
-    assert rank_equivalent("russia_cup", 9, 50) == "I"
-    assert rank_equivalent("russia_cup", 17, 50) == "II"
-    assert rank_equivalent("russia_cup", 33, 50) == "III"
-    assert rank_equivalent("russia_cup", 34, 50) is None
+    assert rank_equivalent("russia_cup", 3, 50) == "КМС"
+    assert rank_equivalent("russia_cup", 4, 50) == "I"
+    assert rank_equivalent("russia_cup", 8, 50) == "I"
+    assert rank_equivalent("russia_cup", 9, 50) == "II"
+    assert rank_equivalent("russia_cup", 16, 50) == "II"
+    assert rank_equivalent("russia_cup", 17, 50) == "III"
+    assert rank_equivalent("russia_cup", 32, 50) == "III"
+    assert rank_equivalent("russia_cup", 33, 50) is None
 
 
 def test_rank_equivalent_all_russian_and_youth():

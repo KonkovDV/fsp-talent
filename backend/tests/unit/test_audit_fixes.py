@@ -42,7 +42,8 @@ def test_bug03_updated_at_default_is_tz_aware():
     """
     from app.models.participant import Participant
     col = Participant.__table__.c["updated_at"]
-    val = col.default.arg()  # call the lambda
+    # SQLAlchemy wraps a zero-arg default as lambda ctx: fn().
+    val = col.default.arg(None)
     assert val.tzinfo is not None, "updated_at default must produce a timezone-aware datetime"
 
 
@@ -132,6 +133,9 @@ def test_bug02_websearch_tsquery_not_split_joined():
     assert "websearch_to_tsquery" in source, "websearch_to_tsquery must still be used for q"
     # and must use to_tsquery for skills (with | for OR)
     assert "to_tsquery" in source, "to_tsquery must be used for skill lexeme OR"
+    from app.services.search.pipeline import _skill_or_tsquery
+
+    assert _skill_or_tsquery(["C++", "Node.js", "C#"]) == "'C++' | 'Node.js' | 'C#'"
 
 
 # ---------------------------------------------------------------------------

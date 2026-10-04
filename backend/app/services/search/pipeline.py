@@ -43,6 +43,16 @@ def _rrf(ranked_ids: list) -> dict:
     return {pid: 1.0 / (RRF_K + i + 1) for i, pid in enumerate(ranked_ids)}
 
 
+def _skill_or_tsquery(names: list[str]) -> str:
+    """Quote skill names so to_tsquery accepts C++, C# and Node.js."""
+    quoted = []
+    for name in names:
+        lexeme = name.replace("\\", "").replace("'", "''")
+        if lexeme:
+            quoted.append(f"'{lexeme}'")
+    return " | ".join(quoted)
+
+
 def _safe_uuid(s: object) -> uuid.UUID | None:
     """Parse a UUID from JSONB without crashing on malformed data."""
     try:
@@ -86,9 +96,9 @@ async def search_candidates(
     if wanted_list or q:
         parts: list = []
         if wanted_list:
-            # Normalized skill names are already lowercased single lexemes;
-            # join with | for OR semantics in to_tsquery.
-            parts.append(func.to_tsquery("simple", " | ".join(wanted_list)))
+            skill_q = _skill_or_tsquery(wanted_list)
+            if skill_q:
+                parts.append(func.to_tsquery("simple", skill_q))
         if q:
             # websearch_to_tsquery preserves OR / AND / phrase / negation syntax.
             parts.append(func.websearch_to_tsquery("simple", q))
