@@ -2,7 +2,9 @@
 FSP integration adapters.
 
 MockFSPAdapter serves two hand-written demo profiles (FSP001, FSP002) and deterministically
-generates synthetic protocols for FSP1000..FSP1999 (used by the seed script). Same id -> same data.
+generates synthetic protocols for FSP1000..FSP1149 (exactly the range the seed script loads and
+the README documents). Same id -> same data. Ids outside the range are rejected, so nobody can
+register unseeded synthetic identities with the public demo secret.
 """
 from __future__ import annotations
 import random
@@ -12,7 +14,7 @@ from typing import Optional, Protocol
 from app.core.config import settings
 
 TEAM_DISCIPLINES = {"product", "security", "bas", "robotics"}
-GENERATED_RANGE = range(1000, 2000)
+GENERATED_RANGE = range(1000, 1150)
 DEMO_SECRET = "test"
 
 

@@ -1,3 +1,5 @@
+# Host ports are bound to 127.0.0.1: only nginx (:80) is reachable from the network.
+# PostgreSQL, Redis and the raw API stay local for debugging (smoke test uses 127.0.0.1:8010).
 services:
   backend:
     build: ./backend
@@ -7,7 +9,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: http://localhost
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
-    ports: ['8010:8000']
+    ports: ['127.0.0.1:8010:8000']
     volumes: [vc_keys:/secrets]
     depends_on:
       postgres: {condition: service_healthy}
@@ -44,7 +46,7 @@ services:
 
   frontend:
     build: ./frontend
-    ports: ['3010:80']
+    ports: ['127.0.0.1:3010:80']
     depends_on: [backend]
     restart: unless-stopped
     healthcheck:
@@ -60,7 +62,7 @@ services:
       POSTGRES_PASSWORD: fsp
       POSTGRES_DB: fsp_talent
     volumes: [postgres_data:/var/lib/postgresql/data]
-    ports: ['5432:5432']
+    ports: ['127.0.0.1:5432:5432']
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fsp -d fsp_talent"]
       interval: 5s
@@ -71,7 +73,7 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes: [redis_data:/data]
-    ports: ['6379:6379']
+    ports: ['127.0.0.1:6379:6379']
 
   nginx:
     image: nginx:alpine

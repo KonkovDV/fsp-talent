@@ -2,6 +2,9 @@
 Candidate search: SQL hard filters -> lexical / quality / optional dense rankings -> RRF fusion.
 Final order: (skill coverage, fused score, best LCB, id). Cards are anonymous: no name, no FSP id,
 evidence shown as status + year + percentile bucket instead of exact event and place.
+
+When a discipline is selected, the quality signal (max LCB) is computed inside that discipline only:
+a strong algorithmic score must not lift a candidate in a security search.
 """
 from __future__ import annotations
 import uuid
@@ -46,8 +49,10 @@ async def search_candidates(
     wanted_list = sorted(wanted)
     text = " ".join(wanted_list + ([q] if q else [])).strip()
 
-    max_lcb = (select(DisciplineScore.participant_id, func.max(DisciplineScore.lcb).label("max_lcb"))
-               .group_by(DisciplineScore.participant_id).subquery())
+    score_q = select(DisciplineScore.participant_id, func.max(DisciplineScore.lcb).label("max_lcb"))
+    if discipline:
+        score_q = score_q.where(DisciplineScore.discipline == discipline)
+    max_lcb = score_q.group_by(DisciplineScore.participant_id).subquery()
     PSI = ProfileSearchIndex
     if text:
         tsq = func.websearch_to_tsquery("simple", " or ".join(text.split()))
@@ -104,7 +109,8 @@ async def search_candidates(
 
     ordered = sorted(ids, key=lambda i: (-len(have.get(i, ())), -fused[i], -best[i], str(i)))[:limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
-    return {"total": len(ids), "query_skills": wanted_list, "items": cards}
+    # "total" is the size of the ranked pool (capped at POOL_LIMIT), not a full COUNT(*).
+    return {"total": len(ids), "pool_capped": len(ids) >= POOL_LIMIT, "query_skills": wanted_list, "items": cards}
 
 
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) -> list[dict]:
