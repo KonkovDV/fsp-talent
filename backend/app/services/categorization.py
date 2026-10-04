@@ -1,13 +1,23 @@
 """
 Rule-based categorization: role x grade x stack.
 
-Grade and the FSP-verified level are independent axes: grade comes from experience
-(or the candidate's own declaration), never from competition results.
+Grade priority (highest first):
+  1. declared  -- candidate's own declaration (most trusted, candidate knows themselves)
+  2. experience -- from experience_years (industry-standard proxy)
+  3. competition -- from FSP-verified LCB when no experience data is available;
+                    targets school students / young athletes with no work history
+  4. default   -- 'junior' when all signals are absent
+
+The competition-derived grade fills the gap for young FSP participants who
+have real results but no industry experience to report.  It does NOT downgrade
+candidates who have experience_years set: self-reported experience is a
+different axis from competition performance and should not be overridden.
 """
 from __future__ import annotations
 
 from typing import TypedDict
 
+from app.services.scoring.engine import grade_from_lcb
 from app.services.skills import ROLES, roles_for
 
 RULES_VERSION = "v2.0.0"
@@ -85,13 +95,26 @@ def assign_category(
         role = "fullstack"
         explanation.append("Роль по умолчанию: недостаточно данных")
 
+    # --- Grade: declared > experience > competition > default ---
     if declared_grade in GRADES:
         grade, source = declared_grade, "declared"
         explanation.append("Грейд указан кандидатом")
     elif experience_years is not None:
         grade, source = grade_from_experience(experience_years), "experience"
         explanation.append(
-            f"Грейд по опыту: {experience_years} {_ru_word(experience_years, 'год', 'года', 'лет')}")
+            f"Грейд по опыту: {experience_years} "
+            f"{_ru_word(experience_years, 'год', 'года', 'лет')}"
+        )
+    elif best_disc and (comp_grade := grade_from_lcb(best_disc["lcb"])):
+        # Activated only when experience_years is None -- typically school-age athletes
+        # who have no work history but a verified competition track record.
+        # Uses the FSP-attested Wilson LCB as an objective competence proxy.
+        grade, source = comp_grade, "competition"
+        disc_label = DISCIPLINE_LABELS.get(best_disc["discipline"], best_disc["discipline"])
+        explanation.append(
+            f"Грейд по соревнованиям ФСП: LCB {best_disc['lcb']:.2f} "
+            f"(дисциплина «{disc_label}»)"
+        )
     else:
         grade, source = "junior", "default"
         explanation.append("Опыт не указан, грейд по умолчанию")

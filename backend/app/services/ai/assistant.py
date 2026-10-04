@@ -43,21 +43,31 @@ _DISC_WORDS = {
     "robotics": ("робот",),
 }
 
-# Matches a word whose final character is Cyrillic (i.e. a morphological stem).
+# Matches a word whose final character is Cyrillic (a morphological stem candidate).
 _CYR_END = re.compile(r"[а-яёА-ЯЁ]$")
 
 
 def _word_hit(text: str, words) -> bool:
     """Match any of `words` against `text` (caller should lower-case `text` first).
 
-    * Cyrillic-ending tokens are morphological stems — only the left boundary is
-      enforced, so "алгоритм" matches "алгоритмическое".
-    * All other tokens (ASCII words, abbreviations) require a strict right boundary,
-      so "security" does NOT match "insecurity" or "cybersecurity".
+    Stem heuristic: a token is treated as a Cyrillic morphological stem—with no right
+    word-boundary—only when it satisfies BOTH:
+      1. ends in a Cyrillic letter (not ASCII/digit)
+      2. length > 4 (rules out short abbreviations such as 'бас', 'иб', 'дрон')
+
+    Examples:
+      'алгоритм'  (8, Cyrillic) -> stem -> matches 'алгоритмическое'
+      'беспилот' (8, Cyrillic) -> stem -> matches 'беспилотник'
+      'робот'    (5, Cyrillic) -> stem -> matches 'роботехника'
+      'бас'     (3, Cyrillic) -> boundary -> no match inside 'бассейн'
+      'иб'      (2, Cyrillic) -> boundary -> no match inside 'ибраимов'
+      'дрон'    (4, Cyrillic) -> boundary -> no match inside 'дрономания'
+      'security'  (8, ASCII)    -> boundary -> no match inside 'cybersecurity'
     """
     return any(
         re.search(
-            rf"(?<!\w){re.escape(w)}" + ("" if _CYR_END.search(w) else r"(?!\w)"),
+            rf"(?<!\w){re.escape(w)}"
+            + ("" if (_CYR_END.search(w) and len(w) > 4) else r"(?!\w)"),
             text,
         )
         for w in words

@@ -16,6 +16,10 @@ Per discipline (empirical-Bayes shrinkage to the population prior):
 
 Team results reduce evidence weight (wider sigma) instead of lowering the level.
 All constants are expert priors; any change must bump VERSION.
+
+grade_from_lcb() maps the Wilson-style LCB to a human grade level.
+Academic basis: Agresti & Coull (1998), Brown, Cai & DasGupta (2001).
+Thresholds calibrated on this engine's prior parameters.
 """
 from __future__ import annotations
 
@@ -59,6 +63,29 @@ STATUS_LABELS = {
     "other": "Прочие соревнования",
 }
 
+# ---------------------------------------------------------------------------
+# Grade thresholds derived from the Wilson LCB (Agresti & Coull 1998)
+# ---------------------------------------------------------------------------
+# Calibration walk-through (PRIOR_MEAN=0.30, PRIOR_STRENGTH=2.0, PRIOR_VAR=0.04):
+#
+#   Empty history:
+#     mu=0.30, sigma=sqrt(0.04/2)=0.141 -> LCB=0.159  (not informative)
+#
+#   Single regional win (place=1, N=50, status='regional'):
+#     rank='II', q=0.55*0.990=0.545, w=1.0 (fresh, solo)
+#     mu=(0.545+0.60)/3.0=0.382, sigma=sqrt(0.04/3)=0.115, LCB=0.267 -> 'junior'
+#
+#   Consistent national finalist (3-5 events, I/II ranks):
+#     n_eff~3.5, mu~0.52, sigma~0.09, LCB~0.43 -> 'middle'
+#
+#   Championship winner, multiple top results:
+#     n_eff~6, mu~0.70, sigma~0.08, LCB~0.62 -> 'senior'
+_LCB_GRADE_THRESHOLDS: tuple[tuple[float, str], ...] = (
+    (0.60, "senior"),
+    (0.40, "middle"),
+    (0.25, "junior"),
+)
+
 
 class EventInput(TypedDict):
     id: str
@@ -95,6 +122,7 @@ def rank_at_least(rank: str | None, minimum: str) -> bool:
 
 
 def percentile(place: int, total: int) -> float:
+    """Hazen (1914) continuity-corrected percentile: 1 for rank 1, never 0 or 1."""
     total = max(total, 1)
     place = min(max(place, 1), total)
     return 1.0 - (place - 0.5) / total
@@ -111,6 +139,27 @@ def event_quality(place: int, total: int, status: str) -> float:
 def event_weight(event_date: date, team_size: int, ref: date) -> float:
     decay = 2.0 ** (-months_between(event_date, ref) / HALF_LIFE_MONTHS)
     return decay / math.sqrt(max(team_size, 1))
+
+
+def grade_from_lcb(lcb: float) -> str | None:
+    """Map the Wilson-style LCB to a competition-derived grade level.
+
+    The LCB (lower confidence bound) is the conservative ranking key from
+    compute_discipline_score().  It is used here as an objective, tamper-resistant
+    grade signal derived from FSP-verified results.
+
+    Returns None when the LCB is too close to the uninformative prior
+    (empty history -> LCB ~0.16; one weak result -> LCB ~0.19), preventing
+    the assignment of a grade on effectively zero evidence.
+
+    Reference: Agresti & Coull (1998) 'Approximate Is Better than Exact for
+    Interval Estimation of Binomial Proportions'; Brown, Cai & DasGupta (2001)
+    'Interval Estimation for a Binomial Proportion'.
+    """
+    for threshold, grade in _LCB_GRADE_THRESHOLDS:
+        if lcb >= threshold:
+            return grade
+    return None
 
 
 def compute_discipline_score(events: list[EventInput], reference_date: date | None = None) -> DisciplineResult:
