@@ -179,19 +179,28 @@ export default function EmployerNeeds() {
                 <div className="mt-5 space-y-4">
                   {picked.length > 0 && (
                     <div className="card">
-                      <p className="text-sm text-ink-2">В сравнении {picked.length} из 3. Берите людей из этой подборки: чужие и скрытые профили сюда не попадают.</p>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-sm text-ink-2">В сравнении {picked.length} из 3{picked.length < 2 ? ': отметьте ещё одного кандидата' : ''}. Имя и контакты в сравнение не попадают.</p>
+                        <button type="button" onClick={() => setPicked([])} className="text-xs text-accent hover:underline">Очистить</button>
+                      </div>
                       {compared.data && compared.data.items.length >= 2 && (
                         <div className="mt-3 overflow-x-auto">
                           <table className="protocol">
                             <thead><tr><th>Фактор</th>{compared.data.items.map(c => <th key={c.candidate_id}>{ROLE_RU[c.role] ?? c.role} {c.grade}</th>)}</tr></thead>
                             <tbody>
                               <tr><td>Совпадение</td>{compared.data.items.map(c => <td key={c.candidate_id} className="num">{Math.round((c.score ?? 0) * 100)}</td>)}</tr>
-                              {(compared.data.items[0]?.factors ?? []).map(f => (
-                                <tr key={f.key}><td>{f.label}</td>{compared.data.items.map(c => {
-                                  const cell = c.factors.find(x => x.key === f.key)
-                                  return <td key={c.candidate_id} className="num">{cell?.value == null ? '—' : Math.round(cell.value * 100)}</td>
-                                })}</tr>
-                              ))}
+                              {(compared.data.items[0]?.factors ?? []).map(f => {
+                                const values = compared.data!.items.map(c => c.factors.find(x => x.key === f.key)?.value ?? null)
+                                const known = values.filter((v): v is number => v != null)
+                                const best = known.length > 1 && new Set(known).size > 1 ? Math.max(...known) : null
+                                return (
+                                  <tr key={f.key}><td>{f.label}</td>{values.map((v, i) => (
+                                    <td key={compared.data!.items[i].candidate_id} className={`num ${v != null && v === best ? 'font-semibold text-accent' : ''}`}>
+                                      {v == null ? '—' : Math.round(v * 100)}
+                                    </td>
+                                  ))}</tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -201,14 +210,12 @@ export default function EmployerNeeds() {
                   {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
                   {matches.data && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
-                    <div key={card.candidate_id}>
-                      <button type="button" className="btn-ghost mb-1 text-sm"
-                        onClick={() => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 3 ? prev : [...prev, card.candidate_id])}>
-                        {picked.includes(card.candidate_id) ? 'Убрать из сравнения' : 'В сравнение'}
-                      </button>
-                      <CandidateCard card={card} place={i + 1} onOffer={setOfferFor}
-                        onShortlist={(id, on) => toggle.mutate({ id, on })} />
-                    </div>
+                    <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor}
+                      onShortlist={(id, on) => toggle.mutate({ id, on })}
+                      compare={{
+                        on: picked.includes(card.candidate_id), full: picked.length >= 3,
+                        toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 3 ? prev : [...prev, card.candidate_id]),
+                      }} />
                   ))}
                 </div>
               )}
