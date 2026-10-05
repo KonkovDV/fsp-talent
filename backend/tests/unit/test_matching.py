@@ -61,6 +61,16 @@ def test_wrong_role_and_lower_grade_cost_points():
     assert score(NEED, _cand(grade="junior")).score < good.score
 
 
+def test_compare_stays_anonymous():
+    from app.services.matching import anonymous_compare
+    cards = [{"candidate_id": "a", "role": "backend", "grade": "middle", "display_name": "Иван",
+              "fsp_id": "FSP1", "match": {"score": 0.8, "factors": [], "plus": ["Тест"], "minus": []}}]
+    rows = anonymous_compare(cards, ["a", "missing"])
+    assert len(rows) == 1
+    assert rows[0]["score"] == 0.8
+    assert "display_name" not in rows[0] and "fsp_id" not in rows[0]
+
+
 def test_recommended_categories_pick_the_strongest_cells():
     cells = recommended_categories([("backend", "middle", 0.9), ("backend", "middle", 0.8), ("ml", "junior", 0.3)])
     assert cells[0]["role"] == "backend" and cells[0]["candidates"] == 2

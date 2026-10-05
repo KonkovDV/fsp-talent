@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, answerPractice, applyToVacancy, myApplications, startPractice, vacanciesForMe } from '../../api/client'
 import { CategoryPlate, Empty, PageHeader, Skeleton, rub } from '../../components/ui'
@@ -22,13 +22,16 @@ export default function CandidateVacancies() {
   const [task, setTask] = useState<PracticeItem | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   const [taskError, setTaskError] = useState('')
+  const [params] = useSearchParams()
+  const topic = params.get('topic')
   const { data: cards = [], isLoading } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
   const { data: mine = [] } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
   const practice = useMutation({
-    mutationFn: (id: string) => startPractice(id).then(r => r.data as PracticeItem),
+    mutationFn: (opts: { vacancy_id?: string; topic?: string }) => startPractice(opts).then(r => r.data as PracticeItem),
     onSuccess: item => { setTaskError(''); setPicked(null); setTask(item) },
     onError: (e: unknown) => setTaskError(apiError(e, 'Задание не собрано')),
   })
+  useEffect(() => { if (topic) practice.mutate({ topic }) }, [topic])
   const submitPractice = useMutation({
     mutationFn: () => answerPractice(task!.id, picked!).then(r => r.data as PracticeItem),
     onSuccess: item => setTask(item),
@@ -89,7 +92,7 @@ export default function CandidateVacancies() {
               <div className="text-right">
                 {(card.salary_from || card.salary_to) && <p className="num font-display text-lg font-semibold text-ink">{rub(card.salary_from)} – {rub(card.salary_to)}</p>}
                 <Link to={`/candidate/assessment?vacancy=${card.id}`} className="btn-ghost mt-3 block text-sm">Тест по этой вакансии</Link>
-                <button type="button" className="btn-ghost mt-1 block text-sm" onClick={() => practice.mutate(card.id)}>Короткая практика</button>
+                <button type="button" className="btn-ghost mt-1 block text-sm" onClick={() => practice.mutate({ vacancy_id: card.id })}>Короткая практика</button>
                 <button disabled={card.applied || !card.can_apply || apply.isPending} onClick={() => apply.mutate(card.id)}
                   className={card.applied ? 'btn-secondary mt-3' : 'btn-primary mt-3'}>
                   {card.applied ? 'Отклик отправлен' : card.can_apply ? 'Откликнуться' : 'Нужно согласие представителя'}

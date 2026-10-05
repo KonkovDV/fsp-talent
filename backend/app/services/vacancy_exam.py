@@ -123,6 +123,8 @@ def form_exam(title: str, description: str = "", skills: list[str] | None = None
             for t in sorted(shares, key=lambda k: -shares[k])
         ],
         "samples": _samples(spec, shares, grade, f"{title}|{spec}|{','.join(named)}"),
+        "quotes": [{"skill": item.skill, "evidence": item.evidence}
+                   for item in extract_skills(f"{title}\n{description or ''}")],
         "why": why,
         "topic_shares": shares,
     }

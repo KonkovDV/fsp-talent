@@ -19,6 +19,7 @@ def test_named_skills_pull_the_blueprint_toward_those_topics():
     assert abs(sum(shares.values()) - 1) < 0.02
     assert exam["samples"]
     assert all("correct" not in sample for sample in exam["samples"])
+    assert any(q["skill"] == "PostgreSQL" and "PostgreSQL" in q["evidence"] for q in exam["quotes"])
 
 
 def test_the_same_vacancy_forms_the_same_samples():

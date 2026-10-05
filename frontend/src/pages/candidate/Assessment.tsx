@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Lock, XCircle } from 'lucide-react'
 import {
   abandonAssessment, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
@@ -233,6 +233,11 @@ export default function CandidateAssessment() {
               {result.topics.map(t => <li key={t.topic}>{t.label}: {t.correct} из {t.answered}</li>)}
             </ul>
           )}
+          {(() => {
+            const weak = result.topics.filter(t => t.answered > 0).sort((a, b) => a.correct / a.answered - b.correct / b.answered)[0]
+            if (!weak || weak.correct >= weak.answered) return null
+            return <p className="text-sm">Слабее всего {weak.label}: {weak.correct} из {weak.answered}. <Link className="text-accent" to={`/candidate/vacancies?topic=${weak.topic}`}>Короткая практика по этой теме</Link> грейд не меняет.</p>
+          })()}
           {result.confirmed_skills.length > 0 && (
             <p className="text-sm">Навыки, подтверждённые тестом: {result.confirmed_skills.map(s => `${s.name} (${pct(s.share)})`).join(', ')}.
               <span className="text-text-muted"> В поиске они весят больше заявленных.</span></p>

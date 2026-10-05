@@ -219,6 +219,28 @@ def _mean(factors: list[Factor]) -> float | None:
     return sum(f.weight * f.value for f in active) / weight
 
 
+def anonymous_compare(cards: list[dict], ids: list[str]) -> list[dict]:
+    """Up to three cards from the current shortlist, without name, contacts or FSP id."""
+    by_id = {c.get("candidate_id"): c for c in cards}
+    rows = []
+    for cid in ids[:3]:
+        card = by_id.get(cid)
+        if not isinstance(card, dict):
+            continue
+        match = card.get("match") or {}
+        rows.append({
+            "candidate_id": cid,
+            "role": card.get("role"),
+            "grade": card.get("grade"),
+            "grade_source": card.get("grade_source"),
+            "score": match.get("score"),
+            "factors": match.get("factors") or [],
+            "plus": match.get("plus") or [],
+            "minus": match.get("minus") or [],
+        })
+    return rows
+
+
 def recommended_categories(rows: list[tuple[str | None, str | None, float]], top: int = 3) -> list[dict]:
     """Which role × grade cells hold the best matches: (role, grade, score) -> cells by mean score of the top."""
     cells: dict[tuple[str | None, str | None], list[float]] = {}

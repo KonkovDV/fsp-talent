@@ -119,8 +119,10 @@ export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${se
 export const assessmentCooldown = (specialization?: string) =>
   api.get('/assessment/cooldown', { params: specialization ? { specialization } : {} })
 export const assessmentHistory = () => api.get('/assessment/history')
-export const startPractice = (vacancy_id?: string | null) =>
-  api.post('/assessment/practice/start', { vacancy_id: vacancy_id || null })
+export const startPractice = (opts?: { vacancy_id?: string | null; topic?: string | null }) =>
+  api.post('/assessment/practice/start', { vacancy_id: opts?.vacancy_id || null, topic: opts?.topic || null })
+export const compareNeed = (needId: string, ids: string[]) =>
+  api.get(`/needs/${needId}/compare`, { params: { ids: ids.join(',') } })
 export const answerPractice = (id: string, answer_index: number) =>
   api.post(`/assessment/practice/${id}/answer`, { answer_index })
 export const myApplications = () => api.get('/vacancies/my-applications')

@@ -16,7 +16,7 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import CategoryAssignment, Need, NeedShortlist, NeedVersion, Participant
-from app.services.matching import NeedSpec
+from app.services.matching import NeedSpec, anonymous_compare
 from app.services.search.pipeline import score_pool, search_candidates
 from app.services.skills import normalize_skill
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS
@@ -151,6 +151,28 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
     for card in result["items"]:
         card["shortlisted"] = card["candidate_id"] in listed
     return {**result, "need": _out(need, await _params(db, need))}
+
+
+@router.get("/{need_id}/compare")
+async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
+                  current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Side-by-side factors for up to three candidates already in this need's match list."""
+    if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    need = await _own(db, need_id, current)
+    wanted = []
+    for raw in ids.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            wanted.append(str(uuid.UUID(raw)))
+        except ValueError:
+            continue
+    p = NeedParams(**(await _params(db, need)).params)
+    result = await search_candidates(
+        db, skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal, need=p.spec())
+    return {"items": anonymous_compare(result["items"], wanted[:3])}
 
 
 class ShortlistIn(BaseModel):

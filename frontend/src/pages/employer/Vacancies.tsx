@@ -8,7 +8,7 @@ const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', di
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
 interface ExamTopic { topic: string; label: string; share: number }
 interface ExamSample { topic: string; family: string; stem: string }
-interface Exam { why: string; topics: ExamTopic[]; samples: ExamSample[] }
+interface Exam { why: string; topics: ExamTopic[]; samples: ExamSample[]; quotes?: { skill: string; evidence: string }[] }
 interface Vacancy { id: string; title: string; role: string | null; grade: string | null; is_open: boolean; skills: string[]
   salary_from: number | null; salary_to: number | null; work_format: string }
 interface Application { id: string; vacancy_title: string; status: string; created_at: string | null }
@@ -92,6 +92,9 @@ export default function EmployerVacancies() {
           {exam && (
             <div className="rounded-lg border border-line bg-sunken p-4">
               <p className="text-sm text-ink">{exam.why}</p>
+              {exam.quotes && exam.quotes.length > 0 && (
+                <ul className="mt-2 text-sm text-ink-2">{exam.quotes.map(q => <li key={q.skill}>{q.skill}: «{q.evidence}»</li>)}</ul>
+              )}
               <ul className="mt-3 flex flex-wrap gap-2">
                 {exam.topics.map(t => <li key={t.topic} className="chip-default">{t.label} {Math.round(t.share * 100)}%</li>)}
               </ul>

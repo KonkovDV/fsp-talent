@@ -293,6 +293,7 @@ async def cooldown_status(specialization: str | None = None, current: dict = Dep
 
 class PracticeStartIn(BaseModel):
     vacancy_id: uuid.UUID | None = None
+    topic: str | None = Field(None, max_length=40)
 
 
 class PracticeAnswerIn(BaseModel):
@@ -308,7 +309,7 @@ async def practice_start(body: PracticeStartIn, current: dict = Depends(get_curr
     if await too_many(f"practice:{participant.id}", limit=12, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Не больше двенадцати коротких заданий в час")
     try:
-        row = await start_practice(db, participant, body.vacancy_id)
+        row = await start_practice(db, participant, body.vacancy_id, body.topic)
         await db.commit()
     except LookupError as e:
         raise ApiError(404, "not_found", "Вакансия не найдена") from e

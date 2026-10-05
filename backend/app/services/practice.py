@@ -43,7 +43,7 @@ def _pick_family(spec: str, topic: str | None):
 
 
 async def start_practice(db: AsyncSession, participant: Participant,
-                         vacancy_id: uuid.UUID | None = None) -> PracticeAttempt:
+                         vacancy_id: uuid.UUID | None = None, topic: str | None = None) -> PracticeAttempt:
     open_row = await db.scalar(select(PracticeAttempt).where(
         PracticeAttempt.participant_id == participant.id, PracticeAttempt.answered_at.is_(None)))
     if open_row is not None:
@@ -65,6 +65,10 @@ async def start_practice(db: AsyncSession, participant: Participant,
         stored_vacancy = vacancy.id
         if exam["target_grade"] in GRADE_LEVEL:
             grade = exam["target_grade"]
+    elif topic in TOPIC_LABELS:
+        topic = topic
+    else:
+        topic = None
     family = _pick_family(spec, topic)
     if family is None:
         raise LookupError("family")
