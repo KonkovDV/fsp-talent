@@ -3,14 +3,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ListChecks } from 'lucide-react'
 import { apiError, saveSurvey, surveyOptions } from '../api/client'
 
+export interface SurveyHint {
+  specialization?: string
+  declared_grade?: string
+  experience_years?: number
+  nonce: number
+}
+
 interface Props {
   profile: { specialization: string | null; industry: string | null; work_goal: string | null
     declared_grade: string | null; experience_years: number | null; survey_done: boolean }
   compact?: boolean
+  hint?: SurveyHint | null
 }
 
 /** TZ 2.1: specialization and industry from the survey + declared grade + test make the category. */
-export default function SurveyCard({ profile, compact }: Props) {
+export default function SurveyCard({ profile, compact, hint }: Props) {
   const qc = useQueryClient()
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const [spec, setSpec] = useState(profile.specialization ?? '')
@@ -23,6 +31,12 @@ export default function SurveyCard({ profile, compact }: Props) {
     setSpec(profile.specialization ?? ''); setIndustry(profile.industry ?? '')
     setGoal(profile.work_goal ?? 'job'); setGrade(profile.declared_grade ?? '')
   }, [profile.specialization, profile.industry, profile.work_goal, profile.declared_grade])
+  useEffect(() => {
+    if (!hint) return
+    if (hint.specialization) setSpec(hint.specialization)
+    if (hint.declared_grade) setGrade(hint.declared_grade)
+    if (hint.experience_years != null) setYears(String(hint.experience_years))
+  }, [hint])
 
   const save = useMutation({
     mutationFn: () => saveSurvey({ specialization: spec, industry, work_goal: goal, declared_grade: grade || null,

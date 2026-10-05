@@ -47,6 +47,16 @@ _DISC_WORDS = {
 _CYR_END = re.compile(r"[а-яёА-ЯЁ]$")
 
 
+def _find_word(text: str, words) -> re.Match[str] | None:
+    """First match of `words` in `text`. The same boundary rules as `_word_hit`."""
+    for w in words:
+        boundary = "" if (_CYR_END.search(w) and len(w) > 4) else r"(?!\w)"
+        match = re.search(rf"(?<!\w){re.escape(w)}{boundary}", text, re.IGNORECASE)
+        if match:
+            return match
+    return None
+
+
 def _word_hit(text: str, words) -> bool:
     """Match any of `words` against `text` (caller should lower-case `text` first).
 
@@ -64,14 +74,113 @@ def _word_hit(text: str, words) -> bool:
       'дрон'    (4, Cyrillic) -> boundary -> no match inside 'дрономания'
       'security'  (8, ASCII)    -> boundary -> no match inside 'cybersecurity'
     """
-    return any(
-        re.search(
-            rf"(?<!\w){re.escape(w)}"
-            + ("" if (_CYR_END.search(w) and len(w) > 4) else r"(?!\w)"),
-            text,
-        )
-        for w in words
-    )
+    return _find_word(text, words) is not None
+
+
+_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_PHONE = re.compile(r"(?<!\d)(?:\+7|8)(?:[\s().\-]*\d){10}(?!\d)")
+_TELEGRAM = re.compile(r"(?<![\w@])@[A-Za-z][A-Za-z0-9_]{4,31}")
+_YEARS = re.compile(
+    r"(?:стаж|опыт(?:\s+работы)?)[^\d]{0,40}(\d{1,2})\s*(?:года?|лет)(?!\w)"
+    r"|(\d{1,2})\s*(?:года?|лет)(?!\w)\s+(?:опыт|стаж)"
+    r"|(\d{1,2})\s*\+?\s*years?(?!\w)",
+    re.IGNORECASE,
+)
+_NAME_LINE = re.compile(r"[A-Za-zА-Яа-яЁё\-]+(?:\s+[A-Za-zА-Яа-яЁё\-]+){1,2}")
+_NAME_WORD = re.compile(r"^(?:[A-ZА-ЯЁ][a-zа-яё]{1,19}|[A-ZА-ЯЁ]{2,20})$")
+_NAME_STOP = {
+    "резюме", "resume", "опыт", "навыки", "образование", "контакты", "проекты", "работа",
+    "developer", "engineer", "разработчик", "инженер", "программист", "специалист",
+    "python", "java", "javascript", "backend", "frontend", "fullstack", "devops", "mobile",
+    "senior", "junior", "middle", "lead", "intern", "москва", "петербург", "санкт", "россия",
+}
+_SOFT_SKILLS = (
+    ("Коммуникация", ("коммуникац", "коммуникабельн")),
+    ("Командная работа", ("командн", "в команде")),
+    ("Наставничество", ("наставни", "ментор")),
+    ("Лидерство", ("лидерств",)),
+    ("Публичные выступления", ("презентац", "выступлен")),
+)
+
+
+def _quoted(text: str, match: re.Match[str]) -> dict:
+    """The value's evidence is the line that contains the match, so the quote is verbatim."""
+    left = text.rfind("\n", 0, match.start()) + 1
+    right = text.find("\n", match.end())
+    line = text[left:right if right >= 0 else len(text)].strip()
+    return {"value": match.group(0), "quote": line}
+
+
+def _earliest(text: str, groups: dict[str, tuple[str, ...]]) -> dict | None:
+    best: tuple[int, str, re.Match[str]] | None = None
+    for key, words in groups.items():
+        match = _find_word(text, words)
+        if match and (best is None or match.start() < best[0]):
+            best = (match.start(), key, match)
+    if best is None:
+        return None
+    _, key, match = best
+    left = text.rfind("\n", 0, match.start()) + 1
+    right = text.find("\n", match.end())
+    line = text[left:right if right >= 0 else len(text)].strip()
+    return {"value": key, "quote": line}
+
+
+def _full_name(text: str) -> dict | None:
+    """A short line of two or three capitalized words near the top. Job titles are rejected."""
+    for line in [ln.strip() for ln in text.splitlines() if ln.strip()][:8]:
+        if "@" in line or any(ch.isdigit() for ch in line) or not _NAME_LINE.fullmatch(line):
+            continue
+        words = [part for word in line.split() for part in word.split("-")]
+        if any(word.lower() in _NAME_STOP for word in words) or not all(_NAME_WORD.match(word) for word in words):
+            continue
+        return {"value": line, "quote": line}
+    return None
+
+
+def _phone(text: str) -> dict | None:
+    match = _PHONE.search(text)
+    if match is None:
+        return None
+    digits = re.sub(r"\D", "", match.group(0))
+    if len(digits) != 11:
+        return None
+    normalized = "+7" + digits[1:]
+    hit = _quoted(text, match)
+    hit["value"] = normalized
+    return hit
+
+
+def extract_resume_fields(text: str) -> dict:
+    """Name, contacts, years, grade and role. Each value keeps a verbatim quote; nothing is guessed.
+
+    The login email is returned for display and is not a profile field: the account address stays the
+    confirmed one. Soft skills are quoted too and stay out of the skill taxonomy.
+    """
+    email = _EMAIL.search(text)
+    telegram = _TELEGRAM.search(text)
+    years = _YEARS.search(text)
+    year_value = next((int(g) for g in years.groups() if g), None) if years else None
+    if year_value is not None and not 0 <= year_value <= 50:
+        year_value = None
+    soft = []
+    for name, words in _SOFT_SKILLS:
+        match = _find_word(text, words)
+        if match:
+            left = text.rfind("\n", 0, match.start()) + 1
+            right = text.find("\n", match.end())
+            soft.append({"name": name, "quote": text[left:right if right >= 0 else len(text)].strip()})
+    return {
+        "full_name": _full_name(text),
+        "email": _quoted(text, email) if email else None,
+        "phone": _phone(text),
+        "telegram": _quoted(text, telegram) if telegram else None,
+        "experience_years": None if year_value is None or years is None else {
+            "value": year_value, "quote": _quoted(text, years)["quote"]},
+        "grade": _earliest(text, _GRADE_WORDS),
+        "role": _earliest(text, _ROLE_WORDS),
+        "soft_skills": soft,
+    }
 
 
 def parse_query(q: str) -> dict:
@@ -131,5 +240,6 @@ async def parse_resume(text: str) -> dict:
         "skills": sorted(found.values(), key=lambda s: s["name"]),
         "llm_used": llm_used,
         "llm_rejected": rejected,
-        "note": "Подтвердите каждый навык перед сохранением",
+        "note": "Проверьте навыки и нажмите «Применить» у полей, которые хотите перенести в профиль",
+        **extract_resume_fields(text),
     }

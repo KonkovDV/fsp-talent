@@ -7,9 +7,18 @@ import { LegalDocModal } from '../../components/LegalConsents'
 import FspLinkCard from '../../components/FspLinkCard'
 import ConsentsPanel from '../../components/ConsentsPanel'
 import DeleteAccountCard from '../../components/DeleteAccountCard'
-import SurveyCard from '../../components/SurveyCard'
+import SurveyCard, { type SurveyHint } from '../../components/SurveyCard'
+import { roleRu } from '../../labels'
 
 interface SkillRow { name: string; source_quote?: string | null; trust_level?: string }
+interface Quoted { value: string; quote: string }
+interface ResumeFound {
+  skills: SkillRow[]; llm_used?: boolean; note?: string
+  full_name: Quoted | null; email: Quoted | null; phone: Quoted | null; telegram: Quoted | null
+  experience_years: { value: number; quote: string } | null
+  grade: Quoted | null; role: Quoted | null
+  soft_skills: { name: string; quote: string }[]
+}
 
 export default function CandidateProfile() {
   const qc = useQueryClient()
@@ -20,8 +29,11 @@ export default function CandidateProfile() {
   const [skills, setSkills] = useState<SkillRow[]>([])
   const [telegram, setTelegram] = useState('')
   const [phone, setPhone] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [publicProfile, setPublicProfile] = useState(false)
   const [resume, setResume] = useState('')
+  const [found, setFound] = useState<ResumeFound | null>(null)
+  const [hint, setHint] = useState<SurveyHint | null>(null)
   const [note, setNote] = useState('')
   const [askDistribution, setAskDistribution] = useState(false)
 
@@ -30,6 +42,7 @@ export default function CandidateProfile() {
     setSkills(profile.skills ?? [])
     setTelegram(profile.telegram ?? '')
     setPhone(profile.phone ?? '')
+    setDisplayName(profile.display_name ?? '')
     setPublicProfile(profile.public_profile)
   }, [profile])
 
@@ -39,6 +52,7 @@ export default function CandidateProfile() {
       telegram: telegram || null,
       phone: phone || null,
       public_profile: publicProfile,
+      ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
     }),
     onSuccess: () => { setNote('Сохранено'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: (error: unknown) => {
@@ -57,14 +71,25 @@ export default function CandidateProfile() {
     mutationFn: (value: boolean) => updateVisibility(value),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
   })
+  const takeParsed = (result: ResumeFound) => {
+    setSkills(prev => {
+      const known = new Set(prev.map(item => item.name))
+      return [...prev, ...result.skills.filter(item => !known.has(item.name))]
+    })
+    setFound(result)
+    const skillsNote = result.skills.length
+      ? (result.llm_used ? 'Навыки предложены моделью и правилами.' : 'Навыки добавлены в список.')
+      : 'Навыков из словаря в тексте нет.'
+    setNote(`${skillsNote} Поля ниже переносятся только по кнопке «Применить».`)
+  }
   const parsed = useMutation({
-    mutationFn: () => parseResume(resume).then(r => r.data),
-    onSuccess: (result) => {
-      const known = new Set(skills.map(item => item.name))
-      setSkills([...skills, ...result.skills.filter((item: SkillRow) => !known.has(item.name))])
-      setNote(result.llm_used ? 'Навыки предложены моделью и правилами. Проверьте перед сохранением.' : result.note)
-    },
+    mutationFn: () => parseResume(resume).then(r => r.data as ResumeFound),
+    onSuccess: takeParsed,
   })
+  const applySurvey = (patch: Omit<SurveyHint, 'nonce'>, message: string) => {
+    setHint(prev => ({ ...(prev ?? { nonce: 0 }), ...patch, nonce: Date.now() }))
+    setNote(profile?.industry ? message : `${message} Отрасль выберите в опросе.`)
+  }
 
   if (isLoading || !profile) return <div className="space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-96" /></div>
   const addSkill = () => {
@@ -119,12 +144,7 @@ export default function CandidateProfile() {
                   if (!file) return
                   uploadResumePdf(file).then(r => {
                     setResume(r.data.text ?? '')
-                    const found = (r.data.skills ?? []) as { name: string }[]
-                    if (found.length) setSkills(prev => {
-                      const names = new Set(prev.map(s => s.name))
-                      return [...prev, ...found.filter(s => !names.has(s.name))]
-                    })
-                    setNote(found.length ? `Из PDF: ${found.map(s => s.name).join(', ')}` : 'В PDF не нашлось навыков из словаря')
+                    takeParsed(r.data as ResumeFound)
                   }).catch((err: unknown) => setNote(apiError(err, 'PDF не разобран')))
                 }} />
               </label>
@@ -139,9 +159,13 @@ export default function CandidateProfile() {
                 }).catch(() => setNote('PDF профиля не собрался'))
               }}>Скачать PDF профиля</button>
               <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-ghost px-0 text-accent">
-                {parsed.isPending ? 'Разбираем…' : 'Найти навыки в резюме'}
+                {parsed.isPending ? 'Разбираем…' : 'Разобрать резюме'}
               </button>
               </div>
+              {found && <ResumeFields found={found} onName={value => { setDisplayName(value); setNote('Имя подставлено в контакты. Сохраните изменения.') }}
+                onPhone={value => { setPhone(value); setNote('Телефон подставлен. Сохраните изменения.') }}
+                onTelegram={value => { setTelegram(value); setNote('Telegram подставлен. Сохраните изменения.') }}
+                onSurvey={applySurvey} />}
             </div>
           </section>
 
@@ -149,6 +173,8 @@ export default function CandidateProfile() {
             <h2 id="contacts-h" className="section-title">Контакты для работодателя</h2>
             <p className="text-sm text-ink-2">Видны только компании, чьё приглашение вы приняли.</p>
             <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2"><label className="field-label" htmlFor="name">Имя в профиле</label>
+                <input id="name" value={displayName} onChange={e => setDisplayName(e.target.value)} className="input" autoComplete="name" /></div>
               <div><label className="field-label" htmlFor="tg">Telegram</label>
                 <input id="tg" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" className="input" /></div>
               <div><label className="field-label" htmlFor="phone">Телефон</label>
@@ -180,12 +206,55 @@ export default function CandidateProfile() {
         </div>
 
         <aside className="space-y-6">
-          <SurveyCard profile={profile} compact />
+          <SurveyCard profile={profile} compact hint={hint} />
           <FspLinkCard profile={profile} />
           <ConsentsPanel />
           <DeleteAccountCard />
         </aside>
       </div>
+    </div>
+  )
+}
+
+function ResumeFields({ found, onName, onPhone, onTelegram, onSurvey }: {
+  found: ResumeFound
+  onName: (value: string) => void
+  onPhone: (value: string) => void
+  onTelegram: (value: string) => void
+  onSurvey: (patch: Omit<SurveyHint, 'nonce'>, message: string) => void
+}) {
+  const row = (label: string, value: string, quote: string, onApply?: () => void) => (
+    <div key={label} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <p className="min-w-0 text-sm text-ink"><span className="text-ink-2">{label}.</span> {value}
+        <span className="mt-0.5 block text-xs text-ink-3">«{quote}»</span></p>
+      {onApply && <button type="button" onClick={onApply} className="btn-ghost shrink-0 px-0 text-accent">Применить</button>}
+    </div>
+  )
+  const empty = !found.full_name && !found.email && !found.phone && !found.telegram
+    && !found.experience_years && !found.grade && !found.role && found.soft_skills.length === 0
+  return (
+    <div className="space-y-3 rounded-xl border border-line bg-sunken/40 p-3">
+      <p className="field-label">Нашлось в резюме</p>
+      {empty && <p className="text-sm text-ink-2">Имени, контактов, стажа, грейда и роли в тексте нет. Навыки из словаря уже добавлены в список.</p>}
+      {found.full_name && row('Имя', found.full_name.value, found.full_name.quote, () => onName(found.full_name!.value))}
+      {found.phone && row('Телефон', found.phone.value, found.phone.quote, () => onPhone(found.phone!.value))}
+      {found.telegram && row('Telegram', found.telegram.value, found.telegram.quote, () => onTelegram(found.telegram!.value))}
+      {found.email && row('Почта в резюме', found.email.value, found.email.quote)}
+      {found.email && <p className="text-xs text-ink-3">Входная почта аккаунта из резюме не меняется.</p>}
+      {found.role && row('Специализация', roleRu(found.role.value), found.role.quote,
+        () => onSurvey({ specialization: found.role!.value }, 'Специализация подставлена в опрос. Сохраните опрос.'))}
+      {found.grade && row('Заявленный грейд', found.grade.value, found.grade.quote,
+        () => onSurvey({ declared_grade: found.grade!.value }, 'Заявленный грейд подставлен в опрос. Сохраните опрос. Грейд, подтверждённый тестом, резюме не меняет.'))}
+      {found.experience_years && row('Опыт, лет', String(found.experience_years.value), found.experience_years.quote,
+        () => onSurvey({ experience_years: found.experience_years!.value }, 'Стаж подставлен в опрос. Сохраните опрос.'))}
+      {found.soft_skills.length > 0 && (
+        <div className="text-sm text-ink">
+          <p className="text-ink-2">Мягкие навыки, в поиск не входят</p>
+          <ul className="mt-1 space-y-1">
+            {found.soft_skills.map(item => <li key={item.name}>{item.name} <span className="text-xs text-ink-3">«{item.quote}»</span></li>)}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
