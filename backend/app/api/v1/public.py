@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Participant, VerifiableCredential
+from app.models import Consent, Participant, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.profile import adult_cutoff
@@ -31,7 +31,10 @@ def _public_filter():
         and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
         and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
     )
-    return (Participant.public_profile.is_(True), adult)
+    # 152-FZ art. 10.1: data open to everyone needs an active consent to distribution, not just the toggle.
+    consented = Participant.id.in_(select(Consent.subject_id).where(
+        Consent.subject_type == "participant", Consent.kind == "pd_distribution", Consent.withdrawn_at.is_(None)))
+    return (Participant.public_profile.is_(True), adult, consented)
 
 
 @router.get("/issuer")

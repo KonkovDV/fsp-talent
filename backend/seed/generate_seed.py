@@ -97,6 +97,10 @@ async def main() -> None:
             if fsp_id in DEMOS:
                 participant.password_hash = password_hash
             _consents(db, "participant", participant.id, now)
+            if participant.public_profile:
+                doc = documents()["pd_distribution"]
+                db.add(Consent(subject_type="participant", subject_id=participant.id, kind=doc.kind,
+                               version=doc.version, sha256=doc.sha256, given_at=now))
             await rebuild_profile(db, participant)
             created += 1
             if created % 25 == 0:

@@ -24,3 +24,4 @@ redis_data/
 .mypy_cache/
 .ruff_cache/
 *.log
+deploy/backups/

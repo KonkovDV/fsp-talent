@@ -38,3 +38,20 @@
 2. Байесовская модель уровня по протоколам ФСП с неопределённостью и нормами ЕВСК — у конкурентов ФСП даёт фиксированный бонус.
 3. Миграции Alembic с откатом, проверки целостности репозитория, smoke против живого API в CI.
 4. Правовой слой: журналы согласий и доступа, несовершеннолетние скрыты до согласия представителя.
+
+## 4. Что внедрено в ветке `feat/sota-upgrade-2026-10-05`
+
+| # | Идея | Где | Как проверено |
+|---|---|---|---|
+| 1 | Семейства заданий с уровнями, ответ кодом | `backend/app/items/` | `test_item_families.py`: перезапуск в Python, Node.js, SQLite |
+| 2 | IRT 3PL + EAP + P(θ ≥ порога) | `app/services/cat.py` | `test_assessment_policy.py` |
+| 3 | CAT на классификацию, randomesque, доли тем, ≤ 30 % концептуальных | `app/services/cat.py`, `app/items/registry.py` | тесты + симуляция |
+| 4 | Мониторинг утечки по дрейфу, карантин, калибровка | `app/services/item_monitor.py`, `app/validation/calibrate.py` | атака утечкой в `docs/VALIDATION_ASSESSMENT.md` |
+| 5 | Навыки, подтверждённые тестом | `app/services/assessment.py` | smoke: `test_confirmed` после теста |
+| 6 | Потребности, версии, шорт-лист, разложимый скор, рекомендуемые категории | `app/services/matching.py`, `app/api/v1/needs.py`, страница «Потребности» | `test_matching.py`, smoke, браузер |
+| 7 | Оценка на парах: скрытая правда, базовая линия, абляции, SHA-256, импорт | `app/validation/matching.py` | `docs/VALIDATION_MATCHING.md` |
+| 8 | Регистрация по email с подтверждением, согласия с версиями | `app/api/v1/auth.py`, `app/legal/` | smoke, браузер |
+| 9 | Кандидат без ФСП, привязка позже | `POST /candidates/me/fsp` | smoke, браузер |
+| 10 | Шестая дисциплина «системы ИИ» | `app/services/categorization.py` | — |
+| 11 | Стенд sslip.io + Caddy, ночной бэкап | `deploy/` | проверка YAML; на сервере не запускался |
+| 12 | Режим стажировки | опрос «что ищете», фильтр поиска и потребности | smoke-фильтр, браузер |
