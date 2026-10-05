@@ -108,7 +108,7 @@ export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
 export const assessmentBlueprint = () => api.get('/assessment/blueprint')
-export const startAssessment = (data: { target_grade: string; specialization?: string | null }) =>
+export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string }) =>
   api.post('/assessment/start', data)
 export const activeAssessment = () => api.get('/assessment/active')
 export const answerAssessment = (sessionId: string, item_token: string, answer_index: number) =>

@@ -58,6 +58,7 @@ function useCountdown(item: Item | null) {
 export default function CandidateAssessment() {
   const qc = useQueryClient()
   const [target, setTarget] = useState('')
+  const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   const [error, setError] = useState('')
@@ -83,7 +84,7 @@ export default function CandidateAssessment() {
     for (const key of ['myProfile', 'assessmentHistory', 'assessmentActive']) qc.invalidateQueries({ queryKey: [key] })
   }
   const start = useMutation({
-    mutationFn: () => startAssessment({ target_grade: target }).then(r => r.data),
+    mutationFn: () => startAssessment({ target_grade: target, code_language: lang }).then(r => r.data),
     onSuccess: (data: SessionState) => { setState(data); setPicked(null); setError(''); setShowReview(false) },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось начать тест')),
   })
@@ -132,6 +133,16 @@ export default function CandidateAssessment() {
                 ))}
               </div>
               <p className="field-hint">Уверенный результат поднимет грейд на ступень выше выбранного.</p>
+            </fieldset>
+            <fieldset>
+              <legend className="field-label">Язык в заданиях на чтение кода</legend>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Язык кода">
+                {Object.entries((blueprint?.code_languages ?? { python: 'Python' }) as Record<string, string>).map(([k, v]) => (
+                  <button key={k} type="button" role="radio" aria-checked={lang === k} onClick={() => setLang(k)}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm ${lang === k ? 'border-accent bg-accent-soft font-medium text-accent' : 'border-line-strong text-ink-2 hover:border-accent/60'}`}>{v}</button>
+                ))}
+              </div>
+              <p className="field-hint">Задания на подсчёт операций будут на выбранном языке; остальные зависят от темы (SQL, JavaScript, сети).</p>
             </fieldset>
             <button onClick={() => start.mutate()} disabled={!target || start.isPending} className="btn-primary px-6 py-3">
               <ClipboardCheck size={16} aria-hidden />{start.isPending ? 'Готовим задания…' : 'Начать тест'}

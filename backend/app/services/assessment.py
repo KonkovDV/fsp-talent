@@ -165,8 +165,8 @@ def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: s
 
 # ── session flow ────────────────────────────────────────────────────────────
 
-async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, target_grade: str
-                        ) -> tuple[TestSession, TestSessionItem]:
+async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, target_grade: str,
+                        code_language: str = "python") -> tuple[TestSession, TestSessionItem]:
     if target_grade not in GRADE_ORDER:
         raise ValueError(f"Invalid grade: {target_grade}")
     now = datetime.now(UTC)
@@ -175,7 +175,7 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
         TestSession.expires_at <= now).values(status="expired", completed_at=now))
     session = TestSession(
         participant_id=participant_id, target_grade=target_grade, discipline=spec, specialization=spec,
-        engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags={},
+        engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags={"code_language": code_language},
         expires_at=now + timedelta(minutes=SESSION_TTL_MINUTES),
     )
     db.add(session)
@@ -193,8 +193,10 @@ async def serve_next(db: AsyncSession, session: TestSession, state: cat.State, b
     except LookupError as e:
         raise QuestionBankError(str(e)) from e
     fam = choice.family
+    lang = (session.flags or {}).get("code_language", "python")
+    extra = {"lang": lang} if lang in fam.languages and len(fam.languages) > 1 else {}
     for _ in range(8):
-        item = fam.generate(rng, choice.level, session.specialization)
+        item = fam.generate(rng, choice.level, session.specialization, **extra)
         key = item.static_key or cat.item_key(fam, choice.level)
         if key not in bank.blocked and key not in state.keys_used:
             break

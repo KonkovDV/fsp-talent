@@ -16,6 +16,8 @@ import pytest
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, FAMILIES, families_for
 
 NODE = shutil.which("node")
+GO = shutil.which("go")
+JAVA = shutil.which("java")
 SEEDS = range(4)
 
 
@@ -52,6 +54,17 @@ def _run(verify: dict) -> str:
         assert out.returncode == 0, out.stderr
         text = out.stdout.strip()
         return " ".join(text.splitlines()) if verify.get("join_lines") else text
+    if runner in ("go", "java"):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            name = "main.go" if runner == "go" else "Main.java"
+            path = f"{tmp}/{name}"
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(verify["code"])
+            cmd = [GO, "run", path] if runner == "go" else [JAVA, path]
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=tmp)
+            assert out.returncode == 0, out.stderr
+            return out.stdout.strip()
     if runner == "sqlite":
         con = sqlite3.connect(":memory:")
         con.executescript(verify["schema"])
@@ -118,10 +131,22 @@ def test_every_specialization_has_its_own_families_and_no_foreign_ones():
 
 
 def test_items_are_practically_unique():
-    """A leaked item says little about the next session: 200 draws of one family level give at least 120 distinct items."""
+    """A leaked item says little about the next session: 200 draws of one level give 120+ distinct items."""
     for fid in ("py_eval", "sql_query", "algo_ops", "js_eval", "net_ipv4", "ml_metrics", "emb_bits"):
         family = FAMILIES[fid]
         spec = sorted(family.specs)[0]
         stems = {(item.stem, item.code) for item in
                  (family.generate(random.Random(s), 3, spec) for s in range(200))}
         assert len(stems) >= 120, (fid, len(stems))
+
+
+@pytest.mark.parametrize("lang", ["python", "javascript", "go", "java"])
+def test_counting_programs_agree_across_languages(lang):
+    """The candidate may read loops in another language; the answer must be the same program's answer."""
+    if lang == "javascript" and NODE is None or lang == "go" and GO is None or lang == "java" and JAVA is None:
+        pytest.skip(f"{lang} toolchain is not installed")
+    family = FAMILIES["algo_ops"]
+    for level in family.levels:
+        item = family.generate(random.Random(level * 7), level, "backend", lang=lang)
+        assert item.language == lang
+        assert _run(item.verify) == item.options[item.correct], (lang, level, item.code)
