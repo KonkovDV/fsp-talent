@@ -29,7 +29,7 @@ WEIGHTS = {
 UNTESTED = 0.5          # test factor of a candidate who has not taken the test: neutral, not zero
 LABELS = {
     "skills": "Навыки", "grade": "Грейд", "test": "Тест", "role": "Специализация",
-    "fsp": "Подтверждено ФСП", "text": "Совпадение с запросом", "industry": "Отрасль",
+    "fsp": "ФСП", "text": "Запрос", "industry": "Отрасль",
 }
 # How much a skill counts by the strength of evidence: roughly the probability that the skill is real.
 # A bare declaration is still usually true, so it is discounted, not halved.

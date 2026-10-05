@@ -26,6 +26,7 @@ from app.api.deps import get_current_participant
 from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
+from app.items.families.langs import LANGUAGE_LABELS
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
 from app.models import Participant
 from app.models.assessment import GRADE_ORDER, TestSession, TestSessionItem
@@ -59,6 +60,8 @@ TOPIC_LABELS = {"python": "Python", "sql": "SQL", "algorithms": "Алгорит�
 class StartIn(BaseModel):
     target_grade: Grade
     specialization: str | None = Field(None, description="По умолчанию — специализация из опроса")
+    code_language: Literal["python", "javascript", "go", "java"] = Field(
+        "python", description="Язык, на котором показывать задания на чтение кода")
 
 
 class AnswerIn(BaseModel):
@@ -205,6 +208,7 @@ async def blueprint():
     """Test structure per specialization: topics, shares and item families. Nothing here helps to cheat."""
     return {
         "min_items": cat.MIN_ITEMS, "max_items": cat.MAX_ITEMS, "pass_probability": cat.PASS_P,
+        "code_languages": LANGUAGE_LABELS,
         "upgrade_probability": cat.UPGRADE_P, "concept_max_share": CONCEPT_MAX_SHARE,
         "cuts": cat.CUTS,
         "specializations": {
@@ -241,7 +245,7 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
     if existing and existing.expires_at > datetime.now(UTC):
         raise ApiError(409, "conflict", "Уже есть незавершённый тест", details={"session_id": str(existing.id)})
     try:
-        session, item = await start_session(db, participant_id, spec, body.target_grade)
+        session, item = await start_session(db, participant_id, spec, body.target_grade, body.code_language)
         await db.commit()
     except QuestionBankError as e:
         raise ApiError(503, "question_bank_empty") from e

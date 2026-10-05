@@ -1,10 +1,10 @@
 export const ROLE_RU: Record<string, string> = {
-  backend: 'бэкенд', frontend: 'фронтенд', fullstack: 'фулстек', ml: 'ML',
-  devops: 'DevOps', security: 'ИБ', embedded: 'embedded', mobile: 'мобильная разработка',
+  backend: 'Backend', frontend: 'Frontend', fullstack: 'Fullstack', ml: 'ML и данные',
+  devops: 'DevOps', security: 'Информационная безопасность', embedded: 'Встраиваемые системы', mobile: 'Мобильная разработка',
 }
 
 export const DISC_RU: Record<string, string> = {
-  algorithmic: 'Алгоритмика', product: 'Продукт', security: 'Безопасность', bas: 'БАС', robotics: 'Робототехника',
+  algorithmic: 'Алгоритмическое', product: 'Продуктовое', security: 'Системы ИБ', bas: 'БАС', robotics: 'Робототехника',
   ai: 'Системы ИИ',
 }
 

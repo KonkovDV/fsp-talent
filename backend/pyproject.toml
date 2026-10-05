@@ -55,6 +55,10 @@ select = ["E", "F", "I", "UP"]
 # DTZ011: date.today() для возраста и давности соревнований — календарная дата, не момент времени.
 ignore = ["B008", "DTZ011"]
 
+[tool.ruff.lint.per-file-ignores]
+# Code templates of test items: one program per line is easier to read than wrapped string pieces.
+"app/items/families/langs.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = false

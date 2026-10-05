@@ -1,307 +1,155 @@
 import { Link } from 'react-router-dom'
-import { Code2, Shield, Trophy, ArrowRight, Medal, Lock, CheckCircle2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { BadgeCheck, FileSignature, ShieldCheck } from 'lucide-react'
+import { SiteFooter } from '../components/Layout'
+import { PublicHeader } from '../components/PublicShell'
 
-/** ФСП diamond logo — standalone for landing */
-function FspLogoFull() {
+/** Illustrative rows for the hero. They show the real card format; the people are invented. */
+const SAMPLE = [
+  { place: 1, cat: 'backend · senior', grade: 'senior', score: 91, evidence: ['Тест: 96 %', 'КМС, алгоритмическое'],
+    factors: [100, 100, 100, 96, 80] },
+  { place: 2, cat: 'backend · middle', grade: 'middle', score: 84, evidence: ['Тест: 88 %', 'Без истории ФСП'],
+    factors: [92, 100, 100, 88, null] },
+  { place: 3, cat: 'fullstack · middle', grade: 'middle', score: 71, evidence: ['Грейд заявлен', 'I разряд, продуктовое'],
+    factors: [80, 85, 50, 50, 60] },
+]
+const FACTOR_NAMES = ['Навыки', 'Грейд', 'Роль', 'Тест', 'ФСП']
+
+function ProtocolPreview() {
   return (
-    <div className="flex items-center gap-3 select-none">
-      <div
-        style={{
-          width: 40, height: 40,
-          background: 'linear-gradient(135deg, #D42330, #FF4D5A)',
-          clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        <span style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>Ф</span>
-      </div>
-      <div className="flex flex-col" style={{ lineHeight: 1 }}>
-        <span style={{ color: '#fff', fontWeight: 900, fontSize: 18, letterSpacing: '0.04em', fontFamily: 'Montserrat, Inter, sans-serif' }}>ФСП</span>
-        <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500, fontSize: 10, letterSpacing: '0.12em' }}>ТАЛАНТ</span>
-      </div>
+    <figure className="rounded-xl border border-line bg-panel shadow-pop" aria-label="Пример подборки">
+      <figcaption className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-4">
+        <span className="font-display text-sm font-semibold text-ink">Потребность: backend, middle</span>
+        <span className="text-xs text-ink-3">Python, PostgreSQL · пример выдачи</span>
+      </figcaption>
+      <ol className="divide-y divide-line">
+        {SAMPLE.map((row, i) => (
+          <li key={row.place} className="grid grid-cols-[2.25rem_1fr_auto] items-center gap-x-4 gap-y-2 px-5 py-4">
+            <span className="place text-ink-3">{row.place}</span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`badge-${row.grade}`}>{row.cat}</span>
+                {row.evidence.map(e => <span key={e} className="text-xs text-ink-2">{e}</span>)}
+              </div>
+              <div className="mt-2.5 grid grid-cols-5 gap-1.5" aria-hidden>
+                {row.factors.map((f, k) => (
+                  <div key={k}>
+                    <div className="meter">{f !== null && <span style={{ width: `${f}%`, animationDelay: `${150 + i * 120 + k * 40}ms` }} />}</div>
+                    <p className={`mt-1 truncate text-[10px] ${f === null ? 'text-ink-3 line-through' : 'text-ink-3'}`}>{FACTOR_NAMES[k]}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <span className="text-right">
+              <span className="block font-display text-2xl font-semibold tabular-nums text-ink">{row.score}</span>
+              <span className="text-2xs text-ink-3">из 100</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="border-t border-line px-5 py-3 text-xs text-ink-2">
+        У второго кандидата нет истории ФСП — эта ось не учитывается и не тянет его вниз.
+      </p>
+    </figure>
+  )
+}
+
+const CANDIDATE_STEPS = [
+  ['Регистрация по email', 'ФСП ID не обязателен — его можно привязать позже.'],
+  ['Опрос', 'Специализация, отрасль, заявленный грейд.'],
+  ['Адаптивный тест', '8–20 заданий; у каждого кандидата свои.'],
+  ['Приглашения', 'Работодатель пишет первым и сразу называет зарплату.'],
+]
+const EMPLOYER_STEPS = [
+  ['Потребность', 'Роль, грейд, обязательные и желательные навыки.'],
+  ['Подборка', 'Порядок задаёт один скор, у каждого фактора свой вес.'],
+  ['Приглашение', 'Зарплата «от» и «до» в рублях и способ связи.'],
+  ['Контакты', 'Открываются, когда кандидат принял приглашение.'],
+]
+
+function Lane({ title, steps }: { title: string; steps: string[][] }) {
+  return (
+    <div>
+      <h3 className="section-title">{title}</h3>
+      <ol className="mt-5 space-y-5">
+        {steps.map(([head, text], i) => (
+          <li key={head} className="grid grid-cols-[2rem_1fr] gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line-strong text-xs font-semibold tabular-nums text-ink-2">{i + 1}</span>
+            <div>
+              <p className="font-medium text-ink">{head}</p>
+              <p className="mt-0.5 text-sm text-ink-2">{text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
 
-const STATS = [
-  { value: '5', label: 'дисциплин ФСП' },
-  { value: '2', label: 'оси оценки' },
-  { value: 'W3C VC', label: 'подпись результатов' },
-  { value: '152-ФЗ', label: 'контакты по согласию' },
-]
-
-const FEATURES = [
-  {
-    Icon: Trophy,
-    title: 'Двуосная оценка',
-    desc: 'Грейд по опыту + уровень ФСП: процентиль, лестница ЕВСК и нижняя граница Байеса — не просто место в протоколе',
-    accent: '#F0A500',
-    bg: 'rgba(240,165,0,0.08)',
-    border: 'rgba(240,165,0,0.25)',
-  },
-  {
-    Icon: Lock,
-    title: 'Анонимный поиск',
-    desc: 'Навыки, разряд-эквивалент и причина попадания в выдачу. Имя и контакты — только после согласия кандидата',
-    accent: '#1D82F5',
-    bg: 'rgba(29,130,245,0.08)',
-    border: 'rgba(29,130,245,0.25)',
-  },
-  {
-    Icon: Shield,
-    title: 'Проверяемая подпись',
-    desc: 'Результат подписан криптографически. W3C VC 2.0, eddsa-jcs-2022 — подмена места ломает проверку',
-    accent: '#22C55E',
-    bg: 'rgba(34,197,94,0.08)',
-    border: 'rgba(34,197,94,0.25)',
-  },
-  {
-    Icon: Code2,
-    title: '5 дисциплин',
-    desc: 'Алгоритмика, продукт, безопасность, БАС, робототехника. Каждая — отдельный байесовский скор с нижней границей',
-    accent: '#D42330',
-    bg: 'rgba(212,35,48,0.08)',
-    border: 'rgba(212,35,48,0.25)',
-  },
-]
-
-const HOW = [
-  { n: '01', title: 'Регистрация', desc: 'Участник привязывает ID ФСП. Работодатель создаёт аккаунт компании.' },
-  { n: '02', title: 'Поиск', desc: 'Работодатель ищет по навыкам, грейду, дисциплине. Результаты анонимны.' },
-  { n: '03', title: 'Оффер', desc: 'Оффер отправляется кандидату. Он принимает или отклоняет.' },
-  { n: '04', title: 'Контакт', desc: 'Только после согласия кандидата открываются имя и контакты.' },
+const TRUST = [
+  { Icon: BadgeCheck, title: 'Задания проверяет код', text: 'Каждое задание собирается из шаблона, а ответ получается запуском фрагмента в Python, Node.js или SQLite. Утёкшие задания уходят в карантин автоматически.' },
+  { Icon: FileSignature, title: 'Результаты ФСП подписаны', text: 'Место в протоколе выдаётся как удостоверение W3C VC 2.0. Подмена хотя бы одной цифры ломает проверку подписи.' },
+  { Icon: ShieldCheck, title: 'Согласие — отдельный документ', text: 'Как требует 152-ФЗ с сентября 2025 года. Работодатель видит анонимную карточку, имя и контакты — только после согласия.' },
 ]
 
 export default function LandingPage() {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-
   return (
-    <div className="min-h-dvh bg-surface-0 text-text-primary">
+    <div className="min-h-dvh bg-paper">
+      <PublicHeader />
 
-      {/* ══ NAV ══════════════════════════════════════════════ */}
-      <header className="fsp-nav sticky top-0 z-40" role="banner">
-        <nav className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between" aria-label="Главная навигация">
-          <a href="/" aria-label="ФСП Талант — главная">
-            <FspLogoFull />
-          </a>
-          <div className="flex items-center gap-2">
-            <Link to="/leaderboard" className="btn-nav text-sm">Лидерборд</Link>
-            <Link to="/login"       className="btn-nav text-sm">Войти</Link>
-            <Link to="/register"
-              className="ml-1 btn-danger text-sm"
-            >
-              Регистрация <ArrowRight size={13} />
-            </Link>
+      <main id="main">
+        <section className="mx-auto grid max-w-page items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:py-20">
+          <div className="animate-rise">
+            <p className="text-sm font-medium text-accent">Федерация спортивного программирования · обратный найм</p>
+            <h1 className="mt-4 font-display text-[2.25rem] font-medium leading-[1.1] tracking-tight text-ink sm:text-[3rem]">
+              Приглашайте разработчиков по результату, а не по резюме
+            </h1>
+            <p className="mt-6 max-w-[52ch] text-lg text-ink-2">
+              Кандидат проходит адаптивный тест и подтверждает достижения на соревнованиях ФСП. Работодатель видит
+              категорию и объяснение подборки, а потом сам приглашает — сразу с зарплатной вилкой.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link to="/register?role=employer" className="btn-primary px-6 py-3 text-base">Найти кандидата</Link>
+              <Link to="/register" className="btn-secondary px-6 py-3 text-base">Я ищу работу</Link>
+            </div>
+            <p className="mt-5 text-xs text-ink-3">
+              Демо-вход: <Link to="/login?role=employer" className="text-accent hover:underline">hr@sibcode.demo</Link> или{' '}
+              <Link to="/login" className="text-accent hover:underline">fsp001@demo.talent</Link>, пароль demo12345.
+            </p>
           </div>
-        </nav>
-        <div style={{ height: 2, background: 'linear-gradient(90deg, #D42330, #FF4D5A, #D42330)' }} aria-hidden />
-      </header>
+          <ProtocolPreview />
+        </section>
 
-      {/* ══ HERO ═════════════════════════════════════════════ */}
-      <section
-        style={{ background: 'linear-gradient(150deg, #0A1F5C 0%, #1B3FA0 60%, #1555A0 100%)', position: 'relative', overflow: 'hidden' }}
-        className="pt-24 pb-32 px-6 text-center"
-        aria-labelledby="hero-heading"
-      >
-        {/* Grid pattern */}
-        <div className="pointer-events-none absolute inset-0 bg-grid opacity-30" aria-hidden />
-        {/* Glow */}
-        <div
-          className="pointer-events-none absolute"
-          style={{ top: -120, left: '50%', transform: 'translateX(-50%)', width: 800, height: 400, background: 'radial-gradient(ellipse, rgba(29,130,245,0.25), transparent 70%)', zIndex: 0 }}
-          aria-hidden
-        />
-
-        <div
-          className={`relative z-10 max-w-4xl mx-auto space-y-7 transition-all duration-700 ${
-            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'
-          }`}
-        >
-          {/* Eyebrow */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold"
-            style={{ background: 'rgba(212,35,48,0.2)', border: '1px solid rgba(212,35,48,0.5)', color: '#FF6B75' }}>
-            <span className="relative flex h-2 w-2" aria-hidden>
-              <span className="animate-ping absolute h-full w-full rounded-full opacity-75" style={{ background: '#D42330' }} />
-              <span className="relative rounded-full h-2 w-2" style={{ background: '#FF4D5A' }} />
-            </span>
-            LCT-2026 · Платформа открыта
+        <section className="border-y border-line bg-panel">
+          <div className="mx-auto grid max-w-page gap-12 px-4 py-14 sm:px-6 md:grid-cols-2">
+            <Lane title="Кандидату" steps={CANDIDATE_STEPS} />
+            <Lane title="Работодателю" steps={EMPLOYER_STEPS} />
           </div>
+        </section>
 
-          {/* Headline */}
-          <h1
-            id="hero-heading"
-            className="text-5xl text-balance animate-fade-up"
-            style={{ fontFamily: 'Montserrat, Inter, sans-serif', fontWeight: 900, color: '#FFFFFF', lineHeight: 1.1, animationDelay: '0.1s' }}
-          >
-            Маркетплейс{' '}
-            <span className="text-gradient-fsp">ИТ-талантов</span>{' '}
-            <span style={{ color: '#D42330' }}>России</span>
-          </h1>
-
-          <p
-            className="text-lg text-balance animate-fade-up"
-            style={{ color: 'rgba(255,255,255,0.75)', maxWidth: 640, margin: '0 auto', animationDelay: '0.2s' }}
-          >
-            Работодатель находит участников по протоколам ФСП и отправляет оффер.{' '}
-            <strong style={{ color: '#fff', fontWeight: 700 }}>Имя и контакты открываются только после согласия кандидата</strong>.
-          </p>
-
-          {/* CTA */}
-          <div
-            className="flex flex-col sm:flex-row gap-3 justify-center animate-fade-up"
-            style={{ animationDelay: '0.3s' }}
-          >
-            <Link to="/register?role=participant"
-              className="btn-danger text-base px-8 py-3 rounded-md font-bold"
-            >
-              Я участник ФСП <Medal size={16} />
-            </Link>
-            <Link to="/register?role=employer"
-              className="btn-secondary-white text-base px-8 py-3 rounded-md font-bold"
-            >
-              Я работодатель
-            </Link>
-          </div>
-
-          {/* Trust badges */}
-          <div className="flex flex-wrap items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: '0.4s' }}>
-            {['Официальные данные ФСП', '152-ФЗ соответствие', 'W3C VC 2.0'].map(t => (
-              <span key={t} className="flex items-center gap-1.5 text-sm" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                <CheckCircle2 size={13} style={{ color: '#22C55E' }} />
-                {t}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Diagonal cut */}
-        <div
-          className="pointer-events-none absolute bottom-0 left-0 right-0"
-          style={{ height: 60, background: 'oklch(var(--surface-0))', clipPath: 'polygon(0 100%, 100% 100%, 100% 0)' }}
-          aria-hidden
-        />
-      </section>
-
-      {/* ══ STATS BAR ════════════════════════════════════════ */}
-      <section className="border-y border-border py-10" aria-label="Статистика платформы">
-        <div className="max-w-7xl mx-auto px-6">
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map(s => (
-              <div key={s.label} className="text-center">
-                <dt
-                  className="text-3xl tabular mb-1"
-                  style={{ fontFamily: 'Montserrat, Inter, sans-serif', fontWeight: 900, background: 'linear-gradient(135deg, #1D82F5, #5BADFF)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-                >
-                  {s.value}
-                </dt>
-                <dd className="text-xs text-text-muted uppercase tracking-widest font-semibold">{s.label}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
-
-      {/* ══ FEATURES ═════════════════════════════════════════ */}
-      <section className="py-24 px-6" aria-labelledby="features-heading">
-        <div className="max-w-7xl mx-auto">
-          <h2
-            id="features-heading"
-            className="text-3xl text-center mb-14 text-balance"
-            style={{ fontFamily: 'Montserrat, Inter, sans-serif', fontWeight: 900 }}
-          >
-            Возможности платформы
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {FEATURES.map(({ Icon, title, desc, accent, bg, border }) => (
-              <div
-                key={title}
-                className="card-hover space-y-4"
-                style={{ borderLeft: `3px solid ${accent}` }}
-              >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center"
-                  style={{ background: bg, border: `1px solid ${border}` }}
-                >
-                  <Icon size={20} style={{ color: accent }} />
-                </div>
-                <h3 className="font-bold text-text-primary">{title}</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">{desc}</p>
+        <section className="mx-auto max-w-page px-4 py-14 sm:px-6">
+          <h2 className="font-display text-2xl font-semibold tracking-tight text-ink">Почему категории можно верить</h2>
+          <div className="mt-8 grid gap-8 md:grid-cols-3">
+            {TRUST.map(({ Icon, title, text }) => (
+              <div key={title}>
+                <Icon className="text-accent" size={22} aria-hidden />
+                <h3 className="mt-3 font-medium text-ink">{title}</h3>
+                <p className="mt-1.5 text-sm text-ink-2">{text}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ══ HOW IT WORKS ═════════════════════════════════════ */}
-      <section
-        className="py-24 px-6"
-        style={{ background: 'linear-gradient(180deg, oklch(var(--surface-1)) 0%, oklch(var(--surface-0)) 100%)' }}
-        aria-labelledby="how-heading"
-      >
-        <div className="max-w-5xl mx-auto">
-          <h2
-            id="how-heading"
-            className="text-3xl text-center mb-14 text-balance"
-            style={{ fontFamily: 'Montserrat, Inter, sans-serif', fontWeight: 900 }}
-          >
-            Как это работает
-          </h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {HOW.map(({ n, title, desc }) => (
-              <div key={n} className="card-fsp space-y-3">
-                <span
-                  className="text-4xl tabular"
-                  style={{ fontFamily: 'Montserrat, Inter, sans-serif', fontWeight: 900, background: 'linear-gradient(135deg, #1B3FA0, #1D82F5)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-                >
-                  {n}
-                </span>
-                <h3 className="font-bold text-text-primary">{title}</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">{desc}</p>
-              </div>
-            ))}
+        <section className="bg-navy text-white">
+          <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-6 px-4 py-12 sm:px-6">
+            <div>
+              <h2 className="font-display text-2xl font-semibold">Опишите, кого ищете</h2>
+              <p className="mt-2 text-sm text-white/75">Подборка с объяснением появится сразу после сохранения потребности.</p>
+            </div>
+            <Link to="/register?role=employer" className="btn bg-white px-6 py-3 text-navy hover:bg-white/90">Создать аккаунт работодателя</Link>
           </div>
-        </div>
-      </section>
-
-      {/* ══ CTA ══════════════════════════════════════════════ */}
-      <section
-        className="py-20 px-6 text-center"
-        style={{ background: 'linear-gradient(135deg, #0A1F5C, #1B3FA0)' }}
-      >
-        <div className="max-w-lg mx-auto space-y-6">
-          <h2 className="text-2xl text-white" style={{ fontFamily: 'Montserrat, Inter, sans-serif', fontWeight: 900 }}>
-            Готовы начать?
-          </h2>
-          <p style={{ color: 'rgba(255,255,255,0.7)' }}>Регистрация бесплатна. Анонимность гарантирована до оффера.</p>
-          <Link to="/register?role=participant" className="btn-danger px-8 py-3 inline-flex text-base font-bold">
-            Зарегистрироваться
-          </Link>
-        </div>
-      </section>
-
-      {/* ══ FOOTER ═══════════════════════════════════════════ */}
-      <footer style={{ background: '#06133A', borderTop: '1px solid rgba(255,255,255,0.1)' }} className="py-8" role="contentinfo">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <FspLogoFull />
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
-            &copy; 2026 Федерация спортивного программирования · прототип · 152-ФЗ
-          </p>
-          <div className="flex items-center gap-5">
-            {[['Лидерборд', '/leaderboard'], ['Войти', '/login'], ['Регистрация', '/register']].map(([label, to]) => (
-              <Link
-                key={to}
-                to={to}
-                style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}
-                className="hover:text-white transition-colors"
-              >
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </footer>
+        </section>
+      </main>
+      <SiteFooter />
     </div>
   )
 }

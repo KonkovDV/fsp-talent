@@ -48,6 +48,8 @@ class Family:
     levels: tuple[int, ...] = LEVELS
     # Optional: (spec, level) -> whether the family has items there (static pools are uneven).
     supports: Callable[[str, int], bool] | None = None
+    # Languages the family can show its code in; generate() then accepts lang=... (see families/langs.py).
+    languages: tuple[str, ...] = ("python",)
 
     def available(self, spec: str, level: int) -> bool:
         return spec in self.specs and level in self.levels and (self.supports is None or self.supports(spec, level))

@@ -7,52 +7,57 @@ import random
 from collections import deque
 
 from app.items import Family, Item, near_int, options_with
+from app.items.families.langs import LANGUAGES, fib_program, loop_program
 from app.items.families.python_code import run_python
 
 
-def _count_item(rng, code, distractors, explanation) -> Item:
+def _count_item(rng, code, distractors, explanation, lang: str = "python", shown: str | None = None) -> Item:
+    """`code` is the Python program the answer is computed from; `shown` is the same program in `lang`."""
     answer = run_python(code)
     options, correct = options_with(rng, answer, distractors, near_int(rng, int(answer), 4))
-    return Item(stem="Сколько раз выполнится count += 1? Код выводит итоговое значение count.", code=code,
-                language="python", options=options, correct=correct, explanation=explanation,
-                verify={"runner": "python", "code": code, "expect": answer})
+    shown = shown or code
+    runner = {"python": "python", "javascript": "node"}.get(lang, lang)
+    return Item(stem="Сколько раз увеличится count? Программа выводит итоговое значение.", code=shown,
+                language=lang, options=options, correct=correct, explanation=explanation,
+                verify={"runner": runner, "code": shown, "expect": answer})
 
 
-def ops_generate(rng: random.Random, level: int, spec: str) -> Item:
+def _loop(rng, lang, kind, params, distractors, explanation) -> Item:
+    return _count_item(rng, loop_program("python", kind, params), distractors, explanation, lang,
+                       loop_program(lang, kind, params))
+
+
+def ops_generate(rng: random.Random, level: int, spec: str, lang: str = "python") -> Item:
+    if lang not in LANGUAGES:
+        lang = "python"
     if level == 1:
         a, b, s = rng.randint(0, 5), rng.randint(20, 40), rng.randint(3, 6)
-        code = f"count = 0\nfor i in range({a}, {b}, {s}):\n    count += 1\nprint(count)"
-        return _count_item(rng, code, [(b - a) // s, (b - a) // s + 1 + (1 if (b - a) % s == 0 else 0), b - a],
-                           "range(a, b, s) даёт ceil((b − a) / s) значений; b не входит.")
+        return _loop(rng, lang, "range", {"a": a, "b": b, "s": s},
+                     [(b - a) // s, (b - a) // s + 1 + (1 if (b - a) % s == 0 else 0), b - a],
+                     "Цикл от a до b с шагом s выполняется ceil((b − a) / s) раз; b не входит.")
     if level == 2:
         n = rng.randint(6, 12)
-        if rng.random() < 0.5:
-            code = f"count = 0\nfor i in range({n}):\n    for j in range(i):\n        count += 1\nprint(count)"
-        else:
-            code = f"count = 0\nfor i in range({n}):\n    for j in range(i, {n}):\n        count += 1\nprint(count)"
-        return _count_item(rng, code, [n * n, n * (n - 1), n * (n + 1) // 2 + n],
-                           "Внутренний цикл зависит от i: сумма арифметической прогрессии, порядка n²/2.")
+        kind = "tri_lt" if rng.random() < 0.5 else "tri_ge"
+        return _loop(rng, lang, kind, {"n": n}, [n * n, n * (n - 1), n * (n + 1) // 2 + n],
+                     "Внутренний цикл зависит от i: сумма арифметической прогрессии, порядка n²/2.")
     if level == 3:
         n = rng.randint(40, 1000)
         d = rng.choice([2, 3])
-        code = f"count = 0\ni = {n}\nwhile i > 1:\n    i //= {d}\n    count += 1\nprint(count)"
-        return _count_item(rng, code, [round(math.log(n, d)) + 1, n // d, int(math.log2(n)) + (d == 3) * 2],
-                           f"Каждый шаг делит i на {d}: число шагов — логарифм n по основанию {d} (с округлением).")
+        return _loop(rng, lang, "halve", {"n": n, "d": d},
+                     [round(math.log(n, d)) + 1, n // d, int(math.log2(n)) + (d == 3) * 2],
+                     f"Каждый шаг делит i на {d}: число шагов — логарифм n по основанию {d} (с округлением вниз).")
     if level == 4:
         n, k = rng.randint(5, 9), rng.randint(2, 4)
-        code = (f"count = 0\nfor i in range({n}):\n    for j in range({n}):\n"
-                f"        if (i + j) % {k} == 0:\n            count += 1\nprint(count)")
-        return _count_item(rng, code, [n * n // k, n * n // k + 1, (n // k) * n],
-                           "Нужно точно посчитать пары (i, j) с суммой, кратной k; оценка n²/k даёт только порядок.")
+        return _loop(rng, lang, "pairs", {"n": n, "k": k}, [n * n // k, n * n // k + 1, (n // k) * n],
+                     "Нужно точно посчитать пары (i, j) с суммой, кратной k; оценка n²/k даёт только порядок.")
     n = rng.randint(5, 9)
-    if rng.random() < 0.5:
-        code = ("count = 0\n\ndef f(n):\n    global count\n    count += 1\n    if n < 2:\n        return n\n"
-                f"    return f(n - 1) + f(n - 2)\n\nf({n})\nprint(count)")
+    if rng.random() < 0.5 or lang != "python":
         fib = [0, 1]
         for _ in range(n + 2):
             fib.append(fib[-1] + fib[-2])
-        return _count_item(rng, code, [fib[n], 2 ** n, 2 * n - 1],
-                           "Число вызовов наивной рекурсии Фибоначчи C(n) = C(n−1) + C(n−2) + 1 = 2·F(n+1) − 1.")
+        return _count_item(rng, fib_program("python", n), [fib[n], 2 ** n, 2 * n - 1],
+                           "Число вызовов наивной рекурсии Фибоначчи C(n) = C(n−1) + C(n−2) + 1 = 2·F(n+1) − 1.",
+                           lang, fib_program(lang, n))
     code = ("count = 0\nmemo = {}\n\ndef f(n):\n    global count\n    count += 1\n    if n in memo:\n"
             "        return memo[n]\n    memo[n] = n if n < 2 else f(n - 1) + f(n - 2)\n    return memo[n]\n\n"
             f"f({n})\nprint(count)")
@@ -136,7 +141,7 @@ def graph_generate(rng: random.Random, level: int, spec: str) -> Item:
 OPS = Family(
     id="algo_ops", title="Алгоритмы: подсчёт операций", topic="algorithms", kind="code",
     specs=frozenset({"backend", "fullstack", "frontend", "ml", "devops", "embedded", "mobile", "security"}),
-    skills=("Algorithms",), generate=ops_generate, a=1.4,
+    skills=("Algorithms",), generate=ops_generate, a=1.4, languages=LANGUAGES,
 )
 GRAPH = Family(
     id="algo_graph", title="Алгоритмы: кратчайший путь", topic="algorithms", kind="code",

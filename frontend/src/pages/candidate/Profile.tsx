@@ -1,23 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, apiErrorCode, getMyProfile, giveConsent, parseResume, updateMyProfile, updateVisibility } from '../../api/client'
-import { Eye, EyeOff, MailCheck } from 'lucide-react'
+import { Eye, EyeOff, MailCheck, X } from 'lucide-react'
+import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
 import FspLinkCard from '../../components/FspLinkCard'
 import ConsentsPanel from '../../components/ConsentsPanel'
 import SurveyCard from '../../components/SurveyCard'
 
-const GRADES = ['', 'junior', 'middle', 'senior', 'lead']
-
-interface SkillRow { name: string; source_quote?: string | null }
+interface SkillRow { name: string; source_quote?: string | null; trust_level?: string }
 
 export default function CandidateProfile() {
   const qc = useQueryClient()
   const { data: profile, isLoading } = useQuery({
     queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data),
   })
-  const [experience, setExperience] = useState('')
-  const [grade, setGrade] = useState('')
+  const [newSkill, setNewSkill] = useState('')
   const [skills, setSkills] = useState<SkillRow[]>([])
   const [telegram, setTelegram] = useState('')
   const [phone, setPhone] = useState('')
@@ -28,8 +26,6 @@ export default function CandidateProfile() {
 
   useEffect(() => {
     if (!profile) return
-    setExperience(profile.experience_years == null ? '' : String(profile.experience_years))
-    setGrade(profile.declared_grade ?? '')
     setSkills(profile.skills ?? [])
     setTelegram(profile.telegram ?? '')
     setPhone(profile.phone ?? '')
@@ -38,8 +34,6 @@ export default function CandidateProfile() {
 
   const save = useMutation({
     mutationFn: () => updateMyProfile({
-      experience_years: experience === '' ? null : Number(experience),
-      declared_grade: grade || null,
       skills,
       telegram: telegram || null,
       phone: phone || null,
@@ -71,94 +65,96 @@ export default function CandidateProfile() {
     },
   })
 
-  if (isLoading) return <div className="animate-pulse h-64 bg-surface-2 rounded-2xl" />
-  if (!profile) return null
+  if (isLoading || !profile) return <div className="space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-96" /></div>
+  const addSkill = () => {
+    const name = newSkill.trim()
+    if (name && !skills.some(s => s.name.toLowerCase() === name.toLowerCase())) setSkills([...skills, { name }])
+    setNewSkill('')
+  }
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{profile.display_name}</h1>
-          <p className="text-sm text-text-muted">{profile.fsp_id ?? 'без ФСП ID'} · {profile.region ?? 'регион не указан'}</p>
-          <p className="text-xs text-text-muted flex items-center gap-1 mt-1">
-            <MailCheck size={12} className="text-green-600" />{profile.email} — подтверждён, его получит работодатель после вашего согласия
-          </p>
-        </div>
-        <button onClick={() => visibility.mutate(!profile.is_visible)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${profile.is_visible ? 'bg-green-100 text-green-700' : 'bg-surface-2 text-gray-600'}`}>
-          {profile.is_visible ? <Eye size={16} /> : <EyeOff size={16} />}
-          {profile.discoverable ? 'Виден работодателям' : 'Скрыт из поиска'}
-        </button>
-      </div>
+    <div>
+      <PageHeader title={profile.display_name ?? 'Профиль'}
+        lead={<span className="inline-flex items-center gap-1.5"><MailCheck size={14} className="text-ok" aria-hidden />
+          {profile.email} — подтверждён. Его получит работодатель, когда вы примете приглашение.</span>}
+        actions={
+          <button onClick={() => visibility.mutate(!profile.is_visible)} aria-pressed={profile.is_visible}
+            className={profile.discoverable ? 'btn-secondary border-ok/50 text-ok' : 'btn-secondary'}>
+            {profile.is_visible ? <Eye size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
+            {profile.discoverable ? 'Виден работодателям' : 'Скрыт из поиска'}
+          </button>} />
 
-      <div className="card space-y-4">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <label className="text-sm">Опыт, лет
-            <input type="number" min={0} max={50} value={experience} onChange={e => setExperience(e.target.value)}
-              className="mt-1 w-full border border-border rounded-xl px-3 py-2" />
-          </label>
-          <label className="text-sm">Грейд (самооценка)
-            <select value={grade} onChange={e => setGrade(e.target.value)} className="mt-1 w-full border border-border rounded-xl px-3 py-2">
-              {GRADES.map(item => <option key={item} value={item}>{item || 'не указан'}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">Telegram
-            <input value={telegram} onChange={e => setTelegram(e.target.value)} className="mt-1 w-full border border-border rounded-xl px-3 py-2" />
-          </label>
-          <label className="text-sm">Телефон
-            <input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1 w-full border border-border rounded-xl px-3 py-2" />
-          </label>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={publicProfile} disabled={profile.is_minor}
-            onChange={e => setPublicProfile(e.target.checked)} />
-          Именная публичная страница и лидерборд
-          {profile.is_minor && <span className="text-gray-400">недоступно несовершеннолетним</span>}
-        </label>
-        {askDistribution && (
-          <div className="rounded-xl border border-fsp-violet/30 bg-fsp-violet/5 p-4 text-sm space-y-2" role="alert">
-            <p>Для публичной страницы нужно отдельное согласие на распространение данных (ст. 10.1 152-ФЗ).
-              Публикуются имя, регион, категория и результаты ФСП; контакты и дата рождения не публикуются никогда.</p>
-            <div className="flex gap-3">
-              <button onClick={() => consentToPublic.mutate()} className="btn-primary text-sm">Даю согласие</button>
-              <button onClick={() => setReadDoc(true)} className="btn-secondary text-sm">Прочитать текст</button>
-              <button onClick={() => { setAskDistribution(false); setPublicProfile(false) }} className="text-sm text-text-muted">Отмена</button>
+      <div className="grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">
+        <div className="space-y-6">
+          <section className="card space-y-5" aria-labelledby="skills-h">
+            <div>
+              <h2 id="skills-h" className="section-title">Навыки</h2>
+              <p className="mt-1 text-sm text-ink-2">Отмеченные галочкой подтверждены тестом и весят в поиске больше заявленных.</p>
             </div>
-          </div>
-        )}
-        {readDoc && <LegalDocModal kind="pd_distribution" onClose={() => setReadDoc(false)} />}
-        <div>
-          <p className="text-sm font-medium mb-2">Навыки</p>
-          <div className="flex flex-wrap gap-2">
-            {skills.map(skill => (
-              <button key={skill.name} onClick={() => setSkills(skills.filter(item => item.name !== skill.name))}
-                className="px-3 py-1 bg-fsp-violet/10 text-fsp-violet rounded-lg text-sm" title="Убрать">
-                {skill.name} ×
+            <div className="flex flex-wrap gap-1.5">
+              {skills.length === 0 && <p className="text-sm text-ink-3">Навыков пока нет: добавьте вручную или разберите резюме.</p>}
+              {skills.map(skill => (
+                <span key={skill.name} className={skill.trust_level === 'test_confirmed' ? 'chip-active' : 'chip-default'}>
+                  {skill.name}{skill.trust_level === 'test_confirmed' && ' ✓'}
+                  <button onClick={() => setSkills(skills.filter(item => item.name !== skill.name))} aria-label={`Убрать ${skill.name}`}
+                    className="-mr-1 rounded-full p-0.5 hover:bg-sunken"><X size={12} /></button>
+                </span>
+              ))}
+            </div>
+            <form className="flex gap-2" onSubmit={e => { e.preventDefault(); addSkill() }}>
+              <input value={newSkill} onChange={e => setNewSkill(e.target.value)} placeholder="Например, PostgreSQL" className="input" aria-label="Новый навык" />
+              <button className="btn-secondary shrink-0" disabled={!newSkill.trim()}>Добавить</button>
+            </form>
+            <div>
+              <label className="field-label" htmlFor="resume">Текст резюме</label>
+              <textarea id="resume" value={resume} onChange={e => setResume(e.target.value)} rows={4}
+                placeholder="Вставьте резюме: навык попадёт в список, только если он прямо упомянут в тексте"
+                className="input" />
+              <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-ghost mt-2 px-0 text-accent">
+                {parsed.isPending ? 'Разбираем…' : 'Найти навыки в резюме'}
               </button>
-            ))}
+            </div>
+          </section>
+
+          <section className="card space-y-4" aria-labelledby="contacts-h">
+            <h2 id="contacts-h" className="section-title">Контакты для работодателя</h2>
+            <p className="text-sm text-ink-2">Видны только компании, чьё приглашение вы приняли.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label className="field-label" htmlFor="tg">Telegram</label>
+                <input id="tg" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" className="input" /></div>
+              <div><label className="field-label" htmlFor="phone">Телефон</label>
+                <input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7" className="input" /></div>
+            </div>
+            <label className="flex items-start gap-2.5 text-sm text-ink">
+              <input type="checkbox" className="mt-1" checked={publicProfile} disabled={profile.is_minor}
+                onChange={e => setPublicProfile(e.target.checked)} />
+              <span>Публичная страница и место в рейтинге
+                <span className="block text-xs text-ink-3">{profile.is_minor ? 'Недоступно до 18 лет.' : 'Имя, регион, категория и результаты ФСП; контакты не публикуются.'}</span></span>
+            </label>
+            {askDistribution && (
+              <div className="notice-info flex-col" role="alert">
+                <p>Для публичной страницы нужно отдельное согласие на распространение данных (ст. 10.1 152-ФЗ).</p>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => consentToPublic.mutate()} className="btn-primary btn-sm">Даю согласие</button>
+                  <button onClick={() => setReadDoc(true)} className="btn-secondary btn-sm">Прочитать текст</button>
+                  <button onClick={() => { setAskDistribution(false); setPublicProfile(false) }} className="btn-ghost btn-sm">Отмена</button>
+                </div>
+              </div>
+            )}
+            {readDoc && <LegalDocModal kind="pd_distribution" onClose={() => setReadDoc(false)} />}
+          </section>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={() => save.mutate()} disabled={save.isPending} className="btn-primary">{save.isPending ? 'Сохраняем…' : 'Сохранить изменения'}</button>
+            {note && <p className="text-sm text-ink-2" role="status">{note}</p>}
           </div>
         </div>
-        <textarea value={resume} onChange={e => setResume(e.target.value)} rows={4}
-          placeholder="Вставьте резюме: навыки извлекутся только если есть в тексте"
-          className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
-        <div className="flex gap-3">
-          <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-secondary text-sm">Разобрать резюме</button>
-          <button onClick={() => save.mutate()} className="btn-primary text-sm">{save.isPending ? 'Сохраняем…' : 'Сохранить'}</button>
-        </div>
-        {note && <p className="text-sm text-text-secondary">{note}</p>}
-        <div className="text-sm text-text-muted">
-          <p>Роль: {profile.primary_role} · грейд: {profile.grade} ({profile.grade_source})</p>
-          <ul className="mt-1">{(profile.explanation ?? []).map((line: string) => <li key={line}>{line}</li>)}</ul>
-        </div>
-        {(profile.discipline_scores ?? []).map((ds: { discipline: string; label: string; lcb: number; best_rank: string | null; confidence: number }) => (
-          <p key={ds.discipline} className="text-sm font-mono">
-            {ds.label}: LCB {ds.lcb.toFixed(2)} · уверенность {Math.round(ds.confidence * 100)}%
-            {ds.best_rank ? ` · ${ds.best_rank}` : ''}
-          </p>
-        ))}
+
+        <aside className="space-y-6">
+          <SurveyCard profile={profile} compact />
+          <FspLinkCard profile={profile} />
+          <ConsentsPanel />
+        </aside>
       </div>
-      <SurveyCard profile={profile} compact />
-      <FspLinkCard profile={profile} />
-      <ConsentsPanel />
     </div>
   )
 }

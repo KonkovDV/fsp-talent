@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import AccessLog, Employer, Offer, Participant
+from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
 from app.services.offers import expire_if_stale, expire_stale
 
 router = APIRouter(prefix="/offers", tags=["offers"])
@@ -98,7 +98,17 @@ async def list_my_offers(current: dict = Depends(get_current_employer), db: Asyn
         select(Offer).where(Offer.employer_id == _eid(current)).order_by(Offer.created_at.desc())))
     if expire_stale(rows):
         await db.commit()
-    return [_offer_out(o) for o in rows]
+    # The list shows whom each invitation went to: the anonymous category, not a name.
+    cats = {c.participant_id: c for c in await db.scalars(select(CategoryAssignment).where(
+        CategoryAssignment.participant_id.in_([o.candidate_id for o in rows])))} if rows else {}
+    out = []
+    for o in rows:
+        card = _offer_out(o)
+        cat = cats.get(o.candidate_id)
+        card["candidate"] = (
+            {"role": cat.primary_role, "grade": cat.grade, "grade_source": cat.grade_source} if cat else None)
+        out.append(card)
+    return out
 
 
 @router.post("/{offer_id}/withdraw")

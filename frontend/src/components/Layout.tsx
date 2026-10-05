@@ -1,132 +1,87 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { LogOut, Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { LogOut, Sun, Moon, LayoutDashboard, User, Trophy, Gift, Briefcase, Search, FileText, ClipboardCheck } from 'lucide-react'
-import { useState, useEffect } from 'react'
-
-/** ФСП diamond logo mark */
-function FspLogo({ size = 28 }: { size?: number }) {
-  return (
-    <div className="flex items-center gap-2.5 select-none" aria-hidden>
-      <div
-        style={{
-          width: size, height: size,
-          background: 'linear-gradient(135deg, #D42330, #FF4D5A)',
-          clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ color: '#fff', fontWeight: 900, fontSize: size * 0.35, letterSpacing: '-0.03em' }}>Ф</span>
-      </div>
-      <div className="flex flex-col" style={{ lineHeight: 1 }}>
-        <span style={{ color: '#fff', fontWeight: 900, fontSize: 13, letterSpacing: '0.04em' }}>ФСП</span>
-        <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: 9, letterSpacing: '0.08em' }}>ТАЛАНТ</span>
-      </div>
-    </div>
-  )
-}
+import { useTheme } from '../lib/theme'
+import { Brand } from './Brand'
 
 const CANDIDATE_LINKS = [
-  { to: '/candidate',           label: 'Обзор',      end: true,  Icon: LayoutDashboard },
-  { to: '/candidate/profile',   label: 'Профиль',    end: false, Icon: User },
-  { to: '/candidate/assessment', label: 'Тест на грейд', end: false, Icon: ClipboardCheck },
-  { to: '/candidate/results',   label: 'Результаты', end: false, Icon: Trophy },
-  { to: '/candidate/offers',    label: 'Офферы',     end: false, Icon: Gift },
-  { to: '/candidate/vacancies', label: 'Вакансии',   end: false, Icon: Briefcase },
+  { to: '/candidate', label: 'Обзор', end: true },
+  { to: '/candidate/profile', label: 'Профиль', end: false },
+  { to: '/candidate/assessment', label: 'Тест на грейд', end: false },
+  { to: '/candidate/offers', label: 'Приглашения', end: false },
+  { to: '/candidate/vacancies', label: 'Вакансии', end: false },
+  { to: '/candidate/results', label: 'Результаты ФСП', end: false },
 ]
 
 const EMPLOYER_LINKS = [
-  { to: '/employer',           label: 'Дашборд',  end: true,  Icon: LayoutDashboard },
-  { to: '/employer/needs',     label: 'Потребности', end: false, Icon: ClipboardCheck },
-  { to: '/employer/search',    label: 'Поиск',    end: false, Icon: Search },
-  { to: '/employer/offers',    label: 'Офферы',   end: false, Icon: Gift },
-  { to: '/employer/vacancies', label: 'Вакансии', end: false, Icon: FileText },
+  { to: '/employer', label: 'Обзор', end: true },
+  { to: '/employer/needs', label: 'Потребности', end: false },
+  { to: '/employer/search', label: 'Поиск', end: false },
+  { to: '/employer/offers', label: 'Приглашения', end: false },
+  { to: '/employer/vacancies', label: 'Вакансии', end: false },
 ]
+
+export function ThemeToggle() {
+  const [theme, toggle] = useTheme()
+  return (
+    <button onClick={toggle} className="btn-nav h-9 w-9 p-0" aria-label={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+      title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}>
+      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  )
+}
+
+export function SiteFooter() {
+  return (
+    <footer className="border-t border-line">
+      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-ink-3 sm:px-6">
+        <p>ФСП Талант — прототип для Федерации спортивного программирования, ЛЦТ 2026. Демо-данные вымышлены.</p>
+        <p>Контакты кандидата открываются только после его согласия. <Link to="/legal" className="underline hover:text-ink">Документы и согласия</Link></p>
+      </div>
+    </footer>
+  )
+}
 
 export default function Layout() {
   const { userRole, logout } = useAuthStore()
   const navigate = useNavigate()
-  const [dark, setDark] = useState(true)
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
-  }, [dark])
-
-  const handleLogout = () => { logout(); navigate('/') }
   const links = userRole === 'participant' ? CANDIDATE_LINKS : EMPLOYER_LINKS
+  const roleLabel = userRole === 'participant' ? 'Кандидат' : 'Работодатель'
 
   return (
-    <div className="min-h-dvh flex flex-col bg-surface-0">
-
-      {/* ── ФСП Navy Header ─────────────────────────────────── */}
-      <header className="fsp-nav sticky top-0 z-40" role="banner">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-
-          {/* Logo + Nav */}
-          <div className="flex items-center gap-6">
-            <a href="/" aria-label="ФСП Талант — главная">
-              <FspLogo size={28} />
-            </a>
-
-            {/* Nav links */}
-            <nav className="hidden md:flex items-center gap-0.5" aria-label="Разделы">
-              {links.map(({ to, label, end, Icon }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  className={({ isActive }) =>
-                    `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-150 ${
-                      isActive
-                        ? 'bg-white/20 text-white'
-                        : 'text-white/65 hover:text-white hover:bg-white/10'
-                    }`
-                  }
-                >
-                  <Icon size={13} aria-hidden />
+    <div className="flex min-h-dvh flex-col bg-paper">
+      <header className="sticky top-0 z-40 border-b border-line bg-panel/95 backdrop-blur supports-[backdrop-filter]:bg-panel/85">
+        <div className="brand-stripe" aria-hidden />
+        <div className="mx-auto flex h-16 max-w-page items-center justify-between gap-4 px-4 sm:px-6">
+          <Brand to={userRole === 'participant' ? '/candidate' : '/employer'} />
+          <div className="flex items-center gap-1">
+            <span className="mr-2 hidden text-xs text-ink-3 sm:inline">{roleLabel}</span>
+            <ThemeToggle />
+            <button onClick={() => { logout(); navigate('/') }} className="btn-nav gap-1.5 text-xs">
+              <LogOut size={15} aria-hidden /> Выйти
+            </button>
+          </div>
+        </div>
+        <nav aria-label="Разделы" className="mx-auto max-w-page overflow-x-auto px-2 sm:px-4">
+          <ul className="flex min-w-max gap-1">
+            {links.map(({ to, label, end }) => (
+              <li key={to}>
+                <NavLink to={to} end={end} className={({ isActive }) =>
+                  `relative block px-3 pb-3 pt-1 text-sm transition-colors ${isActive
+                    ? 'font-semibold text-ink after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent'
+                    : 'text-ink-2 hover:text-ink'}`}>
                   {label}
                 </NavLink>
-              ))}
-            </nav>
-          </div>
-
-          {/* Right controls */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setDark(d => !d)}
-              className="btn-nav w-8 h-8 p-0"
-              aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
-            >
-              {dark ? <Sun size={14} /> : <Moon size={14} />}
-            </button>
-            <button
-              onClick={handleLogout}
-              className="btn-nav text-xs gap-1.5"
-              aria-label="Выйти"
-            >
-              <LogOut size={13} /> Выйти
-            </button>
-          </div>
-        </div>
-
-        {/* ── Red accent underline ── */}
-        <div style={{ height: 2, background: 'linear-gradient(90deg, #D42330, #FF4D5A, #D42330)' }} aria-hidden />
+              </li>
+            ))}
+          </ul>
+        </nav>
       </header>
 
-      {/* Content */}
-      <main id="main" className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8" tabIndex={-1}>
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-page flex-1 px-4 py-8 outline-none sm:px-6 sm:py-10">
         <Outlet />
       </main>
-
-      {/* ── Footer strip ── */}
-      <footer style={{ background: '#0A1F5C', borderTop: '1px solid rgba(255,255,255,0.1)' }} className="py-3">
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <FspLogo size={22} />
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
-            &copy; 2026 Федерация спортивного программирования · контакты только после согласия
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

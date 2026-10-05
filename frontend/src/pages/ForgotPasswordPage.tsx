@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiError, forgotPassword, resetPassword, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
+import AuthShell from '../components/AuthShell'
 
 export default function ForgotPasswordPage() {
   const [params] = useSearchParams()
@@ -29,27 +30,27 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-surface-0 px-4">
-      <div className="card w-full max-w-md space-y-4">
-        <h1 className="text-2xl font-bold">Сброс пароля</h1>
-        {!sent ? (
-          <form onSubmit={request} className="space-y-3">
-            <label className="block text-sm">Email<input value={email} onChange={e => setEmail(e.target.value)} type="email" className="mt-1 input" /></label>
-            <button disabled={busy || !email} className="btn-primary w-full">Прислать код</button>
-          </form>
-        ) : (
-          <form onSubmit={reset} className="space-y-3">
-            <p className="text-sm text-text-secondary">Если аккаунт с адресом {email} есть, мы отправили на него код.</p>
-            <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric"
-              placeholder="Код из письма" aria-label="Код из письма" className="input font-mono" />
-            <input value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete="new-password"
-              placeholder="Новый пароль, от 8 символов" aria-label="Новый пароль" className="input" />
-            <button disabled={busy || code.length !== 6 || password.length < 8} className="btn-primary w-full">Сменить пароль</button>
-          </form>
-        )}
-        {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2" role="alert">{error}</p>}
-        <p className="text-sm text-text-muted"><Link to={`/login?role=${role}`} className="hover:underline">Ко входу</Link></p>
-      </div>
-    </div>
+    <AuthShell title="Сброс пароля" lead="Пришлём код на email, затем зададите новый пароль."
+      aside={<Link to={`/login?role=${role}`} className="hover:text-accent">Ко входу</Link>}>
+      {!sent ? (
+        <form onSubmit={request} className="space-y-4">
+          <div><label className="field-label" htmlFor="email">Email</label>
+            <input id="email" value={email} onChange={e => setEmail(e.target.value)} type="email" className="input" /></div>
+          <button disabled={busy || !email} className="btn-primary w-full py-3">Прислать код</button>
+        </form>
+      ) : (
+        <form onSubmit={reset} className="space-y-4">
+          <p className="text-sm text-ink-2">Если аккаунт с адресом {email} есть, код уже в почте.</p>
+          <div><label className="field-label" htmlFor="code">Код из письма</label>
+            <input id="code" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric"
+              aria-label="Код из письма" className="input font-display tracking-[0.3em]" /></div>
+          <div><label className="field-label" htmlFor="np">Новый пароль</label>
+            <input id="np" value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete="new-password"
+              aria-label="Новый пароль" className="input" /><p className="field-hint">Не короче 8 символов.</p></div>
+          <button disabled={busy || code.length !== 6 || password.length < 8} className="btn-primary w-full py-3">Сменить пароль</button>
+        </form>
+      )}
+      {error && <p className="notice-error mt-4" role="alert">{error}</p>}
+    </AuthShell>
   )
 }
