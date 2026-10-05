@@ -24,6 +24,7 @@ from app.models import (
     Vacancy,
 )
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
+from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
@@ -237,7 +238,15 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
     except IntegrityError as e:
         await db.rollback()
         raise HTTPException(409, "Отклик на эту вакансию уже есть") from e
+    who = category_label(category.primary_role if category else None, category.grade if category else None)
+    outbox = Outbox()
+    await notify(db, outbox, "employer", vacancy.employer_id, "application_new",
+                 f"Новый отклик на «{vacancy.title}»",
+                 f"Откликнулся кандидат ({who}). "
+                 "Контакты откликнувшегося доступны в разделе «Вакансии».",
+                 "/employer/vacancies")
     await db.commit()
+    await outbox.deliver()
     return {"status": "applied"}
 
 
@@ -261,6 +270,10 @@ async def my_applications(
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "viewed_at": a.viewed_at.isoformat() if getattr(a, "viewed_at", None) else None,
     } for a in rows]
+
+
+STATUS_RU = {"reviewing": "на рассмотрении", "invited": "приглашение на интервью", "rejected": "отказ",
+             "closed": "вакансия закрыта"}
 
 
 class ApplicationStatusUpdate(BaseModel):
@@ -287,13 +300,19 @@ async def update_application_status(
         raise HTTPException(404, "Отклик не найден")
     if application.status in ("accepted", "rejected"):
         raise HTTPException(409, f"Отклик уже закрыт кандидатом: {application.status}")
+    changed = application.status != body.status
     application.status = body.status
-    if getattr(application, "viewed_at", None) is None:
-        try:
-            application.viewed_at = datetime.now(UTC)
-        except AttributeError:
-            pass
+    if application.viewed_at is None:
+        application.viewed_at = datetime.now(UTC)
+    outbox = Outbox()
+    if changed:
+        employer = await db.get(Employer, vacancy.employer_id)
+        await notify(db, outbox, "participant", application.candidate_id, "application_status",
+                     f"Отклик на «{vacancy.title}»: {STATUS_RU[body.status]}",
+                     f"{employer.company_name if employer else 'Работодатель'} изменил статус вашего отклика: "
+                     f"{STATUS_RU[body.status]}.", "/candidate/vacancies")
     await db.commit()
+    await outbox.deliver()
     return {"id": str(application.id), "status": application.status}
 
 

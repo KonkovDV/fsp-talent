@@ -13,6 +13,7 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
+from app.services.notify import Outbox, notify, salary
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.privacy import contacts_allowed
 
@@ -90,7 +91,15 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
     except IntegrityError as e:
         await db.rollback()
         raise HTTPException(409, "Активный оффер этому кандидату уже есть") from e
+    outbox = Outbox()
+    await notify(db, outbox, "participant", candidate.id, "offer_new",
+                 f"Приглашение от «{employer.company_name}»",
+                 f"{employer.company_name} приглашает на роль «{offer.role}»: "
+                 f"{salary(offer.salary_from_gross, offer.salary_to_gross)}. "
+                 "Контакты компания получит, только если вы примете приглашение. Срок ответа — 14 дней.",
+                 "/candidate/offers")
     await db.commit()
+    await outbox.deliver()
     return _offer_out(offer)
 
 
@@ -123,7 +132,13 @@ async def withdraw_offer(offer_id: uuid.UUID, current: dict = Depends(get_curren
     if offer.status != "pending":
         raise HTTPException(409, "Отозвать можно только ожидающий оффер")
     offer.status = "withdrawn"
+    employer = await db.get(Employer, offer.employer_id)
+    outbox = Outbox()
+    await notify(db, outbox, "participant", offer.candidate_id, "offer_withdrawn",
+                 f"«{employer.company_name}» отозвала приглашение",
+                 f"Приглашение на роль «{offer.role}» больше не действует.", "/candidate/offers")
     await db.commit()
+    await outbox.deliver()
     return {"status": offer.status}
 
 

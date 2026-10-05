@@ -183,6 +183,19 @@ def main():
     assert status == 422, no_salary
     status, denied = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
     assert status == 403, denied
+    status, bell = call("GET", "/notifications", token=participant_token)
+    note = next(n for n in bell["items"] if n["kind"] == "offer_new")
+    assert status == 200 and bell["unread"] >= 1 and "180 000" in note["body"], bell
+    letters = []
+    for path in glob.glob(os.path.join(MAIL_DIR, "*.json")):
+        with open(path, encoding="utf-8") as fh:
+            letters.append(json.load(fh))
+    if letters:   # file mail mode: the invitation letter went to the candidate
+        assert any(x["to"] == CANDIDATE["username"] and "Приглашение" in x["subject"] for x in letters)
+    status, read = call("POST", f"/notifications/{note['id']}/read", token=participant_token)
+    assert status == 200 and read["read"], read
+    status, foreign = call("POST", f"/notifications/{note['id']}/read", token=employer_token)
+    assert status == 404, foreign
     status, accepted = call("POST", f"/candidates/me/offers/{offer['id']}/respond",
                             {"action": "accept"}, token=participant_token)
     assert status == 200 and accepted["status"] == "accepted", accepted
@@ -191,6 +204,8 @@ def main():
     assert status == 409, again
     status, contacts = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
     assert status == 200 and contacts["display_name"] and contacts["email"], contacts
+    status, bell = call("GET", "/notifications", token=employer_token)
+    assert status == 200 and any(n["kind"] == "offer_accepted" for n in bell["items"]), bell
     status, public = call("GET", f"/public/candidates/{me['id']}")
     assert status == 200 and "fsp_id" not in public and public["display_name"], public
     status, board = call("GET", "/public/leaderboard?discipline=algorithmic")

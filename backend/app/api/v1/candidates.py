@@ -13,12 +13,13 @@ from app.api.deps import get_current_participant
 from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import ConsentLog, GradeConfirmation, Offer, Participant
+from app.models import CategoryAssignment, ConsentLog, GradeConfirmation, Offer, Participant
 from app.models.participant import Result, Skill
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.identity import active_consent
+from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
@@ -301,7 +302,21 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         offer.status = "rejected"
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == offer.candidate_id))
+    who = category_label(cat.primary_role if cat else None, cat.grade if cat else None)
+    outbox = Outbox()
+    if offer.status == "accepted":
+        await notify(db, outbox, "employer", offer.employer_id, "offer_accepted",
+                     f"Кандидат принял приглашение «{offer.role}»",
+                     f"Кандидат ({who}) принял приглашение. Контакты открыты в разделе «Приглашения».",
+                     "/employer/offers")
+    else:
+        await notify(db, outbox, "employer", offer.employer_id, "offer_rejected",
+                     f"Кандидат отклонил приглашение «{offer.role}»",
+                     f"Кандидат ({who}) отклонил приглашение. Подборка по потребности обновляется сама.",
+                     "/employer/offers")
     await db.commit()
+    await outbox.deliver()
     return {"status": offer.status}
 
 

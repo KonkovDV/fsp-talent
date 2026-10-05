@@ -11,6 +11,7 @@ from app.models.audit import AccessLog, ConsentLog
 from app.models.employer import Employer
 from app.models.identity import Consent, EmailVerification
 from app.models.need import Need, NeedShortlist, NeedVersion
+from app.models.notification import Notification
 from app.models.offer import Offer
 from app.models.participant import Participant, Qualification, Result, Skill
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
@@ -31,6 +32,7 @@ __all__ = [
     "Need",
     "NeedShortlist",
     "NeedVersion",
+    "Notification",
     "Offer",
     "Participant",
     "PracticeAttempt",
