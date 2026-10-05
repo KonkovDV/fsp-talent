@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { apiError, resendVerification, verifyEmail, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
+import AuthShell from '../components/AuthShell'
 
 /** Email confirmation: 6-digit code from the letter, or the link (?token=…) that fills it in. */
 export default function VerifyPage() {
@@ -53,34 +54,29 @@ export default function VerifyPage() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-surface-0 px-4">
-      <div className="card w-full max-w-md space-y-4">
-        <MailCheck className="text-fsp-violet" size={32} />
-        <h1 className="text-2xl font-bold">Подтвердите email</h1>
-        {token && busy ? <p className="text-sm text-text-muted">Проверяем ссылку…</p> : (
-          <>
-            <p className="text-sm text-text-secondary">
-              {email ? <>Мы отправили код на <b>{email}</b>. </> : null}
-              Код действует 30 минут. Можно просто открыть ссылку из письма.
-            </p>
-            <form onSubmit={submit} className="space-y-3">
-              <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                inputMode="numeric" autoComplete="one-time-code" placeholder="000000" aria-label="Код из письма"
-                className="input text-center text-2xl tracking-[0.5em] font-mono" />
-              <button type="submit" disabled={busy || code.length !== 6 || !email} className="btn-primary w-full">
-                {busy ? 'Проверяем…' : 'Подтвердить'}
-              </button>
-            </form>
-            {email && (
-              <button onClick={resend} disabled={cooldown > 0} className="text-sm text-fsp-violet disabled:text-text-muted">
-                {cooldown > 0 ? `Отправить код ещё раз через ${cooldown} с` : 'Отправить код ещё раз'}
-              </button>
-            )}
-          </>
-        )}
-        {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2" role="alert">{error}</p>}
-        <p className="text-sm text-text-muted"><Link to={`/login?role=${role}`} className="hover:underline">Ко входу</Link></p>
-      </div>
-    </div>
+    <AuthShell title="Подтвердите email"
+      lead={email ? <>Код отправлен на <b className="text-ink">{email}</b>. Он действует 30 минут; можно просто открыть ссылку из письма.</> : 'Откройте ссылку из письма или введите код.'}
+      aside={<Link to={`/login?role=${role}`} className="hover:text-accent">Ко входу</Link>}>
+      <div className="flex items-center gap-3 pb-5"><MailCheck className="text-accent" size={22} aria-hidden />
+        <span className="text-sm text-ink-2">Шесть цифр из письма</span></div>
+      {token && busy ? <p className="text-sm text-ink-2">Проверяем ссылку…</p> : (
+        <>
+          <form onSubmit={submit} className="space-y-3">
+            <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" aria-label="Код из письма"
+              className="input py-3 text-center font-display text-3xl tracking-[0.4em]" />
+            <button type="submit" disabled={busy || code.length !== 6 || !email} className="btn-primary w-full py-3">
+              {busy ? 'Проверяем…' : 'Подтвердить'}
+            </button>
+          </form>
+          {email && (
+            <button onClick={resend} disabled={cooldown > 0} className="mt-4 text-sm text-accent disabled:text-ink-3">
+              {cooldown > 0 ? `Отправить код ещё раз через ${cooldown} с` : 'Отправить код ещё раз'}
+            </button>
+          )}
+        </>
+      )}
+      {error && <p className="notice-error mt-4" role="alert">{error}</p>}
+    </AuthShell>
   )
 }

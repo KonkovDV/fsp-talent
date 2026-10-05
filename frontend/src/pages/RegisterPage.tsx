@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
 import { apiError, apiErrorCode, legalDocuments, registerEmployer, registerParticipant, type Role } from '../api/client'
 import { ConsentChecklist, requiredKinds } from '../components/LegalConsents'
+import AuthShell, { RoleSwitch } from '../components/AuthShell'
 
 const participantSchema = z.object({
   display_name: z.string().min(2, 'Как к вам обращаться'),
@@ -54,65 +55,63 @@ export default function RegisterPage() {
     } catch (e) { fail(e) }
   }
   const submitting = pf.formState.isSubmitting || ef.formState.isSubmitting
-  const field = 'mt-1 input'
-  const err = (m?: string) => m && <p className="text-fsp-red text-xs mt-1">{m}</p>
+  const err = (m?: string) => m && <p className="field-error">{m}</p>
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-surface-0 px-4 py-8">
-      <div className="card w-full max-w-md">
-        <h1 className="text-2xl font-bold text-text-primary mb-2">Регистрация</h1>
-        <div className="flex gap-2 mb-6" role="tablist">
-          {(['participant', 'employer'] as Role[]).map(r => (
-            <Link key={r} to={`/register?role=${r}`} role="tab" aria-selected={r === role}
-              className={`flex-1 text-center text-sm py-2 rounded-lg ${r === role ? 'bg-fsp-violet text-white' : 'bg-surface-2 text-text-secondary'}`}>
-              {r === 'participant' ? 'Кандидат' : 'Работодатель'}
-            </Link>
-          ))}
-        </div>
-
-        {role === 'participant' ? (
-          <form onSubmit={pf.handleSubmit(onParticipant)} className="space-y-4" noValidate>
-            <label className="block text-sm">Имя<input {...pf.register('display_name')} className={field} autoComplete="name" />
-              {err(pf.formState.errors.display_name?.message)}</label>
-            <label className="block text-sm">Email<input {...pf.register('email')} type="email" className={field} autoComplete="email" />
-              {err(pf.formState.errors.email?.message)}</label>
-            <label className="block text-sm">Пароль<input {...pf.register('password')} type="password" className={field} autoComplete="new-password" />
-              {err(pf.formState.errors.password?.message)}</label>
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-1" {...pf.register('is_adult')} />
-              <span>Мне исполнилось 18 лет. <span className="text-text-muted">Если нет, карточка будет скрыта от работодателей до согласия родителя.</span></span>
-            </label>
-            <p className="text-xs text-text-muted bg-surface-2 rounded-lg p-3">
-              История соревнований ФСП не нужна для регистрации. Привязать ФСП ID можно позже в профиле:
-              подтверждённые результаты появятся в карточке отдельным блоком.
-            </p>
-            <ConsentChecklist role={role} value={consents} onChange={setConsents} />
-            {error && <p className="text-fsp-red text-sm bg-fsp-red/10 rounded-lg px-4 py-2" role="alert">{error}</p>}
-            <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full">
-              {submitting ? 'Отправляем код…' : 'Получить код на email'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={ef.handleSubmit(onEmployer)} className="space-y-4" noValidate>
-            <label className="block text-sm">Название компании<input {...ef.register('company_name')} className={field} />
-              {err(ef.formState.errors.company_name?.message)}</label>
-            <label className="block text-sm">Рабочий email<input {...ef.register('email')} type="email" className={field} autoComplete="email" />
-              {err(ef.formState.errors.email?.message)}</label>
-            <label className="block text-sm">Пароль<input {...ef.register('password')} type="password" className={field} autoComplete="new-password" />
-              {err(ef.formState.errors.password?.message)}</label>
-            <label className="block text-sm">ИНН (необязательно)<input {...ef.register('inn')} inputMode="numeric" className={field} />
-              {err(ef.formState.errors.inn?.message)}</label>
-            <ConsentChecklist role={role} value={consents} onChange={setConsents} />
-            {error && <p className="text-fsp-red text-sm bg-fsp-red/10 rounded-lg px-4 py-2" role="alert">{error}</p>}
-            <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full">
-              {submitting ? 'Отправляем код…' : 'Получить код на email'}
-            </button>
-          </form>
-        )}
-        <p className="text-center text-sm text-text-muted mt-4">
-          Есть аккаунт? <Link to={`/login?role=${role}`} className="text-fsp-violet hover:underline">Войти</Link>
-        </p>
-      </div>
-    </div>
+    <AuthShell title="Регистрация"
+      lead={role === 'participant'
+        ? 'Пройдёте опрос и тест — получите категорию, которую видят работодатели.'
+        : 'Опишете, кого ищете, — подборка с объяснением появится сразу.'}
+      aside={<>Есть аккаунт? <Link to={`/login?role=${role}`} className="font-medium text-accent hover:underline">Войти</Link></>}>
+      <RoleSwitch role={role} base="/register" />
+      {role === 'participant' ? (
+        <form onSubmit={pf.handleSubmit(onParticipant)} className="space-y-4" noValidate>
+          <div><label className="field-label" htmlFor="display_name">Имя</label>
+            <input id="display_name" {...pf.register('display_name')} className="input" autoComplete="name" />
+            {err(pf.formState.errors.display_name?.message)}</div>
+          <div><label className="field-label" htmlFor="email">Email</label>
+            <input id="email" {...pf.register('email')} type="email" className="input" autoComplete="email" />
+            {err(pf.formState.errors.email?.message)}</div>
+          <div><label className="field-label" htmlFor="password">Пароль</label>
+            <input id="password" {...pf.register('password')} type="password" className="input" autoComplete="new-password" />
+            <p className="field-hint">Не короче 8 символов.</p>
+            {err(pf.formState.errors.password?.message)}</div>
+          <label className="flex items-start gap-2.5 text-sm text-ink">
+            <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...pf.register('is_adult')} />
+            <span>Мне исполнилось 18 лет<span className="block text-xs text-ink-3">Если нет, карточка скрыта от работодателей до согласия родителя.</span></span>
+          </label>
+          <p className="panel-quiet text-xs text-ink-2">
+            История соревнований ФСП не нужна. ФСП ID можно привязать позже в профиле — результаты появятся
+            в карточке отдельным подтверждённым блоком.
+          </p>
+          <ConsentChecklist role={role} value={consents} onChange={setConsents} />
+          {error && <p className="notice-error" role="alert">{error}</p>}
+          <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full py-3">
+            {submitting ? 'Отправляем код…' : 'Получить код на email'}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={ef.handleSubmit(onEmployer)} className="space-y-4" noValidate>
+          <div><label className="field-label" htmlFor="company_name">Название компании</label>
+            <input id="company_name" {...ef.register('company_name')} className="input" />
+            {err(ef.formState.errors.company_name?.message)}</div>
+          <div><label className="field-label" htmlFor="email">Рабочий email</label>
+            <input id="email" {...ef.register('email')} type="email" className="input" autoComplete="email" />
+            {err(ef.formState.errors.email?.message)}</div>
+          <div><label className="field-label" htmlFor="password">Пароль</label>
+            <input id="password" {...ef.register('password')} type="password" className="input" autoComplete="new-password" />
+            <p className="field-hint">Не короче 8 символов.</p>
+            {err(ef.formState.errors.password?.message)}</div>
+          <div><label className="field-label" htmlFor="inn">ИНН, если есть</label>
+            <input id="inn" {...ef.register('inn')} inputMode="numeric" className="input" />
+            {err(ef.formState.errors.inn?.message)}</div>
+          <ConsentChecklist role={role} value={consents} onChange={setConsents} />
+          {error && <p className="notice-error" role="alert">{error}</p>}
+          <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full py-3">
+            {submitting ? 'Отправляем код…' : 'Получить код на email'}
+          </button>
+        </form>
+      )}
+    </AuthShell>
   )
 }

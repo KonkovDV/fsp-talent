@@ -25,7 +25,7 @@ export default function ConsentsPanel() {
   })
   return (
     <div className="card space-y-3">
-      <h2 className="font-semibold flex items-center gap-2"><ShieldCheck size={18} className="text-fsp-violet" />Согласия</h2>
+      <h2 className="section-title flex items-center gap-2"><ShieldCheck size={18} className="text-accent" />Согласия</h2>
       <ul className="divide-y divide-border text-sm">
         {data.map(row => (
           <li key={row.kind} className="py-2 flex flex-wrap items-center gap-2 justify-between">
@@ -39,7 +39,7 @@ export default function ConsentsPanel() {
               <button onClick={() => {
                 if (!row.required || window.confirm('Без этого согласия карточка будет скрыта, а данные удалены в течение 30 дней. Отозвать?'))
                   withdraw.mutate(row.kind)
-              }} className="text-xs text-fsp-red hover:underline">Отозвать</button>
+              }} className="text-xs text-invite hover:underline">Отозвать</button>
             )}
           </li>
         ))}

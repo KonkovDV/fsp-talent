@@ -1,51 +1,60 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyOffers, respondToOffer } from '../../api/client'
+import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
+
+interface Offer {
+  id: string; company: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
+  work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
+}
+const STATUS: Record<string, [string, string]> = {
+  pending: ['ждёт ответа', 'badge-warn'], accepted: ['принято', 'badge-ok'], rejected: ['отклонено', 'badge-vc'],
+  expired: ['срок истёк', 'badge-vc'], withdrawn: ['отозвано', 'badge-vc'],
+}
+const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
 export default function CandidateOffers() {
   const qc = useQueryClient()
-  const { data: offers = [], isLoading } = useQuery({
-    queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data)
-  })
-  const mut = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
-      respondToOffer(id, action),
+  const { data: offers = [], isLoading } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
+  const respond = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) => respondToOffer(id, action),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
   })
-  const STATUS: Record<string, string> = {
-    pending: 'ожидает', accepted: 'принят', rejected: 'отклонён', expired: 'истёк', withdrawn: 'отозван',
-  }
-  const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'офис' }
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Офферы</h1>
-      {isLoading && <div className="animate-pulse h-40 bg-gray-100 rounded-2xl" />}
-      {offers.map((o: any) => (
-        <div key={o.id} className="card">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold">{o.company}</p>
-              <p className="text-sm text-text-muted">{o.role} · {FORMAT[o.work_format] ?? o.work_format}</p>
-              <p className="text-sm text-fsp-violet font-medium mt-1 font-mono">
-                {o.salary_from.toLocaleString('ru-RU')} — {o.salary_to.toLocaleString('ru-RU')} {o.currency}
-              </p>
-              {o.message && <p className="text-sm text-text-secondary mt-2">{o.message}</p>}
-              {o.contact_method && <p className="text-sm text-text-muted mt-1">Связь с компанией: {o.contact_method}</p>}
-            </div>
-            <span className="badge bg-gray-100 text-gray-700">{STATUS[o.status] ?? o.status}</span>
-          </div>
-          {o.status === 'pending' && (
-            <div className="flex gap-3 mt-4 pt-4 border-t border-gray-100">
-              <button onClick={() => mut.mutate({ id: o.id, action: 'accept' })}
-                className="btn-primary text-sm py-2">Принять и открыть контакты</button>
-              <button onClick={() => mut.mutate({ id: o.id, action: 'reject' })}
-                className="btn-secondary text-sm py-2">Отклонить</button>
-            </div>
-          )}
-        </div>
-      ))}
-      {!isLoading && offers.length === 0 && (
-        <div className="card text-center text-gray-400 py-12">Офферов пока нет</div>
-      )}
+    <div>
+      <PageHeader title="Приглашения"
+        lead="Работодатель пишет первым и сразу называет зарплату. Ваши имя и контакты он увидит, только если вы примете приглашение." />
+      {isLoading && <Skeleton className="h-40" />}
+      {!isLoading && offers.length === 0 && <Empty title="Приглашений пока нет">Подтвердите грейд тестом и заполните навыки — так вас быстрее найдут.</Empty>}
+      <ul className="space-y-4">
+        {offers.map(o => {
+          const [label, cls] = STATUS[o.status] ?? [o.status, 'badge-vc']
+          return (
+            <li key={o.id} className="card">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-ink-2">{o.company}</p>
+                  <h2 className="mt-0.5 text-lg font-semibold text-ink">{o.role}</h2>
+                  <p className="mt-1 text-sm text-ink-2">{FORMAT[o.work_format] ?? o.work_format}, получено {date(o.created_at)}
+                    {o.expires_at && o.status === 'pending' ? `, ответить до ${date(o.expires_at)}` : ''}</p>
+                </div>
+                <div className="text-right">
+                  <p className="num font-display text-xl font-semibold text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</p>
+                  <p className="text-xs text-ink-3">до вычета НДФЛ</p>
+                  <span className={`${cls} mt-2`}>{label}</span>
+                </div>
+              </div>
+              {o.message && <p className="mt-4 max-w-prose text-sm text-ink">{o.message}</p>}
+              {o.contact_method && <p className="mt-2 text-sm text-ink-2">Связь с компанией: <span className="text-ink">{o.contact_method}</span></p>}
+              {o.status === 'pending' && (
+                <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-4">
+                  <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
+                  <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending} className="btn-secondary">Отклонить</button>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

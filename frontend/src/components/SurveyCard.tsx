@@ -30,15 +30,15 @@ export default function SurveyCard({ profile, compact }: Props) {
     onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: (e: unknown) => setNote(apiError(e)),
   })
-  const select = 'mt-1 w-full border border-border rounded-xl px-3 py-2 bg-surface-1'
+  const select = 'select mt-1'
   const entries = (o?: Record<string, string>) => Object.entries(o ?? {})
 
   return (
     <div className="card space-y-3" data-testid="survey">
       <div className="flex items-start gap-3">
-        <ListChecks className="text-fsp-violet shrink-0 mt-0.5" size={20} />
+        <ListChecks className="text-accent shrink-0 mt-0.5" size={20} />
         <div>
-          <p className="font-semibold">{profile.survey_done ? 'Опрос' : 'Шаг 1. Короткий опрос'}</p>
+          <p className="section-title">{profile.survey_done ? 'Опрос' : 'Шаг 1. Короткий опрос'}</p>
           {!compact && <p className="text-sm text-text-secondary">Специализация задаёт категорию и состав теста:
             задания из других направлений в ваш тест не попадут. Грейд подтверждается отдельно для каждой специализации.</p>}
         </div>
@@ -68,7 +68,7 @@ export default function SurveyCard({ profile, compact }: Props) {
           </select>
         </label>
         <label>Опыт, лет
-          <input type="number" min={0} max={50} value={years} onChange={e => setYears(e.target.value)} className={select} />
+          <input type="number" min={0} max={50} value={years} onChange={e => setYears(e.target.value)} className="input mt-1" />
         </label>
       </div>
       <div className="flex items-center gap-3">

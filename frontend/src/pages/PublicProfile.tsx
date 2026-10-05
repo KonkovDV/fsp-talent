@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { getPublicProfile, getCredentials, verifyCredential } from '../api/client'
-import GradeRadar from '../components/GradeRadar'
-import { roleRu } from '../labels'
-import { Shield, ArrowLeft } from 'lucide-react'
+import { Shield } from 'lucide-react'
+import PublicShell from '../components/PublicShell'
+import { CategoryPlate, Empty, Meter, RankBadge, Skeleton } from '../components/ui'
 
 interface Achievement {
   eventName?: string
@@ -35,95 +35,69 @@ export default function PublicProfile() {
   })
 
   if (profileQuery.isError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-fsp-light-bg">
-        <div className="card text-center space-y-3">
-          <p>Публичный профиль не найден. Его включают только совершеннолетние.</p>
-          <Link to="/leaderboard" className="text-fsp-violet text-sm">К лидерборду</Link>
-        </div>
-      </div>
-    )
+    return <PublicShell><Empty title="Публичной страницы нет" action={<Link to="/leaderboard" className="btn-secondary">К рейтингу</Link>}>
+      Её включает сам участник, и только с 18 лет.</Empty></PublicShell>
   }
-  if (!profileQuery.data) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse h-64 w-96 bg-gray-100 rounded-2xl" /></div>
-  }
+  if (!profileQuery.data) return <PublicShell><Skeleton className="h-96" /></PublicShell>
   const profile = profileQuery.data
+  const scores: { discipline: string; label: string; lcb: number; confidence?: number; best_rank: string | null }[] = profile.discipline_scores ?? []
   return (
-    <div className="min-h-screen bg-fsp-light-bg">
-      <header className="bg-fsp-dark text-white py-4">
-        <div className="max-w-5xl mx-auto px-6 flex items-center gap-3">
-          <Link to="/leaderboard" className="text-gray-400 hover:text-white"><ArrowLeft size={18} /></Link>
-          <span className="text-xl font-bold text-fsp-violet">FSP Talent</span>
-        </div>
-      </header>
-      <div className="max-w-5xl mx-auto px-6 py-10 grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 space-y-4">
-          <div className="card text-center">
-            <div className="w-16 h-16 rounded-full bg-fsp-violet/20 flex items-center justify-center text-fsp-violet text-2xl font-bold mx-auto mb-3">
-              {(profile.display_name ?? 'У')[0]}
-            </div>
-            <h1 className="text-lg font-bold">{profile.display_name}</h1>
-            <p className="text-sm text-text-muted mt-1">{profile.region}</p>
-            <div className="mt-3">
-              <span className="badge bg-fsp-violet/10 text-fsp-violet">{roleRu(profile.primary_role)}</span>{' '}
-              <span className="badge bg-gray-100 text-gray-700">{profile.grade}</span>
-            </div>
+    <PublicShell>
+      <div className="grid items-start gap-8 lg:grid-cols-[320px_1fr]">
+        <aside className="card">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft font-display text-xl font-semibold text-accent" aria-hidden>
+            {(profile.display_name ?? 'У')[0]}
           </div>
-          <div className="card">
-            <h3 className="text-sm font-semibold mb-2">Навыки</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {(profile.skills ?? []).map((skill: string) => (
-                <span key={skill} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">{skill}</span>
+          <h1 className="mt-4 font-display text-xl font-semibold text-ink">{profile.display_name}</h1>
+          <p className="mt-1 text-sm text-ink-2">{profile.region}</p>
+          <div className="mt-4"><CategoryPlate role={profile.primary_role} grade={profile.grade} source={profile.grade_source} /></div>
+          {(profile.skills ?? []).length > 0 && (
+            <div className="mt-5 flex flex-wrap gap-1.5">{(profile.skills as string[]).map(s => <span key={s} className="chip-default">{s}</span>)}</div>
+          )}
+          <p className="mt-6 text-xs text-ink-3">Контакты на публичной странице не показываются никогда.</p>
+        </aside>
+        <div className="space-y-6">
+          <section className="card">
+            <h2 className="section-title">Уровень по дисциплинам ФСП</h2>
+            <p className="mt-1 text-sm text-ink-2">Нижняя граница уровня с учётом места, размера поля, разряда и давности результата.</p>
+            <ul className="mt-5 space-y-4">
+              {scores.map(ds => (
+                <li key={ds.discipline}>
+                  <div className="flex items-center justify-between text-sm"><span className="text-ink">{ds.label}</span>
+                    <span className="flex items-center gap-2"><RankBadge rank={ds.best_rank} /><span className="num font-semibold text-ink">{ds.lcb.toFixed(2)}</span></span></div>
+                  <div className="mt-2"><Meter value={Math.min(1, ds.lcb / 0.6)} /></div>
+                </li>
               ))}
-            </div>
-          </div>
-        </div>
-        <div className="md:col-span-2 space-y-4">
-          <div className="card">
-            <h2 className="font-semibold mb-1">Уровень по дисциплинам ФСП</h2>
-            <p className="text-xs text-text-muted mb-3">График — средний уровень после сжатия. Ранжирование идёт по нижней границе.</p>
-            <GradeRadar scores={profile.discipline_scores ?? []} />
-            <div className="mt-3 space-y-1">
-              {(profile.discipline_scores ?? []).map((ds: { discipline: string; label: string; lcb: number; best_rank: string | null }) => (
-                <p key={ds.discipline} className="text-sm font-mono">{ds.label}: LCB {ds.lcb.toFixed(2)}{ds.best_rank ? ` · ${ds.best_rank}` : ''}</p>
-              ))}
-            </div>
-          </div>
+            </ul>
+          </section>
           {creds.length > 0 && (
-            <div className="card">
-              <h2 className="font-semibold mb-3 flex items-center gap-2"><Shield size={16} className="text-fsp-violet" />Проверяемые удостоверения</h2>
-              <div className="space-y-3">
-                {creds.map((item: { id: string; valid: boolean; issued_at: string; credential: { credentialSubject?: { achievement?: Achievement } } }) => {
-                  const achievement = item.credential.credentialSubject?.achievement
+            <section className="card">
+              <h2 className="section-title flex items-center gap-2"><Shield size={18} className="text-accent" aria-hidden />Проверяемые удостоверения</h2>
+              <p className="mt-1 text-sm text-ink-2">Каждый результат подписан по стандарту W3C Verifiable Credentials 2.0. Попробуйте изменить место — проверка подписи не пройдёт.</p>
+              <ul className="mt-4 divide-y divide-line">
+                {creds.map((item: { id: string; valid: boolean; credential: { credentialSubject?: { achievement?: Achievement } } }) => {
+                  const a = item.credential.credentialSubject?.achievement
                   return (
-                    <div key={item.id} className="bg-gray-50 rounded-xl p-3 space-y-1">
-                      <p className="text-sm font-medium">{achievement?.eventName ?? item.id}</p>
-                      <p className="text-xs text-gray-600">
-                        {achievement?.place != null && `${achievement.place} место из ${achievement.totalParticipants}`}
-                        {achievement?.rankEquivalent ? ` · ${achievement.rankEquivalent}` : ''}
-                        {achievement?.teamSize && achievement.teamSize > 1 ? ` · команда ${achievement.teamSize}` : ''}
-                        {achievement?.eventDate ? ` · ${achievement.eventDate}` : ''}
-                      </p>
-                      <p className="text-xs">{item.valid ? 'подпись верна' : 'подпись не сходится'}</p>
-                    </div>
+                    <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-ink">{a?.eventName ?? item.id}</p>
+                        <p className="text-xs text-ink-2">{a?.place != null && `${a.place} место из ${a.totalParticipants}`}{a?.rankEquivalent ? `, ${a.rankEquivalent}` : ''}{a?.teamSize && a.teamSize > 1 ? `, команда из ${a.teamSize}` : ''}</p>
+                      </div>
+                      <span className={item.valid ? 'badge-ok' : 'badge-warn'}>{item.valid ? 'подпись верна' : 'подпись не сходится'}</span>
+                    </li>
                   )
                 })}
-              </div>
-              <button
-                className="btn-secondary text-sm mt-4"
-                onClick={() => {
-                  const copy = structuredClone(creds[0].credential)
-                  copy.credentialSubject.achievement.place = 999
-                  tamper.mutate(copy)
-                }}
-              >
-                {tamper.isPending ? 'Проверяем…' : 'Подменить место и проверить'}
-              </button>
-              {tamperNote && <p className="text-sm text-fsp-red mt-2">{tamperNote}</p>}
-            </div>
+              </ul>
+              <button className="btn-secondary mt-4" onClick={() => {
+                const copy = structuredClone(creds[0].credential)
+                copy.credentialSubject.achievement.place = 999
+                tamper.mutate(copy)
+              }}>{tamper.isPending ? 'Проверяем…' : 'Подменить место и проверить подпись'}</button>
+              {tamperNote && <p className="notice-error mt-3" role="status">{tamperNote}</p>}
+            </section>
           )}
         </div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

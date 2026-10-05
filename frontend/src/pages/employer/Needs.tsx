@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Target } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 import {
   apiError, createNeed, listNeeds, needMatches, needShortlist, removeShortlist, setShortlist, surveyOptions, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
-import { OfferModal } from './Search'
+import InviteDialog from '../../components/InviteDialog'
+import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
+import { ROLE_RU } from '../../labels'
 
 interface NeedParams {
   role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
@@ -24,6 +26,8 @@ export default function EmployerNeeds() {
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [error, setError] = useState('')
   const [offerFor, setOfferFor] = useState<string | null>(null)
+  const [tab, setTab] = useState<'matches' | 'shortlist'>('matches')
+  const [sent, setSent] = useState(false)
 
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const { data: needs = [] } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
@@ -58,96 +62,153 @@ export default function EmployerNeeds() {
     setForm({ title: n.title, role: n.params.role ?? '', grade: n.params.grade ?? '', skills: n.params.skills.join(', '),
       nice: n.params.nice_to_have.join(', '), industry: n.params.industry ?? '', internship: n.params.work_goal === 'internship' })
   }
-  const select = 'input text-sm'
+  const field = 'field-label'
+  const shortItems = shortlist.data?.items ?? []
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Потребности</h1>
-          <p className="text-sm text-text-muted">Кого вы ищете. Каждое изменение — новая версия; шорт-лист помнит, по какой версии выбран кандидат.</p>
-        </div>
-        <button onClick={() => { setEditing('new'); setForm(EMPTY) }} className="btn-primary gap-1 text-sm"><Plus size={14} />Новая</button>
-      </div>
+    <div>
+      <PageHeader title="Потребности"
+        lead="Опишите, кого ищете. Каждое изменение сохраняется новой версией, а шорт-лист помнит, по какой версии выбран кандидат."
+        actions={<button onClick={() => { setEditing('new'); setForm(EMPTY) }} className="btn-primary"><Plus size={16} aria-hidden />Новая потребность</button>} />
 
       {editing && (
-        <form className="card grid sm:grid-cols-3 gap-3" onSubmit={e => { e.preventDefault(); save.mutate() }}>
-          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Название, напр. «Python-бэкенд в платёжную команду»"
-            className={`${select} sm:col-span-3`} aria-label="Название" />
-          <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className={select} aria-label="Специализация">
-            <option value="">Любая специализация</option>
-            {Object.entries(opts?.specializations ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
-          </select>
-          <select value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} className={select} aria-label="Грейд">
-            <option value="">Любой грейд</option>
-            {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{g}</option>)}
-          </select>
-          <select value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className={select} aria-label="Отрасль">
-            <option value="">Отрасль не важна</option>
-            {Object.entries(opts?.industries ?? {}).filter(([k]) => k !== 'any').map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
-          </select>
-          <input value={form.skills} onChange={e => setForm({ ...form, skills: e.target.value })} placeholder="Обязательные навыки через запятую" className={select} aria-label="Обязательные навыки" />
-          <input value={form.nice} onChange={e => setForm({ ...form, nice: e.target.value })} placeholder="Желательные навыки" className={select} aria-label="Желательные навыки" />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.internship} onChange={e => setForm({ ...form, internship: e.target.checked })} />Стажировка / практика</label>
-          {error && <p className="text-sm text-fsp-red sm:col-span-3" role="alert">{error}</p>}
-          <div className="flex gap-2 sm:col-span-3">
-            <button className="btn-primary text-sm" disabled={form.title.length < 2 || save.isPending}>{editing === 'new' ? 'Создать' : 'Сохранить новую версию'}</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => setEditing(null)}>Отмена</button>
+        <form className="card mb-8 space-y-5" onSubmit={e => { e.preventDefault(); save.mutate() }} aria-label="Потребность">
+          <h2 className="section-title">{editing === 'new' ? 'Новая потребность' : 'Изменение — будет сохранено новой версией'}</h2>
+          <div><label className={field} htmlFor="n-title">Название</label>
+            <input id="n-title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+              placeholder="Например, Python-бэкенд в платёжную команду" className="input" aria-label="Название" /></div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div><label className={field} htmlFor="n-role">Специализация</label>
+              <select id="n-role" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className="select" aria-label="Специализация">
+                <option value="">Любая</option>
+                {Object.entries(opts?.specializations ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
+              </select></div>
+            <div><label className={field} htmlFor="n-grade">Грейд</label>
+              <select id="n-grade" value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} className="select" aria-label="Грейд">
+                <option value="">Любой</option>
+                {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{g}</option>)}
+              </select></div>
+            <div><label className={field} htmlFor="n-ind">Отрасль</label>
+              <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select" aria-label="Отрасль">
+                <option value="">Не важна</option>
+                {Object.entries(opts?.industries ?? {}).filter(([k]) => k !== 'any').map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
+              </select></div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div><label className={field} htmlFor="n-req">Обязательные навыки</label>
+              <input id="n-req" value={form.skills} onChange={e => setForm({ ...form, skills: e.target.value })} placeholder="Python, PostgreSQL" className="input" aria-label="Обязательные навыки" /></div>
+            <div><label className={field} htmlFor="n-nice">Желательные навыки</label>
+              <input id="n-nice" value={form.nice} onChange={e => setForm({ ...form, nice: e.target.value })} placeholder="Docker, Kafka" className="input" aria-label="Желательные навыки" />
+              <p className="field-hint">Весят вдвое меньше обязательных.</p></div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.internship} onChange={e => setForm({ ...form, internship: e.target.checked })} />Ищем стажёра или практиканта</label>
+          {error && <p className="notice-error" role="alert">{error}</p>}
+          <div className="flex gap-3">
+            <button className="btn-primary" disabled={form.title.length < 2 || save.isPending}>{editing === 'new' ? 'Создать' : 'Сохранить новую версию'}</button>
+            <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Отмена</button>
           </div>
         </form>
       )}
 
       {needs.length === 0 && !editing && (
-        <div className="card text-sm text-text-secondary flex items-center gap-3"><Target size={18} />Создайте первую потребность — подбор и объяснения появятся сразу.</div>
+        <Empty title="Потребностей пока нет" action={<button onClick={() => { setEditing('new'); setForm(EMPTY) }} className="btn-primary">Создать первую</button>}>
+          Подборка с объяснением появится сразу после сохранения.
+        </Empty>
       )}
 
       {needs.length > 0 && (
-        <div className="flex flex-wrap gap-2" role="tablist">
-          {needs.map(n => (
-            <button key={n.id} role="tab" aria-selected={n.id === selected} onClick={() => setSelected(n.id)}
-              className={`text-sm px-3 py-1.5 rounded-lg border ${n.id === selected ? 'border-fsp-electric text-fsp-electric' : 'border-border text-text-secondary'}`}>
-              {n.title} <span className="text-text-muted">v{n.version} · ★{n.shortlist_count}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {current && (
-        <div className="grid lg:grid-cols-[1fr_280px] gap-6 items-start">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-              <span>{current.params.role ?? 'любая специализация'} · {current.params.grade ?? 'любой грейд'}</span>
-              {current.params.skills.map(s => <span key={s} className="chip-default">{s}</span>)}
-              {current.params.nice_to_have.map(s => <span key={s} className="chip-default opacity-70">+{s}</span>)}
-              <button onClick={() => edit(current)} className="text-fsp-electric hover:underline">изменить</button>
-            </div>
-            {matches.data?.recommended_categories?.length > 0 && (
-              <p className="text-xs text-text-secondary">Где искать: {matches.data.recommended_categories.map(
-                (c: { role: string; grade: string; candidates: number; best: number }) => `${c.role} ${c.grade} — ${c.candidates} канд., лучшее совпадение ${Math.round(c.best * 100)}`).join(' · ')}</p>
-            )}
-            {matches.isLoading && <div className="skeleton h-40" />}
-            {(matches.data?.items ?? []).map((card: CandidateCardData) => (
-              <CandidateCard key={card.candidate_id} card={card} onOffer={setOfferFor}
-                onShortlist={(id, on) => toggle.mutate({ id, on })} />
-            ))}
-          </div>
-          <aside className="card space-y-3 lg:sticky lg:top-20" aria-label="Шорт-лист">
-            <p className="font-semibold text-sm">Шорт-лист</p>
-            {shortlist.data && (
-              <p className="text-xs text-text-muted">Отобрано {shortlist.data.funnel.shortlisted} · приглашено {shortlist.data.funnel.invited} · отказ {shortlist.data.funnel.rejected}</p>
-            )}
-            <ul className="text-xs space-y-2">
-              {(shortlist.data?.items ?? []).map((r: { candidate_id: string; role: string; grade: string; score: number; picked_on_version: number }) => (
-                <li key={r.candidate_id} className="flex justify-between gap-2">
-                  <span>{r.role} {r.grade} · {Math.round((r.score ?? 0) * 100)}</span>
-                  <span className="text-text-muted">v{r.picked_on_version}</span>
+        <div className="grid items-start gap-8 lg:grid-cols-[260px_1fr]">
+          <nav aria-label="Потребности" className="lg:sticky lg:top-36">
+            <ul className="space-y-1" role="tablist">
+              {needs.map(n => (
+                <li key={n.id}>
+                  <button role="tab" aria-selected={n.id === selected} onClick={() => { setSelected(n.id); setTab('matches') }}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${n.id === selected ? 'bg-panel ring-1 ring-line-strong' : 'hover:bg-panel'}`}>
+                    <span className="block text-sm font-medium text-ink">{n.title}</span>
+                    <span className="mt-0.5 block text-xs text-ink-3">версия {n.version}, в шорт-листе {n.shortlist_count}</span>
+                  </button>
                 </li>
               ))}
             </ul>
-          </aside>
+          </nav>
+
+          {current && (
+            <section aria-label={current.title}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-ink">{current.title}</h2>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
+                    <span>{current.params.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params.grade ?? 'любой грейд'}</span>
+                    {current.params.skills.map(s => <span key={s} className="chip-active">{s}</span>)}
+                    {current.params.nice_to_have.map(s => <span key={s} className="chip-default">+ {s}</span>)}
+                    {current.params.work_goal === 'internship' && <span className="badge-warn">стажировка</span>}
+                  </div>
+                </div>
+                <button onClick={() => edit(current)} className="btn-secondary btn-sm"><Pencil size={14} aria-hidden />Изменить</button>
+              </div>
+
+              {matches.data?.recommended_categories?.length > 0 && (
+                <div className="panel-quiet mt-5 text-sm">
+                  <p className="text-ink-2">Где искать: самые сильные совпадения в категориях</p>
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {matches.data.recommended_categories.map((c: { role: string; grade: string; candidates: number; best: number }) => (
+                      <li key={`${c.role}-${c.grade}`} className="rounded-md bg-panel px-3 py-1.5 ring-1 ring-line">
+                        <span className="font-medium text-ink">{ROLE_RU[c.role] ?? c.role} {c.grade}</span>
+                        <span className="text-ink-3"> — {c.candidates} канд., лучшее {Math.round(c.best * 100)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-6 flex gap-6 border-b border-line" role="tablist">
+                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`]] as const).map(([key, title]) => (
+                  <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+                    className={`-mb-px border-b-2 pb-3 text-sm ${tab === key ? 'border-accent font-semibold text-ink' : 'border-transparent text-ink-2 hover:text-ink'}`}>{title}</button>
+                ))}
+              </div>
+              {sent && <p className="notice-ok mt-4" role="status">Приглашение отправлено.</p>}
+
+              {tab === 'matches' && (
+                <div className="mt-5 space-y-4">
+                  {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
+                  {matches.data && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
+                  {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
+                    <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor}
+                      onShortlist={(id, on) => toggle.mutate({ id, on })} />
+                  ))}
+                </div>
+              )}
+              {tab === 'shortlist' && (
+                <div className="mt-5">
+                  {shortlist.data && (
+                    <p className="mb-4 text-sm text-ink-2">Отобрано {shortlist.data.funnel.shortlisted}, приглашено {shortlist.data.funnel.invited}, отказ {shortlist.data.funnel.rejected}.</p>
+                  )}
+                  {shortItems.length === 0 ? <Empty title="Шорт-лист пуст">Отмечайте кандидатов звёздочкой в подборке.</Empty> : (
+                    <div className="card overflow-x-auto p-0">
+                      <table className="protocol">
+                        <thead><tr><th>Категория</th><th className="text-right">Совпадение</th><th>Выбран по версии</th><th>Добавлен</th><th /></tr></thead>
+                        <tbody>
+                          {shortItems.map((r: { candidate_id: string; role: string; grade: string; score: number; picked_on_version: number; added_at: string }) => (
+                            <tr key={r.candidate_id}>
+                              <td className="text-ink">{ROLE_RU[r.role] ?? r.role} {r.grade}</td>
+                              <td className="num text-right font-semibold text-ink">{Math.round((r.score ?? 0) * 100)}</td>
+                              <td className="text-ink-2">v{r.picked_on_version}{r.picked_on_version !== current.version && ' (до изменения)'}</td>
+                              <td className="num text-ink-2">{date(r.added_at)}</td>
+                              <td className="text-right"><button onClick={() => setOfferFor(r.candidate_id)} className="btn-invite btn-sm">Пригласить</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
-      {offerFor && <OfferModal candidateId={offerFor} onClose={() => setOfferFor(null)} />}
+      {offerFor && <InviteDialog candidateId={offerFor} defaultRole={current?.title ?? ''} onClose={() => setOfferFor(null)} onSent={() => setSent(true)} />}
     </div>
   )
 }

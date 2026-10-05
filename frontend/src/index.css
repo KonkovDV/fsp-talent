@@ -1,303 +1,175 @@
+@import '@fontsource-variable/golos-text';
+@import '@fontsource-variable/unbounded';
+@import '@fontsource-variable/jetbrains-mono';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ═══════════════════════════════════════════════════════════════
-   ФСП TALENT — Design System v3.0
-   Palette: Navy #0A1F5C · Blue #1B3FA0 · Electric #1D82F5
-            Red #D42330 · Gold #F0A500
-   Hue reference (OKLCH): blue=258, red=22, gold=72
-   ═══════════════════════════════════════════════════════════════ */
+/* ФСП Талант — design system v4 «Протокол».
+   The product turns results into a ranked list, so the interface borrows the language of a competition protocol:
+   places, ranks, tabular numbers, hairline rules. Colours are RGB triplets so Tailwind can apply opacity. */
 
 @layer base {
-  /* ── Dark theme (default) ─────────────────────────────────── */
-  :root, [data-theme="dark"] {
-    /* Brand — ФСП Blue */
-    --brand:        0.42 0.18 258;
-    --brand-dim:    0.28 0.14 258;
-    --brand-bright: 0.62 0.20 238;
-    /* Accent red */
-    --accent-red:   0.52 0.22 22;
-    /* Accent gold */
-    --accent-gold:  0.78 0.17 72;
-    /* Surfaces — navy-tinted dark */
-    --surface-0:    0.11 0.02 258;
-    --surface-1:    0.15 0.02 258;
-    --surface-2:    0.19 0.02 258;
-    --surface-3:    0.25 0.02 258;
-    /* Text */
-    --text-primary:   0.96 0 0;
-    --text-secondary: 0.72 0.02 258;
-    --text-muted:     0.52 0.02 258;
-    /* Borders */
-    --border:       0.28 0.03 258;
-    --border-strong:0.42 0.05 258;
-    /* Score track */
-    --score-track:  0.20 0.02 258;
-    /* Nav */
-    --nav-bg:       0.13 0.06 258;
+  :root, [data-theme='light'] {
+    --paper: 245 246 250;
+    --panel: 255 255 255;
+    --sunken: 238 240 246;
+    --ink: 14 22 48;
+    --ink-2: 74 83 112;
+    --ink-3: 112 120 145;
+    --line: 221 225 236;
+    --line-strong: 186 192 210;
+    --accent: 27 63 160;        /* ФСП blue: actions, links, focus */
+    --accent-soft: 232 237 250;
+    --accent-ink: 255 255 255;
+    --invite: 212 35 48;        /* ФСП red: the invitation, nothing else */
+    --invite-soft: 253 236 237;
+    --ok: 22 122 77;
+    --ok-soft: 230 245 237;
+    --warn: 176 106 0;
+    --warn-soft: 253 243 224;
+    --medal: 179 120 0;         /* gold: sport ranks only */
+    --medal-soft: 252 244 222;
+    color-scheme: light;
   }
 
-  /* ── Light theme ──────────────────────────────────────────── */
-  [data-theme="light"] {
-    --brand:        0.40 0.18 258;
-    --brand-dim:    0.92 0.05 258;
-    --brand-bright: 0.35 0.20 258;
-    --accent-red:   0.50 0.22 22;
-    --accent-gold:  0.72 0.17 72;
-    --surface-0:    0.98 0 0;
-    --surface-1:    0.96 0.005 258;
-    --surface-2:    0.92 0.008 258;
-    --surface-3:    0.87 0.010 258;
-    --text-primary:   0.12 0.02 258;
-    --text-secondary: 0.35 0.04 258;
-    --text-muted:     0.55 0.03 258;
-    --border:       0.85 0.01 258;
-    --border-strong:0.72 0.02 258;
-    --score-track:  0.90 0.01 258;
-    --nav-bg:       0.13 0.06 258;
-  }
-
-  html {
-    font-family: 'Inter', system-ui, sans-serif;
-    font-feature-settings: 'cv11', 'ss01';
-    font-optical-sizing: auto;
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-    scroll-behavior: smooth;
+  [data-theme='dark'] {
+    --paper: 7 13 31;
+    --panel: 13 22 48;
+    --sunken: 10 17 39;
+    --ink: 236 240 248;
+    --ink-2: 165 174 200;
+    --ink-3: 120 130 160;
+    --line: 32 44 80;
+    --line-strong: 55 70 112;
+    --accent: 110 150 255;
+    --accent-soft: 23 36 78;
+    --accent-ink: 7 13 31;
+    --invite: 255 92 102;
+    --invite-soft: 60 18 28;
+    --ok: 72 199 138;
+    --ok-soft: 14 46 36;
+    --warn: 240 180 70;
+    --warn-soft: 52 38 12;
+    --medal: 240 190 70;
+    --medal-soft: 50 40 12;
     color-scheme: dark;
   }
 
-  body {
-    @apply bg-surface-0 text-text-primary;
-    min-height: 100dvh;
+  html {
+    font-family: 'Golos Text Variable', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'tnum' 0;
   }
+  body { @apply bg-paper text-ink; min-height: 100dvh; }
+  h1, h2, h3 { text-wrap: balance; }
+  :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; border-radius: 4px; }
+  ::selection { background: rgb(var(--accent) / 0.18); }
 
-  /* Skip link */
   .skip-link {
-    @apply sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4
-           focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg
-           focus:bg-fsp-electric focus:text-white focus:outline-none;
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:px-4 focus:py-2
+           focus:rounded focus:bg-accent focus:text-accent-ink;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      transition-duration: 0.01ms !important;
-    }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
 }
 
 @layer components {
-  /* ═══ BUTTONS ══════════════════════════════════════════════ */
+  /* Buttons. One primary per screen; the red one is only for sending an invitation. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 font-semibold
-           transition-all duration-200 select-none
-           focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0
-           disabled:opacity-40 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold
+           transition-colors duration-150 select-none disabled:opacity-45 disabled:pointer-events-none;
   }
-  /* Primary — ФСП Electric Blue */
-  .btn-primary {
-    @apply btn px-5 py-2.5 text-sm rounded-md
-           bg-fsp-electric text-white
-           hover:bg-fsp-blue hover:shadow-glow-brand
-           active:scale-95;
-  }
-  .btn-primary:focus-visible {
-    --tw-ring-color: #1D82F5;
-  }
-  /* Danger / CTA — ФСП Red */
-  .btn-danger {
-    @apply btn px-5 py-2.5 text-sm rounded-md
-           bg-fsp-red text-white
-           hover:brightness-110 hover:shadow-glow-red
-           active:scale-95;
-  }
-  /* Secondary — outlined */
-  .btn-secondary {
-    @apply btn px-5 py-2.5 text-sm rounded-md
-           border-2 border-fsp-electric text-fsp-electric
-           hover:bg-fsp-electric hover:text-white
-           active:scale-95;
-  }
-  /* Secondary white (for dark navy backgrounds) */
-  .btn-secondary-white {
-    @apply btn px-5 py-2.5 text-sm rounded-md
-           border-2 border-white/70 text-white
-           hover:bg-white/15
-           active:scale-95;
-  }
-  .btn-ghost {
-    @apply btn px-3 py-2 text-sm rounded-md text-text-secondary
-           hover:text-text-primary hover:bg-surface-2;
-  }
-  /* Nav ghost — white text on dark navy */
-  .btn-nav {
-    @apply btn px-3 py-1.5 text-sm rounded-md text-white/80
-           hover:text-white hover:bg-white/10;
-  }
+  .btn-primary { @apply btn bg-accent text-accent-ink hover:bg-accent/90; }
+  .btn-invite, .btn-danger { @apply btn bg-invite text-white hover:bg-invite/90; }
+  .btn-secondary { @apply btn border border-line-strong bg-panel text-ink hover:border-accent hover:text-accent; }
+  .btn-ghost { @apply btn px-3 text-ink-2 hover:text-ink hover:bg-sunken; }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .btn-secondary-white { @apply btn border border-white/60 text-white hover:bg-white/10; }
+  .btn-nav { @apply btn px-2.5 py-1.5 text-ink-2 hover:text-ink hover:bg-sunken; }
 
-  /* ═══ CARDS ════════════════════════════════════════════════ */
-  .card {
-    @apply bg-surface-1 rounded-lg border border-border p-6
-           shadow-card;
-  }
-  .card-hover {
-    @apply card cursor-pointer transition-all duration-200
-           hover:border-brand/50 hover:shadow-card-hover
-           hover:-translate-y-0.5;
-  }
-  .card-interactive {
-    @apply card-hover active:translate-y-0 active:shadow-card;
-  }
-  /* ФСП style — blue left accent border */
-  .card-fsp {
-    @apply card border-l-4 border-l-fsp-electric border-t-border
-           border-r-border border-b-border;
-  }
-  .card-fsp-red {
-    @apply card border-l-4 border-l-fsp-red border-t-border
-           border-r-border border-b-border;
-  }
-  .card-fsp-gold {
-    @apply card border-l-4 border-l-fsp-gold border-t-border
-           border-r-border border-b-border;
-  }
+  /* Panels. Hairline border, no drop shadow: content is the hierarchy. */
+  .card { @apply rounded-lg border border-line bg-panel p-5 sm:p-6; }
+  .card-hover { @apply card transition-colors hover:border-line-strong; }
+  .card-interactive { @apply card-hover cursor-pointer; }
+  .card-fsp, .card-fsp-red, .card-fsp-gold { @apply card; }
+  .panel-quiet { @apply rounded-lg bg-sunken p-4; }
 
-  /* ═══ BADGES ═══════════════════════════════════════════════ */
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
-           text-xs font-bold tracking-wide uppercase;
-  }
-  /* Grade badges — ФСП palette */
-  .badge-brand  { @apply badge bg-fsp-electric/20 text-fsp-electric  border border-fsp-electric/40; }
-  .badge-lead   { @apply badge bg-fsp-gold/20    text-fsp-gold      border border-fsp-gold/50; }
-  .badge-senior { @apply badge bg-fsp-electric/25 text-fsp-electric  border border-fsp-electric/50; }
-  .badge-middle { @apply badge bg-fsp-blue/20    text-fsp-light     border border-fsp-blue/40; }
-  .badge-junior { @apply badge bg-surface-3      text-text-secondary border border-border; }
-  /* ФСП Sport rank badges */
-  .badge-mc     { @apply badge bg-fsp-gold/25   text-fsp-gold     border border-fsp-gold/60; }     /* МС */
-  .badge-kmc    { @apply badge bg-fsp-red/20    text-fsp-red      border border-fsp-red/40; }      /* КМС */
-  .badge-vc     { @apply badge bg-fsp-navy/60   text-fsp-light    border border-fsp-electric/30; } /* ВС */
+  .page-head { @apply flex flex-wrap items-end justify-between gap-4 pb-6; }
+  .page-title { @apply font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl; }
+  .page-lead { @apply mt-1.5 max-w-prose text-sm text-ink-2; }
+  .section-title { @apply font-display text-base font-semibold text-ink; }
 
-  /* ═══ NAVIGATION ════════════════════════════════════════════ */
-  /* Solid navy — official ФСП style */
-  .fsp-nav {
-    background: #0A1F5C;
-    box-shadow: 0 2px 16px rgba(10,31,92,0.45);
-  }
-  /* Keep glass-nav as alias for backward compat */
-  .glass-nav { @apply fsp-nav; }
-
-  /* ═══ SCORE BARS ════════════════════════════════════════════ */
-  .score-bar-track {
-    @apply relative h-2 rounded-full overflow-hidden;
-    background: oklch(var(--score-track));
-  }
-  .score-bar-fill  { @apply h-full rounded-full transition-all duration-700 ease-out; }
-  /* Mu — ФСП Gold */
-  .score-bar-mu  { @apply score-bar-fill; background: linear-gradient(90deg, #C47F00, #F0A500, #FFD04A); }
-  /* LCB — ФСП Electric Blue */
-  .score-bar-lcb { @apply score-bar-fill; background: linear-gradient(90deg, #1B3FA0, #1D82F5, #5BADFF); }
-
-  /* ═══ FORM INPUTS ═══════════════════════════════════════════ */
+  /* Inputs */
   .input {
-    @apply w-full bg-surface-2 border border-border rounded-md px-4 py-2.5
-           text-sm text-text-primary placeholder:text-text-muted
-           focus:outline-none focus:ring-2 focus:ring-fsp-electric focus:border-transparent
-           transition-colors duration-150;
+    @apply w-full rounded-md border border-line-strong bg-panel px-3.5 py-2.5 text-sm text-ink
+           placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none
+           focus:ring-2 focus:ring-accent/20;
   }
-  .select { @apply input appearance-none cursor-pointer; }
+  .select { @apply input appearance-none pr-9 cursor-pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23707891' stroke-width='1.6'%3E%3Cpath d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .field-label { @apply mb-1.5 block text-xs font-medium text-ink-2; }
+  .field-hint { @apply mt-1 text-xs text-ink-3; }
+  .field-error { @apply mt-1 text-xs text-invite; }
 
-  /* ═══ SKELETON ══════════════════════════════════════════════ */
-  .skeleton {
-    @apply rounded-lg bg-surface-2 relative overflow-hidden;
-  }
+  /* Grade plates: a category is specialization × grade, shown like a bib number. */
+  .badge { @apply inline-flex items-center gap-1 rounded px-2 py-0.5 text-2xs font-semibold; }
+  .badge-junior { @apply badge bg-sunken text-ink-2 ring-1 ring-inset ring-line-strong; }
+  .badge-middle { @apply badge bg-accent-soft text-accent ring-1 ring-inset ring-accent/25; }
+  .badge-senior { @apply badge bg-accent text-accent-ink; }
+  .badge-lead { @apply badge bg-navy text-white dark:bg-ink dark:text-paper; }
+  .badge-brand { @apply badge bg-accent-soft text-accent; }
+  .badge-ok { @apply badge bg-ok-soft text-ok; }
+  .badge-warn { @apply badge bg-warn-soft text-warn; }
+  .badge-mc { @apply badge bg-medal text-white dark:text-paper; }
+  .badge-kmc { @apply badge bg-medal-soft text-medal ring-1 ring-inset ring-medal/40; }
+  .badge-vc { @apply badge bg-sunken text-ink-2; }
+
+  .chip { @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium; }
+  .chip-default { @apply chip border-line bg-panel text-ink-2; }
+  .chip-active { @apply chip border-accent/40 bg-accent-soft text-accent; }
+  .chip-missing { @apply chip border-dashed border-invite/50 text-invite; }
+
+  /* Protocol table: places, tabular numbers, hairline rows. */
+  .protocol { @apply w-full border-collapse text-sm; }
+  .protocol th { @apply border-b border-line-strong px-3 py-2 text-left text-xs font-medium text-ink-3; }
+  .protocol td { @apply border-b border-line px-3 py-3 align-middle; }
+  .protocol tr:last-child td { @apply border-b-0; }
+  .place { @apply font-display text-lg font-semibold tabular-nums text-ink; font-feature-settings: 'tnum' 1; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .meter { @apply relative h-1.5 overflow-hidden rounded-full bg-sunken; }
+  .meter > span { @apply absolute inset-y-0 left-0 rounded-full bg-accent origin-left animate-fill; }
+
+  .skeleton { @apply relative overflow-hidden rounded-lg bg-sunken; }
   .skeleton::after {
-    content: '';
-    @apply absolute inset-0;
-    background: linear-gradient(90deg, transparent 0%, oklch(var(--surface-3)) 50%, transparent 100%);
-    background-size: 200% 100%;
-    animation: shimmer 2s infinite;
+    content: ''; @apply absolute inset-0 animate-shimmer;
+    background: linear-gradient(90deg, transparent, rgb(var(--panel) / 0.7), transparent); background-size: 200% 100%;
   }
 
-  /* ═══ STAT CARDS ════════════════════════════════════════════ */
-  .stat-card       { @apply card-fsp flex flex-col gap-2; }
-  .stat-card-value { @apply text-3xl font-black tabular-nums text-fsp-electric; }
-  .stat-card-label { @apply text-2xs font-bold uppercase tracking-widest text-text-muted; }
-  .stat-card-delta { @apply text-xs font-semibold; }
+  .stat-card { @apply rounded-lg border border-line bg-panel p-4; }
+  .stat-card-value { @apply font-display text-2xl font-semibold tabular-nums text-ink; }
+  .stat-card-label { @apply text-xs text-ink-3; }
+  .stat-card-delta { @apply text-xs text-ink-2; }
 
-  /* ═══ CHIPS / FILTER TAGS ═══════════════════════════════════ */
-  .chip {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full
-           text-xs font-semibold border cursor-pointer select-none
-           transition-all duration-150;
-  }
-  .chip-default { @apply chip bg-surface-2 border-border text-text-secondary hover:border-fsp-electric/50 hover:text-fsp-electric; }
-  .chip-active  { @apply chip bg-fsp-electric/20 border-fsp-electric/60 text-fsp-electric; }
+  .notice { @apply flex items-start gap-3 rounded-lg border px-4 py-3 text-sm; }
+  .notice-info { @apply notice border-accent/25 bg-accent-soft text-ink; }
+  .notice-ok { @apply notice border-ok/30 bg-ok-soft text-ink; }
+  .notice-error { @apply notice border-invite/30 bg-invite-soft text-ink; }
 
-  /* ═══ DIVIDER ═══════════════════════════════════════════════ */
-  .fsp-divider {
-    @apply h-px w-full;
-    background: linear-gradient(90deg, transparent, oklch(var(--border-strong)), transparent);
-  }
+  .empty { @apply rounded-lg border border-dashed border-line-strong px-6 py-10 text-center text-sm text-ink-2; }
 
-  /* ═══ HERO DIAGONAL STRIPE ══════════════════════════════════ */
-  .hero-stripe {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(150deg, #0A1F5C 0%, #1B3FA0 55%, #1D82F5 100%);
-    clip-path: polygon(0 0, 100% 0, 100% 75%, 0 100%);
-    z-index: 0;
-  }
+  /* The brand stripe: Federation blue and red, used once at the top of every page. */
+  .brand-stripe { height: 3px; background: linear-gradient(90deg, #1B3FA0 0 72%, #D42330 72% 100%); }
 
-  /* ═══ FSP LOGO DIAMOND ═══════════════════════════════════════ */
-  .fsp-diamond {
-    @apply inline-flex items-center justify-center rounded-sm
-           text-white font-black;
-    background: linear-gradient(135deg, #D42330, #FF4D5A);
-    transform: rotate(45deg);
-  }
-  .fsp-diamond-inner {
-    display: block;
-    transform: rotate(-45deg);
-  }
+  .code-block { @apply overflow-x-auto rounded-lg border border-line bg-sunken p-4 font-mono text-[13px] leading-relaxed text-ink; }
 }
 
 @layer utilities {
-  /* ── Gradients ── */
-  .text-gradient-fsp {
-    background: linear-gradient(135deg, #1D82F5, #5BADFF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .text-gradient-gold {
-    background: linear-gradient(90deg, #F0A500, #FFD04A);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .text-gradient-brand {
-    background: linear-gradient(135deg, #1D82F5, #5BADFF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  /* ── Grid background ── */
-  .bg-grid {
-    background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-    background-size: 32px 32px;
-  }
-  /* ── Glows ── */
-  .glow-brand  { box-shadow: 0 0 24px rgba(27,63,160,0.55); }
-  .glow-red    { box-shadow: 0 0 20px rgba(212,35,48,0.45); }
-  .glow-gold   { box-shadow: 0 0 16px rgba(240,165,0,0.45); }
-  .glow-score  { box-shadow: 0 0 16px rgba(29,130,245,0.4); }
-  /* ── Type ── */
-  .text-balance  { text-wrap: balance; }
-  .tabular       { font-variant-numeric: tabular-nums; }
-  .font-display  { font-family: 'Montserrat', 'Inter', system-ui, sans-serif; font-weight: 900; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .text-balance { text-wrap: balance; }
+  .font-display { font-family: 'Unbounded Variable', 'Golos Text Variable', sans-serif; }
 }

@@ -19,6 +19,8 @@ import CandidateVacancies from './pages/candidate/Vacancies'
 import CandidateAssessment from './pages/candidate/Assessment'
 import LeaderboardPage from './pages/LeaderboardPage'
 import PublicProfile from './pages/PublicProfile'
+import NotFoundPage from './pages/NotFoundPage'
+import LegalPage from './pages/LegalPage'
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'participant' | 'employer' }) {
   const { token, userRole } = useAuthStore()
@@ -37,6 +39,7 @@ export default function App() {
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/forgot" element={<ForgotPasswordPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/legal" element={<LegalPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
 
         {/* Candidate area */}
@@ -58,7 +61,7 @@ export default function App() {
           <Route path="vacancies" element={<EmployerVacancies />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   )

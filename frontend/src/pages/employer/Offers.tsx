@@ -1,77 +1,80 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyEmployerOffers, getOfferContacts, withdrawOffer } from '../../api/client'
-
-const STATUS: Record<string, string> = {
-  pending: 'ожидает', accepted: 'принят', rejected: 'отклонён', expired: 'истёк', withdrawn: 'отозван',
-}
-
-export default function EmployerOffers() {
-  const qc = useQueryClient()
-  const { data: offers = [], isLoading } = useQuery({
-    queryKey: ['empOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data),
-  })
-  const [contacts, setContacts] = useState<Record<string, string> | null>(null)
-  const [error, setError] = useState('')
-  const reveal = useMutation({
-    mutationFn: (id: string) => getOfferContacts(id).then(r => r.data),
-    onSuccess: (data) => { setError(''); setContacts(data) },
-    onError: () => setError('Контакты доступны только после согласия кандидата'),
-  })
-  const withdraw = useMutation({
-    mutationFn: withdrawOffer,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['empOffers'] }),
-  })
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Мои офферы</h1>
-      {isLoading && <div className="animate-pulse h-40 bg-gray-100 rounded-2xl" />}
-      {error && <p className="text-sm text-fsp-red">{error}</p>}
-      {offers.map((offer: Offer) => (
-        <div key={offer.id} className="card flex items-center justify-between gap-4">
-          <div>
-            <p className="font-semibold">{offer.role}</p>
-            <p className="text-sm text-text-muted font-mono">
-              {offer.salary_from.toLocaleString('ru-RU')}–{offer.salary_to.toLocaleString('ru-RU')} {offer.currency} · {offer.work_format}
-            </p>
-            {offer.contact_method && <p className="text-xs text-text-muted">Связь: {offer.contact_method}</p>}
-          </div>
-          <div className="flex items-center gap-2">
-            {offer.status === 'pending' && (
-              <button onClick={() => withdraw.mutate(offer.id)} className="btn-secondary text-xs py-1.5">Отозвать</button>
-            )}
-            {offer.contacts_available && (
-              <button onClick={() => reveal.mutate(offer.id)} className="btn-primary text-xs py-1.5">Контакты</button>
-            )}
-            <span className="badge bg-gray-100 text-gray-700">
-              {offer.status === 'pending' && offer.candidate_viewed_at ? 'просмотрен' : STATUS[offer.status] ?? offer.status}
-            </span>
-          </div>
-        </div>
-      ))}
-      {contacts && (
-        <div className="card">
-          <h2 className="font-semibold mb-2">Контакты: {contacts.display_name}</h2>
-          <p className="text-sm">Email: {contacts.email ?? '—'}</p>
-          <p className="text-sm">Telegram: {contacts.telegram ?? '—'}</p>
-          <p className="text-sm">Телефон: {contacts.phone ?? '—'}</p>
-          <p className="text-sm text-text-muted">{contacts.region}</p>
-        </div>
-      )}
-      {!isLoading && offers.length === 0 && <div className="card text-center text-gray-400 py-12">Офферов пока нет</div>}
-    </div>
-  )
-}
+import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 
 interface Offer {
-  id: string
-  role: string
-  salary_from: number
-  salary_to: number
-  currency: string
-  work_format: string
-  status: string
-  contacts_available: boolean
-  contact_method: string | null
-  candidate_viewed_at: string | null
+  id: string; role: string; salary_from: number; salary_to: number; work_format: string; status: string
+  contacts_available: boolean; contact_method: string | null; candidate_viewed_at: string | null; created_at: string
+  expires_at: string | null; candidate: { role: string; grade: string; grade_source: string } | null
+}
+interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; region: string | null }
+
+const STATUS: Record<string, [string, string]> = {
+  pending: ['ждёт ответа', 'badge-warn'], viewed: ['просмотрено', 'badge-brand'], accepted: ['принято', 'badge-ok'],
+  rejected: ['отклонено', 'badge-vc'], expired: ['срок истёк', 'badge-vc'], withdrawn: ['отозвано', 'badge-vc'],
+}
+
+/** Sent invitations as a funnel: sent → viewed → accepted, with contacts after consent (TZ 2.2 п.3). */
+export default function EmployerOffers() {
+  const qc = useQueryClient()
+  const { data: offers = [], isLoading } = useQuery<Offer[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
+  const [contacts, setContacts] = useState<Record<string, Contacts>>({})
+  const [error, setError] = useState('')
+  const reveal = useMutation({
+    mutationFn: (id: string) => getOfferContacts(id).then(r => ({ id, data: r.data as Contacts })),
+    onSuccess: ({ id, data }) => { setError(''); setContacts(c => ({ ...c, [id]: data })) },
+    onError: () => setError('Контакты откроются, когда кандидат примет приглашение.'),
+  })
+  const withdraw = useMutation({ mutationFn: withdrawOffer, onSuccess: () => qc.invalidateQueries({ queryKey: ['employerOffers'] }) })
+
+  const stage = (o: Offer) => (o.status === 'pending' && o.candidate_viewed_at ? 'viewed' : o.status)
+  const funnel = [
+    ['Отправлено', offers.length],
+    ['Просмотрено', offers.filter(o => o.candidate_viewed_at).length],
+    ['Принято', offers.filter(o => o.status === 'accepted').length],
+  ] as const
+
+  return (
+    <div>
+      <PageHeader title="Приглашения" lead="Статус каждого приглашения. Контакты открываются после согласия кандидата, каждое открытие записывается в журнал." />
+      {offers.length > 0 && (
+        <dl className="mb-6 grid grid-cols-3 gap-3 sm:max-w-lg">
+          {funnel.map(([label, n]) => (
+            <div key={label} className="stat-card"><dt className="stat-card-label">{label}</dt><dd className="stat-card-value">{n}</dd></div>
+          ))}
+        </dl>
+      )}
+      {error && <p className="notice-error mb-4" role="alert">{error}</p>}
+      {isLoading && <Skeleton className="h-48" />}
+      {!isLoading && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
+      {offers.length > 0 && (
+        <div className="card overflow-x-auto p-0">
+          <table className="protocol">
+            <thead><tr><th>Кандидат</th><th>Должность</th><th className="text-right">Зарплата</th><th>Отправлено</th><th>Статус</th><th /></tr></thead>
+            <tbody>
+              {offers.map(o => {
+                const [label, cls] = STATUS[stage(o)] ?? [o.status, 'badge-vc']
+                const c = contacts[o.id]
+                return (
+                  <tr key={o.id}>
+                    <td>{o.candidate ? <CategoryPlate role={o.candidate.role} grade={o.candidate.grade} source={o.candidate.grade_source} /> : '—'}
+                      {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</div>}</td>
+                    <td className="text-ink">{o.role}</td>
+                    <td className="num whitespace-nowrap text-right text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</td>
+                    <td className="num text-ink-2">{date(o.created_at)}</td>
+                    <td><span className={cls}>{label}</span></td>
+                    <td className="whitespace-nowrap text-right">
+                      {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-primary btn-sm">Открыть контакты</button>}
+                      {o.status === 'pending' && <button onClick={() => withdraw.mutate(o.id)} className="btn-ghost btn-sm">Отозвать</button>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }

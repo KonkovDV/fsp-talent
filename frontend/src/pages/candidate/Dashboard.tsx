@@ -1,204 +1,112 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getMyProfile, getMyOffers } from '../../api/client'
-import GradeRadar from '../../components/GradeRadar'
-import ScoreBar from '../../components/ScoreBar'
+import { Check, Circle } from 'lucide-react'
+import { getMyOffers, getMyProfile } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
-import { roleRu } from '../../labels'
-import { Trophy, Briefcase, Eye, TrendingUp, ShieldCheck } from 'lucide-react'
+import { CategoryPlate, Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, rub } from '../../components/ui'
 
-const GRADE_BADGE: Record<string, string> = {
-  lead:   'badge-lead',
-  senior: 'badge-senior',
-  middle: 'badge-middle',
-  junior: 'badge-junior',
-}
+interface Disc { discipline: string; label: string; score?: number; lcb: number; confidence: number; best_rank: string | null; events_count: number }
+interface Offer { id: string; company: string; role: string; salary_from: number; salary_to: number; status: string }
 
-const SOURCE_LABEL: Record<string, string> = {
-  assessed:   'подтверждён тестом',
-  declared:   'указан вами',
-  experience: 'по опыту',
-  default:    'не указан',
-}
-
+/** Candidate home: the category employers see, what is missing for it, and fresh invitations. */
 export default function CandidateDashboard() {
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ['myProfile'],
-    queryFn:  () => getMyProfile().then(r => r.data),
-  })
-  const { data: offers = [] } = useQuery({
-    queryKey: ['myOffers'],
-    queryFn:  () => getMyOffers().then(r => r.data),
-  })
+  const { data: p, isLoading } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
+  const { data: offers = [] } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="skeleton h-8 w-40" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="skeleton h-28" />)}
-        </div>
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="skeleton h-64" />
-          <div className="skeleton h-64" />
-        </div>
-      </div>
-    )
-  }
-  if (!profile) return null
+  if (isLoading || !p) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48" /><Skeleton className="h-64" /></div>
 
-  const pending  = (offers as { status: string }[]).filter(o => o.status === 'pending').length
-  const topDisc  = profile.discipline_scores?.[0]
-
-  const stats = [
-    {
-      icon: Trophy,
-      label: 'Дисциплины ФСП',
-      value: profile.discipline_scores?.length ?? 0,
-      accent: 'text-yellow-400',
-      bg: 'bg-yellow-500/10',
-      delta: null,
-    },
-    {
-      icon: Briefcase,
-      label: 'Новые офферы',
-      value: pending,
-      accent: 'text-cyan-400',
-      bg: 'bg-cyan-500/10',
-      delta: pending > 0 ? `+${pending} ждут` : null,
-    },
-    {
-      icon: Eye,
-      label: 'В поиске',
-      value: profile.discoverable ? 'да' : 'нет',
-      accent: profile.discoverable ? 'text-emerald-400' : 'text-text-muted',
-      bg: profile.discoverable ? 'bg-emerald-500/10' : 'bg-surface-2',
-      delta: null,
-    },
-    {
-      icon: TrendingUp,
-      label: 'Байесовский μ',
-      value: topDisc ? (topDisc.mu ?? topDisc.lcb)?.toFixed(2) : '—',
-      accent: 'text-brand-bright',
-      bg: 'bg-brand/10',
-      delta: topDisc ? `LCB ${topDisc.lcb?.toFixed(2)}` : null,
-    },
+  const pending = offers.filter(o => o.status === 'pending')
+  const steps = [
+    { done: p.email_verified, text: 'Email подтверждён', to: null },
+    { done: p.survey_done, text: 'Опрос: специализация и отрасль', to: '/candidate/profile' },
+    { done: p.grade_source === 'assessed', text: 'Грейд подтверждён тестом', to: '/candidate/assessment' },
+    { done: p.has_fsp, text: 'ФСП ID привязан (необязательно)', to: '/candidate/profile' },
+    { done: p.discoverable, text: 'Карточка видна работодателям', to: '/candidate/profile' },
   ]
+  const disciplines: Disc[] = p.discipline_scores ?? []
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Кабинет</h1>
-          {profile.scoring_version && (
-            <p className="text-xs text-text-muted mt-1">scoring {profile.scoring_version}</p>
+      <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name.split(' ')[0]}` : 'Кабинет'}
+        lead="Так вас видит работодатель в поиске: без имени и контактов, по категории и подтверждениям." />
+
+      {!p.survey_done && <SurveyCard profile={p} />}
+
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">
+        <div className="card">
+          <p className="text-xs text-ink-3">Ваша категория</p>
+          <div className="mt-3"><CategoryPlate role={p.primary_role} grade={p.grade} source={p.grade_source} size="lg" /></div>
+          <p className="mt-3 text-sm text-ink-2">Грейд: {SOURCE_LABEL[p.grade_source] ?? '—'}.
+            {p.grade_source !== 'assessed' && ' Подтверждённый тестом грейд стоит в выдаче выше заявленного.'}</p>
+          {(p.stack ?? []).length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {(p.skills ?? []).slice(0, 14).map((s: { name: string; trust_level: string }) => (
+                <span key={s.name} className={s.trust_level === 'test_confirmed' ? 'chip-active' : 'chip-default'}
+                  title={s.trust_level === 'test_confirmed' ? 'Подтверждён тестом' : 'Заявлен'}>
+                  {s.name}{s.trust_level === 'test_confirmed' && <Check size={12} aria-hidden />}
+                </span>
+              ))}
+            </div>
+          )}
+          {p.grade_source !== 'assessed' && p.survey_done && (
+            <Link to="/candidate/assessment" className="btn-primary mt-5">Подтвердить грейд тестом</Link>
           )}
         </div>
-        {profile.grade && (
-          <span className={GRADE_BADGE[profile.grade] ?? 'badge-junior'}>{profile.grade}</span>
-        )}
-      </div>
-
-      {!profile.survey_done && <SurveyCard profile={profile} />}
-
-      {profile.survey_done && profile.grade_source !== 'assessed' && (
-        <div className="card flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm">
-            Грейд не подтверждён тестом. Работодатели ставят подтверждённый грейд выше самооценки.
-          </p>
-          <Link to="/candidate/assessment" className="btn-primary text-sm">Пройти тест на грейд</Link>
-        </div>
-      )}
-
-      {/* Stats grid */}
-      <section aria-label="Статистика">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map(({ icon: Icon, label, value, accent, bg, delta }) => (
-            <div key={label} className="stat-card">
-              <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
-                <Icon size={18} className={accent} aria-hidden />
-              </div>
-              <p className={`stat-card-value ${accent}`}>{value}</p>
-              <p className="stat-card-label">{label}</p>
-              {delta && <p className="stat-card-delta text-text-muted">{delta}</p>}
-            </div>
-          ))}
+        <div className="card">
+          <h2 className="section-title">Что ещё сделать</h2>
+          <ul className="mt-4 space-y-3 text-sm">
+            {steps.map(s => (
+              <li key={s.text} className="flex items-center gap-3">
+                {s.done
+                  ? <span className="flex h-5 w-5 items-center justify-center rounded-full bg-ok text-white"><Check size={13} aria-hidden /></span>
+                  : <Circle size={20} className="text-line-strong" aria-hidden />}
+                {s.done || !s.to ? <span className={s.done ? 'text-ink-2' : 'text-ink'}>{s.text}</span>
+                  : <Link to={s.to} className="text-accent hover:underline">{s.text}</Link>}
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
-      {/* Main content */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Discipline scores */}
-        <section className="card space-y-5" aria-labelledby="scores-heading">
-          <div className="flex items-center justify-between">
-            <h2 id="scores-heading" className="font-semibold text-text-primary">Дисциплинарные скоры</h2>
-            <ShieldCheck size={16} className="text-text-muted" />
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className="card">
+          <div className="flex items-baseline justify-between">
+            <h2 className="section-title">Приглашения</h2>
+            <Link to="/candidate/offers" className="text-sm text-accent hover:underline">Все</Link>
           </div>
-          {(profile.discipline_scores ?? []).length > 0 ? (
-            <div className="space-y-5">
-              {(profile.discipline_scores ?? []).map((ds: {
-                discipline: string; label: string;
-                score?: number; mu?: number; lcb: number; sigma?: number; best_rank: string | null
-              }) => (
-                <div key={ds.discipline} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-text-primary">{ds.label}</p>
-                    {ds.best_rank && (
-                      <span className={`text-2xs ${ds.best_rank.includes('КМС') ? 'badge-kmc' : ds.best_rank.includes('МС') ? 'badge-mc' : 'badge-junior'}`}>
-                        {ds.best_rank}
-                      </span>
-                    )}
-                  </div>
-                  <ScoreBar mu={ds.score ?? ds.mu ?? ds.lcb} lcb={ds.lcb} sigma={ds.sigma} compact />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-text-muted">Результаты соревнований не добавлены.</p>
-          )}
-          <GradeRadar scores={profile.discipline_scores ?? []} />
-        </section>
-
-        {/* Profile / skills */}
-        <section className="card space-y-5" aria-labelledby="profile-heading">
-          <h2 id="profile-heading" className="font-semibold text-text-primary">Навыки и роль</h2>
-
-          <div className="flex flex-wrap gap-1.5">
-            {(profile.stack ?? []).map((sk: string) => (
-              <span key={sk} className="chip chip-active">{sk}</span>
-            ))}
+          {pending.length === 0
+            ? <p className="mt-4 text-sm text-ink-2">Новых приглашений нет. Работодатели пишут первыми: подтверждённый грейд и полный профиль поднимают вас в выдаче.</p>
+            : <ul className="mt-3 divide-y divide-line">
+                {pending.slice(0, 4).map(o => (
+                  <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2 py-3">
+                    <span><span className="font-medium text-ink">{o.company}</span> <span className="text-ink-2">{o.role}</span></span>
+                    <span className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</span>
+                  </li>
+                ))}
+              </ul>}
+        </div>
+        <div className="card">
+          <div className="flex items-baseline justify-between">
+            <h2 className="section-title">Подтверждено ФСП</h2>
+            <Link to="/candidate/results" className="text-sm text-accent hover:underline">Протоколы</Link>
           </div>
-
-          <dl className="space-y-2 text-sm">
-            <div className="flex gap-2">
-              <dt className="text-text-muted w-24 shrink-0">Роль</dt>
-              <dd className="font-medium text-text-primary">{roleRu(profile.primary_role)}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-text-muted w-24 shrink-0">Грейд</dt>
-              <dd className="font-medium text-text-primary">
-                {profile.grade ?? '—'}
-                {profile.grade_source && (
-                  <span className="text-text-muted font-normal ml-1">({SOURCE_LABEL[profile.grade_source] ?? profile.grade_source})</span>
-                )}
-              </dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-text-muted w-24 shrink-0">Регион</dt>
-              <dd className="font-medium text-text-primary">{profile.region ?? '—'}</dd>
-            </div>
-          </dl>
-
-          {(profile.explanation ?? []).length > 0 && (
-            <div className="space-y-1 pt-2 border-t border-border">
-              {(profile.explanation as string[]).map(line => (
-                <p key={line} className="text-xs text-text-muted">{line}</p>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+          {disciplines.length === 0
+            ? <Empty title="Нет истории ФСП">Это не минус в выдаче. Если вы участвовали в соревнованиях, привяжите ФСП ID в профиле.</Empty>
+            : <ul className="mt-4 space-y-4">
+                {disciplines.map(d => (
+                  <li key={d.discipline}>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-ink">{d.label}</span>
+                      <span className="flex items-center gap-2"><RankBadge rank={d.best_rank} />
+                        <span className="num text-ink-2">{d.events_count} соревн.</span></span>
+                    </div>
+                    <div className="mt-2"><Meter value={Math.min(1, d.lcb / 0.6)} /></div>
+                    <p className="mt-1 text-xs text-ink-3">Нижняя граница уровня {d.lcb.toFixed(2)}, уверенность {Math.round(d.confidence * 100)} %</p>
+                  </li>
+                ))}
+              </ul>}
+        </div>
+      </section>
     </div>
   )
 }
