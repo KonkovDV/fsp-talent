@@ -12,6 +12,7 @@ import CandidateResults from './pages/candidate/Results'
 import CandidateOffers from './pages/candidate/Offers'
 import EmployerDashboard from './pages/employer/Dashboard'
 import EmployerSearch from './pages/employer/Search'
+import EmployerNeeds from './pages/employer/Needs'
 import EmployerOffers from './pages/employer/Offers'
 import EmployerVacancies from './pages/employer/Vacancies'
 import CandidateVacancies from './pages/candidate/Vacancies'
@@ -51,6 +52,7 @@ export default function App() {
         {/* Employer area */}
         <Route path="/employer" element={<ProtectedRoute role="employer"><Layout /></ProtectedRoute>}>
           <Route index element={<EmployerDashboard />} />
+          <Route path="needs" element={<EmployerNeeds />} />
           <Route path="search" element={<EmployerSearch />} />
           <Route path="offers" element={<EmployerOffers />} />
           <Route path="vacancies" element={<EmployerVacancies />} />

@@ -130,3 +130,13 @@ export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)
 export const verifyCredential = (credential: object) => api.post('/public/credentials/verify', credential)
+
+export const listNeeds = () => api.get('/needs')
+export const createNeed = (data: object) => api.post('/needs', data)
+export const updateNeed = (id: string, data: object) => api.put(`/needs/${id}`, data)
+export const archiveNeed = (id: string) => api.delete(`/needs/${id}`)
+export const needMatches = (id: string) => api.get(`/needs/${id}/matches`, { params: { limit: 20 } })
+export const needShortlist = (id: string) => api.get(`/needs/${id}/shortlist`)
+export const setShortlist = (id: string, candidateId: string, status = 'shortlisted') =>
+  api.put(`/needs/${id}/shortlist/${candidateId}`, { status })
+export const removeShortlist = (id: string, candidateId: string) => api.delete(`/needs/${id}/shortlist/${candidateId}`)

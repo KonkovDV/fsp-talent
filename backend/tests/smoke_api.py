@@ -172,8 +172,33 @@ def main():
     status, query = call("POST", "/ai/parse-query", {"q": "сеньор бэкенд python ctf"}, token=employer_token)
     assert status == 200 and query["role"] == "backend" and query["grade"] == "senior", query
     assert "Python" in query["skills"], query
+    check_needs(employer_token)
     check_assessment()
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
+
+
+def check_needs(token):
+    """Employer need: version, explainable matches, recommended categories, shortlist, has_fsp filter."""
+    body = {"title": "Python-бэкенд", "params": {"role": "backend", "grade": "middle",
+                                                "skills": ["python", "PostgreSQL"], "nice_to_have": ["Docker"]}}
+    status, need = call("POST", "/needs", body, token=token)
+    assert status == 201 and need["version"] == 1 and need["params"]["skills"] == ["PostgreSQL", "Python"], need
+    status, found = call("GET", f"/needs/{need['id']}/matches?limit=5", token=token)
+    assert status == 200 and found["items"] and found["recommended_categories"], found
+    top = found["items"][0]
+    assert top["match"]["score"] >= found["items"][-1]["match"]["score"] and top["match"]["plus"], top
+    assert {f["key"] for f in top["match"]["factors"]} >= {"skills", "grade", "role", "test", "fsp"}, top
+    status, picked = call("PUT", f"/needs/{need['id']}/shortlist/{top['candidate_id']}", {"status": "shortlisted"},
+                          token=token)
+    assert status == 200 and picked["version"] == 1, picked
+    body["params"]["grade"] = "senior"
+    status, edited = call("PUT", f"/needs/{need['id']}", body, token=token)
+    assert status == 200 and edited["version"] == 2, edited
+    status, short = call("GET", f"/needs/{need['id']}/shortlist", token=token)
+    assert short["items"][0]["picked_on_version"] == 1 and short["funnel"]["shortlisted"] == 1, short
+    status, no_fsp = call("GET", "/search/candidates?skills=Python,Django&has_fsp=false", token=token)
+    assert status == 200 and no_fsp["items"], no_fsp
+    assert any("Нет истории ФСП" in line for line in no_fsp["items"][0]["match"]["info"]), no_fsp["items"][0]
 
 
 def _login(email):

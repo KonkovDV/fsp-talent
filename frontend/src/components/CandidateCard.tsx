@@ -14,6 +14,14 @@ export interface CandidateCardData {
   matched_skills: string[]
   missing_skills: string[]
   why: string[]
+  shortlisted?: boolean
+  match?: {
+    score: number
+    plus: string[]
+    minus: string[]
+    info: string[]
+    factors: { key: string; label: string; weight: number; value: number | null }[]
+  }
   disciplines: {
     label: string
     discipline: string
@@ -51,11 +59,40 @@ function rankBadgeClass(rank: string | null): string {
 interface Props {
   card: CandidateCardData
   onOffer: (id: string) => void
+  onShortlist?: (id: string, on: boolean) => void
 }
 
-export default function CandidateCard({ card, onOffer }: Props) {
+function MatchBlock({ match }: { match: NonNullable<CandidateCardData['match']> }) {
+  return (
+    <div className="space-y-2" data-testid="match">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl font-black text-text-primary tabular-nums">{Math.round(match.score * 100)}</span>
+        <span className="text-xs text-text-muted leading-tight">совпадение<br />из 100</span>
+        <div className="flex-1 grid grid-cols-7 gap-1" aria-label="Факторы совпадения">
+          {match.factors.map(f => (
+            <div key={f.key} title={`${f.label}: ${f.value == null ? 'не учитывается' : Math.round(f.value * 100) + '%'}, вес ${Math.round(f.weight * 100)}%`}>
+              <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden">
+                {f.value != null && <div className="h-full bg-fsp-electric" style={{ width: `${f.value * 100}%` }} />}
+              </div>
+              <p className={`text-[10px] mt-0.5 truncate ${f.value == null ? 'text-text-muted line-through' : 'text-text-secondary'}`}>{f.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <ul className="text-xs space-y-0.5">
+        {match.plus.map(l => <li key={l} className="text-green-500">+ {l}</li>)}
+        {match.minus.map(l => <li key={l} className="text-fsp-red">− {l}</li>)}
+        {match.info.map(l => <li key={l} className="text-text-muted">· {l}</li>)}
+      </ul>
+    </div>
+  )
+}
+
+export default function CandidateCard({ card, onOffer, onShortlist }: Props) {
   const [expanded, setExpanded] = useState(false)
-  const disc = card.disciplines[0]
+  // The API sends `score`; older cards had `mu`. Normalise here so every page can pass raw API cards.
+  const raw = card.disciplines[0] as (CandidateCardData['disciplines'][number] & { score?: number }) | undefined
+  const disc = raw ? { ...raw, mu: raw.mu ?? raw.score ?? raw.lcb ?? 0 } : undefined
 
   const gradeBadge  = card.grade ? GRADE_BADGE[card.grade]  ?? 'badge-junior' : ''
   const rankBadge   = disc?.best_rank ? rankBadgeClass(disc.best_rank) : ''
@@ -101,6 +138,12 @@ export default function CandidateCard({ card, onOffer }: Props) {
           </div>
         </div>
 
+        {onShortlist && (
+          <button onClick={() => onShortlist(card.candidate_id, !card.shortlisted)}
+            className={`btn text-xs py-2 px-3 rounded-md shrink-0 border ${card.shortlisted ? 'border-fsp-electric text-fsp-electric' : 'border-border text-text-secondary'}`}>
+            {card.shortlisted ? '★ В шорт-листе' : '☆ В шорт-лист'}
+          </button>
+        )}
         {/* Offer button — ФСП Red */}
         <button
           onClick={() => onOffer(card.candidate_id)}
@@ -111,6 +154,8 @@ export default function CandidateCard({ card, onOffer }: Props) {
           <Send size={12} aria-hidden /> Оффер
         </button>
       </div>
+
+      {card.match && <MatchBlock match={card.match} />}
 
       {/* ── Bayesian scores ── */}
       {disc && <ScoreBar mu={disc.mu} lcb={disc.lcb} sigma={disc.sigma} compact />}

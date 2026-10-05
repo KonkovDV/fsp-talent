@@ -151,12 +151,20 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     if "skills" in data:
         seen: set[str] = set()
         rows = []
+        # A skill the test confirmed keeps that status: editing the list must not downgrade evidence.
+        tested = {s.name: s for s in await db.scalars(
+            select(Skill).where(Skill.participant_id == p.id, Skill.trust_level == "test_confirmed"))}
         for item in data["skills"]:
             canonical = normalize_skill(item["name"])
             if not canonical or canonical in seen:
                 continue
             seen.add(canonical)
             quote = (item.get("source_quote") or "").strip() or None
+            if canonical in tested:
+                rows.append(Skill(participant_id=p.id, name=canonical, raw_name=tested[canonical].raw_name,
+                                  source_quote=tested[canonical].source_quote, trust_level="test_confirmed",
+                                  confirmed=True))
+                continue
             rows.append(Skill(participant_id=p.id, name=canonical, raw_name=item["name"][:200],
                               source_quote=quote,
                               trust_level="resume_confirmed" if quote else "self_reported", confirmed=True))

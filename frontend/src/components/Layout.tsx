@@ -37,6 +37,7 @@ const CANDIDATE_LINKS = [
 
 const EMPLOYER_LINKS = [
   { to: '/employer',           label: 'Дашборд',  end: true,  Icon: LayoutDashboard },
+  { to: '/employer/needs',     label: 'Потребности', end: false, Icon: ClipboardCheck },
   { to: '/employer/search',    label: 'Поиск',    end: false, Icon: Search },
   { to: '/employer/offers',    label: 'Офферы',   end: false, Icon: Gift },
   { to: '/employer/vacancies', label: 'Вакансии', end: false, Icon: FileText },
