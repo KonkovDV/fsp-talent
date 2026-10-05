@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiError
 from app.core.config import settings
-from app.core.ratelimit import too_many
+from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.legal import get_document, required_kinds
 from app.models import Consent, ConsentLog, EmailVerification
 from app.services.mail import send_mail
@@ -76,9 +76,14 @@ async def send_code(email: str, role: str, purpose: str, code: str, token: str) 
 
 
 async def check_resend_allowed(email: str, purpose: str) -> None:
-    if await too_many(f"mail:{purpose}:min:{email}", limit=1, window_seconds=60):
+    try:
+        per_minute = await too_many(f"mail:{purpose}:min:{email}", limit=1, window_seconds=60, fail_closed=True)
+        per_day = await too_many(f"mail:{purpose}:day:{email}", limit=8, window_seconds=86400, fail_closed=True)
+    except RateLimitUnavailable:
+        raise ApiError(503, "unavailable", "Отправка писем временно недоступна. Повторите через минуту.") from None
+    if per_minute:
         raise ApiError(429, "resend_cooldown", headers={"Retry-After": "60"})
-    if await too_many(f"mail:{purpose}:day:{email}", limit=8, window_seconds=86400):
+    if per_day:
         raise ApiError(429, "rate_limited", "Лимит писем на сегодня исчерпан")
 
 

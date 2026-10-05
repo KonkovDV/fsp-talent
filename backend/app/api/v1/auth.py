@@ -1,7 +1,7 @@
 """Accounts for both roles: email + password, confirmed by a code or link from the letter (TZ 2.2 п.4).
 
 A candidate does not need FSP history to register. An FSP account is linked later in the profile
-(POST /candidates/me/fsp); in production that step becomes FSP ID login via Keycloak (OIDC).
+(POST /candidates/me/fsp). The demo checks a mock secret; a real FSP ID login is not connected.
 """
 from datetime import UTC, datetime
 from typing import Literal
@@ -17,7 +17,7 @@ from app.api.deps import get_any_auth
 from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.ratelimit import too_many
+from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -67,7 +67,12 @@ def _tokens(subject: str, role: str) -> TokenOut:
 
 
 async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
-    if await too_many(f"auth:{bucket}:{identity.strip().lower()}", limit=limit):
+    try:
+        blocked = await too_many(f"auth:{bucket}:{identity.strip().lower()}", limit=limit, fail_closed=True)
+    except RateLimitUnavailable:
+        raise ApiError(503, "unavailable",
+                       "Проверка попыток входа временно недоступна. Повторите через минуту.") from None
+    if blocked:
         raise ApiError(429, "rate_limited", "Слишком много попыток. Подождите минуту.")
 
 

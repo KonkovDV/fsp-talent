@@ -7,7 +7,7 @@ interface Props { profile: { fsp_id: string | null; has_fsp: boolean; fsp_linked
 
 /**
  * TZ 2.1: a candidate without FSP history is a normal case. The card says so plainly and offers to link
- * an FSP account. In production the form is replaced by "Войти через ФСП ID" (Keycloak, OIDC).
+ * an FSP account. The form checks the demo mock; a real FSP ID login is not connected.
  */
 export default function FspLinkCard({ profile }: Props) {
   const qc = useQueryClient()
@@ -49,7 +49,7 @@ export default function FspLinkCard({ profile }: Props) {
           aria-label="Пароль ФСП" className="input" />
         <button disabled={!fspId || !secret || link.isPending} className="btn-primary text-sm">Привязать</button>
       </form>
-      <p className="text-xs text-text-muted">Демо-мок: FSP2000–FSP2099, пароль test. В продакшене — вход через ФСП ID (Keycloak).</p>
+      <p className="text-xs text-ink-3">Демо-мок: FSP2000–FSP2099, пароль test. Вход через ФСП ID пока не подключён.</p>
       {message && <p className="text-sm" role="status">{message}</p>}
     </div>
   )

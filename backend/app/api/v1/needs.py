@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,10 +95,20 @@ async def create_need(body: NeedIn, current: dict = Depends(get_current_employer
 async def list_needs(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
     needs = list(await db.scalars(select(Need).where(Need.employer_id == uuid.UUID(current["sub"]),
                                                      Need.archived.is_(False)).order_by(Need.updated_at.desc())))
+    if not needs:
+        return []
+    ids = [need.id for need in needs]
+    counts = {need_id: count for need_id, count in (await db.execute(
+        select(NeedShortlist.need_id, func.count()).where(NeedShortlist.need_id.in_(ids))
+        .group_by(NeedShortlist.need_id))).all()}
+    versions = {(row.need_id, row.version): row for row in await db.scalars(
+        select(NeedVersion).where(NeedVersion.need_id.in_(ids)))}
     out = []
     for need in needs:
-        count = len(list(await db.scalars(select(NeedShortlist.id).where(NeedShortlist.need_id == need.id))))
-        out.append(_out(need, await _params(db, need), count))
+        ver = versions.get((need.id, need.version))
+        if ver is None:
+            raise ApiError(404, "need_not_found", "Нет такой версии потребности")
+        out.append(_out(need, ver, int(counts.get(need.id, 0))))
     return out
 
 

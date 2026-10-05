@@ -1,6 +1,7 @@
 """Fixed-window counter in Redis.
 
-If Redis is down the request is allowed — a demo must still be able to log in.
+Search and invitations stay available when Redis is down. Login, registration and mail
+must not: pass fail_closed=True and handle RateLimitUnavailable as HTTP 503.
 """
 from __future__ import annotations
 
@@ -11,7 +12,11 @@ from app.core.redis_client import get_redis
 logger = logging.getLogger(__name__)
 
 
-async def too_many(bucket: str, limit: int = 5, window_seconds: int = 60) -> bool:
+class RateLimitUnavailable(RuntimeError):
+    """Redis did not answer a limit that is not allowed to fail open."""
+
+
+async def too_many(bucket: str, limit: int = 5, window_seconds: int = 60, *, fail_closed: bool = False) -> bool:
     """Increment a fixed-window counter and return True when the limit is exceeded.
 
     Uses a pipeline to send INCR + EXPIRE(NX) in a single round-trip:
@@ -33,6 +38,8 @@ async def too_many(bucket: str, limit: int = 5, window_seconds: int = 60) -> boo
         pipe.expire(bucket, window_seconds, nx=True)
         results = await pipe.execute()
         return int(results[0]) > limit
-    except Exception:
-        logger.exception("Rate limit skipped, Redis unavailable")
+    except Exception as e:
+        logger.warning("Rate limit unavailable for %s", bucket, exc_info=True)
+        if fail_closed:
+            raise RateLimitUnavailable(bucket) from e
         return False

@@ -334,8 +334,7 @@ async def link_fsp(body: FspLinkIn, current: dict = Depends(get_current_particip
                    db: AsyncSession = Depends(get_db)):
     """Attach FSP protocols to an account registered by email.
 
-    Mock mode checks the demo secret; in production this step is FSP ID login via Keycloak (OIDC), and
-    the protocols arrive from the FSP registry with signed credentials.
+    The demo checks a mock secret (FSP2000–FSP2099, password test). A real FSP ID login is not connected.
     """
     if await too_many(f"fsp-link:{current['sub']}", limit=5):
         raise ApiError(429, "rate_limited")
