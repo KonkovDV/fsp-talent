@@ -11,9 +11,15 @@ from app.core.database import Base
 class Participant(Base):
     __tablename__ = "participants"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    fsp_id = Column(String(64), unique=True, nullable=False, index=True)
+    # Optional: a candidate may register by email without FSP history and link an FSP account later.
+    fsp_id = Column(String(64), unique=True, nullable=True, index=True)
+    fsp_linked_at = Column(DateTime(timezone=True))
     display_name = Column(String(200))
+    # Login identity (stored lower-case). It is also the contact an employer gets after consent,
+    # so it is always a confirmed address.
     email = Column(String(200), unique=True)
+    password_hash = Column(String(200))
+    email_verified_at = Column(DateTime(timezone=True))
     telegram = Column(String(64))
     phone = Column(String(20))
     birth_date = Column(Date)

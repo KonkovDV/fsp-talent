@@ -1,13 +1,30 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
+type ErrorPayload = { error?: { code?: string; message?: string; details?: unknown }; detail?: unknown }
+
+function payloadOf(error: unknown): ErrorPayload | undefined {
+  return (error as { response?: { data?: ErrorPayload } })?.response?.data
+}
+
+/** Stable machine code from the API error envelope (docs/API_ERRORS.md). */
+export function apiErrorCode(error: unknown): string | undefined {
+  return payloadOf(error)?.error?.code
+}
+
+export function apiErrorDetails<T = Record<string, unknown>>(error: unknown): T | undefined {
+  return payloadOf(error)?.error?.details as T | undefined
+}
+
 export function apiError(error: unknown, fallback = 'Ошибка'): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  if (typeof detail === 'string') return detail
+  const data = payloadOf(error)
+  const detail = data?.detail
   if (Array.isArray(detail)) {
     const text = detail.map((item) => (typeof item === 'string' ? item : (item as { msg?: string }).msg ?? '')).filter(Boolean).join('; ')
     return text || fallback
   }
+  if (data?.error?.message) return data.error.message
+  if (typeof detail === 'string') return detail
   return fallback
 }
 
@@ -35,15 +52,34 @@ api.interceptors.response.use(
   }
 )
 
-export const registerParticipant = (data: { fsp_id: string; fsp_secret: string }) =>
-  api.post('/auth/participant/register', data)
-export const loginParticipant = (fsp_id: string, password: string) =>
-  api.post('/auth/participant/token', new URLSearchParams({ username: fsp_id, password }),
-           { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+export type Role = 'participant' | 'employer'
+const form = (username: string, password: string) =>
+  [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const
+
+export const registerParticipant = (data: {
+  email: string; password: string; display_name?: string; is_adult: boolean; consents: string[]
+}) => api.post('/auth/participant/register', data)
 export const registerEmployer = (data: object) => api.post('/auth/employer/register', data)
+export const verifyEmail = (data: { email?: string; code?: string; token?: string; role?: Role }) =>
+  api.post('/auth/verify-email', data)
+export const resendVerification = (email: string, role: Role) =>
+  api.post('/auth/resend-verification', { email, role })
+export const forgotPassword = (email: string, role: Role) => api.post('/auth/password/forgot', { email, role })
+export const resetPassword = (data: { email: string; role: Role; code: string; new_password: string }) =>
+  api.post('/auth/password/reset', data)
+export const loginParticipant = (email: string, password: string) =>
+  api.post('/auth/participant/token', ...form(email, password))
 export const loginEmployer = (email: string, password: string) =>
-  api.post('/auth/employer/token', new URLSearchParams({ username: email, password }),
-           { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+  api.post('/auth/employer/token', ...form(email, password))
+
+export interface LegalDoc { kind: string; version: string; title: string; required: boolean; roles: string[]; sha256: string }
+export const legalDocuments = (role?: Role) =>
+  api.get<LegalDoc[]>('/legal/documents', { params: role ? { role } : {} })
+export const legalDocument = (kind: string) => api.get<LegalDoc & { body_md: string }>(`/legal/documents/${kind}`)
+export const myConsents = () => api.get('/me/consents')
+export const giveConsent = (kind: string) => api.post('/me/consents', { kind })
+export const withdrawConsent = (kind: string) => api.delete(`/me/consents/${kind}`)
+export const linkFsp = (fsp_id: string, fsp_secret: string) => api.post('/candidates/me/fsp', { fsp_id, fsp_secret })
 
 export const getMyProfile = () => api.get('/candidates/me')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)

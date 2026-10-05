@@ -2,11 +2,11 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
 
+from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
 from app.core.config import settings
 
@@ -61,18 +61,10 @@ async def request_timing(request: Request, call_next):
     return response
 
 
+install_error_handlers(app)
 app.include_router(api_router)
 
 
 @app.get("/health", tags=["health"])
 async def health():
     return {"status": "ok", "version": settings.VERSION, "mode": settings.FSP_MODE}
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"Unhandled error on {request.method} {request.url.path}")
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error"},
-    )

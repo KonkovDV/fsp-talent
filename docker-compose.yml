@@ -8,6 +8,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: http://localhost
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
+      # Letters with confirmation codes land in Mailpit: http://localhost:8025. Override in .env for real SMTP.
+      MAIL_MODE: ${MAIL_MODE:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
     ports: ['127.0.0.1:8010:8000']
     volumes: [vc_keys:/secrets]
     depends_on:
@@ -82,6 +86,11 @@ services:
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes: [redis_data:/data]
     ports: ['127.0.0.1:6379:6379']
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['127.0.0.1:8025:8025']
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine

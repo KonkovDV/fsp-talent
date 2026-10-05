@@ -3,19 +3,23 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, select
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_participant
+from app.api.errors import ApiError
 from app.core.database import get_db
+from app.core.ratelimit import too_many
 from app.models import ConsentLog, Offer, Participant
 from app.models.participant import Result, Skill
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
+from app.services.fsp.mock import get_fsp_adapter
+from app.services.identity import active_consent
 from app.services.offers import expire_if_stale, expire_stale
-from app.services.profile import rebuild_profile
+from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
 from app.services.skills import normalize_skill
 
@@ -47,8 +51,11 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         raise HTTPException(404, "Профиль не найден")
     cat = p.category
     return {
-        "id": str(p.id), "fsp_id": p.fsp_id, "display_name": p.display_name, "region": p.region,
-        "email": p.email, "telegram": p.telegram, "phone": p.phone,
+        "id": str(p.id), "fsp_id": p.fsp_id, "has_fsp": p.fsp_id is not None,
+        "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
+        "display_name": p.display_name, "region": p.region,
+        "email": p.email, "email_verified": p.email_verified_at is not None,
+        "telegram": p.telegram, "phone": p.phone,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
         "assessed_grade": p.assessed_grade,
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
@@ -89,7 +96,9 @@ class ProfileUpdate(BaseModel):
     # FIX (Pydantic v2): max_length on list[T] must use Annotated[], not Field() kwarg.
     # Old: list[SkillIn] | None = Field(None, max_length=40) -- silently ignored the limit.
     skills: Annotated[list[SkillIn], Field(max_length=40)] | None = None
-    email: EmailStr | None = None
+    # The login email is not editable here: it is the confirmed contact an employer receives.
+    display_name: str | None = Field(None, min_length=1, max_length=200)
+    region: str | None = Field(None, max_length=100)
     telegram: str | None = Field(None, max_length=64)
     phone: str | None = Field(None, max_length=20)
     public_profile: bool | None = None
@@ -105,6 +114,11 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     data = body.model_dump(exclude_unset=True)
     if data.get("public_profile") and p.minor_now():
         raise HTTPException(403, "Именная страница недоступна для несовершеннолетних")
+    if data.get("public_profile") and not p.public_profile and \
+            await active_consent(db, "participant", p.id, "pd_distribution") is None:
+        # 152-FZ art. 10.1: a public page needs a separate consent to distribution.
+        raise ApiError(409, "consent_required", "Для публичной страницы нужно согласие на распространение данных",
+                       details={"missing": ["pd_distribution"]})
     if "declared_grade" in data and data["declared_grade"] not in (*GRADES, None):
         raise HTTPException(400, "Неизвестный грейд")
     for field in ("experience_years", "declared_grade"):
@@ -117,9 +131,14 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         if value != getattr(p, field):
             _log_privacy(db, p, field, value)
         setattr(p, field, value)
-    for field in ("email", "telegram", "phone"):
+    for field in ("telegram", "phone"):
         if field in data:
             setattr(p, field, data[field] or None)
+    if data.get("display_name"):
+        p.display_name = data["display_name"].strip()
+    if "region" in data and p.fsp_id is None:
+        # With FSP linked, the region comes from the protocols.
+        p.region = (data["region"] or "").strip() or None
     if "skills" in data:
         seen: set[str] = set()
         rows = []
@@ -138,7 +157,7 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     try:
         await db.flush()
     except IntegrityError as e:
-        raise HTTPException(409, "Такой email уже используется") from e
+        raise HTTPException(409, "Данные конфликтуют с другим профилем") from e
     await rebuild_profile(db, p)
     await db.commit()
     return {"ok": True}
@@ -247,3 +266,43 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     await db.commit()
     return {"status": offer.status}
+
+
+class FspLinkIn(BaseModel):
+    fsp_id: str = Field(min_length=3, max_length=64)
+    fsp_secret: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/me/fsp")
+async def link_fsp(body: FspLinkIn, current: dict = Depends(get_current_participant),
+                   db: AsyncSession = Depends(get_db)):
+    """Attach FSP protocols to an account registered by email.
+
+    Mock mode checks the demo secret; in production this step is FSP ID login via Keycloak (OIDC), and
+    the protocols arrive from the FSP registry with signed credentials.
+    """
+    if await too_many(f"fsp-link:{current['sub']}", limit=5):
+        raise ApiError(429, "rate_limited")
+    p = await db.get(Participant, _pid(current), with_for_update=True)
+    if not p:
+        raise HTTPException(404, "Профиль не найден")
+    if p.fsp_id is not None:
+        raise ApiError(409, "fsp_already_linked")
+    adapter = get_fsp_adapter()
+    fsp_id = body.fsp_id.strip()
+    if not await adapter.verify_secret(fsp_id, body.fsp_secret):
+        raise ApiError(400, "fsp_invalid")
+    if await db.scalar(select(Participant.id).where(Participant.fsp_id == fsp_id)):
+        raise ApiError(409, "fsp_taken")
+    data = await adapter.fetch_participant(fsp_id)
+    if data is None:
+        raise ApiError(404, "fsp_not_found")
+    await ingest_from_fsp(db, data, participant=p)
+    await rebuild_profile(db, p)
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise ApiError(409, "fsp_taken") from e
+    results = await db.scalar(select(func.count()).select_from(Result).where(Result.participant_id == p.id))
+    return {"fsp_id": p.fsp_id, "results": results, "minor": p.minor_now()}

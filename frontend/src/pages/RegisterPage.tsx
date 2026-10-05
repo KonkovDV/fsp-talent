@@ -3,99 +3,114 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useAuthStore } from '../store/authStore'
-import { apiError, registerParticipant, registerEmployer } from '../api/client'
+import { useQuery } from '@tanstack/react-query'
+import { apiError, apiErrorCode, legalDocuments, registerEmployer, registerParticipant, type Role } from '../api/client'
+import { ConsentChecklist, requiredKinds } from '../components/LegalConsents'
 
 const participantSchema = z.object({
-  fsp_id: z.string().min(3, 'Введите ID ФСП (напр. FSP001)'),
-  fsp_secret: z.string().min(1, 'Введите секрет (пароль из кабинета ФСП)'),
+  display_name: z.string().min(2, 'Как к вам обращаться'),
+  email: z.string().email('Проверьте email'),
+  password: z.string().min(8, 'Минимум 8 символов'),
+  is_adult: z.boolean(),
 })
 const employerSchema = z.object({
-  company_name: z.string().min(2),
-  email: z.string().email(),
+  company_name: z.string().min(2, 'Название компании'),
+  email: z.string().email('Проверьте email'),
   password: z.string().min(8, 'Минимум 8 символов'),
-  inn: z.string().optional(),
+  inn: z.string().regex(/^(\d{10}|\d{12})?$/, '10 или 12 цифр').optional(),
   website: z.string().optional(),
 })
+type ParticipantForm = z.infer<typeof participantSchema>
+type EmployerForm = z.infer<typeof employerSchema>
 
 export default function RegisterPage() {
   const [params] = useSearchParams()
-  const role = params.get('role') === 'employer' ? 'employer' : 'participant'
+  const role: Role = params.get('role') === 'employer' ? 'employer' : 'participant'
   const navigate = useNavigate()
-  const setAuth = useAuthStore(s => s.setAuth)
   const [error, setError] = useState('')
+  const [consents, setConsents] = useState<string[]>([])
+  const { data: docs } = useQuery({
+    queryKey: ['legal-list', role], queryFn: () => legalDocuments(role).then(r => r.data),
+  })
+  const missing = requiredKinds(docs).filter(k => !consents.includes(k))
 
-  const { register: rp, handleSubmit: hp, formState: { errors: ep, isSubmitting: ip } } =
-    useForm({ resolver: zodResolver(participantSchema) })
-  const { register: re, handleSubmit: he, formState: { errors: ee, isSubmitting: ie } } =
-    useForm({ resolver: zodResolver(employerSchema) })
+  const pf = useForm<ParticipantForm>({ resolver: zodResolver(participantSchema), defaultValues: { is_adult: false } })
+  const ef = useForm<EmployerForm>({ resolver: zodResolver(employerSchema) })
 
-  const onParticipant = async (data: any) => {
+  const done = (email: string) => navigate(`/verify?email=${encodeURIComponent(email)}&role=${role}`)
+  const fail = (e: unknown) => {
+    if (apiErrorCode(e) === 'email_taken') setError('Аккаунт с таким email уже есть. Войдите или сбросьте пароль.')
+    else setError(apiError(e, 'Не удалось зарегистрироваться'))
+  }
+  const onParticipant = async (data: ParticipantForm) => {
+    setError('')
+    try { await registerParticipant({ ...data, consents }); done(data.email) } catch (e) { fail(e) }
+  }
+  const onEmployer = async (data: EmployerForm) => {
     setError('')
     try {
-      const res = await registerParticipant(data)
-      setAuth(res.data.access_token, res.data.refresh_token, 'participant')
-      navigate('/candidate')
-    } catch (e: unknown) { setError(apiError(e)) }
+      await registerEmployer({ ...data, inn: data.inn || null, website: data.website || null, consents })
+      done(data.email)
+    } catch (e) { fail(e) }
   }
-  const onEmployer = async (data: any) => {
-    setError('')
-    try {
-      const res = await registerEmployer(data)
-      setAuth(res.data.access_token, res.data.refresh_token, 'employer')
-      navigate('/employer')
-    } catch (e: unknown) { setError(apiError(e)) }
-  }
+  const submitting = pf.formState.isSubmitting || ef.formState.isSubmitting
+  const field = 'mt-1 input'
+  const err = (m?: string) => m && <p className="text-fsp-red text-xs mt-1">{m}</p>
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-surface-0">
+    <div className="min-h-dvh flex items-center justify-center bg-surface-0 px-4 py-8">
       <div className="card w-full max-w-md">
         <h1 className="text-2xl font-bold text-text-primary mb-2">Регистрация</h1>
-        <p className="text-text-muted text-sm mb-6">
-          {role === 'participant' ? 'Участник ФСП' : 'Работодатель'} ·{' '}
-          <Link to={`/register?role=${role === 'participant' ? 'employer' : 'participant'}`}
-            className="text-fsp-violet hover:underline">переключить</Link>
-        </p>
+        <div className="flex gap-2 mb-6" role="tablist">
+          {(['participant', 'employer'] as Role[]).map(r => (
+            <Link key={r} to={`/register?role=${r}`} role="tab" aria-selected={r === role}
+              className={`flex-1 text-center text-sm py-2 rounded-lg ${r === role ? 'bg-fsp-violet text-white' : 'bg-gray-100 text-text-secondary'}`}>
+              {r === 'participant' ? 'Кандидат' : 'Работодатель'}
+            </Link>
+          ))}
+        </div>
+
         {role === 'participant' ? (
-          <form onSubmit={hp(onParticipant)} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">ID ФСП</label>
-              <input {...rp('fsp_id')} placeholder="FSP001" className="input" />
-              {ep.fsp_id && <p className="text-fsp-red text-xs mt-1">{ep.fsp_id.message as string}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Секрет ФСП</label>
-              <input type="password" {...rp('fsp_secret')} placeholder="из личного кабинета ФСП" className="input" />
-              {ep.fsp_secret && <p className="text-fsp-red text-xs mt-1">{ep.fsp_secret.message as string}</p>}
-            </div>
-            {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2">{error}</p>}
-            <button type="submit" disabled={ip} className="btn-primary w-full">
-              {ip ? 'Создание...' : 'Создать аккаунт'}
+          <form onSubmit={pf.handleSubmit(onParticipant)} className="space-y-4" noValidate>
+            <label className="block text-sm">Имя<input {...pf.register('display_name')} className={field} autoComplete="name" />
+              {err(pf.formState.errors.display_name?.message)}</label>
+            <label className="block text-sm">Email<input {...pf.register('email')} type="email" className={field} autoComplete="email" />
+              {err(pf.formState.errors.email?.message)}</label>
+            <label className="block text-sm">Пароль<input {...pf.register('password')} type="password" className={field} autoComplete="new-password" />
+              {err(pf.formState.errors.password?.message)}</label>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-1" {...pf.register('is_adult')} />
+              <span>Мне исполнилось 18 лет. <span className="text-text-muted">Если нет, карточка будет скрыта от работодателей до согласия родителя.</span></span>
+            </label>
+            <p className="text-xs text-text-muted bg-gray-50 rounded-lg p-3">
+              История соревнований ФСП не нужна для регистрации. Привязать ФСП ID можно позже в профиле:
+              подтверждённые результаты появятся в карточке отдельным блоком.
+            </p>
+            <ConsentChecklist role={role} value={consents} onChange={setConsents} />
+            {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2" role="alert">{error}</p>}
+            <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full">
+              {submitting ? 'Отправляем код…' : 'Получить код на email'}
             </button>
-            <p className="text-xs text-text-muted text-center">Demo: FSP001 / test</p>
           </form>
         ) : (
-          <form onSubmit={he(onEmployer)} className="space-y-4">
-            {[['company_name','Название компании'], ['email','Email'], ['inn','ИНН (необязательно)']]
-              .map(([field, label]) => (
-              <div key={field}>
-                <label className="block text-sm font-medium text-text-secondary mb-1">{label}</label>
-                <input {...re(field as any)} className="input" />
-              </div>
-            ))}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Пароль</label>
-              <input type="password" {...re('password')} className="input" />
-              {ee.password && <p className="text-fsp-red text-xs mt-1">{ee.password.message as string}</p>}
-            </div>
-            {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2">{error}</p>}
-            <button type="submit" disabled={ie} className="btn-primary w-full">
-              {ie ? 'Создание...' : 'Создать аккаунт'}
+          <form onSubmit={ef.handleSubmit(onEmployer)} className="space-y-4" noValidate>
+            <label className="block text-sm">Название компании<input {...ef.register('company_name')} className={field} />
+              {err(ef.formState.errors.company_name?.message)}</label>
+            <label className="block text-sm">Рабочий email<input {...ef.register('email')} type="email" className={field} autoComplete="email" />
+              {err(ef.formState.errors.email?.message)}</label>
+            <label className="block text-sm">Пароль<input {...ef.register('password')} type="password" className={field} autoComplete="new-password" />
+              {err(ef.formState.errors.password?.message)}</label>
+            <label className="block text-sm">ИНН (необязательно)<input {...ef.register('inn')} inputMode="numeric" className={field} />
+              {err(ef.formState.errors.inn?.message)}</label>
+            <ConsentChecklist role={role} value={consents} onChange={setConsents} />
+            {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2" role="alert">{error}</p>}
+            <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full">
+              {submitting ? 'Отправляем код…' : 'Получить код на email'}
             </button>
           </form>
         )}
         <p className="text-center text-sm text-text-muted mt-4">
-          Есть аккаунт? <Link to="/login" className="text-fsp-violet hover:underline">Войти</Link>
+          Есть аккаунт? <Link to={`/login?role=${role}`} className="text-fsp-violet hover:underline">Войти</Link>
         </p>
       </div>
     </div>
