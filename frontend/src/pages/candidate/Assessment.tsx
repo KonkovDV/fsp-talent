@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Lock, XCircle } from 'lucide-react'
 import {
   abandonAssessment, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
@@ -57,6 +58,8 @@ function useCountdown(item: Item | null) {
 
 export default function CandidateAssessment() {
   const qc = useQueryClient()
+  const [params] = useSearchParams()
+  const vacancyId = params.get('vacancy')
   const [target, setTarget] = useState('')
   const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
@@ -84,7 +87,7 @@ export default function CandidateAssessment() {
     for (const key of ['myProfile', 'assessmentHistory', 'assessmentActive']) qc.invalidateQueries({ queryKey: [key] })
   }
   const start = useMutation({
-    mutationFn: () => startAssessment({ target_grade: target, code_language: lang }).then(r => r.data),
+    mutationFn: () => startAssessment({ target_grade: target, code_language: lang, vacancy_id: vacancyId }).then(r => r.data),
     onSuccess: (data: SessionState) => { setState(data); setPicked(null); setError(''); setShowReview(false) },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось начать тест')),
   })
@@ -144,6 +147,7 @@ export default function CandidateAssessment() {
               </div>
               <p className="field-hint">Задания на подсчёт операций будут на выбранном языке; остальные зависят от темы (SQL, JavaScript, сети).</p>
             </fieldset>
+            {vacancyId && <p className="text-sm text-ink-2">Темы этого теста собраны из выбранной вакансии, а не из общего плана специализации.</p>}
             <button onClick={() => start.mutate()} disabled={!target || start.isPending} className="btn-primary px-6 py-3">
               <ClipboardCheck size={16} aria-hidden />{start.isPending ? 'Готовим задания…' : 'Начать тест'}
             </button>

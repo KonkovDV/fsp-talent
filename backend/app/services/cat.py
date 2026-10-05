@@ -123,6 +123,8 @@ class State:
     topics_used: Counter = field(default_factory=Counter)
     concept_used: int = 0
     keys_used: set = field(default_factory=set)
+    # Topic shares formed from a vacancy. None: the specialization blueprint.
+    blueprint: dict[str, float] | None = None
     _ll: list[float] = field(default_factory=lambda: [0.0] * len(GRID))
     _ll_n: int = 0
 
@@ -193,13 +195,15 @@ def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = 
     offsets, exposure, blocked = offsets or {}, exposure or {}, blocked or set()
     verdict = evaluate(state)
     cut = active_cut(state, verdict)
-    blueprint = BLUEPRINTS[state.spec]
+    blueprint = state.blueprint or BLUEPRINTS[state.spec]
     planned = max(MIN_ITEMS, state.n + 1)
     candidates: list[Choice] = []
     for fam in families_for(state.spec):
         if state.families_used[fam.id] >= MAX_PER_FAMILY:
             continue
-        share = blueprint[fam.topic]
+        share = blueprint.get(fam.topic, 0.0)
+        if share <= 0:
+            continue
         if state.topics_used[fam.topic] >= math.ceil((share + TOPIC_SLACK) * MAX_ITEMS):
             continue
         if fam.kind == "concept" and state.concept_used + 1 > CONCEPT_MAX_SHARE * planned + 1e-9:

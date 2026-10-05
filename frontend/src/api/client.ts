@@ -101,6 +101,7 @@ export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
 
 export const getMyVacancies = () => api.get('/vacancies/mine')
 export const createVacancy = (data: object) => api.post('/vacancies/', data)
+export const previewVacancyExam = (data: object) => api.post('/vacancies/exam', data)
 export const closeVacancy = (id: string) => api.post(`/vacancies/${id}/close`)
 export const vacanciesForMe = () => api.get('/vacancies/for-me')
 export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
@@ -108,7 +109,7 @@ export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
 export const assessmentBlueprint = () => api.get('/assessment/blueprint')
-export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string }) =>
+export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null }) =>
   api.post('/assessment/start', data)
 export const activeAssessment = () => api.get('/assessment/active')
 export const answerAssessment = (sessionId: string, item_token: string, answer_index: number) =>

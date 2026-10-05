@@ -26,6 +26,7 @@ from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
 from app.services.vacancies import match_vacancy
+from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
@@ -39,6 +40,7 @@ def _uuid(current: dict) -> uuid.UUID:
 
 class VacancyIn(BaseModel):
     title: str = Field(min_length=2, max_length=200)
+    description: str | None = Field(None, max_length=4000)
     role: str | None = None
     grade: str | None = None
     discipline: str | None = None
@@ -68,7 +70,7 @@ class VacancyIn(BaseModel):
 
 def _out(v: Vacancy, extra: dict | None = None) -> dict:
     card = {
-        "id": str(v.id), "title": v.title, "role": v.role, "grade": v.grade,
+        "id": str(v.id), "title": v.title, "description": v.description, "role": v.role, "grade": v.grade,
         "discipline": v.discipline, "min_rank": v.min_rank, "skills": v.skills or [],
         "salary_from": v.salary_from_gross, "salary_to": v.salary_to_gross,
         "work_format": v.work_format, "allows_minors": v.allows_minors, "is_open": v.is_open,
@@ -91,7 +93,8 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
         if name and name not in skills:
             skills.append(name)
     vacancy = Vacancy(
-        employer_id=employer.id, title=body.title, role=body.role, grade=body.grade,
+        employer_id=employer.id, title=body.title, description=(body.description or "").strip() or None,
+        role=body.role, grade=body.grade,
         discipline=body.discipline, min_rank=body.min_rank, skills=skills,
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         work_format=body.work_format, allows_minors=body.allows_minors,
@@ -101,6 +104,17 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
     vacancy.employer = employer
     await db.commit()
     return _out(vacancy)
+
+
+@router.post("/exam")
+async def preview_exam(body: VacancyIn, current: dict = Depends(get_current_employer),
+                       db: AsyncSession = Depends(get_db)):
+    """Show the test this vacancy text would form. Answer keys stay on the server."""
+    if not await db.get(Employer, _uuid(current)):
+        raise HTTPException(404, "Работодатель не найден")
+    exam = form_exam(body.title, body.description or "", list(body.skills), body.role, body.grade)
+    exam.pop("topic_shares", None)
+    return exam
 
 
 @router.get("/mine")

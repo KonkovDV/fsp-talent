@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, applyToVacancy, vacanciesForMe } from '../../api/client'
 import { CategoryPlate, Empty, PageHeader, Skeleton, rub } from '../../components/ui'
@@ -36,6 +37,7 @@ export default function CandidateVacancies() {
               </div>
               <div className="text-right">
                 {(card.salary_from || card.salary_to) && <p className="num font-display text-lg font-semibold text-ink">{rub(card.salary_from)} – {rub(card.salary_to)}</p>}
+                <Link to={`/candidate/assessment?vacancy=${card.id}`} className="btn-ghost mt-3 block text-sm">Тест по этой вакансии</Link>
                 <button disabled={card.applied || !card.can_apply || apply.isPending} onClick={() => apply.mutate(card.id)}
                   className={card.applied ? 'btn-secondary mt-3' : 'btn-primary mt-3'}>
                   {card.applied ? 'Отклик отправлен' : card.can_apply ? 'Откликнуться' : 'Нужно согласие представителя'}

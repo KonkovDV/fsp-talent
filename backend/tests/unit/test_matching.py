@@ -12,6 +12,18 @@ def _cand(**kw) -> CandidateFacts:
     return CandidateFacts(**base)
 
 
+def test_confirmed_profile_outranks_the_same_declared_fit():
+    """Same skills and grade: a passed test and FSP results sort first, without jumping a worse fit."""
+    declared = score(NEED, _cand(test_p=0.4, grade_source="assessed",
+                                 skills={"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
+    confirmed = score(NEED, _cand(test_p=0.95, fsp_lcb=0.7, grade_source="assessed",
+                                  skills={"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
+    assert confirmed.score > declared.score
+    assert confirmed.score - declared.score < 0.01
+    resume = score(NEED, _cand())
+    assert confirmed.score - resume.score >= 0.15
+
+
 def test_tested_skills_and_grade_outrank_declared_ones():
     declared = score(NEED, _cand())
     tested = score(NEED, _cand(grade_source="assessed", test_p=0.95,

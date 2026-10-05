@@ -28,7 +28,7 @@ from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.items.families.langs import LANGUAGE_LABELS
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
-from app.models import Participant
+from app.models import Participant, Vacancy
 from app.models.assessment import GRADE_ORDER, TestSession, TestSessionItem
 from app.services import cat
 from app.services.assessment import (
@@ -48,6 +48,7 @@ from app.services.assessment import (
 )
 from app.services.profile import rebuild_profile
 from app.services.survey import SPECIALIZATIONS
+from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 
@@ -62,6 +63,15 @@ class StartIn(BaseModel):
     specialization: str | None = Field(None, description="По умолчанию — специализация из опроса")
     code_language: Literal["python", "javascript", "go", "java"] = Field(
         "python", description="Язык, на котором показывать задания на чтение кода")
+    vacancy_id: uuid.UUID | None = Field(None, description="Собрать темы теста из этой вакансии")
+
+
+class VacancyExamIn(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    description: str = Field("", max_length=4000)
+    skills: list[str] = Field(default_factory=list, max_length=30)
+    role: str | None = None
+    grade: Grade | None = None
 
 
 class AnswerIn(BaseModel):
@@ -228,6 +238,15 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
     if participant is None:
         raise ApiError(404, "not_found", "Профиль не найден")
     spec = body.specialization or participant.specialization
+    topic_shares = None
+    if body.vacancy_id is not None:
+        vacancy = await db.get(Vacancy, body.vacancy_id)
+        if vacancy is None or not vacancy.is_open:
+            raise ApiError(404, "not_found", "Вакансия не найдена")
+        exam = form_exam(vacancy.title, vacancy.description or "", list(vacancy.skills or []),
+                         vacancy.role, vacancy.grade)
+        spec = exam["specialization"]
+        topic_shares = exam["topic_shares"]
     if spec not in BLUEPRINTS:
         raise ApiError(422, "survey_required")
     if await too_many(f"assessment_start:{participant_id}", limit=3, window_seconds=3600):
@@ -245,7 +264,8 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
     if existing and existing.expires_at > datetime.now(UTC):
         raise ApiError(409, "conflict", "Уже есть незавершённый тест", details={"session_id": str(existing.id)})
     try:
-        session, item = await start_session(db, participant_id, spec, body.target_grade, body.code_language)
+        session, item = await start_session(
+            db, participant_id, spec, body.target_grade, body.code_language, topic_shares)
         await db.commit()
     except QuestionBankError as e:
         raise ApiError(503, "question_bank_empty") from e

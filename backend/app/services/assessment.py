@@ -148,10 +148,16 @@ async def bank_state(db: AsyncSession) -> BankState:
                      exposure=exposure, blocked={r.item_key for r in rows if r.status == "quarantined"})
 
 
-def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: set[str] | None = None) -> cat.State:
+def _topic_shares(session: TestSession) -> dict[str, float] | None:
+    shares = (session.flags or {}).get("topic_shares")
+    return shares if isinstance(shares, dict) and shares else None
+
+
+def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: set[str] | None = None,
+               blueprint: dict[str, float] | None = None) -> cat.State:
     """Rebuild the CAT state from answered items; items quarantined since they were served do not count."""
     blocked = blocked or set()
-    state = cat.State(spec=spec, target=target)
+    state = cat.State(spec=spec, target=target, blueprint=blueprint)
     for it in items:
         state.families_used[it.family_id] += 1
         state.topics_used[it.topic] += 1
@@ -166,22 +172,27 @@ def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: s
 # ── session flow ────────────────────────────────────────────────────────────
 
 async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, target_grade: str,
-                        code_language: str = "python") -> tuple[TestSession, TestSessionItem]:
+                        code_language: str = "python",
+                        topic_shares: dict[str, float] | None = None) -> tuple[TestSession, TestSessionItem]:
     if target_grade not in GRADE_ORDER:
         raise ValueError(f"Invalid grade: {target_grade}")
     now = datetime.now(UTC)
     await db.execute(update(TestSession).where(
         TestSession.participant_id == participant_id, TestSession.status == "in_progress",
         TestSession.expires_at <= now).values(status="expired", completed_at=now))
+    flags: dict = {"code_language": code_language}
+    if topic_shares:
+        flags["topic_shares"] = topic_shares
     session = TestSession(
         participant_id=participant_id, target_grade=target_grade, discipline=spec, specialization=spec,
-        engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags={"code_language": code_language},
+        engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags=flags,
         expires_at=now + timedelta(minutes=SESSION_TTL_MINUTES),
     )
     db.add(session)
     await db.flush()
     bank = await bank_state(db)
-    item = await serve_next(db, session, cat.State(spec=spec, target=target_grade), bank, seq=1)
+    item = await serve_next(
+        db, session, cat.State(spec=spec, target=target_grade, blueprint=topic_shares), bank, seq=1)
     return session, item
 
 
@@ -253,7 +264,8 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     await db.flush()
 
     bank = await bank_state(db)
-    state = build_state(session.specialization, session.target_grade, items, bank.blocked)
+    state = build_state(session.specialization, session.target_grade, items, bank.blocked,
+                        _topic_shares(session))
     verdict = cat.evaluate(state)
     if verdict.done:
         finished = await finalize(db, session, items, bank, verdict.stop_reason or "decided")
@@ -283,7 +295,8 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
     for it in items:
         if it.item_key in bank.blocked:
             it.excluded = True
-    state = build_state(session.specialization, session.target_grade, items, bank.blocked)
+    state = build_state(session.specialization, session.target_grade, items, bank.blocked,
+                        _topic_shares(session))
     outcome = cat.decide(state)
     answered = [it for it in items if it.is_correct is not None and not it.excluded]
     session.status, session.completed_at, session.stop_reason = "completed", now, stop_reason

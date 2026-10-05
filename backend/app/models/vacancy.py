@@ -14,6 +14,7 @@ class Vacancy(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employer_id = Column(UUID(as_uuid=True), ForeignKey("employers.id"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
+    description = Column(String(4000))
     role = Column(String(50))
     grade = Column(String(20))
     discipline = Column(String(50))

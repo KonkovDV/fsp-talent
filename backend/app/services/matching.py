@@ -14,26 +14,27 @@ from dataclasses import dataclass, field
 
 GRADES = ("junior", "middle", "senior", "lead")
 
-# Relevance (skills, grade, role) decides the order; evidence (test, FSP) breaks near-ties. A first version
-# gave the test 0.15 and charged untested candidates the full amount: it lost to the keyword baseline on the
-# offline benchmark (docs/VALIDATION_MATCHING.md), because a missing test is not evidence of a poor fit.
+# Fit to the need (skills, grade, role) decides who belongs in the list. Inside one hundredth of
+# that fit, the confirmed profile decides the order: a passed test and FSP results outrank a
+# self-described resume (TZ section 2). A missing FSP history is omitted, not scored as zero.
+# A declared skill counts as 0.55 of a skill the test confirmed. docs/VALIDATION_MATCHING.md.
+FIT_KEYS = ("skills", "grade", "role", "text", "industry")
+EVIDENCE_KEYS = ("test", "fsp")
 WEIGHTS = {
-    "skills": 0.40,
-    "grade": 0.25,
-    "role": 0.15,
-    "test": 0.08,
-    "fsp": 0.05,
-    "text": 0.04,
-    "industry": 0.03,
+    "skills": 0.50,
+    "grade": 0.20,
+    "role": 0.20,
+    "text": 0.05,
+    "industry": 0.05,
+    "test": 0.62,
+    "fsp": 0.38,
 }
-UNTESTED = 0.5          # test factor of a candidate who has not taken the test: neutral, not zero
+UNTESTED = 0.20
 LABELS = {
     "skills": "Навыки", "grade": "Грейд", "test": "Тест", "role": "Специализация",
     "fsp": "ФСП", "text": "Запрос", "industry": "Отрасль",
 }
-# How much a skill counts by the strength of evidence: roughly the probability that the skill is real.
-# A bare declaration is still usually true, so it is discounted, not halved.
-TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.95, "self_reported": 0.8}
+TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
 RELATED_CREDIT = 0.3
 # Groups of interchangeable technologies: knowing one gives partial credit for another.
 RELATED = [
@@ -202,11 +203,20 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         if values["industry"] == 1.0 and c.industry == need.industry:
             plus.append("Интересна ваша отрасль")
 
-    factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in WEIGHTS]
+    factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
+    fit = _mean([f for f in factors if f.key in FIT_KEYS])
+    evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
+    # Evidence moves the score by less than 0.01, so it reorders only candidates the need fits equally.
+    total = (fit or 0.0) + (0.009 * evidence if evidence is not None else 0.0)
+    return MatchResult(round(total, 4), factors, plus, minus, info)
+
+
+def _mean(factors: list[Factor]) -> float | None:
     active = [f for f in factors if f.value is not None]
     weight = sum(f.weight for f in active)
-    total = sum(f.weight * f.value for f in active) / weight if weight else 0.0
-    return MatchResult(round(total, 4), factors, plus, minus, info)
+    if not weight:
+        return None
+    return sum(f.weight * f.value for f in active) / weight
 
 
 def recommended_categories(rows: list[tuple[str | None, str | None, float]], top: int = 3) -> list[dict]:
