@@ -1,6 +1,5 @@
 """
-Tests that verify every fix from the 2026 deep audit.
-Each test is named after the bug ID it covers.
+Checks for scoring, search and credentials.
 
 Runs without a live DB/Redis: all SQLAlchemy calls are mocked.
 """
@@ -19,7 +18,7 @@ _APP = _REPO_ROOT / "app"
 
 
 # ---------------------------------------------------------------------------
-# BUG-03: participant.updated_at must be non-NULL after INSERT
+# participant.updated_at is set on insert
 # ---------------------------------------------------------------------------
 
 def test_bug03_updated_at_has_default():
@@ -48,7 +47,7 @@ def test_bug03_updated_at_default_is_tz_aware():
 
 
 # ---------------------------------------------------------------------------
-# BUG-04: verify_credential should use a cached public key object
+# verify_credential uses the cached public key
 # ---------------------------------------------------------------------------
 
 def test_bug04_public_key_obj_is_cached():
@@ -64,7 +63,7 @@ def test_bug04_public_key_obj_is_cached():
 
 
 # ---------------------------------------------------------------------------
-# BUG-06: _safe_uuid must swallow ValueError for malformed JSONB entries
+# _safe_uuid ignores a malformed JSONB entry
 # ---------------------------------------------------------------------------
 
 def test_bug06_safe_uuid_returns_none_on_bad_input():
@@ -84,7 +83,7 @@ def test_bug06_safe_uuid_returns_none_on_bad_input():
 
 
 # ---------------------------------------------------------------------------
-# BUG-05: auth rate-limit buckets must be role-specific (AST check)
+# auth rate-limit buckets are role-specific
 # ---------------------------------------------------------------------------
 
 def test_bug05_register_buckets_are_role_specific():
@@ -114,7 +113,7 @@ def test_bug05_register_buckets_are_role_specific():
 
 
 # ---------------------------------------------------------------------------
-# BUG-02: tsquery construction must not mangle boolean operators in q
+# skill tsquery keeps the original names
 # (structural / AST check on pipeline.py)
 # ---------------------------------------------------------------------------
 
@@ -139,7 +138,7 @@ def test_bug02_websearch_tsquery_not_split_joined():
 
 
 # ---------------------------------------------------------------------------
-# BUG-01: dense retrieval must NOT filter to the lexical pool
+# dense retrieval searches the whole embedding table
 # (structural check on pipeline.py)
 # ---------------------------------------------------------------------------
 

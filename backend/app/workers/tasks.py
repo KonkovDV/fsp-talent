@@ -7,11 +7,6 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-# FIX BUG-D: per-participant rebuild lock to prevent concurrent Celery workers
-# from racing on the same DisciplineScore / CategoryAssignment rows.
-# Key pattern: rebuild_lock:{participant_id}, TTL = 10 minutes.
-# If a rebuild is already running, the second task logs and exits cleanly.
-# On retry the lock has expired, so the next attempt proceeds normally.
 _REBUILD_LOCK_TTL = 600  # seconds
 _REBUILD_LOCK_PREFIX = "rebuild_lock:"
 
@@ -52,7 +47,6 @@ async def _rebuild(participant_id: str) -> None:
     from app.models import Participant
     from app.services.profile import rebuild_profile
 
-    # FIX BUG-D: idempotency guard -- only one rebuild runs per participant at a time.
     if not await _acquire_rebuild_lock(participant_id):
         logger.info("rebuild_lock: skipping duplicate rebuild for %s", participant_id)
         return

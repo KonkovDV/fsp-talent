@@ -31,9 +31,6 @@ class Participant(Base):
     assessed_grade = Column(String(20))
     assessed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    # FIX BUG-03: updated_at must have a default= as well as onupdate=.
-    # Without default=, the column is NULL after INSERT, which causes ORDER BY updated_at
-    # to place new participants at an arbitrary position (NULLS FIRST in ascending order).
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -95,12 +92,6 @@ class Result(Base):
     raw_data = Column(JSONB, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     participant = relationship("Participant", back_populates="results")
-    # FIX BUG-F: Without this constraint, a network retry or second ingest_from_fsp call
-    # (e.g., after a transaction rollback mid-flight) inserts duplicate Result rows for
-    # the same (participant, event). Duplicates inflate n_eff in the Bayesian scorer:
-    # two identical 1st-place results at the same event look like two independent wins,
-    # driving mu toward 1.0 and sigma toward 0. The leaderboard becomes gameable by
-    # triggering re-ingest.
     __table_args__ = (
         UniqueConstraint("participant_id", "event_id", name="uq_result_participant_event"),
     )

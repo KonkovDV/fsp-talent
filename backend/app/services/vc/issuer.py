@@ -76,19 +76,12 @@ def issuer_id() -> str:
     return f"{settings.PUBLIC_BASE_URL}/api/v1/public/issuer"
 
 
-# FIX BUG-G: Cache the base58-encoded public key multibase string.
-# Previously every call to issuer_document() and verify_credential() would:
-#   _private_key()[cached] -> .public_key() -> .public_bytes(Raw) -> _b58encode()
-# _b58encode is an O(key_len) iteration; at high verification RPS this is
-# measurable CPU overhead. The result is deterministic: private key is cached,
-# public key is derived, multibase is fixed.
 @lru_cache(maxsize=1)
 def public_key_multibase() -> str:
     raw = _private_key().public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     return "z" + _b58encode(_ED25519_PUB_MULTICODEC + raw)
 
 
-# FIX BUG-04 (carried over): Cache the parsed Ed25519PublicKey object.
 @lru_cache(maxsize=1)
 def _public_key_obj() -> Ed25519PublicKey:
     raw = _b58decode(public_key_multibase()[1:])[len(_ED25519_PUB_MULTICODEC):]
@@ -143,8 +136,6 @@ def verify_credential(credential: dict) -> bool:
     proof_value = proof.get("proofValue", "")
     if not proof_value.startswith("z"):
         return False
-    # FIX BUG-G2: Enforce temporal validity per W3C VC DM 2.0 section 4.9.4.
-    # A credential with validFrom in the future MUST NOT be accepted as valid.
     valid_from = credential.get("validFrom")
     if valid_from is not None:
         if not isinstance(valid_from, str):
@@ -160,7 +151,6 @@ def verify_credential(credential: dict) -> bool:
     document = {k: v for k, v in credential.items() if k != "proof"}
     proof_config = {k: v for k, v in proof.items() if k != "proofValue"}
     try:
-        # Use cached public key object (BUG-04 fix carried over)
         _public_key_obj().verify(_b58decode(proof_value[1:]), _hash_data(document, proof_config))
         return True
     except (InvalidSignature, ValueError):

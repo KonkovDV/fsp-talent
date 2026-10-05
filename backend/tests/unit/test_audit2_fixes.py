@@ -1,10 +1,5 @@
 """
-Regression tests for SOTA-2026 Audit Round 2.
-
-BUG-A: offers.py reveal_contacts never stamps contacts_revealed_at
-BUG-B: vacancies.py vacancies_for_me has no LIMIT (full-table DoS)
-BUG-C: vacancy.py Vacancy model missing updated_at
-BUG-D: tasks.py rebuild runs concurrently for same participant_id
+Checks for offer reveal, vacancy listing and the profile rebuild lock.
 
 All tests are static-analysis only (no DB, no Redis, no imports of app code).
 They run in the CI unit job without any infrastructure.

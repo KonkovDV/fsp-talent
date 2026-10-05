@@ -40,6 +40,7 @@ jobs:
       SECRET_KEY: test-secret-key-for-ci-only
       FSP_MODE: mock
       AI_ENABLED: 'false'
+      VC_PRIVATE_KEY_PATH: ${{ github.workspace }}/vc_ed25519.pem
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

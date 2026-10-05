@@ -51,7 +51,6 @@ def _offer_out(o: Offer) -> dict:
         "contact_method": o.contact_method,
         "candidate_viewed_at": o.candidate_viewed_at.isoformat() if o.candidate_viewed_at else None,
         "contacts_available": o.status == "accepted",
-        # FIX BUG-A: expose contacts_revealed_at so the audit trail is queryable via API
         "contacts_revealed_at": o.contacts_revealed_at.isoformat() if o.contacts_revealed_at else None,
     }
 
@@ -127,7 +126,6 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
     candidate = await db.get(Participant, offer.candidate_id)
     if not candidate:
         raise HTTPException(404, "Кандидат не найден")
-    # FIX BUG-A: stamp contacts_revealed_at on first reveal; idempotent on repeated calls.
     now = datetime.now(UTC)
     if offer.contacts_revealed_at is None:
         offer.contacts_revealed_at = now

@@ -67,9 +67,6 @@ class ProfileSearchIndex(Base):
     role = Column(String(50))
     grade = Column(String(20))
     region = Column(String(100))
-    # FIX BUG-E: onupdate= was missing. Without it, every rebuild_profile UPDATE
-    # leaves updated_at frozen at creation time. Incremental sync and freshness
-    # monitoring cannot detect stale profiles.
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

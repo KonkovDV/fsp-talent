@@ -25,9 +25,6 @@ class Vacancy(Base):
     allows_minors = Column(Boolean, nullable=False, default=False)
     is_open = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    # FIX BUG-C: track when vacancy was last modified (closed, reopened, edited).
-    # Without updated_at there is no way to answer "when was this vacancy closed?"
-    # onupdate= fires on any ORM UPDATE; default= fills it on INSERT.
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
