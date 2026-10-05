@@ -38,7 +38,7 @@ export default function CandidateOffers() {
                     {o.expires_at && o.status === 'pending' ? `, ответить до ${date(o.expires_at)}` : ''}</p>
                 </div>
                 <div className="text-right">
-                  <p className="num font-display text-xl font-semibold text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</p>
+                  <p className="num font-display text-xl font-bold text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</p>
                   <p className="text-xs text-ink-3">до вычета НДФЛ</p>
                   <span className={`${cls} mt-2`}>{label}</span>
                 </div>

@@ -130,7 +130,7 @@ export default function CandidateAssessment() {
                 {GRADES.map(g => (
                   <button key={g} type="button" role="radio" aria-checked={target === g} onClick={() => setTarget(g)}
                     className={`rounded-lg border px-3 py-3 text-center transition-colors ${target === g ? 'border-accent bg-accent-soft' : 'border-line-strong bg-panel hover:border-accent/60'}`}>
-                    <span className="block font-display text-sm font-semibold text-ink">{g}</span>
+                    <span className="block font-display text-sm font-bold text-ink">{g}</span>
                     {confirmation?.grade === g && <span className="text-2xs text-ok">подтверждён</span>}
                   </button>
                 ))}

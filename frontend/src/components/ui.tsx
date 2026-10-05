@@ -36,7 +36,7 @@ export function CategoryPlate({ role, grade, source, size = 'md' }: {
   return (
     <span className={`inline-flex items-stretch overflow-hidden rounded-md ring-1 ring-inset ${confirmed ? 'ring-accent' : 'ring-line-strong'} ${size === 'lg' ? 'text-base' : 'text-xs'}`}>
       <span className={`px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-medium text-ink`}>{ROLE_RU[role ?? ''] ?? role ?? 'роль не задана'}</span>
-      <span className={`px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-display font-semibold ${confirmed ? 'bg-accent text-accent-ink' : 'bg-sunken text-ink-2'}`}>
+      <span className={`flex items-center whitespace-nowrap px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-display font-bold ${confirmed ? 'bg-accent text-accent-ink' : 'bg-sunken text-ink-2'}`}>
         {grade ? GRADE_RU[grade] ?? grade : '—'}
       </span>
     </span>

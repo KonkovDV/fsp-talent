@@ -89,3 +89,17 @@ def test_benchmark_is_deterministic_and_beats_the_baselines():
     assert sha256(data) == sha256(make_dataset(400, 40, seed=2026))
     rows = {r.method: r for r in evaluate(data)}
     assert rows["full"].ndcg10 > rows["keyword"].ndcg10 > rows["random"].ndcg10
+
+
+def test_empty_need_ranks_by_profile_strength_not_a_near_zero_fit():
+    """No criteria: the score must not collapse to ~0.01 (it was shown as «1 из 100»)."""
+    from app.services.matching import CandidateFacts, NeedSpec, score
+    strong = score(NeedSpec(), CandidateFacts(role="backend", grade="middle", grade_source="assessed",
+                                              skills={}, test_p=0.95, test_spec="backend", fsp_lcb=0.6))
+    weak = score(NeedSpec(), CandidateFacts(role="backend", grade="middle", grade_source="declared",
+                                            skills={}, test_p=None, test_spec=None, fsp_lcb=None))
+    assert strong.basis == "evidence" and strong.score > 0.5
+    assert strong.score > weak.score
+    fitted = score(NeedSpec(role="backend"), CandidateFacts(role="backend", grade="middle", grade_source="assessed",
+                                                            skills={}, test_p=0.95, test_spec="backend", fsp_lcb=0.6))
+    assert fitted.basis == "fit"

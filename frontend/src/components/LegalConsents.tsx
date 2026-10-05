@@ -14,12 +14,12 @@ export function LegalDocModal({ kind, onClose }: { kind: string; onClose: () => 
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1B1C21]/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"
       onClick={onClose}>
       <div className="bg-panel border border-line shadow-pop rounded-xl max-w-2xl w-full max-h-[85dvh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 p-5 border-b border-border">
           <div>
-            <h2 className="font-display text-lg font-semibold">{data?.title ?? 'Документ'}</h2>
+            <h2 className="font-display text-lg font-bold">{data?.title ?? 'Документ'}</h2>
             {data && <p className="text-xs text-text-muted font-mono">версия {data.version} · SHA-256 {data.sha256.slice(0, 12)}…</p>}
           </div>
           <button onClick={onClose} aria-label="Закрыть" className="text-text-muted hover:text-text-primary"><X size={20} /></button>

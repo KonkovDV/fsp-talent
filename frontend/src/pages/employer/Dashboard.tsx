@@ -39,7 +39,7 @@ export default function EmployerDashboard() {
       <div className="grid gap-4 md:grid-cols-3">
         {tiles.map(t => (
           <Link key={t.label} to={t.to} className="card-hover flex flex-col">
-            <span className="font-display text-4xl font-semibold tabular-nums text-ink">{t.n}</span>
+            <span className="font-display text-4xl font-bold tabular-nums text-ink">{t.n}</span>
             <span className="mt-1 font-medium text-ink">{t.label}</span>
             <span className="mt-2 flex-1 text-sm text-ink-2">{t.hint}</span>
             <span className="mt-4 text-sm font-medium text-accent">{t.cta}</span>

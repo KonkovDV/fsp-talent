@@ -217,7 +217,7 @@ async def search_candidates(
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
-        card["match"] = {"score": m.score, "plus": m.plus, "minus": m.minus, "info": m.info,
+        card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
                                      for f in m.factors]}
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
@@ -232,6 +232,7 @@ class PoolMatch:
     minus: list
     info: list
     facts: CandidateFacts | None
+    basis: str = "fit"
 
 
 async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
@@ -275,7 +276,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             text_rank=fused.get(pid, 0.0) / top,
         )
         m = match_score(need, facts)
-        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts)
+        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis)
     return out
 
 

@@ -97,6 +97,9 @@ class MatchResult:
     plus: list[str]
     minus: list[str]
     info: list[str]
+    # "fit": the need names criteria and the score measures them. "evidence": no criteria at all,
+    # so the score is the strength of the confirmed profile (test, FSP) and the UI says so.
+    basis: str = "fit"
 
 
 def _related(skill: str, have: dict[str, str]) -> str | None:
@@ -206,8 +209,11 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
     fit = _mean([f for f in factors if f.key in FIT_KEYS])
     evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
+    if fit is None:
+        # Nothing to match against (an empty search): rank by how well the profile is confirmed.
+        return MatchResult(round(evidence or 0.0, 4), factors, plus, minus, info, basis="evidence")
     # Evidence moves the score by less than 0.01, so it reorders only candidates the need fits equally.
-    total = (fit or 0.0) + (0.009 * evidence if evidence is not None else 0.0)
+    total = fit + (0.009 * evidence if evidence is not None else 0.0)
     return MatchResult(round(total, 4), factors, plus, minus, info)
 
 

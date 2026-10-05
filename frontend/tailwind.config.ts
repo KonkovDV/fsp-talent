@@ -5,8 +5,8 @@ const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`
 /**
  * ФСП Талант — design tokens.
  * Light theme is the default (HR people read cards for a long time); dark follows the system or the toggle.
- * Brand colours of the Federation: navy, blue and red. Red is reserved for the invitation and the brand stripe,
- * gold only for sport ranks (МС, КМС). Everything else is ink on paper.
+ * Brand colours from the FSP brandbook: #402FFF, #EC1D35, #EDEDED, #C8C9CA, #1B1C21; typeface JetBrains Mono.
+ * Red is reserved for the invitation and the brand stripe, gold only for sport ranks (МС, КМС).
  */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -20,18 +20,19 @@ export default {
         ink: { DEFAULT: v('ink'), 2: v('ink-2'), 3: v('ink-3') },
         line: { DEFAULT: v('line'), strong: v('line-strong') },
         accent: { DEFAULT: v('accent'), soft: v('accent-soft'), ink: v('accent-ink') },
-        invite: { DEFAULT: v('invite'), soft: v('invite-soft') },
+        invite: { DEFAULT: v('invite'), soft: v('invite-soft'), ink: v('invite-ink') },
+        'brand-red': v('brand-red'),
         ok: { DEFAULT: v('ok'), soft: v('ok-soft') },
         warn: { DEFAULT: v('warn'), soft: v('warn-soft') },
         medal: { DEFAULT: v('medal'), soft: v('medal-soft') },
-        navy: '#0A1F5C',
+        navy: v('ink'),
         // Legacy names used by older markup; they now resolve to the same tokens.
         surface: { 0: v('paper'), 1: v('panel'), 2: v('sunken'), 3: v('line') },
         text: { primary: v('ink'), secondary: v('ink-2'), muted: v('ink-3') },
         border: { DEFAULT: v('line'), strong: v('line-strong') },
         brand: { DEFAULT: v('accent'), dim: v('accent-soft'), bright: v('accent') },
         fsp: {
-          navy: '#0A1F5C', blue: '#1B3FA0', red: '#D42330', gold: '#C98A00', light: '#E8EDF8',
+          navy: v('ink'), blue: '#1B3FA0', red: '#D42330', gold: '#C98A00', light: '#E8EDF8',
           electric: v('accent'), violet: v('accent'), 'violet-dark': '#0A1F5C', dark: '#0A1F5C',
           silver: '#A0AEBF', gray: '#6B7280', 'light-bg': '#F4F7FE',
         },
@@ -39,8 +40,9 @@ export default {
       },
       fontFamily: {
         sans: ['"Golos Text Variable"', 'system-ui', 'sans-serif'],
-        display: ['"Unbounded Variable"', '"Golos Text Variable"', 'sans-serif'],
-        heading: ['"Unbounded Variable"', '"Golos Text Variable"', 'sans-serif'],
+        // JetBrains Mono is the Federation's brand typeface (brandbook); Golos Text carries long Russian body copy.
+        display: ['"JetBrains Mono Variable"', 'ui-monospace', 'monospace'],
+        heading: ['"JetBrains Mono Variable"', 'ui-monospace', 'monospace'],
         mono: ['"JetBrains Mono Variable"', 'ui-monospace', 'monospace'],
       },
       fontSize: {
@@ -58,8 +60,8 @@ export default {
       borderRadius: { sm: '4px', DEFAULT: '6px', md: '6px', lg: '10px', xl: '12px', '2xl': '14px', '3xl': '18px' },
       boxShadow: {
         card: '0 1px 0 rgb(var(--line) / 1)',
-        'card-hover': '0 6px 24px -12px rgb(10 31 92 / 0.25)',
-        pop: '0 18px 48px -16px rgb(10 31 92 / 0.35)',
+        'card-hover': '0 6px 24px -12px rgb(27 28 33 / 0.22)',
+        pop: '0 18px 48px -16px rgb(27 28 33 / 0.28)',
         'glow-brand': 'none', 'glow-red': 'none', 'glow-gold': 'none', 'glow-score': 'none', nav: 'none',
       },
       maxWidth: { page: '1200px', prose: '68ch' },

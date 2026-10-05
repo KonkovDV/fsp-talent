@@ -45,10 +45,10 @@ export default function PublicProfile() {
     <PublicShell>
       <div className="grid items-start gap-8 lg:grid-cols-[320px_1fr]">
         <aside className="card">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft font-display text-xl font-semibold text-accent" aria-hidden>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft font-display text-xl font-bold text-accent" aria-hidden>
             {(profile.display_name ?? 'У')[0]}
           </div>
-          <h1 className="mt-4 font-display text-xl font-semibold text-ink">{profile.display_name}</h1>
+          <h1 className="mt-4 font-display text-xl font-bold text-ink">{profile.display_name}</h1>
           <p className="mt-1 text-sm text-ink-2">{profile.region}</p>
           <div className="mt-4"><CategoryPlate role={profile.primary_role} grade={profile.grade} source={profile.grade_source} /></div>
           {(profile.skills ?? []).length > 0 && (

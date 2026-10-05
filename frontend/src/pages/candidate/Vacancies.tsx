@@ -90,7 +90,7 @@ export default function CandidateVacancies() {
                 </div>
               </div>
               <div className="text-right">
-                {(card.salary_from || card.salary_to) && <p className="num font-display text-lg font-semibold text-ink">{rub(card.salary_from)} – {rub(card.salary_to)}</p>}
+                {(card.salary_from || card.salary_to) && <p className="num font-display text-lg font-bold text-ink">{rub(card.salary_from)} – {rub(card.salary_to)}</p>}
                 <Link to={`/candidate/assessment?vacancy=${card.id}`} className="btn-ghost mt-3 block text-sm">Тест по этой вакансии</Link>
                 <button type="button" className="btn-ghost mt-1 block text-sm" onClick={() => practice.mutate({ vacancy_id: card.id })}>Короткая практика</button>
                 <button disabled={card.applied || !card.can_apply || apply.isPending} onClick={() => apply.mutate(card.id)}
