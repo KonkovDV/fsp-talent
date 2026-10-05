@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, createNeed, listNeeds, needMatches, needShortlist, removeShortlist, setShortlist, surveyOptions, updateNeed,
+  apiError, compareNeed, needExam, createNeed, listNeeds, needMatches, needShortlist, removeShortlist, setShortlist, surveyOptions, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
+import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 import { ROLE_RU } from '../../labels'
 
@@ -26,7 +27,7 @@ export default function EmployerNeeds() {
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [error, setError] = useState('')
   const [offerFor, setOfferFor] = useState<string | null>(null)
-  const [tab, setTab] = useState<'matches' | 'shortlist'>('matches')
+  const [tab, setTab] = useState<'matches' | 'shortlist' | 'exam'>('matches')
   const [picked, setPicked] = useState<string[]>([])
   const [sent, setSent] = useState(false)
 
@@ -41,6 +42,8 @@ export default function EmployerNeeds() {
     enabled: !!selected && picked.length >= 2,
     queryFn: () => compareNeed(selected!, picked).then(r => r.data as { items: { candidate_id: string; role: string; grade: string; score: number; factors: { key: string; label: string; value: number | null }[] }[] }),
   })
+  const exam = useQuery({ queryKey: ['needExam', selected, current?.version], enabled: !!selected && tab === 'exam',
+    queryFn: () => needExam(selected!).then(r => r.data as Exam) })
   const shortlist = useQuery({ queryKey: ['needShortlist', selected], enabled: !!selected,
     queryFn: () => needShortlist(selected!).then(r => r.data) })
 
@@ -139,7 +142,7 @@ export default function EmployerNeeds() {
           </nav>
 
           {current && (
-            <section aria-label={current.title}>
+            <section aria-label={current.title} className="min-w-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-xl font-semibold text-ink">{current.title}</h2>
@@ -168,7 +171,7 @@ export default function EmployerNeeds() {
               )}
 
               <div className="mt-6 flex gap-6 border-b border-line" role="tablist">
-                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`]] as const).map(([key, title]) => (
+                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`], ['exam', 'Как проверим']] as const).map(([key, title]) => (
                   <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
                     className={`-mb-px border-b-2 pb-3 text-sm ${tab === key ? 'border-accent font-semibold text-ink' : 'border-transparent text-ink-2 hover:text-ink'}`}>{title}</button>
                 ))}
@@ -179,19 +182,28 @@ export default function EmployerNeeds() {
                 <div className="mt-5 space-y-4">
                   {picked.length > 0 && (
                     <div className="card">
-                      <p className="text-sm text-ink-2">В сравнении {picked.length} из 3. Берите людей из этой подборки: чужие и скрытые профили сюда не попадают.</p>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-sm text-ink-2">В сравнении {picked.length} из 3{picked.length < 2 ? ': отметьте ещё одного кандидата' : ''}. Имя и контакты в сравнение не попадают.</p>
+                        <button type="button" onClick={() => setPicked([])} className="text-xs text-accent hover:underline">Очистить</button>
+                      </div>
                       {compared.data && compared.data.items.length >= 2 && (
                         <div className="mt-3 overflow-x-auto">
                           <table className="protocol">
                             <thead><tr><th>Фактор</th>{compared.data.items.map(c => <th key={c.candidate_id}>{ROLE_RU[c.role] ?? c.role} {c.grade}</th>)}</tr></thead>
                             <tbody>
                               <tr><td>Совпадение</td>{compared.data.items.map(c => <td key={c.candidate_id} className="num">{Math.round((c.score ?? 0) * 100)}</td>)}</tr>
-                              {(compared.data.items[0]?.factors ?? []).map(f => (
-                                <tr key={f.key}><td>{f.label}</td>{compared.data.items.map(c => {
-                                  const cell = c.factors.find(x => x.key === f.key)
-                                  return <td key={c.candidate_id} className="num">{cell?.value == null ? '—' : Math.round(cell.value * 100)}</td>
-                                })}</tr>
-                              ))}
+                              {(compared.data.items[0]?.factors ?? []).map(f => {
+                                const values = compared.data!.items.map(c => c.factors.find(x => x.key === f.key)?.value ?? null)
+                                const known = values.filter((v): v is number => v != null)
+                                const best = known.length > 1 && new Set(known).size > 1 ? Math.max(...known) : null
+                                return (
+                                  <tr key={f.key}><td>{f.label}</td>{values.map((v, i) => (
+                                    <td key={compared.data!.items[i].candidate_id} className={`num ${v != null && v === best ? 'font-semibold text-accent' : ''}`}>
+                                      {v == null ? '—' : Math.round(v * 100)}
+                                    </td>
+                                  ))}</tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -201,17 +213,23 @@ export default function EmployerNeeds() {
                   {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
                   {matches.data && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
-                    <div key={card.candidate_id}>
-                      <button type="button" className="btn-ghost mb-1 text-sm"
-                        onClick={() => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 3 ? prev : [...prev, card.candidate_id])}>
-                        {picked.includes(card.candidate_id) ? 'Убрать из сравнения' : 'В сравнение'}
-                      </button>
-                      <CandidateCard card={card} place={i + 1} onOffer={setOfferFor}
-                        onShortlist={(id, on) => toggle.mutate({ id, on })} />
-                    </div>
+                    <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor}
+                      onShortlist={(id, on) => toggle.mutate({ id, on })}
+                      compare={{
+                        on: picked.includes(card.candidate_id), full: picked.length >= 3,
+                        toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 3 ? prev : [...prev, card.candidate_id]),
+                      }} />
                   ))}
                 </div>
               )}
+              {tab === 'exam' && (
+                <div className="card mt-5">
+                  <p className="mb-4 text-sm text-ink-2">Кандидат, которого вы пригласите, подтверждает грейд этим тестом. Состав считается из навыков и текста потребности; задания каждый раз генерируются заново.</p>
+                  {exam.isLoading && <Skeleton className="h-40" />}
+                  {exam.data && <ExamPreview exam={exam.data} />}
+                </div>
+              )}
+
               {tab === 'shortlist' && (
                 <div className="mt-5">
                   {shortlist.data && (

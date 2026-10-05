@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, previewVacancyExam, vacancyApplications } from '../../api/client'
 import { DISC_RU, ROLE_RU } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, date, rub } from '../../components/ui'
 
 const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', skills: '', salary_from_gross: 150000,
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
-interface ExamTopic { topic: string; label: string; share: number }
-interface ExamSample { topic: string; family: string; stem: string }
-interface Exam { why: string; topics: ExamTopic[]; samples: ExamSample[]; quotes?: { skill: string; evidence: string }[] }
 interface Vacancy { id: string; title: string; role: string | null; grade: string | null; is_open: boolean; skills: string[]
   salary_from: number | null; salary_to: number | null; work_format: string }
 interface Application { id: string; vacancy_title: string; status: string; created_at: string | null }
@@ -89,20 +87,7 @@ export default function EmployerVacancies() {
               onClick={() => preview.mutate()}>Какой тест получится</button>
             <button type="button" className="btn-secondary" onClick={() => { setOpen(false); setExam(null) }}>Отмена</button>
           </div>
-          {exam && (
-            <div className="rounded-lg border border-line bg-sunken p-4">
-              <p className="text-sm text-ink">{exam.why}</p>
-              {exam.quotes && exam.quotes.length > 0 && (
-                <ul className="mt-2 text-sm text-ink-2">{exam.quotes.map(q => <li key={q.skill}>{q.skill}: «{q.evidence}»</li>)}</ul>
-              )}
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {exam.topics.map(t => <li key={t.topic} className="chip-default">{t.label} {Math.round(t.share * 100)}%</li>)}
-              </ul>
-              <ul className="mt-3 space-y-2 text-sm text-ink-2">
-                {exam.samples.map(s => <li key={s.stem}><span className="text-ink">{s.family}.</span> {s.stem}</li>)}
-              </ul>
-            </div>
-          )}
+          {exam && <div className="rounded-lg border border-line bg-sunken/60 p-4"><ExamPreview exam={exam} /></div>}
         </form>
       )}
 

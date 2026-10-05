@@ -141,8 +141,10 @@ async def main() -> None:
             jobs += 1
         await db.commit()
         print(f"seeded employers={employers} participants={created} vacancies={jobs}")
-    # Without a question bank /assessment/start cannot serve a session.
     await seed_questions()
+    # Completed tests, needs, invitations and applications, so the demo shows every step without setup.
+    from seed.demo_activity import main as demo_activity
+    await demo_activity()
 
 
 if __name__ == "__main__":

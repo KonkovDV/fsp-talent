@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Star } from 'lucide-react'
+import { ChevronDown, Columns3, Star } from 'lucide-react'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 
 export interface CandidateCardData {
@@ -39,6 +39,8 @@ interface Props {
   place?: number
   onOffer: (id: string) => void
   onShortlist?: (id: string, on: boolean) => void
+  /** Side-by-side comparison of up to three cards from the same list. */
+  compare?: { on: boolean; full: boolean; toggle: () => void }
 }
 
 const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет')
@@ -47,7 +49,7 @@ const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3,
  * One line of the selection protocol: place, category, match score and the factors behind it.
  * The card is anonymous: no name, no FSP id, no event names — those open after the candidate's consent.
  */
-export default function CandidateCard({ card, place, onOffer, onShortlist }: Props) {
+export default function CandidateCard({ card, place, onOffer, onShortlist, compare }: Props) {
   const [open, setOpen] = useState(false)
   const disc = card.disciplines[0]
   const score = card.match ? Math.round(card.match.score * 100) : null
@@ -102,7 +104,15 @@ export default function CandidateCard({ card, place, onOffer, onShortlist }: Pro
           <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
           Почему в выдаче
         </button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {compare && (
+            <button type="button" onClick={compare.toggle} aria-pressed={compare.on} disabled={!compare.on && compare.full}
+              title={!compare.on && compare.full ? 'Сравнивать можно до трёх кандидатов' : undefined}
+              className={`btn-secondary btn-sm ${compare.on ? 'border-accent text-accent' : ''}`}>
+              <Columns3 size={14} aria-hidden />
+              {compare.on ? 'В сравнении' : 'Сравнить'}
+            </button>
+          )}
           {onShortlist && (
             <button onClick={() => onShortlist(card.candidate_id, !card.shortlisted)} aria-pressed={!!card.shortlisted}
               className={`btn-secondary btn-sm ${card.shortlisted ? 'border-accent text-accent' : ''}`}>

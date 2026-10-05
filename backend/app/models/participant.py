@@ -45,6 +45,8 @@ class Participant(Base):
     practice_topic = Column(String(40))
     practice_ok = Column(Boolean)
     practice_at = Column(DateTime(timezone=True))
+    # Set when identifying fields were erased: on account deletion or 30 days after consent withdrawal.
+    deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),

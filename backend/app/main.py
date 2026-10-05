@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from app.api.docs import install_docs
 from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -32,12 +33,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FSP Talent API",
-    description="LCT-2026: AI-powered talent marketplace for Federal Sports Programming Federation",
+    title="ФСП Талант API",
+    description=("ЛЦТ 2026, кейс Федерации спортивного программирования: подбор ИТ-специалистов "
+                 "по подтверждённому результату. Коды ошибок: docs/API_ERRORS.md."),
     version=settings.VERSION,
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,     # served by app.api.docs without a CDN, so the site CSP allows it
+    redoc_url=None,
 )
 
 app.add_middleware(
@@ -62,6 +64,7 @@ async def request_timing(request: Request, call_next):
 
 
 install_error_handlers(app)
+install_docs(app)
 app.include_router(api_router)
 
 

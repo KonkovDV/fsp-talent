@@ -111,7 +111,7 @@ def form_exam(title: str, description: str = "", skills: list[str] | None = None
     pulled = sorted(topics, key=lambda t: -topics[t])
     if pulled:
         labels = ", ".join(TOPIC_LABELS.get(t, t) for t in pulled[:4])
-        why = f"Вакансия называет {labels}. Эти темы занимают большую долю теста, остальное — план специализации."
+        why = f"В описании названы: {labels}. Эти темы занимают большую долю теста, остальное — план специализации."
     else:
         why = "В описании нет навыков из словаря, поэтому тест идёт по плану специализации."
     return {

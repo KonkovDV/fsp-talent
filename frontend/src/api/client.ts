@@ -83,6 +83,10 @@ export const linkFsp = (fsp_id: string, fsp_secret: string) => api.post('/candid
 
 export const getMyProfile = () => api.get('/candidates/me')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)
+export const listNotifications = () => api.get('/notifications')
+export const readNotification = (id: string) => api.post(`/notifications/${id}/read`)
+export const readAllNotifications = () => api.post('/notifications/read-all')
+export const deleteMyAccount = (confirm: string) => api.delete('/candidates/me', { data: { confirm } })
 export const getMyResults = () => api.get('/candidates/me/results')
 export const getMyOffers = () => api.get('/candidates/me/offers')
 export const respondToOffer = (offerId: string, action: 'accept' | 'reject') =>
@@ -101,6 +105,7 @@ export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
 
 export const getMyVacancies = () => api.get('/vacancies/mine')
 export const createVacancy = (data: object) => api.post('/vacancies/', data)
+export const needExam = (id: string) => api.get(`/needs/${id}/exam`)
 export const previewVacancyExam = (data: object) => api.post('/vacancies/exam', data)
 export const closeVacancy = (id: string) => api.post(`/vacancies/${id}/close`)
 export const vacanciesForMe = () => api.get('/vacancies/for-me')

@@ -3,6 +3,7 @@ import { LogOut, Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useTheme } from '../lib/theme'
 import { Brand } from './Brand'
+import NotificationBell from './NotificationBell'
 
 const CANDIDATE_LINKS = [
   { to: '/candidate', label: 'Обзор', end: true },
@@ -56,6 +57,7 @@ export default function Layout() {
           <Brand to={userRole === 'participant' ? '/candidate' : '/employer'} />
           <div className="flex items-center gap-1">
             <span className="mr-2 hidden text-xs text-ink-3 sm:inline">{roleLabel}</span>
+            <NotificationBell />
             <ThemeToggle />
             <button onClick={() => { logout(); navigate('/') }} className="btn-nav gap-1.5 text-xs">
               <LogOut size={15} aria-hidden /> Выйти

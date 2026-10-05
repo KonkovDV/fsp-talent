@@ -13,13 +13,15 @@ from app.api.deps import get_current_participant
 from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import ConsentLog, GradeConfirmation, Offer, Participant
+from app.models import CategoryAssignment, ConsentLog, GradeConfirmation, Offer, Participant
 from app.models.participant import Result, Skill
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.identity import active_consent
+from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
+from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
 from app.services.skills import normalize_skill
@@ -49,7 +51,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         select(Participant).where(Participant.id == _pid(current)).options(
             selectinload(Participant.discipline_scores), selectinload(Participant.category),
             selectinload(Participant.results), selectinload(Participant.skills)))
-    if not p:
+    if not p or p.deleted_at is not None:
         raise HTTPException(404, "Профиль не найден")
     cat = p.category
     return {
@@ -197,6 +199,25 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
     return {"is_visible": p.is_visible, "discoverable": p.discoverable}
 
 
+class DeleteAccountIn(BaseModel):
+    confirm: str = Field(..., max_length=20)
+
+
+@router.delete("/me")
+async def delete_my_account(body: DeleteAccountIn, current: dict = Depends(get_current_participant),
+                            db: AsyncSession = Depends(get_db)):
+    """Erase the account now (152-FZ, art. 21): contacts, name, FSP link and skills are removed,
+    pending invitations are withdrawn. Anonymous sport results and the consent log stay."""
+    if body.confirm.strip().lower() != "удалить":
+        raise ApiError(422, "delete_confirm")
+    p = await db.get(Participant, _pid(current))
+    if not p or p.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    await erase_participant(db, p, reason="account_deleted")
+    await db.commit()
+    return {"deleted": True}
+
+
 @router.get("/me/results")
 async def get_my_results(
     limit: int = Query(50, ge=1, le=_PAGE_SIZE_MAX),
@@ -281,7 +302,21 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         offer.status = "rejected"
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == offer.candidate_id))
+    who = category_label(cat.primary_role if cat else None, cat.grade if cat else None)
+    outbox = Outbox()
+    if offer.status == "accepted":
+        await notify(db, outbox, "employer", offer.employer_id, "offer_accepted",
+                     f"Кандидат принял приглашение «{offer.role}»",
+                     f"Кандидат ({who}) принял приглашение. Контакты открыты в разделе «Приглашения».",
+                     "/employer/offers")
+    else:
+        await notify(db, outbox, "employer", offer.employer_id, "offer_rejected",
+                     f"Кандидат отклонил приглашение «{offer.role}»",
+                     f"Кандидат ({who}) отклонил приглашение. Подборка по потребности обновляется сама.",
+                     "/employer/offers")
     await db.commit()
+    await outbox.deliver()
     return {"status": offer.status}
 
 

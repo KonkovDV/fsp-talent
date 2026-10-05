@@ -114,7 +114,7 @@ export default function EmployerSearch() {
           {draftChanged && <button onClick={run} className="btn-primary w-full">Применить фильтры</button>}
         </aside>
 
-        <section aria-live="polite" aria-busy={isFetching}>
+        <section aria-live="polite" aria-busy={isFetching} className="min-w-0">
           {sent && <p className="notice-ok mb-4" role="status">Приглашение отправлено. Ответ кандидата появится в разделе «Приглашения».</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
