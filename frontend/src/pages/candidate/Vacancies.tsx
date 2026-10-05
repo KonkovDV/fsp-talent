@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, applyToVacancy, vacanciesForMe } from '../../api/client'
+import { apiError, answerPractice, applyToVacancy, myApplications, startPractice, vacanciesForMe } from '../../api/client'
 import { CategoryPlate, Empty, PageHeader, Skeleton, rub } from '../../components/ui'
 
 interface Card {
@@ -10,9 +11,29 @@ interface Card {
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
+interface PracticeItem {
+  id: string; stem: string; code: string | null; options: { index: number; text: string }[]
+  topic_label: string; is_correct?: boolean; explanation?: string; answered?: boolean
+}
+interface Mine { id: string; title: string; status: string }
+
 export default function CandidateVacancies() {
   const qc = useQueryClient()
+  const [task, setTask] = useState<PracticeItem | null>(null)
+  const [picked, setPicked] = useState<number | null>(null)
+  const [taskError, setTaskError] = useState('')
   const { data: cards = [], isLoading } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
+  const { data: mine = [] } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
+  const practice = useMutation({
+    mutationFn: (id: string) => startPractice(id).then(r => r.data as PracticeItem),
+    onSuccess: item => { setTaskError(''); setPicked(null); setTask(item) },
+    onError: (e: unknown) => setTaskError(apiError(e, 'Задание не собрано')),
+  })
+  const submitPractice = useMutation({
+    mutationFn: () => answerPractice(task!.id, picked!).then(r => r.data as PracticeItem),
+    onSuccess: item => setTask(item),
+    onError: (e: unknown) => setTaskError(apiError(e, 'Ответ не принят')),
+  })
   const apply = useMutation({
     mutationFn: (id: string) => applyToVacancy(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vacanciesForMe'] }),
@@ -24,6 +45,36 @@ export default function CandidateVacancies() {
       {isLoading && <Skeleton className="h-48" />}
       {!isLoading && cards.length === 0 && <Empty title="Подходящих открытых вакансий нет">Они появятся, когда работодатели опубликуют вакансии вашей специализации.</Empty>}
       {apply.isError && <p className="notice-error mb-4" role="alert">{apiError(apply.error, 'Не удалось откликнуться')}</p>}
+      {taskError && <p className="notice-error mb-4" role="alert">{taskError}</p>}
+      {task && (
+        <section className="card mb-6">
+          <p className="text-xs text-ink-3">{task.topic_label}. Одно задание, грейд не меняется.</p>
+          <p className="mt-2 text-ink">{task.stem}</p>
+          {task.code && <pre className="mt-3 overflow-x-auto rounded bg-sunken p-3 text-sm">{task.code}</pre>}
+          <ul className="mt-3 space-y-2">
+            {task.options.map(o => (
+              <li key={o.index}>
+                <button type="button" className={picked === o.index ? 'chip-active' : 'chip-default'}
+                  disabled={task.answered} onClick={() => setPicked(o.index)}>{o.text}</button>
+              </li>
+            ))}
+          </ul>
+          {task.answered ? (
+            <p className="mt-3 text-sm text-ink">{task.is_correct ? 'Верно.' : 'Неверно.'} {task.explanation}</p>
+          ) : (
+            <button type="button" className="btn-primary mt-4" disabled={picked == null || submitPractice.isPending}
+              onClick={() => submitPractice.mutate()}>Ответить</button>
+          )}
+        </section>
+      )}
+      {mine.length > 0 && (
+        <section className="mb-6">
+          <h2 className="section-title">Мои отклики</h2>
+          <ul className="mt-3 divide-y divide-line rounded-lg border border-line bg-panel">
+            {mine.map(a => <li key={a.id} className="flex justify-between px-4 py-2 text-sm"><span>{a.title}</span><span className="text-ink-3">{a.status}</span></li>)}
+          </ul>
+        </section>
+      )}
       <ul className="space-y-4">
         {cards.map(card => (
           <li key={card.id} className="card">
@@ -38,6 +89,7 @@ export default function CandidateVacancies() {
               <div className="text-right">
                 {(card.salary_from || card.salary_to) && <p className="num font-display text-lg font-semibold text-ink">{rub(card.salary_from)} – {rub(card.salary_to)}</p>}
                 <Link to={`/candidate/assessment?vacancy=${card.id}`} className="btn-ghost mt-3 block text-sm">Тест по этой вакансии</Link>
+                <button type="button" className="btn-ghost mt-1 block text-sm" onClick={() => practice.mutate(card.id)}>Короткая практика</button>
                 <button disabled={card.applied || !card.can_apply || apply.isPending} onClick={() => apply.mutate(card.id)}
                   className={card.applied ? 'btn-secondary mt-3' : 'btn-primary mt-3'}>
                   {card.applied ? 'Отклик отправлен' : card.can_apply ? 'Откликнуться' : 'Нужно согласие представителя'}

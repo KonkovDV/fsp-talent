@@ -329,6 +329,9 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
                        f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
         if pid in dense_hit:
             why.append("Смысловое совпадение с запросом")
+        if p.practice_at is not None and p.practice_topic:
+            mark = "верно" if p.practice_ok else "с ошибкой"
+            why.append(f"Короткая практика ({p.practice_topic}): {mark}")
         cards.append({
             "candidate_id": str(pid),
             "role": cat.primary_role if cat else None,

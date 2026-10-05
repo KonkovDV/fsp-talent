@@ -207,3 +207,26 @@ class GradeConfirmation(Base):
     confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
                                                    default=lambda: datetime.now(UTC))
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PracticeAttempt(Base):
+    """One short task from a vacancy or the specialization plan. It does not change the grade."""
+    __tablename__ = "practice_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, index=True)
+    vacancy_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    topic: Mapped[str] = mapped_column(String(40), nullable=False)
+    family_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    stem: Mapped[str] = mapped_column(Text, nullable=False)
+    code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    options: Mapped[list] = mapped_column(JSONB, nullable=False)
+    correct_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    answer_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                 default=lambda: datetime.now(UTC))
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

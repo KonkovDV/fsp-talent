@@ -46,6 +46,7 @@ from app.services.assessment import (
     session_items,
     start_session,
 )
+from app.services.practice import answer_practice, public_attempt, start_practice
 from app.services.profile import rebuild_profile
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
@@ -288,6 +289,45 @@ async def cooldown_status(specialization: str | None = None, current: dict = Dep
                           db: AsyncSession = Depends(get_db)):
     locked = await check_cooldown(db, uuid.UUID(current["sub"]), specialization)
     return {"locked": locked is not None, "locked_until": locked.isoformat() if locked else None}
+
+
+class PracticeStartIn(BaseModel):
+    vacancy_id: uuid.UUID | None = None
+
+
+class PracticeAnswerIn(BaseModel):
+    answer_index: int = Field(ge=0, le=9)
+
+
+@router.post("/practice/start")
+async def practice_start(body: PracticeStartIn, current: dict = Depends(get_current_participant),
+                         db: AsyncSession = Depends(get_db)):
+    participant = await db.get(Participant, uuid.UUID(current["sub"]))
+    if participant is None:
+        raise ApiError(404, "not_found", "Профиль не найден")
+    if await too_many(f"practice:{participant.id}", limit=12, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Не больше двенадцати коротких заданий в час")
+    try:
+        row = await start_practice(db, participant, body.vacancy_id)
+        await db.commit()
+    except LookupError as e:
+        raise ApiError(404, "not_found", "Вакансия не найдена") from e
+    return public_attempt(row)
+
+
+@router.post("/practice/{attempt_id}/answer")
+async def practice_answer(attempt_id: uuid.UUID, body: PracticeAnswerIn,
+                          current: dict = Depends(get_current_participant),
+                          db: AsyncSession = Depends(get_db)):
+    participant = await db.get(Participant, uuid.UUID(current["sub"]))
+    if participant is None:
+        raise ApiError(404, "not_found", "Профиль не найден")
+    try:
+        result = await answer_practice(db, participant, attempt_id, body.answer_index)
+        await db.commit()
+    except LookupError as e:
+        raise ApiError(404, "not_found", "Задание не найдено") from e
+    return result
 
 
 @router.get("/history")

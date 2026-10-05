@@ -41,6 +41,10 @@ class Participant(Base):
     # employers must not rank candidates by a self-described grade (TZ section 2).
     assessed_grade = Column(String(20))
     assessed_at = Column(DateTime(timezone=True))
+    # Latest short practice task. Shown on the anonymous card; it does not change the grade.
+    practice_topic = Column(String(40))
+    practice_ok = Column(Boolean)
+    practice_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),

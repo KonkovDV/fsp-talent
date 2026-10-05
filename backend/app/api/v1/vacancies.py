@@ -184,6 +184,23 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
     return cards
 
 
+@router.get("/my-applications")
+async def candidate_applications(current: dict = Depends(get_current_participant),
+                                 db: AsyncSession = Depends(get_db)):
+    """Statuses of the candidate's own applications. Other people's data is not included."""
+    rows = list(await db.scalars(
+        select(Application).where(Application.candidate_id == _uuid(current))
+        .options(selectinload(Application.vacancy))
+        .order_by(Application.created_at.desc())
+        .limit(50)))
+    return [{
+        "id": str(a.id),
+        "title": a.vacancy.title if a.vacancy else "",
+        "status": a.status,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    } for a in rows]
+
+
 @router.post("/{vacancy_id}/apply", status_code=201)
 async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_participant),
                 db: AsyncSession = Depends(get_db)):
