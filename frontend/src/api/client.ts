@@ -131,8 +131,9 @@ export const assessmentBlueprint = () => api.get('/assessment/blueprint')
 export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null }) =>
   api.post('/assessment/start', data)
 export const activeAssessment = () => api.get('/assessment/active')
-export const answerAssessment = (sessionId: string, item_token: string, answer_index: number) =>
-  api.post(`/assessment/${sessionId}/answer`, { item_token, answer_index })
+export const answerAssessment = (sessionId: string, item_token: string,
+  answer: { answer_index: number } | { answer_text: string }) =>
+  api.post(`/assessment/${sessionId}/answer`, { item_token, ...answer })
 export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
 export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
 export const assessmentCooldown = (specialization?: string) =>

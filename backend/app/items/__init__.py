@@ -12,10 +12,15 @@ finite pool can be memorised. Leaks are watched by app.services.item_monitor.
 from __future__ import annotations
 
 import random
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
 LEVELS = (1, 2, 3, 4, 5)
+# Guessing in the 3PL model. Four options are guessed one time in four; a typed whole number almost never.
+CHOICE_C = 0.25
+TYPED_C = 0.02
+_WHOLE = re.compile(r"[+-]?\d{1,12}")
 # Prior difficulty on the theta scale for each level. Grade cuts are -1.5 / -0.5 / 0.5 / 1.5, so the
 # levels sit around them; per-level offsets are re-estimated from real answers (item_stats.b_offset).
 LEVEL_B = {1: -2.2, 2: -1.2, 3: -0.2, 4: 0.8, 5: 1.8}
@@ -87,3 +92,19 @@ def options_with(rng: random.Random, correct, distractors, filler: Callable[[], 
 
 def near_int(rng: random.Random, value: int, spread: int = 5) -> Callable[[], int]:
     return lambda: value + rng.choice([-1, 1]) * rng.randint(1, max(1, spread))
+
+
+def typed_answer(kind: str, item: Item) -> str | None:
+    """A code item whose answer is a whole number is answered by typing it, without options on screen.
+
+    With four options a weak candidate gets one item in four for free (c = 0.25), and at the grade cut that
+    noise costs about 40 % of the item's information. Typing removes it, so the grade repeats more often on a
+    retest. Other answers (hex, addresses, decimals) keep the options: their format is ambiguous to type.
+    """
+    right = item.options[item.correct].strip()
+    return right if kind == "code" and _WHOLE.fullmatch(right) else None
+
+
+def same_number(typed: str, right: str) -> bool:
+    text = typed.strip().replace("\u2212", "-").replace(" ", "").replace("\u00a0", "")
+    return bool(_WHOLE.fullmatch(text)) and int(text) == int(right)

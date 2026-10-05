@@ -168,6 +168,9 @@ class TestSessionItem(Base):
     is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     timed_out: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # A whole-number answer is typed (app.items.typed_answer): the options stay on the server.
+    typed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    answer_text: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class ItemStat(Base):

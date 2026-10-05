@@ -6,26 +6,32 @@ the production selector and decision code (app.services.cat). Simulated candidat
 
 The simulated "truth" is deliberately not the model the service assumes: every item key has its own true
 difficulty shift N(0, 0.3²) and discrimination ×U(0.8, 1.2) that the service does not know (uncalibrated
-bank), and guessing is c = 0.25. So the numbers include model misfit.
+bank). Guessing is c = 0.25 for items with four options and 0.02 for a typed whole number; an item is typed
+with the share its generator really produces (app.items.registry.typed_share). So the numbers include misfit.
 
 Scenarios:
   clean      no leak; also counts false leak alarms on clean data;
+  choices    ablation: the same bank with four options on every item (the design before typed answers);
   leak       30 % of candidates know the answers of their specialization's main family (a published solver);
   monitored  the leak monitor ran on the "leak" answers, quarantined keys are excluded, a new cohort is tested.
-Plus: retest agreement, test length, item exposure, and random guessing.
+Plus: retest agreement and Cohen's kappa, item discrimination, test length, item exposure, random guessing.
+`--check` exits with an error when the clean scenario breaks the thresholds in CHECKS (run in CI).
 """
 from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import random
 import statistics
+import sys
 from dataclasses import dataclass, field
 
-from app.items import LEVEL_B
-from app.items.registry import BLUEPRINTS, FAMILIES
+from app.items import CHOICE_C, LEVEL_B, TYPED_C
+from app.items.registry import BLUEPRINTS, FAMILIES, typed_share
 from app.models.assessment import GRADE_ORDER
-from app.services.cat import CUTS, MAX_ITEMS, Response, State, choose, decide, evaluate, item_key, p3
+from app.services import cat as cat_module
+from app.services.cat import CUTS, MAX_ITEMS, Response, State, choose, decide, evaluate, item_key, p3, posterior
 from app.services.item_monitor import KeyStats, calibrate_offset, leave_family_out
 
 SPECS = tuple(BLUEPRINTS)
@@ -72,6 +78,23 @@ class Session:
     theta_hat: float = 0.0
 
 
+_TYPED = True   # switched off by choices_only() for the ablation
+
+
+@contextlib.contextmanager
+def choices_only():
+    """The ablation: every item has four options, and the selector knows it."""
+    global _TYPED
+    original = cat_module.expected_guess
+    cat_module.expected_guess = lambda family_id, level: CHOICE_C
+    _TYPED = False
+    try:
+        yield
+    finally:
+        cat_module.expected_guess = original
+        _TYPED = True
+
+
 def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.Random,
                 leaked_family: str | None = None, blocked: set[str] | None = None,
                 guesser: bool = False, offsets: dict[str, float] | None = None) -> Session:
@@ -84,19 +107,21 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
             break
         ch = choose(state, rng, offsets=offsets, blocked=blocked)
         key = item_key(ch.family, ch.level)
+        typed = _TYPED and rng.random() < typed_share(ch.family.id, ch.level)
+        c = TYPED_C if typed else CHOICE_C
         if guesser:
-            correct = rng.random() < 0.25
+            correct = rng.random() < c
         elif leaked_family and ch.family.id == leaked_family:
             correct = True
         else:
-            p_true = p3(theta, ch.a * truth.a_mult[key], LEVEL_B[ch.level] + truth.offsets[key], ch.c)
+            p_true = p3(theta, ch.a * truth.a_mult[key], LEVEL_B[ch.level] + truth.offsets[key], c)
             correct = rng.random() < p_true
-        state.responses.append(Response(ch.a, ch.b, ch.c, correct))
+        state.responses.append(Response(ch.a, ch.b, c, correct))
         state.families_used[ch.family.id] += 1
         state.topics_used[ch.family.topic] += 1
         state.concept_used += ch.family.kind == "concept"
         keys.append(key)
-        answers.append((key, ch.family.id, ch.a, ch.b, ch.c, correct))
+        answers.append((key, ch.family.id, ch.a, ch.b, c, correct))
     out = decide(state)
     s = Session(spec, target, theta, out.earned, out.passed, out.upgraded, state.n, keys, answers, out.theta)
     return s
@@ -128,16 +153,26 @@ class CohortReport:
     concept_share: float
 
 
-def cohort(n: int, truth: Truth, rng: random.Random, leak_share: float = 0.0,
+Person = tuple[float, str, str]   # true ability, specialization, declared grade
+
+
+def population(n: int, rng: random.Random) -> list[Person]:
+    """Candidates are drawn apart from their answers, so two designs can be compared on the same people."""
+    people = []
+    for _ in range(n):
+        theta = rng.gauss(0.3, 1.0)
+        people.append((theta, rng.choice(SPECS), _declared(theta, rng)))
+    return people
+
+
+def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: float = 0.0,
            blocked: set[str] | None = None, offsets: dict[str, float] | None = None
            ) -> tuple[CohortReport, list[Session]]:
     sessions = []
-    for _ in range(n):
-        theta = rng.gauss(0.3, 1.0)
-        spec = rng.choice(SPECS)
-        target = _declared(theta, rng)
+    for theta, spec, target in people:
         leaked = MAIN_FAMILY[spec] if rng.random() < leak_share else None
         sessions.append(run_session(theta, spec, target, truth, rng, leaked, blocked, offsets=offsets))
+    n = len(sessions)
     right = sum(s.passed == (s.theta >= CUTS[s.target]) for s in sessions)
     clear = [s for s in sessions if abs(s.theta - CUTS[s.target]) > 0.5]
     above = [s for s in sessions if s.theta >= CUTS[s.target]]
@@ -167,9 +202,9 @@ def monitor(sessions: list[Session]) -> dict[str, KeyStats]:
     return stats
 
 
-def calibrate(sessions: list[Session]) -> dict[str, float]:
-    """Per-key difficulty shift from a pretest cohort, with ability estimated without the key's family."""
-    from app.services.cat import Response, posterior
+def _rest_rows(sessions: list[Session]) -> dict[str, list[tuple[float, float, float, float, bool]]]:
+    """Per key: (ability estimated without the key's family, a, b, c, correct). The item's own family is
+    left out, so a leaked or easy family does not inflate the ability it is compared with."""
     rows: dict[str, list] = collections.defaultdict(list)
     for s in sessions:
         for fam in {r[1] for r in s.answers}:
@@ -178,12 +213,81 @@ def calibrate(sessions: list[Session]) -> dict[str, float]:
             for key, f, a, b, c, ok in s.answers:
                 if f == fam:
                     rows[key].append((theta, a, b, c, ok))
-    return {k: calibrate_offset(v) for k, v in rows.items() if len(v) >= 30}
+    return rows
+
+
+def calibrate(sessions: list[Session]) -> dict[str, float]:
+    """Per-key difficulty shift from a pretest cohort, with ability estimated without the key's family."""
+    return {k: calibrate_offset(v) for k, v in _rest_rows(sessions).items() if len(v) >= 30}
+
+
+@dataclass
+class Discrimination:
+    """How well items separate stronger and weaker candidates, for one answer format."""
+    keys: int                  # item keys with at least 30 answers in this format
+    median_r: float            # median point-biserial r between "correct" and the rest-of-test ability
+    good_share: float          # share of keys with r ≥ 0.20 (the usual floor for a working item)
+    weak_right: float          # right answers of candidates 0.5+ below the item's difficulty
+    strong_right: float        # right answers of candidates 0.5+ above it
+
+
+def _pearson(xs: list[float], ys: list[float]) -> float:
+    if len(set(xs)) < 2 or len(set(ys)) < 2:
+        return 0.0
+    return statistics.correlation(xs, ys)
+
+
+def discrimination(sessions: list[Session]) -> dict[str, Discrimination]:
+    by_mode: dict[str, dict[str, list]] = {"typed": collections.defaultdict(list),
+                                           "choice": collections.defaultdict(list)}
+    for key, rows in _rest_rows(sessions).items():
+        for row in rows:
+            by_mode["typed" if row[3] < CHOICE_C else "choice"][key].append(row)
+    out = {}
+    for mode, keys in by_mode.items():
+        rs = [_pearson([t for t, *_ in v], [float(ok) for *_, ok in v]) for v in keys.values() if len(v) >= 30]
+        rows = [row for v in keys.values() for row in v]
+        weak = [ok for t, _, b, _, ok in rows if t <= b - 0.5]
+        strong = [ok for t, _, b, _, ok in rows if t >= b + 0.5]
+        out[mode] = Discrimination(
+            keys=len(rs), median_r=statistics.median(rs) if rs else 0.0,
+            good_share=sum(r >= 0.20 for r in rs) / max(1, len(rs)),
+            weak_right=sum(weak) / max(1, len(weak)), strong_right=sum(strong) / max(1, len(strong)),
+        )
+    return out
+
+
+@dataclass
+class Retest:
+    """The same candidate takes the test twice, with fresh items (TZ: stability on a repeated attempt)."""
+    pairs: int
+    agreement: float           # same pass/fail
+    kappa: float               # Cohen's kappa of pass/fail: agreement beyond what the pass rate gives by chance
+    agreement_clear: float     # pairs more than 0.5 from the cut
+    same_grade: float          # same confirmed grade, upgrades included
+    theta_r: float             # correlation of the two ability estimates
+
+
+def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float]) -> Retest:
+    pairs = [(theta, target, run_session(theta, spec, target, truth, rng, offsets=offsets),
+              run_session(theta, spec, target, truth, rng, offsets=offsets)) for theta, spec, target in people]
+    agree = [a.passed == b.passed for _, _, a, b in pairs]
+    p1 = statistics.mean(a.passed for _, _, a, _ in pairs)
+    p2 = statistics.mean(b.passed for _, _, _, b in pairs)
+    po, pe = statistics.mean(agree), p1 * p2 + (1 - p1) * (1 - p2)
+    clear = [ok for (theta, target, _, _), ok in zip(pairs, agree, strict=True) if abs(theta - CUTS[target]) > 0.5]
+    return Retest(
+        pairs=len(pairs), agreement=po, kappa=(po - pe) / (1 - pe) if pe < 1 else 1.0,
+        agreement_clear=statistics.mean(clear) if clear else 1.0,
+        same_grade=statistics.mean(a.earned == b.earned for _, _, a, b in pairs),
+        theta_r=_pearson([a.theta_hat for _, _, a, _ in pairs], [b.theta_hat for _, _, _, b in pairs]),
+    )
 
 
 @dataclass
 class Report:
     clean: CohortReport
+    choices: CohortReport
     leak: CohortReport
     monitored: CohortReport
     false_alarms_clean: int
@@ -191,45 +295,66 @@ class Report:
     leaked_keys: int
     leaked_flagged: int
     other_flagged: int
-    retest_agreement: float
+    retest: Retest
+    retest_choices: Retest
+    discrimination: dict[str, Discrimination]
+    typed_share: float
     guesser_pass: float
+    guesser_pass_choices: float
     blocked: list[str]
+
+
+def _guessers(truth: Truth, rng: random.Random) -> float:
+    guess = [run_session(0.0, rng.choice(SPECS), rng.choice(GRADE_ORDER), truth, rng, guesser=True)
+             for _ in range(300)]
+    return sum(s.passed for s in guess) / len(guess)
 
 
 def run(n: int = 3000, seed: int = 7) -> Report:
     rng = random.Random(seed)
     truth = Truth.draw(rng)
+    people = population(n, random.Random(seed + 1))
+    retest_people = population(max(300, n // 2), random.Random(seed + 2))
     # Pretest cohort: difficulty offsets are estimated before any monitoring starts.
-    _, pretest = cohort(n, truth, rng)
+    _, pretest = cohort(population(n, rng), truth, rng)
     offsets = calibrate(pretest)
-    clean, clean_sessions = cohort(n, truth, rng, offsets=offsets)
+    clean, clean_sessions = cohort(people, truth, rng, offsets=offsets)
+    with choices_only():
+        choices, _ = cohort(people, truth, rng, offsets=offsets)
+        retest_choices = retest(retest_people, truth, rng, offsets)
+        guesser_choices = _guessers(truth, rng)
     clean_alarms = monitor(clean_sessions)
-    leak, leak_sessions = cohort(n, truth, rng, leak_share=0.3, offsets=offsets)
+    leak, leak_sessions = cohort(population(n, rng), truth, rng, leak_share=0.3, offsets=offsets)
     stats = monitor(leak_sessions)
     flagged = {k for k, st in stats.items() if st.alarm}
     leaked_keys = {k for k in stats if k.split(":")[0] in set(MAIN_FAMILY.values()) and stats[k].n >= 30}
-    monitored, _ = cohort(n, truth, rng, leak_share=0.3, blocked=flagged, offsets=offsets)
-
-    agree = 0
-    retest_n = max(300, n // 5)
-    for _ in range(retest_n):
-        theta = rng.gauss(0.3, 1.0)
-        spec, target = rng.choice(SPECS), _declared(theta, rng)
-        a = run_session(theta, spec, target, truth, rng, offsets=offsets)
-        b = run_session(theta, spec, target, truth, rng, offsets=offsets)
-        agree += a.passed == b.passed
-    guess = [run_session(0.0, rng.choice(SPECS), rng.choice(GRADE_ORDER), truth, rng, guesser=True)
-             for _ in range(300)]
+    monitored, _ = cohort(population(n, rng), truth, rng, leak_share=0.3, blocked=flagged, offsets=offsets)
+    served = [c for s in clean_sessions for *_, c, _ in s.answers]
     return Report(
-        clean=clean, leak=leak, monitored=monitored,
+        clean=clean, choices=choices, leak=leak, monitored=monitored,
         false_alarms_clean=sum(1 for st in clean_alarms.values() if st.alarm),
         keys_clean=sum(1 for st in clean_alarms.values() if st.n >= 30),
         leaked_keys=len(leaked_keys), leaked_flagged=len(flagged & leaked_keys),
         other_flagged=len(flagged - leaked_keys),
-        retest_agreement=agree / retest_n,
-        guesser_pass=sum(s.passed for s in guess) / len(guess),
+        retest=retest(retest_people, truth, rng, offsets), retest_choices=retest_choices,
+        discrimination=discrimination(clean_sessions),
+        typed_share=sum(c < CHOICE_C for c in served) / len(served),
+        guesser_pass=_guessers(truth, rng), guesser_pass_choices=guesser_choices,
         blocked=sorted(flagged),
     )
+
+
+# The clean scenario must hold these in CI (`--check`); the seed is fixed, so a failure is a regression.
+CHECKS = {
+    "accuracy_clear ≥ 0.85": lambda r: r.clean.accuracy_clear >= 0.85,
+    "false_pass ≤ 0.12": lambda r: r.clean.false_pass <= 0.12,
+    "false_upgrade ≤ 0.03": lambda r: r.clean.false_upgrade <= 0.03,
+    "retest kappa ≥ 0.35": lambda r: r.retest.kappa >= 0.35,
+    "guesser_pass ≤ 0.02": lambda r: r.guesser_pass <= 0.02,
+    # Guessing flattens an item with options, so its floor is lower.
+    "typed median r ≥ 0.20": lambda r: r.discrimination["typed"].median_r >= 0.20,
+    "choice median r ≥ 0.15": lambda r: r.discrimination["choice"].median_r >= 0.15,
+}
 
 
 def _row(name: str, r: CohortReport) -> str:
@@ -238,24 +363,53 @@ def _row(name: str, r: CohortReport) -> str:
             f"{r.mean_len:.1f} / {r.p90_len} | {r.stopped_early:.0%} | {r.max_exposure:.0%} | {r.concept_share:.0%} |")
 
 
+def _retest_row(name: str, r: Retest) -> str:
+    return (f"| {name} | {r.agreement:.0%} | {r.kappa:.2f} | {r.agreement_clear:.0%} | {r.same_grade:.0%} | "
+            f"{r.theta_r:.2f} |")
+
+
+def _disc_row(name: str, d: Discrimination) -> str:
+    return (f"| {name} | {d.keys} | {d.median_r:.2f} | {d.good_share:.0%} | {d.weak_right:.0%} | "
+            f"{d.strong_right:.0%} |")
+
+
 def markdown(r: Report, n: int, seed: int) -> str:
     return "\n".join([
         f"Симуляция: {n} кандидатов на сценарий, seed {seed}. Команда: "
-        f"`python -m app.validation.assessment --n {n} --seed {seed}`.",
+        f"`python -m app.validation.assessment --n {n} --seed {seed}`. Сценарии «без утечки» и «все задания "
+        f"с вариантами» проходят одни и те же кандидаты; ответ вводится в {r.typed_share:.0%} выданных заданий.",
         "",
         "| Сценарий | Точность «сдал/не сдал» | Точность вне ±0,5 от порога | Сдали из тех, кто на уровне | "
         "Ложно сдали | Ложное повышение | "
         "Заданий: среднее / 90 % | Решено до лимита | Макс. экспозиция ключа | Доля концептуальных |",
         "|---|---|---|---|---|---|---|---|---|---|",
         _row("Без утечки", r.clean),
+        _row("Без утечки, все задания с вариантами", r.choices),
         _row("Утечка у 30 %, без мониторинга", r.leak),
         _row("Утечка у 30 %, ключи на карантине", r.monitored),
+        "",
+        f"Повторный тест: {r.retest.pairs} кандидатов проходят тест дважды, задания каждый раз новые.",
+        "",
+        "| Формат | Тот же итог «сдал/не сдал» | Каппа Коэна | То же вне ±0,5 от порога | Тот же грейд | "
+        "Корреляция оценок θ |",
+        "|---|---|---|---|---|---|",
+        _retest_row("Числовой ответ вводится", r.retest),
+        _retest_row("Все задания с вариантами", r.retest_choices),
+        "",
+        "Различающая сила заданий в сценарии «без утечки». r — точечно-бисериальная корреляция ответа "
+        "с оценкой способности по остальным семействам теста.",
+        "",
+        "| Формат ответа | Ключей с ≥ 30 ответами | Медиана r | Ключей с r ≥ 0,20 | Верно у тех, кто на 0,5 слабее "
+        "задания | Верно у тех, кто на 0,5 сильнее |",
+        "|---|---|---|---|---|---|",
+        _disc_row("Число вводится", r.discrimination["typed"]),
+        _disc_row("Выбор из четырёх", r.discrimination["choice"]),
         "",
         f"- Мониторинг утечки: из {r.leaked_keys} утёкших ключей с ≥ 30 ответами пойманы {r.leaked_flagged}, "
         f"ложных срабатываний среди остальных — {r.other_flagged}; на чистых данных — {r.false_alarms_clean} "
         f"из {r.keys_clean} ключей.",
-        f"- Повторный тест: одинаковый итог «сдал/не сдал» в {r.retest_agreement:.0%} пар.",
-        f"- Случайное угадывание проходит тест в {r.guesser_pass:.1%} случаев.",
+        f"- Случайное угадывание проходит тест в {r.guesser_pass:.1%} случаев "
+        f"(все задания с вариантами — {r.guesser_pass_choices:.1%}).",
         "",
     ])
 
@@ -265,6 +419,7 @@ def main() -> None:
     parser.add_argument("--n", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--md", type=str, default=None, help="write the markdown table to this file")
+    parser.add_argument("--check", action="store_true", help="fail when the clean scenario breaks CHECKS")
     args = parser.parse_args()
     report = run(args.n, args.seed)
     text = markdown(report, args.n, args.seed)
@@ -273,6 +428,11 @@ def main() -> None:
     if args.md:
         with open(args.md, "w", encoding="utf-8") as fh:
             fh.write(text)
+    if args.check:
+        failed = [name for name, ok in CHECKS.items() if not ok(report)]
+        print("checks:", "failed " + ", ".join(failed) if failed else f"all {len(CHECKS)} passed")
+        if failed:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

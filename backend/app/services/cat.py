@@ -5,7 +5,7 @@ next one)? That is a classification problem, so items are chosen where they info
 Fisher information at the grade cut, not at the current ability estimate, and the test stops as soon as the
 posterior probability is decided either way.
 
-    P(correct | θ) = c + (1 − c) · σ(a · (θ − b))        3PL; c = 1 / number of options (guessing)
+    P(correct | θ) = c + (1 − c) · σ(a · (θ − b))        3PL; c = 1/4 with options, 0.02 for a typed number
     posterior(θ) ∝ N(θ; μ0, 1) · Π P^x (1 − P)^(1−x)      on a grid −4..4, step 0.05 (EAP)
     p_pass    = P(θ ≥ cut(target) | answers)
     p_upgrade = P(θ ≥ cut(target + 1) | answers)
@@ -23,7 +23,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from app.items import LEVEL_B, Family
-from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
+from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, expected_guess, families_for
 from app.models.assessment import GRADE_ORDER
 
 # Lower edge of each grade on the theta scale (junior starts at -1.5: below that nothing is confirmed).
@@ -214,7 +214,7 @@ def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = 
             if key in blocked or not fam.available(state.spec, level):
                 continue
             b = LEVEL_B[level] + offsets.get(key, 0.0)
-            c = 0.25
+            c = expected_guess(fam.id, level)
             info = info3(cut, fam.a, b, c)
             rate = exposure.get(key, 0.0)
             penalty = min(1.0, EXPOSURE_TARGET / rate) if rate > EXPOSURE_TARGET else 1.0

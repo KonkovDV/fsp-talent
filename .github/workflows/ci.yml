@@ -59,6 +59,9 @@ jobs:
         run: cd backend && pip install -e .[test]
       - name: Run unit tests
         run: cd backend && pytest tests/unit/ -v --cov=app/services --cov-report=xml
+      # Fixed seed: a broken threshold is a regression in the item generators or the adaptive test.
+      - name: Validate the adaptive test
+        run: cd backend && python -m app.validation.assessment --n 300 --seed 7 --check
       # Unit tests never touch a database. These steps catch a broken migration chain, an
       # unimportable module and a dead API path, which all reached main before.
       - name: Apply migrations

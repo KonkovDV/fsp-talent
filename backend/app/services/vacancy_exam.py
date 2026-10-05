@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 
+from app.items import typed_answer
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
 from app.services.skills import extract_skills, normalize_skill
 
@@ -93,6 +94,7 @@ def _samples(spec: str, shares: dict[str, float], grade: str, seed: str) -> list
             "stem": item.stem,
             "code": item.code,
             "language": item.language,
+            "answer_mode": "number" if typed_answer(fam.kind, item) is not None else "choice",
         })
         seen.add(fam.topic)
         if len(out) == 3:

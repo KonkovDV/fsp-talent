@@ -1,5 +1,8 @@
 export interface ExamTopic { topic: string; label: string; share: number }
-export interface ExamSample { topic: string; topic_label?: string; family: string; stem: string; code?: string | null; language?: string | null }
+export interface ExamSample {
+  topic: string; topic_label?: string; family: string; stem: string; code?: string | null; language?: string | null
+  answer_mode?: 'choice' | 'number'
+}
 export interface Exam { why: string; topics: ExamTopic[]; samples: ExamSample[]; quotes?: { skill: string; evidence: string }[] }
 
 // One hue, stepped by order: the bar shows parts of a whole, the labels carry the names.
@@ -40,6 +43,7 @@ export default function ExamPreview({ exam }: { exam: Exam }) {
               <li key={s.stem} className="space-y-2">
                 <p className={`whitespace-pre-wrap text-sm text-ink ${s.stem.includes(' | ') ? 'font-mono text-xs' : ''}`}><span className="font-sans text-ink-3">{s.topic_label ?? s.family}.</span> {s.stem}</p>
                 {s.code && <pre className="code-block"><code>{s.code}</code></pre>}
+                <p className="text-xs text-ink-3">{s.answer_mode === 'number' ? 'Ответ вводится числом' : 'Выбор из четырёх вариантов'}</p>
               </li>
             ))}
           </ol>

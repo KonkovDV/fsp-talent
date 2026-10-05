@@ -13,9 +13,16 @@ const GRADES = ['junior', 'middle', 'senior', 'lead']
 
 interface Item {
   token: string; seq: number; stem: string; code: string | null; language: string | null
+  answer_mode: 'choice' | 'number'
   options: { index: number; text: string }[]; topic_label: string; family_title: string; kind: string
   time_limit_s: number; served_at: string
 }
+interface ReviewItem {
+  seq: number; stem: string; code: string | null; answer_mode: 'choice' | 'number'; options: string[]
+  your_answer: number | null; your_text: string | null; right_answer: number | null; right_text: string | null
+  correct: boolean | null; explanation: string | null; topic_label: string
+}
+const WHOLE = /^[+\-\u2212]?\d{1,12}$/
 interface Result {
   outcome: string; passed: boolean; upgraded: boolean; earned_grade: string | null; confirmed_grade: string | null
   p_pass: number; p_upgrade: number | null; theta: number; se: number; items_count: number; score: number
@@ -64,6 +71,7 @@ export default function CandidateAssessment() {
   const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
+  const [typed, setTyped] = useState('')
   const [error, setError] = useState('')
   const [showReview, setShowReview] = useState(false)
 
@@ -88,12 +96,14 @@ export default function CandidateAssessment() {
   }
   const start = useMutation({
     mutationFn: () => startAssessment({ target_grade: target, code_language: lang, vacancy_id: vacancyId }).then(r => r.data),
-    onSuccess: (data: SessionState) => { setState(data); setPicked(null); setError(''); setShowReview(false) },
+    onSuccess: (data: SessionState) => { setState(data); setPicked(null); setTyped(''); setError(''); setShowReview(false) },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось начать тест')),
   })
   const answer = useMutation({
-    mutationFn: () => answerAssessment(state!.session_id, state!.item!.token, picked!).then(r => r.data),
-    onSuccess: (data: SessionState) => { setState(data); setPicked(null); if (data.result) refresh() },
+    mutationFn: () => answerAssessment(state!.session_id, state!.item!.token,
+      state!.item!.answer_mode === 'number' ? { answer_text: typed.replace(/\s/g, '') } : { answer_index: picked! },
+    ).then(r => r.data),
+    onSuccess: (data: SessionState) => { setState(data); setPicked(null); setTyped(''); if (data.result) refresh() },
     onError: (e: unknown) => { setError(apiError(e, 'Ответ не принят')); refresh() },
   })
   const stop = useMutation({
@@ -108,6 +118,7 @@ export default function CandidateAssessment() {
   if (!profile) return <div className="animate-pulse h-64 bg-surface-2 rounded-2xl" />
   const item = state?.item
   const result = state?.result
+  const ready = item?.answer_mode === 'number' ? WHOLE.test(typed.replace(/\s/g, '')) : picked !== null
 
   return (
     <div className="space-y-6">
@@ -171,6 +182,7 @@ export default function CandidateAssessment() {
             <ul className="space-y-1.5 border-t border-line pt-4 text-sm text-ink-2">
               <li>{blueprint?.min_items}–{blueprint?.max_items} заданий, тест заканчивается, как только результат ясен.</li>
               <li>3 минуты на задание с кодом, 75 секунд на вопрос.</li>
+              <li>Если ответ на задание с кодом — целое число, его вводят сами: вариантов нет, угадать нельзя.</li>
               <li>Уровень подтверждается при вероятности не ниже {pct(blueprint?.pass_probability)}, повышение — при {pct(blueprint?.upgrade_probability)}.</li>
               <li>Пересдача того же уровня — через 7 дней. Прерванная попытка засчитывается.</li>
             </ul>
@@ -193,18 +205,28 @@ export default function CandidateAssessment() {
           {item.code && (
             <pre className="code-block"><code>{item.code}</code></pre>
           )}
-          <div className="grid gap-2" role="radiogroup">
-            {item.options.map(o => (
-              <button key={o.index} role="radio" aria-checked={picked === o.index} onClick={() => setPicked(o.index)}
-                className={`text-left px-4 py-3 rounded-xl border font-mono text-sm ${picked === o.index ? 'border-accent bg-accent-soft' : 'border-border hover:border-accent/50'}`}>
-                {o.text}
-              </button>
-            ))}
-          </div>
+          {item.answer_mode === 'number' ? (
+            <form onSubmit={e => { e.preventDefault(); if (ready && !answer.isPending) answer.mutate() }}>
+              <label htmlFor="typed-answer" className="field-label">Ответ — целое число</label>
+              <input id="typed-answer" key={item.token} value={typed} onChange={e => setTyped(e.target.value)} autoFocus
+                inputMode="numeric" autoComplete="off" spellCheck={false} maxLength={32} placeholder="например, 42"
+                className="input max-w-xs font-mono text-base" aria-describedby="typed-hint" />
+              <p id="typed-hint" className="field-hint">Вариантов в этом задании нет. Enter отправляет ответ.</p>
+            </form>
+          ) : (
+            <div className="grid gap-2" role="radiogroup">
+              {item.options.map(o => (
+                <button key={o.index} role="radio" aria-checked={picked === o.index} onClick={() => setPicked(o.index)}
+                  className={`text-left px-4 py-3 rounded-xl border font-mono text-sm ${picked === o.index ? 'border-accent bg-accent-soft' : 'border-border hover:border-accent/50'}`}>
+                  {o.text}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <button onClick={() => { if (window.confirm('Прервать тест? Попытка засчитается, пересдача — через 7 дней.')) stop.mutate() }}
               className="text-sm text-text-muted hover:text-invite">Прервать</button>
-            <button onClick={() => answer.mutate()} disabled={picked === null || answer.isPending} className="btn-primary">
+            <button onClick={() => answer.mutate()} disabled={!ready || answer.isPending} className="btn-primary">
               {answer.isPending ? 'Проверяем…' : 'Ответить'}
             </button>
           </div>
@@ -249,13 +271,15 @@ export default function CandidateAssessment() {
           </div>
           {showReview && review.data && (
             <ol className="space-y-3 text-sm">
-              {review.data.items.map((r: { seq: number; stem: string; code: string | null; options: string[]; your_answer: number | null; right_answer: number | null; correct: boolean | null; explanation: string | null; topic_label: string }) => (
+              {(review.data.items as ReviewItem[]).map(r => (
                 <li key={r.seq} className="border border-border rounded-xl p-3 space-y-1">
                   <p className="text-xs text-text-muted">{r.seq}. {r.topic_label} · {r.correct ? 'верно' : 'неверно'}</p>
                   <p className={`whitespace-pre-wrap ${r.stem.includes(" | ") ? "font-mono text-xs" : ""}`}>{r.stem}</p>
                   {r.code && <pre className="bg-surface-2 rounded p-2 text-xs overflow-x-auto">{r.code}</pre>}
-                  <p className="text-xs">Ваш ответ: {r.your_answer == null ? '—' : r.options[r.your_answer]}
-                    {r.right_answer != null && <> · правильный: <b>{r.options[r.right_answer]}</b></>}</p>
+                  {r.answer_mode === 'number'
+                    ? <p className="text-xs">Ваш ответ: <span className="font-mono">{r.your_text ?? '—'}</span> · правильный: <b className="font-mono">{r.right_text}</b></p>
+                    : <p className="text-xs">Ваш ответ: {r.your_answer == null ? '—' : r.options[r.your_answer]}
+                        {r.right_answer != null && <> · правильный: <b>{r.options[r.right_answer]}</b></>}</p>}
                   {r.explanation && <p className="text-xs text-text-secondary">{r.explanation}</p>}
                 </li>
               ))}

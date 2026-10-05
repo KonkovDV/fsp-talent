@@ -10,4 +10,4 @@ def test_need_skills_pull_the_mix_and_no_keys_leak():
     assert share["sql"] > base.get("sql", 0)
     assert abs(sum(share.values()) - 1) < 0.01
     for sample in sql["samples"]:
-        assert set(sample) == {"topic", "topic_label", "family", "stem", "code", "language"}
+        assert set(sample) == {"topic", "topic_label", "family", "stem", "code", "language", "answer_mode"}

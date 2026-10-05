@@ -27,6 +27,7 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.items import TYPED_C, same_number, typed_answer
 from app.items.registry import FAMILIES
 from app.models.assessment import (
     GRADE_COOLDOWN_DAYS,
@@ -212,11 +213,12 @@ async def serve_next(db: AsyncSession, session: TestSession, state: cat.State, b
         if key not in bank.blocked and key not in state.keys_used:
             break
     b = choice.b + (bank.offsets.get(key, 0.0) if item.static_key else 0.0)
+    typed = typed_answer(fam.kind, item) is not None
     row = TestSessionItem(
         session_id=session.id, seq=seq, item_key=key, family_id=fam.id, level=choice.level, topic=fam.topic,
         kind=fam.kind, skills=list(fam.skills), stem=item.stem, code=item.code, language=item.language,
-        options=item.options, correct_index=item.correct, explanation=item.explanation,
-        a=choice.a, b=b, c=1.0 / len(item.options), time_limit_s=TIME_LIMIT_S[fam.kind],
+        options=item.options, correct_index=item.correct, explanation=item.explanation, typed=typed,
+        a=choice.a, b=b, c=TYPED_C if typed else 1.0 / len(item.options), time_limit_s=TIME_LIMIT_S[fam.kind],
         served_at=datetime.now(UTC),
     )
     db.add(row)
@@ -234,7 +236,8 @@ class Finished:
 
 
 async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: uuid.UUID, token: str,
-                      answer_index: int) -> tuple[TestSession, TestSessionItem | None, Finished | None]:
+                      answer_index: int | None = None, answer_text: str | None = None,
+                      ) -> tuple[TestSession, TestSessionItem | None, Finished | None]:
     session = await db.get(TestSession, session_id, with_for_update=True)
     if session is None or session.participant_id != participant_id or session.engine != "cat_v2":
         raise SessionError("not_found")
@@ -250,11 +253,21 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     if current is None or current.answered_at is not None or not hmac.compare_digest(
             token, item_token(session.id, current.seq, current.id)):
         raise SessionError("item_token_invalid")
+    # A malformed answer is rejected before it consumes the item.
+    if current.typed:
+        if not (answer_text or "").strip():
+            raise SessionError("answer_required")
+        current.answer_text = answer_text.strip()[:32]
+        right = same_number(answer_text, current.options[current.correct_index])
+    else:
+        if answer_index is None or not 0 <= answer_index < len(current.options):
+            raise SessionError("answer_required")
+        current.answer_index = answer_index
+        right = answer_index == current.correct_index
     elapsed = (now - current.served_at).total_seconds()
     current.answered_at = now
-    current.answer_index = answer_index
     current.timed_out = elapsed > current.time_limit_s + GRACE_S
-    current.is_correct = (not current.timed_out) and answer_index == current.correct_index
+    current.is_correct = (not current.timed_out) and right
     flags = dict(session.flags or {})
     if current.timed_out:
         flags["timeouts"] = flags.get("timeouts", 0) + 1

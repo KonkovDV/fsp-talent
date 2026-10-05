@@ -1,7 +1,10 @@
 """All item families and the per-specialization test blueprint."""
 from __future__ import annotations
 
-from app.items import Family
+import random
+from functools import cache
+
+from app.items import CHOICE_C, TYPED_C, Family, typed_answer
 from app.items.families import algorithms, concepts, embedded, javascript, ml, network, python_code, security, sql_query
 
 FAMILIES: dict[str, Family] = {f.id: f for f in [
@@ -28,3 +31,22 @@ def families_for(spec: str) -> list[Family]:
     """Only the specialization's own families: a backend test never mixes in embedded items."""
     topics = BLUEPRINTS[spec]
     return [f for f in FAMILIES.values() if spec in f.specs and f.topic in topics]
+
+
+@cache
+def typed_share(family_id: str, level: int) -> float:
+    """Share of this family's items at this level that are typed. Sampled once per process, so it follows
+    the generators instead of a hand-kept table."""
+    fam = FAMILIES[family_id]
+    spec = next((s for s in sorted(fam.specs) if fam.available(s, level)), None)
+    if fam.kind != "code" or spec is None:
+        return 0.0
+    rng = random.Random(f"typed:{family_id}:{level}")
+    draws = 24
+    return sum(typed_answer(fam.kind, fam.generate(rng, level, spec)) is not None for _ in range(draws)) / draws
+
+
+def expected_guess(family_id: str, level: int) -> float:
+    """Guessing rate the item selector assumes before the item is generated."""
+    share = typed_share(family_id, level)
+    return share * TYPED_C + (1.0 - share) * CHOICE_C

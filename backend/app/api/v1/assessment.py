@@ -77,7 +77,8 @@ class VacancyExamIn(BaseModel):
 
 class AnswerIn(BaseModel):
     item_token: str = Field(min_length=16, max_length=64)
-    answer_index: int = Field(ge=0, le=9)
+    answer_index: int | None = Field(None, ge=0, le=9, description="Номер варианта, если у задания есть варианты")
+    answer_text: str | None = Field(None, max_length=32, description="Число, если ответ вводится (answer_mode=number)")
 
 
 class OptionOut(BaseModel):
@@ -91,6 +92,8 @@ class ItemOut(BaseModel):
     stem: str
     code: str | None
     language: str | None
+    answer_mode: Literal["choice", "number"] = Field(
+        description="number: ответ — целое число, вводится без вариантов; choice: выбрать один из вариантов")
     options: list[OptionOut]
     topic: str
     topic_label: str
@@ -152,7 +155,8 @@ class SessionOut(BaseModel):
 def _item_out(session_id: uuid.UUID, it: TestSessionItem) -> ItemOut:
     return ItemOut(
         token=item_token(session_id, it.seq, it.id), seq=it.seq, stem=it.stem, code=it.code, language=it.language,
-        options=[OptionOut(index=i, text=t) for i, t in enumerate(it.options)], topic=it.topic,
+        answer_mode="number" if it.typed else "choice",
+        options=[] if it.typed else [OptionOut(index=i, text=t) for i, t in enumerate(it.options)], topic=it.topic,
         topic_label=TOPIC_LABELS.get(it.topic, it.topic), family_title=family_title(it.family_id), kind=it.kind,
         time_limit_s=it.time_limit_s, served_at=it.served_at.isoformat(),
     )
@@ -210,6 +214,8 @@ async def _finished_result(db: AsyncSession, session: TestSession, items: list[T
 def _raise(e: SessionError):
     if e.code == "not_found":
         raise ApiError(404, "not_found", "Сессия не найдена") from e
+    if e.code == "answer_required":
+        raise ApiError(422, "validation_error", "Нужен ответ: номер варианта или число") from e
     status_code = 410 if e.code == "session_expired" else 409
     raise ApiError(status_code, e.code) from e
 
@@ -367,7 +373,7 @@ async def answer(session_id: uuid.UUID, body: AnswerIn, current: dict = Depends(
                  db: AsyncSession = Depends(get_db)):
     try:
         session, nxt, fin = await answer_item(db, session_id, uuid.UUID(current["sub"]), body.item_token,
-                                              body.answer_index)
+                                              body.answer_index, body.answer_text)
     except SessionError as e:
         await db.commit()   # an expired session is stored as expired
         _raise(e)
@@ -410,9 +416,11 @@ async def review(session_id: uuid.UUID, current: dict = Depends(get_current_part
         out.append({
             "seq": it.seq, "topic": it.topic, "topic_label": TOPIC_LABELS.get(it.topic, it.topic),
             "family_title": family_title(it.family_id), "level": it.level, "stem": it.stem, "code": it.code,
-            "language": it.language, "options": it.options, "your_answer": it.answer_index,
+            "language": it.language, "answer_mode": "number" if it.typed else "choice",
+            "options": [] if it.typed else it.options, "your_answer": it.answer_index, "your_text": it.answer_text,
             "correct": it.is_correct, "timed_out": it.timed_out, "excluded": it.excluded,
-            "right_answer": None if static else it.correct_index,
+            "right_answer": None if static or it.typed else it.correct_index,
+            "right_text": it.options[it.correct_index] if it.typed else None,
             "explanation": None if static else it.explanation,
         })
     return {"session_id": str(session.id), "items": out}

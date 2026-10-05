@@ -92,10 +92,15 @@ async def _simulate_tests(db, now: datetime) -> int:
             item.served_at = datetime.now(UTC) - timedelta(seconds=rng.randint(30, 90))
             await db.flush()
             right = rng.random() < _p_right(theta, item.a, item.b, item.c)
-            wrong = [i for i in range(len(item.options)) if i != item.correct_index]
-            choice = item.correct_index if right else rng.choice(wrong)
             token = assessment.item_token(session.id, item.seq, item.id)
-            session, item, finished = await assessment.answer_item(db, session.id, p.id, token, choice)
+            if item.typed:
+                value = int(item.options[item.correct_index])
+                text = str(value if right else value + rng.choice([-2, -1, 1, 2]))
+                session, item, finished = await assessment.answer_item(db, session.id, p.id, token, answer_text=text)
+            else:
+                wrong = [i for i in range(len(item.options)) if i != item.correct_index]
+                choice = item.correct_index if right else rng.choice(wrong)
+                session, item, finished = await assessment.answer_item(db, session.id, p.id, token, choice)
             if finished is not None:
                 break
         # Spread the finish dates over the last month.
