@@ -4,14 +4,21 @@ import { getMyEmployerOffers, listNeeds, vacancyApplications } from '../../api/c
 import { PageHeader } from '../../components/ui'
 
 interface Need { id: string; title: string; version: number; shortlist_count: number }
+interface OfferRow { status: string; candidate_viewed_at: string | null; contacts_revealed_at: string | null }
 
 /** Employer home: three numbers that matter and the next step for each. */
 export default function EmployerDashboard() {
-  const { data: offers = [] } = useQuery({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
+  const { data: offers = [] } = useQuery<OfferRow[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
   const { data: needs = [] } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
   const { data: apps = [] } = useQuery({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
-  const accepted = offers.filter((o: { status: string }) => o.status === 'accepted').length
-  const pending = offers.filter((o: { status: string }) => o.status === 'pending').length
+  const accepted = offers.filter(o => o.status === 'accepted').length
+  const pending = offers.filter(o => o.status === 'pending').length
+  const funnel = [
+    ['Отправлено', offers.length],
+    ['Просмотрено', offers.filter(o => o.candidate_viewed_at).length],
+    ['Принято', accepted],
+    ['Контакты открыты', offers.filter(o => o.contacts_revealed_at).length],
+  ] as const
 
   const tiles = [
     { n: needs.length, label: 'потребностей', hint: 'Описание того, кого ищете, с подборкой и шорт-листом', to: '/employer/needs', cta: needs.length ? 'Открыть' : 'Создать первую' },
@@ -22,6 +29,13 @@ export default function EmployerDashboard() {
     <div>
       <PageHeader title="Кабинет работодателя" lead="Начните с потребности: опишите роль и навыки — подборка с объяснением появится сразу."
         actions={<><Link to="/employer/search" className="btn-secondary">Свободный поиск</Link><Link to="/employer/needs" className="btn-primary">Новая потребность</Link></>} />
+      {offers.length > 0 && (
+        <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {funnel.map(([label, n]) => (
+            <div key={label} className="stat-card"><dt className="stat-card-label">{label}</dt><dd className="stat-card-value">{n}</dd></div>
+          ))}
+        </dl>
+      )}
       <div className="grid gap-4 md:grid-cols-3">
         {tiles.map(t => (
           <Link key={t.label} to={t.to} className="card-hover flex flex-col">

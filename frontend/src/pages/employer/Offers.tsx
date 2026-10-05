@@ -5,7 +5,8 @@ import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../com
 
 interface Offer {
   id: string; role: string; salary_from: number; salary_to: number; work_format: string; status: string
-  contacts_available: boolean; contact_method: string | null; candidate_viewed_at: string | null; created_at: string
+  contacts_available: boolean; contact_method: string | null; candidate_viewed_at: string | null
+  contacts_revealed_at: string | null; created_at: string
   expires_at: string | null; candidate: { role: string; grade: string; grade_source: string } | null
 }
 interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; region: string | null }
@@ -33,13 +34,14 @@ export default function EmployerOffers() {
     ['Отправлено', offers.length],
     ['Просмотрено', offers.filter(o => o.candidate_viewed_at).length],
     ['Принято', offers.filter(o => o.status === 'accepted').length],
+    ['Контакты открыты', offers.filter(o => o.contacts_revealed_at).length],
   ] as const
 
   return (
     <div>
       <PageHeader title="Приглашения" lead="Статус каждого приглашения. Контакты открываются после согласия кандидата, каждое открытие записывается в журнал." />
       {offers.length > 0 && (
-        <dl className="mb-6 grid grid-cols-3 gap-3 sm:max-w-lg">
+        <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {funnel.map(([label, n]) => (
             <div key={label} className="stat-card"><dt className="stat-card-label">{label}</dt><dd className="stat-card-value">{n}</dd></div>
           ))}

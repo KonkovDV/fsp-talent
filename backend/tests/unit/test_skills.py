@@ -7,7 +7,12 @@ def test_aliases_and_cyrillic_lookalikes():
     assert normalize_skill("С++") == "C++"
     assert normalize_skill("pg") is None
     assert normalize_skill("C") == "C"
+    assert normalize_skill("голанг") == "Go"
+    assert normalize_skill("джаваскрипт") == "JavaScript"
+    assert normalize_skill("кубернетес") == "Kubernetes"
+    assert normalize_skill("фастапи") == "FastAPI"
     assert all(item.skill != "C" for item in extract_skills("option c, not a language"))
+    assert all(item.skill != "Rust" for item in extract_skills("проект растёт второй год"))
 
 
 def test_extraction_keeps_original_evidence():
