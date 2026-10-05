@@ -4,12 +4,15 @@ import Layout from './components/Layout'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import VerifyPage from './pages/VerifyPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import CandidateDashboard from './pages/candidate/Dashboard'
 import CandidateProfile from './pages/candidate/Profile'
 import CandidateResults from './pages/candidate/Results'
 import CandidateOffers from './pages/candidate/Offers'
 import EmployerDashboard from './pages/employer/Dashboard'
 import EmployerSearch from './pages/employer/Search'
+import EmployerNeeds from './pages/employer/Needs'
 import EmployerOffers from './pages/employer/Offers'
 import EmployerVacancies from './pages/employer/Vacancies'
 import CandidateVacancies from './pages/candidate/Vacancies'
@@ -31,6 +34,8 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/forgot" element={<ForgotPasswordPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
 
@@ -47,6 +52,7 @@ export default function App() {
         {/* Employer area */}
         <Route path="/employer" element={<ProtectedRoute role="employer"><Layout /></ProtectedRoute>}>
           <Route index element={<EmployerDashboard />} />
+          <Route path="needs" element={<EmployerNeeds />} />
           <Route path="search" element={<EmployerSearch />} />
           <Route path="offers" element={<EmployerOffers />} />
           <Route path="vacancies" element={<EmployerVacancies />} />

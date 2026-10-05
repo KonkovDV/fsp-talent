@@ -1,13 +1,30 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
+type ErrorPayload = { error?: { code?: string; message?: string; details?: unknown }; detail?: unknown }
+
+function payloadOf(error: unknown): ErrorPayload | undefined {
+  return (error as { response?: { data?: ErrorPayload } })?.response?.data
+}
+
+/** Stable machine code from the API error envelope (docs/API_ERRORS.md). */
+export function apiErrorCode(error: unknown): string | undefined {
+  return payloadOf(error)?.error?.code
+}
+
+export function apiErrorDetails<T = Record<string, unknown>>(error: unknown): T | undefined {
+  return payloadOf(error)?.error?.details as T | undefined
+}
+
 export function apiError(error: unknown, fallback = 'Ошибка'): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  if (typeof detail === 'string') return detail
+  const data = payloadOf(error)
+  const detail = data?.detail
   if (Array.isArray(detail)) {
     const text = detail.map((item) => (typeof item === 'string' ? item : (item as { msg?: string }).msg ?? '')).filter(Boolean).join('; ')
     return text || fallback
   }
+  if (data?.error?.message) return data.error.message
+  if (typeof detail === 'string') return detail
   return fallback
 }
 
@@ -35,15 +52,34 @@ api.interceptors.response.use(
   }
 )
 
-export const registerParticipant = (data: { fsp_id: string; fsp_secret: string }) =>
-  api.post('/auth/participant/register', data)
-export const loginParticipant = (fsp_id: string, password: string) =>
-  api.post('/auth/participant/token', new URLSearchParams({ username: fsp_id, password }),
-           { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+export type Role = 'participant' | 'employer'
+const form = (username: string, password: string) =>
+  [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const
+
+export const registerParticipant = (data: {
+  email: string; password: string; display_name?: string; is_adult: boolean; consents: string[]
+}) => api.post('/auth/participant/register', data)
 export const registerEmployer = (data: object) => api.post('/auth/employer/register', data)
+export const verifyEmail = (data: { email?: string; code?: string; token?: string; role?: Role }) =>
+  api.post('/auth/verify-email', data)
+export const resendVerification = (email: string, role: Role) =>
+  api.post('/auth/resend-verification', { email, role })
+export const forgotPassword = (email: string, role: Role) => api.post('/auth/password/forgot', { email, role })
+export const resetPassword = (data: { email: string; role: Role; code: string; new_password: string }) =>
+  api.post('/auth/password/reset', data)
+export const loginParticipant = (email: string, password: string) =>
+  api.post('/auth/participant/token', ...form(email, password))
 export const loginEmployer = (email: string, password: string) =>
-  api.post('/auth/employer/token', new URLSearchParams({ username: email, password }),
-           { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+  api.post('/auth/employer/token', ...form(email, password))
+
+export interface LegalDoc { kind: string; version: string; title: string; required: boolean; roles: string[]; sha256: string }
+export const legalDocuments = (role?: Role) =>
+  api.get<LegalDoc[]>('/legal/documents', { params: role ? { role } : {} })
+export const legalDocument = (kind: string) => api.get<LegalDoc & { body_md: string }>(`/legal/documents/${kind}`)
+export const myConsents = () => api.get('/me/consents')
+export const giveConsent = (kind: string) => api.post('/me/consents', { kind })
+export const withdrawConsent = (kind: string) => api.delete(`/me/consents/${kind}`)
+export const linkFsp = (fsp_id: string, fsp_secret: string) => api.post('/candidates/me/fsp', { fsp_id, fsp_secret })
 
 export const getMyProfile = () => api.get('/candidates/me')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)
@@ -71,15 +107,36 @@ export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
 export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
-export const startAssessment = (data: { target_grade: string; discipline?: string | null }) =>
+export const assessmentBlueprint = () => api.get('/assessment/blueprint')
+export const startAssessment = (data: { target_grade: string; specialization?: string | null }) =>
   api.post('/assessment/start', data)
-export const submitAssessment = (sessionId: string, answers: { question_id: string; answer: string }[]) =>
-  api.post(`/assessment/${sessionId}/submit`, { answers })
-export const assessmentCooldown = () => api.get('/assessment/cooldown')
+export const activeAssessment = () => api.get('/assessment/active')
+export const answerAssessment = (sessionId: string, item_token: string, answer_index: number) =>
+  api.post(`/assessment/${sessionId}/answer`, { item_token, answer_index })
+export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
+export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
+export const assessmentCooldown = (specialization?: string) =>
+  api.get('/assessment/cooldown', { params: specialization ? { specialization } : {} })
 export const assessmentHistory = () => api.get('/assessment/history')
+export const itemHealth = () => api.get('/public/assessment/items')
+
+export const surveyOptions = () => api.get('/candidates/survey-options')
+export const saveSurvey = (data: {
+  specialization: string; industry: string; work_goal: string; declared_grade?: string | null; experience_years?: number | null
+}) => api.put('/candidates/me/survey', data)
 
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
 export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)
 export const verifyCredential = (credential: object) => api.post('/public/credentials/verify', credential)
+
+export const listNeeds = () => api.get('/needs')
+export const createNeed = (data: object) => api.post('/needs', data)
+export const updateNeed = (id: string, data: object) => api.put(`/needs/${id}`, data)
+export const archiveNeed = (id: string) => api.delete(`/needs/${id}`)
+export const needMatches = (id: string) => api.get(`/needs/${id}/matches`, { params: { limit: 20 } })
+export const needShortlist = (id: string) => api.get(`/needs/${id}/shortlist`)
+export const setShortlist = (id: string, candidateId: string, status = 'shortlisted') =>
+  api.put(`/needs/${id}/shortlist/${candidateId}`, { status })
+export const removeShortlist = (id: string, candidateId: string) => api.delete(`/needs/${id}/shortlist/${candidateId}`)

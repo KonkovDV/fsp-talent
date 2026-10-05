@@ -4,11 +4,11 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '../store/authStore'
-import { apiError, loginParticipant, loginEmployer } from '../api/client'
+import { apiError, apiErrorCode, loginParticipant, loginEmployer } from '../api/client'
 import { ArrowRight, User, Briefcase, Medal, Shield } from 'lucide-react'
 
 const schema = z.object({
-  username: z.string().min(1, 'Обязательное поле'),
+  username: z.string().email('Введите email'),
   password: z.string().min(1, 'Обязательное поле'),
 })
 type Form = z.infer<typeof schema>
@@ -38,7 +38,11 @@ export default function LoginPage() {
         : await loginEmployer(username, password)
       setAuth(res.data.access_token, res.data.refresh_token, role)
       navigate(role === 'participant' ? '/candidate' : '/employer')
-    } catch (e: any) {
+    } catch (e: unknown) {
+      if (apiErrorCode(e) === 'email_not_verified') {
+        navigate(`/verify?email=${encodeURIComponent(username.trim().toLowerCase())}&role=${role}`)
+        return
+      }
       setError(apiError(e, 'Ошибка входа'))
     }
   }
@@ -118,7 +122,7 @@ export default function LoginPage() {
                 style={role === r ? { background: '#1B3FA0' } : {}}
               >
                 {r === 'participant' ? <User size={14} /> : <Briefcase size={14} />}
-                {r === 'participant' ? 'Участник ФСП' : 'Работодатель'}
+                {r === 'participant' ? 'Кандидат' : 'Работодатель'}
               </Link>
             ))}
           </div>
@@ -129,22 +133,23 @@ export default function LoginPage() {
               Вход в систему
             </h1>
             <p className="text-text-muted text-sm mt-1">
-              {isParticipant ? 'Участник ФСП' : 'Аккаунт работодателя'}
+              {isParticipant ? 'Кандидат: с историей ФСП или без неё' : 'Аккаунт работодателя'}
             </p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-text-secondary mb-1.5">
-                {isParticipant ? 'ID ФСП (напр. FSP001)' : 'Email'}
+                Email
               </label>
-              <input {...register('username')} className="input" placeholder={isParticipant ? 'FSP001' : 'hr@company.ru'} />
+              <input {...register('username')} type="email" autoComplete="email" className="input" placeholder={isParticipant ? 'you@mail.ru' : 'hr@company.ru'} />
               {errors.username && <p className="text-xs mt-1" style={{ color: '#D42330' }}>{errors.username.message}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-text-secondary mb-1.5">Пароль</label>
-              <input type="password" {...register('password')} className="input" placeholder="••••••••" />
+              <input type="password" {...register('password')} autoComplete="current-password" className="input" placeholder="••••••••" />
+              <Link to={`/forgot?role=${role}`} className="text-xs text-text-muted hover:underline">Забыли пароль?</Link>
               {errors.password && <p className="text-xs mt-1" style={{ color: '#D42330' }}>{errors.password.message}</p>}
             </div>
 
@@ -170,12 +175,14 @@ export default function LoginPage() {
           <div className="text-center space-y-2">
             <p className="text-sm text-text-muted">
               Нет аккаунта?{' '}
-              <Link to="/register" style={{ color: '#1D82F5', fontWeight: 600 }} className="hover:underline">
+              <Link to={`/register?role=${role}`} style={{ color: '#1D82F5', fontWeight: 600 }} className="hover:underline">
                 Зарегистрироваться
               </Link>
             </p>
             <p className="text-xs text-text-muted">
-              {isParticipant ? 'Демо: FSP001 / test · FSP002 / test' : 'Демо: hr@yandex.demo / demo12345'}
+              {isParticipant
+                ? 'Демо (пароль demo12345): fsp001@demo.talent · fsp002@demo.talent · nofsp@demo.talent (без ФСП)'
+                : 'Демо: hr@sibcode.demo / demo12345'}
             </p>
           </div>
         </div>

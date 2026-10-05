@@ -10,7 +10,7 @@ from typing import TypedDict
 
 from app.services.skills import ROLES, roles_for
 
-RULES_VERSION = "v2.0.0"
+RULES_VERSION = "v2.1.0"
 GRADES = ("junior", "middle", "senior", "lead")
 MIN_SKILLS_FOR_ROLE = 2
 
@@ -20,6 +20,7 @@ DISCIPLINE_ROLE_MAP: dict[str, str] = {
     "security": "security",
     "bas": "embedded",
     "robotics": "embedded",
+    "ai": "ml",
 }
 DISCIPLINE_LABELS = {
     "algorithmic": "Алгоритмическое программирование",
@@ -27,6 +28,8 @@ DISCIPLINE_LABELS = {
     "security": "Программирование систем ИБ",
     "bas": "Программирование БАС",
     "robotics": "Программирование робототехники",
+    # Sixth discipline in the 2026 calendar (ЕКП): so far training events only, no official protocols yet.
+    "ai": "Программирование систем ИИ",
 }
 
 
@@ -64,6 +67,7 @@ def assign_category(
     experience_years: int | None = None,
     declared_grade: str | None = None,
     assessed_grade: str | None = None,
+    specialization: str | None = None,
 ) -> CategoryResult:
     explanation: list[str] = []
 
@@ -74,7 +78,11 @@ def assign_category(
     best_skill_role = max(ROLES, key=lambda r: (role_votes[r], -ROLES.index(r)))
     best_disc = max(discipline_scores, key=lambda d: d["lcb"], default=None)
 
-    if role_votes[best_skill_role] >= MIN_SKILLS_FOR_ROLE:
+    if specialization in ROLES:
+        # TZ 2.1: the survey decides the specialization; skills and FSP only explain it.
+        role = specialization
+        explanation.append(f"Специализация из опроса: {role}")
+    elif role_votes[best_skill_role] >= MIN_SKILLS_FOR_ROLE:
         role = best_skill_role
         count = role_votes[role]
         skills_word = _ru_word(count, "подтверждённый навык", "подтверждённых навыка", "подтверждённых навыков")

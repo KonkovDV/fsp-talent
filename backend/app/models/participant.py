@@ -11,15 +11,26 @@ from app.core.database import Base
 class Participant(Base):
     __tablename__ = "participants"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    fsp_id = Column(String(64), unique=True, nullable=False, index=True)
+    # Optional: a candidate may register by email without FSP history and link an FSP account later.
+    fsp_id = Column(String(64), unique=True, nullable=True, index=True)
+    fsp_linked_at = Column(DateTime(timezone=True))
     display_name = Column(String(200))
+    # Login identity (stored lower-case). It is also the contact an employer gets after consent,
+    # so it is always a confirmed address.
     email = Column(String(200), unique=True)
+    password_hash = Column(String(200))
+    email_verified_at = Column(DateTime(timezone=True))
     telegram = Column(String(64))
     phone = Column(String(20))
     birth_date = Column(Date)
     region = Column(String(100), index=True)
     experience_years = Column(Integer)
     declared_grade = Column(String(20))
+    # Survey (TZ 2.1): specialization drives the category and the test blueprint.
+    specialization = Column(String(30), index=True)
+    industry = Column(String(40))
+    work_goal = Column(String(20))   # job | internship | both
+    survey_at = Column(DateTime(timezone=True))
     # is_visible: anonymous card is searchable by employers; public_profile: named page + leaderboard
     is_visible = Column(Boolean, nullable=False, default=True)
     public_profile = Column(Boolean, nullable=False, default=False)

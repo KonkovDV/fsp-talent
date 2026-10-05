@@ -29,6 +29,8 @@ export default function EmployerSearch() {
   const [minRank,     setMinRank]    = useState('')
   const [skills,      setSkills]     = useState('')
   const [assessedOnly, setAssessedOnly] = useState(false)
+  const [hasFsp, setHasFsp] = useState('')
+  const [internship, setInternship] = useState(false)
   const [offerFor,    setOfferFor]   = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen]= useState(true)
 
@@ -40,6 +42,8 @@ export default function EmployerSearch() {
     min_rank:   minRank    || undefined,
     skills:     skills     || undefined,
     assessed_only: assessedOnly || undefined,
+    has_fsp:    hasFsp || undefined,
+    work_goal:  internship ? 'internship' : undefined,
   }
 
   // Filters edit a draft. The shown selection changes only on "Найти" and stays on screen while the
@@ -153,6 +157,15 @@ export default function EmployerSearch() {
                 onChange={e => { setAssessedOnly(e.target.checked) }} />
               Только грейд, подтверждённый тестом
             </label>
+            <select value={hasFsp} onChange={e => setHasFsp(e.target.value)} className="input text-xs w-auto" aria-label="История ФСП">
+              <option value="">ФСП: все</option>
+              <option value="true">С историей ФСП</option>
+              <option value="false">Без истории ФСП</option>
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <input type="checkbox" checked={internship} onChange={e => setInternship(e.target.checked)} />
+              Стажировка / практика
+            </label>
           </div>
         )}
       </div>
@@ -166,6 +179,8 @@ export default function EmployerSearch() {
       {submitted && data && (
         <p className="text-xs text-text-muted">
           Найдено <strong className="text-text-secondary">{data.total}</strong> кандидатов · пул ≤ 1 000
+          {data.recommended_categories?.length > 0 && <> · лучшие категории: {data.recommended_categories.map(
+            (c: { role: string; grade: string; candidates: number }) => `${c.role} ${c.grade} (${c.candidates})`).join(', ')}</>}
         </p>
       )}
 
@@ -184,7 +199,7 @@ export default function EmployerSearch() {
   )
 }
 
-function OfferModal({ candidateId, onClose }: { candidateId: string; onClose: () => void }) {
+export function OfferModal({ candidateId, onClose }: { candidateId: string; onClose: () => void }) {
   const [form, setForm] = useState({
     role: 'Backend-разработчик',
     salary_from_gross: 150_000,

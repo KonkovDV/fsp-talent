@@ -1,0 +1,80 @@
+# Stand: docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+# Only Caddy (80/443) is published. Database and Redis are reachable only inside the network.
+name: fsp-talent-prod
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS, e.g. 203-0-113-10.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [backend, frontend]
+    restart: unless-stopped
+
+  backend:
+    build: ../backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
+      REDIS_URL: redis://redis:6379/0
+      PUBLIC_BASE_URL: https://${SITE_ADDRESS}
+      CORS_ORIGINS: https://${SITE_ADDRESS}
+      VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
+      MAIL_MODE: ${MAIL_MODE:-smtp}
+    volumes: [vc_keys:/secrets]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: fsp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: fsp_talent
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fsp -d fsp_talent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+
+  # Nightly dump at 03:30 server time, 14 kept. Restore: see deploy/README.md.
+  backup:
+    image: pgvector/pgvector:pg16
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - ./backups:/backups
+      - ./backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "-c", "while true; do now=$$(date +%H%M); if [ \"$$now\" = \"0330\" ]; then sh /backup.sh; sleep 60; fi; sleep 30; done"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+  vc_keys:

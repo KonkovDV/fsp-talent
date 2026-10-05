@@ -2,9 +2,9 @@
 FSP integration adapters.
 
 MockFSPAdapter serves two hand-written demo profiles (FSP001, FSP002) and deterministically
-generates synthetic protocols for FSP1000..FSP1149 (exactly the range the seed script loads and
-the README documents). Same id -> same data. Ids outside the range are rejected, so nobody can
-register unseeded synthetic identities with the public demo secret.
+generates synthetic protocols for FSP1000..FSP1149 (the range the seed script loads as profiles) and
+FSP2000..FSP2099 (athletes who exist in the mock registry but have no account yet: use them to demo
+linking an FSP account to an email registration). Same id -> same data. Other ids are rejected.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from app.core.config import settings
 
 TEAM_DISCIPLINES = {"product", "security", "bas", "robotics"}
 GENERATED_RANGE = range(1000, 1150)
+UNCLAIMED_RANGE = range(2000, 2100)
 DEMO_SECRET = "test"
 
 
@@ -127,7 +128,8 @@ class MockFSPAdapter:
     async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None:
         if fsp_id in DEMO:
             return DEMO[fsp_id]
-        if fsp_id.startswith("FSP") and fsp_id[3:].isdigit() and int(fsp_id[3:]) in GENERATED_RANGE:
+        number = int(fsp_id[3:]) if fsp_id.startswith("FSP") and fsp_id[3:].isdigit() else -1
+        if number in GENERATED_RANGE or number in UNCLAIMED_RANGE:
             return _generate(fsp_id)
         return None
 

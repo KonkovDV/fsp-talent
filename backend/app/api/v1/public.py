@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Participant, VerifiableCredential
+from app.models import Consent, Participant, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.profile import adult_cutoff
@@ -31,7 +31,10 @@ def _public_filter():
         and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
         and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
     )
-    return (Participant.public_profile.is_(True), adult)
+    # 152-FZ art. 10.1: data open to everyone needs an active consent to distribution, not just the toggle.
+    consented = Participant.id.in_(select(Consent.subject_id).where(
+        Consent.subject_type == "participant", Consent.kind == "pd_distribution", Consent.withdrawn_at.is_(None)))
+    return (Participant.public_profile.is_(True), adult, consented)
 
 
 @router.get("/issuer")
@@ -173,3 +176,20 @@ async def get_leaderboard(
         }
         for i, (ds, cat, p) in enumerate(rows)
     ]
+
+
+@router.get("/assessment/items")
+async def item_health(db: AsyncSession = Depends(get_db)):
+    """Open statistics of the item bank: answers, solve rate against the model and leak status.
+
+    z is (right − expected) / sd, with ability measured without the item's own family. z ≥ 3.5 on 30+
+    answers sends the key to quarantine: it is no longer served and its answers stop counting.
+    """
+    from app.models.assessment import ItemStat
+    rows = list(await db.scalars(select(ItemStat).order_by(ItemStat.z.desc())))
+    return [{
+        "item_key": r.item_key, "family_id": r.family_id, "level": r.level, "answers": r.n,
+        "solve_rate": round(r.correct / r.n, 3) if r.n else None,
+        "expected_rate": round(r.expected / r.n, 3) if r.n else None,
+        "z": round(r.z, 2), "status": r.status, "b_offset": round(r.b_offset, 2), "sessions": r.sessions,
+    } for r in rows]

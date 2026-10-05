@@ -14,6 +14,7 @@ class Employer(Base):
     company_name = Column(String(200), nullable=False)
     email = Column(String(200), unique=True, nullable=False)
     password_hash = Column(String(200), nullable=False)
+    email_verified_at = Column(DateTime(timezone=True))
     inn = Column(String(12))
     website = Column(String(200))
     description = Column(Text)

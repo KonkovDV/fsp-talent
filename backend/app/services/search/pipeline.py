@@ -11,14 +11,17 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Participant, Result, Skill, TestSession
+from app.models import GradeConfirmation, Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.matching import RELATED, CandidateFacts, NeedSpec, recommended_categories
+from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.engine import RANK_ORDER, STATUS_LABELS, percentile
 from app.services.skills import extract_skills, normalize_skill
@@ -75,6 +78,9 @@ async def search_candidates(
     q: str | None = None,
     limit: int = 20,
     assessed_only: bool = False,
+    has_fsp: bool | None = None,
+    work_goal: str | None = None,
+    need: NeedSpec | None = None,
 ) -> dict:
     wanted = {n for s in (skills or []) if (n := normalize_skill(s))}
     if q:
@@ -92,7 +98,12 @@ async def search_candidates(
     if wanted_list or q:
         parts: list = []
         if wanted_list:
-            skill_q = _skill_or_tsquery(wanted_list)
+            # Related technologies are retrieved too: the factor score gives them half credit.
+            retrieval = set(wanted_list) | (set(need.nice) if need else set())
+            for group in RELATED:
+                if retrieval & group:
+                    retrieval |= group
+            skill_q = _skill_or_tsquery(sorted(retrieval))
             if skill_q:
                 parts.append(func.to_tsquery("simple", skill_q))
         if q:
@@ -118,6 +129,13 @@ async def search_candidates(
                    or_(adult, Participant.minor_consent_given.is_(True))))
     if assessed_only:
         stmt = stmt.where(Participant.assessed_grade.is_not(None))
+    if has_fsp is not None:
+        stmt = stmt.where(Participant.fsp_id.is_not(None) if has_fsp else Participant.fsp_id.is_(None))
+    if work_goal == "internship":
+        # Internship mode: students who look for practice or either option.
+        stmt = stmt.where(Participant.work_goal.in_(("internship", "both")))
+    elif work_goal == "job":
+        stmt = stmt.where(or_(Participant.work_goal.is_(None), Participant.work_goal.in_(("job", "both"))))
     if role:
         stmt = stmt.where(PSI.role == role)
     if grade:
@@ -189,13 +207,76 @@ async def search_candidates(
                     Skill.participant_id.in_(all_ids), Skill.confirmed.is_(True), Skill.name.in_(wanted))):
             have.setdefault(pid, set()).add(name)
 
-    assessed: set[uuid.UUID] = set(await db.scalars(
-        select(Participant.id).where(Participant.id.in_(all_ids), Participant.assessed_grade.is_not(None))))
-    # Inside one skill-coverage level, a grade confirmed by a test outranks a self-described one.
-    ordered = sorted(all_ids, key=lambda i: (
-        -len(have.get(i, ())), -(i in assessed), -fused[i], -best[i], str(i)))[:limit]
+    need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
+    matches = await score_pool(db, all_ids, need, fused, discipline)
+    # One explainable score orders the list; ties fall back to the fused retrieval rank.
+    ordered = sorted(all_ids, key=lambda i: (-matches[i].score, -fused[i], -best[i], str(i)))
+    categories = recommended_categories(
+        [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)])
+    ordered = ordered[:limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
-    return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list, "items": cards}
+    for card in cards:
+        m = matches[uuid.UUID(card["candidate_id"])]
+        card["match"] = {"score": m.score, "plus": m.plus, "minus": m.minus, "info": m.info,
+                         "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
+                                     for f in m.factors]}
+    return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
+            "recommended_categories": categories, "items": cards}
+
+
+@dataclass
+class PoolMatch:
+    score: float
+    factors: list
+    plus: list
+    minus: list
+    info: list
+    facts: CandidateFacts | None
+
+
+async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
+                     discipline: str | None = None) -> dict[uuid.UUID, PoolMatch]:
+    """Load the facts the factor score needs for every candidate of the pool, in four queries."""
+    if not ids:
+        return {}
+    names = set(need.skills) | set(need.nice)
+    for group in RELATED:
+        if names & group:
+            names |= group
+    skills: dict[uuid.UUID, dict[str, str]] = {}
+    if names:
+        for pid, name, trust in await db.execute(
+                select(Skill.participant_id, Skill.name, Skill.trust_level).where(
+                    Skill.participant_id.in_(ids), Skill.confirmed.is_(True), Skill.name.in_(names))):
+            skills.setdefault(pid, {})[name] = trust
+    people = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ids)))}
+    cats = {c.participant_id: c for c in await db.scalars(
+        select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ids)))}
+    lcb_q = select(DisciplineScore.participant_id, func.max(DisciplineScore.lcb)).where(
+        DisciplineScore.participant_id.in_(ids))
+    if discipline:
+        lcb_q = lcb_q.where(DisciplineScore.discipline == discipline)
+    lcb = dict((pid, v) for pid, v in await db.execute(lcb_q.group_by(DisciplineScore.participant_id)))
+    confs = {(c.participant_id, c.specialization): c for c in await db.scalars(
+        select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ids)))}
+    top = max(fused.values(), default=0.0) or 1.0
+    out: dict[uuid.UUID, PoolMatch] = {}
+    for pid in ids:
+        p, cat = people.get(pid), cats.get(pid)
+        spec = need.role or (p.specialization if p else None) or (cat.primary_role if cat else None)
+        conf = confs.get((pid, spec)) if spec else None
+        has_fsp = bool(p and p.fsp_id)
+        facts = CandidateFacts(
+            role=cat.primary_role if cat else None, grade=cat.grade if cat else None,
+            grade_source=cat.grade_source if cat else None, skills=skills.get(pid, {}),
+            test_p=conf.p_pass if conf and conf.p_pass is not None else (1.0 if conf else None),
+            test_spec=conf.specialization if conf else None,
+            fsp_lcb=(lcb.get(pid, 0.0) if has_fsp else None), industry=p.industry if p else None,
+            text_rank=fused.get(pid, 0.0) / top,
+        )
+        m = match_score(need, facts)
+        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts)
+    return out
 
 
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) -> list[dict]:

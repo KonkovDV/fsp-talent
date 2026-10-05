@@ -5,6 +5,7 @@ export const ROLE_RU: Record<string, string> = {
 
 export const DISC_RU: Record<string, string> = {
   algorithmic: 'Алгоритмика', product: 'Продукт', security: 'Безопасность', bas: 'БАС', robotics: 'Робототехника',
+  ai: 'Системы ИИ',
 }
 
 export function roleRu(role?: string | null): string {

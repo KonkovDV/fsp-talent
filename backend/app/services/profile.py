@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,12 +37,24 @@ def born_adult(birth: date | None, is_minor: bool, today: date | None = None) ->
     return birth <= adult_cutoff(today)
 
 
-async def ingest_from_fsp(db: AsyncSession, data: FSPParticipant) -> Participant:
-    p = Participant(
-        fsp_id=data.fsp_id, display_name=data.display_name, region=data.region,
-        birth_date=data.birth_date, is_minor=age_on(data.birth_date, date.today()) < 18,
-    )
-    db.add(p)
+async def ingest_from_fsp(
+    db: AsyncSession, data: FSPParticipant, participant: Participant | None = None,
+) -> Participant:
+    """Create a profile from FSP protocols, or attach them to an account registered by email.
+
+    FSP data is authoritative for the birth date and region; the display name the person chose is kept.
+    """
+    if participant is None:
+        p = Participant(fsp_id=data.fsp_id, display_name=data.display_name)
+        db.add(p)
+    else:
+        p = participant
+        p.fsp_id = data.fsp_id
+        p.display_name = p.display_name or data.display_name
+    p.region = data.region or p.region
+    p.birth_date = data.birth_date
+    p.is_minor = age_on(data.birth_date, date.today()) < 18
+    p.fsp_linked_at = datetime.now(UTC)
     await db.flush()
     for r in data.results:
         res = Result(
@@ -98,7 +110,8 @@ async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
         db.add(DisciplineScore(participant_id=p.id, discipline=disc, **sd))
         scores.append({"discipline": disc, **sd})
 
-    cat = assign_category(skills, scores, p.experience_years, p.declared_grade, p.assessed_grade)
+    cat = assign_category(skills, scores, p.experience_years, p.declared_grade, p.assessed_grade,
+                          getattr(p, "specialization", None))
     existing = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == p.id))
     if existing:
         for k, v in cat.items():

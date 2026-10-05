@@ -38,6 +38,19 @@ class Settings(BaseSettings):
     # Verifiable Credentials (W3C VC 2.0, Data Integrity eddsa-jcs-2022)
     VC_PRIVATE_KEY_PATH: str = "/secrets/vc_ed25519.pem"
 
+    # Email (TZ 2.2 п.4). console: print to the API log; file: write JSON letters to MAIL_FILE_DIR
+    # (CI and smoke read codes from there); smtp: real delivery (Mailpit locally, any SMTP on the stand).
+    MAIL_MODE: str = "console"   # console | file | smtp
+    MAIL_FILE_DIR: str = "/tmp/fsp-talent-mail"
+    MAIL_FROM: str = "FSP Talent <no-reply@fsp-talent.local>"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_STARTTLS: bool = False
+    SMTP_SSL: bool = False
+    EMAIL_CODE_TTL_MINUTES: int = 30
+
     # FSP API (real mode)
     FSP_API_URL: str = "https://api.fsp.ru/v1"
     FSP_API_KEY: str = ""
