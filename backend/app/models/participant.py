@@ -26,6 +26,10 @@ class Participant(Base):
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
     grade_locked_until = Column(DateTime(timezone=True))
+    # Grade confirmed by a completed test. It outranks declared_grade and experience in the category:
+    # employers must not rank candidates by a self-described grade (TZ section 2).
+    assessed_grade = Column(String(20))
+    assessed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     # FIX BUG-03: updated_at must have a default= as well as onupdate=.
     # Without default=, the column is NULL after INSERT, which causes ORDER BY updated_at

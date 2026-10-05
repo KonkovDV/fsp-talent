@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { LogOut, Sun, Moon, LayoutDashboard, User, Trophy, Gift, Briefcase, Search, FileText } from 'lucide-react'
+import { LogOut, Sun, Moon, LayoutDashboard, User, Trophy, Gift, Briefcase, Search, FileText, ClipboardCheck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 /** ФСП diamond logo mark */
@@ -29,6 +29,7 @@ function FspLogo({ size = 28 }: { size?: number }) {
 const CANDIDATE_LINKS = [
   { to: '/candidate',           label: 'Обзор',      end: true,  Icon: LayoutDashboard },
   { to: '/candidate/profile',   label: 'Профиль',    end: false, Icon: User },
+  { to: '/candidate/assessment', label: 'Тест на грейд', end: false, Icon: ClipboardCheck },
   { to: '/candidate/results',   label: 'Результаты', end: false, Icon: Trophy },
   { to: '/candidate/offers',    label: 'Офферы',     end: false, Icon: Gift },
   { to: '/candidate/vacancies', label: 'Вакансии',   end: false, Icon: Briefcase },

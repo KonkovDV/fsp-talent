@@ -1,7 +1,7 @@
 """Assessment tables, employer description/industry, participant grade cooldown.
 
 Revision ID: 0008
-Revises: 0007
+Revises: 0007_result_participant_event
 Create Date: 2026-10-05
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0008"
-down_revision = "0007"
+down_revision = "0007_result_participant_event"
 branch_labels = None
 depends_on = None
 

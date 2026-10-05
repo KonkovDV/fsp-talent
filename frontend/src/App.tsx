@@ -13,6 +13,7 @@ import EmployerSearch from './pages/employer/Search'
 import EmployerOffers from './pages/employer/Offers'
 import EmployerVacancies from './pages/employer/Vacancies'
 import CandidateVacancies from './pages/candidate/Vacancies'
+import CandidateAssessment from './pages/candidate/Assessment'
 import LeaderboardPage from './pages/LeaderboardPage'
 import PublicProfile from './pages/PublicProfile'
 
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="results" element={<CandidateResults />} />
           <Route path="offers" element={<CandidateOffers />} />
           <Route path="vacancies" element={<CandidateVacancies />} />
+          <Route path="assessment" element={<CandidateAssessment />} />
         </Route>
 
         {/* Employer area */}

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { getMyProfile, getMyOffers } from '../../api/client'
 import GradeRadar from '../../components/GradeRadar'
 import ScoreBar from '../../components/ScoreBar'
@@ -13,6 +14,7 @@ const GRADE_BADGE: Record<string, string> = {
 }
 
 const SOURCE_LABEL: Record<string, string> = {
+  assessed:   'подтверждён тестом',
   declared:   'указан вами',
   experience: 'по опыту',
   default:    'не указан',
@@ -96,6 +98,15 @@ export default function CandidateDashboard() {
           <span className={GRADE_BADGE[profile.grade] ?? 'badge-junior'}>{profile.grade}</span>
         )}
       </div>
+
+      {profile.grade_source !== 'assessed' && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm">
+            Грейд не подтверждён тестом. Работодатели ставят подтверждённый грейд выше самооценки.
+          </p>
+          <Link to="/candidate/assessment" className="btn-primary text-sm">Пройти тест на грейд</Link>
+        </div>
+      )}
 
       {/* Stats grid */}
       <section aria-label="Статистика">

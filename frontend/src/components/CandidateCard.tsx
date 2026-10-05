@@ -74,6 +74,12 @@ export default function CandidateCard({ card, onOffer }: Props) {
               {ROLE_RU[card.role ?? ''] ?? card.role ?? 'Роль не указана'}
             </h3>
             {card.grade && <span className={gradeBadge}>{card.grade}</span>}
+            {card.grade && (
+              <span className="text-xs text-text-muted"
+                title={card.grade_source === 'assessed' ? 'Грейд подтверждён тестом' : 'Грейд указан кандидатом или оценён по стажу'}>
+                {card.grade_source === 'assessed' ? '✓ тест' : 'без теста'}
+              </span>
+            )}
             {disc?.best_rank && <span className={rankBadge}>{disc.best_rank}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">

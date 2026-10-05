@@ -14,19 +14,24 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_participant
 from app.core.database import get_db
 from app.core.ratelimit import too_many
+from app.models import Participant
 from app.models.assessment import GRADE_ORDER, TestSession
 from app.services.assessment import (
+    QuestionBankError,
     check_cooldown,
+    check_retake_interval,
     get_active_session,
     get_session_with_questions,
     start_session,
     submit_answers,
 )
+from app.services.profile import rebuild_profile
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 
@@ -68,7 +73,12 @@ class ResultOut(BaseModel):
     status: str
     score: float | None
     irt_theta: float | None
+    # Grade this result corresponds to (may be below the target; None = too low to confirm anything).
     grade_assigned: str | None
+    # Grade confirmed on the profile after this session, and what the session did to it.
+    confirmed_grade: str | None
+    outcome: str  # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed
+    grade_locked_until: str | None
     completed_at: str | None
 
 
@@ -100,11 +110,21 @@ async def start_test(
     locked_until = await check_cooldown(db, participant_id)
     if locked_until:
         raise HTTPException(429, f"Grade change locked until {locked_until.isoformat()}")
+    retake_at = await check_retake_interval(db, participant_id, body.target_grade)
+    if retake_at:
+        raise HTTPException(429, f"This grade can be retaken after {retake_at.isoformat()}")
     existing = await get_active_session(db, participant_id)
     if existing:
         raise HTTPException(409, f"Session {existing.id} already active, expires {existing.expires_at.isoformat()}")
-    session, questions = await start_session(db, participant_id, body.target_grade, body.discipline)
-    await db.commit()
+    try:
+        session, questions = await start_session(db, participant_id, body.target_grade, body.discipline)
+        await db.commit()
+    except QuestionBankError as e:
+        raise HTTPException(503, str(e)) from e
+    except IntegrityError as e:
+        # uix_one_active_session: a parallel start request won the race.
+        await db.rollback()
+        raise HTTPException(409, "A test session is already active") from e
     await db.refresh(session)
     return SessionOut(
         session_id=str(session.id), status=session.status,
@@ -179,19 +199,26 @@ async def submit(
 ):
     participant_id = uuid.UUID(current["sub"])
     try:
-        session = await submit_answers(
+        session, decision = await submit_answers(
             db, session_id, participant_id,
             [{"question_id": a.question_id, "answer": a.answer} for a in body.answers],
         )
     except ValueError as e:
         detail = str(e)
         code = 404 if "not found" in detail.lower() else 409
-        raise HTTPException(code, detail)
+        raise HTTPException(code, detail) from e
+    participant = await db.get(Participant, participant_id)
+    if participant is not None and decision.applied:
+        # The confirmed grade feeds the category employers see and filter by.
+        await rebuild_profile(db, participant)
     await db.commit()
     await db.refresh(session)
     return ResultOut(
         session_id=str(session.id), status=session.status,
         score=session.score, irt_theta=session.irt_theta,
         grade_assigned=session.grade_assigned,
+        confirmed_grade=decision.assessed_grade,
+        outcome=decision.reason,
+        grade_locked_until=decision.locked_until.isoformat() if decision.locked_until else None,
         completed_at=session.completed_at.isoformat() if session.completed_at else None,
     )

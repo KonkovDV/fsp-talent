@@ -71,6 +71,13 @@ export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
 export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
+export const startAssessment = (data: { target_grade: string; discipline?: string | null }) =>
+  api.post('/assessment/start', data)
+export const submitAssessment = (sessionId: string, answers: { question_id: string; answer: string }[]) =>
+  api.post(`/assessment/${sessionId}/submit`, { answers })
+export const assessmentCooldown = () => api.get('/assessment/cooldown')
+export const assessmentHistory = () => api.get('/assessment/history')
+
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
 export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })

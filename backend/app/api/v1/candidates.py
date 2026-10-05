@@ -50,6 +50,9 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "id": str(p.id), "fsp_id": p.fsp_id, "display_name": p.display_name, "region": p.region,
         "email": p.email, "telegram": p.telegram, "phone": p.phone,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
+        "assessed_grade": p.assessed_grade,
+        "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
+        "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile,
         "is_minor": p.is_minor, "minor_consent_given": p.minor_consent_given,
         "discoverable": p.discoverable,
@@ -200,10 +203,17 @@ async def get_my_offers(
         .limit(limit).offset(offset)
     ))
     changed = expire_stale(rows)
+    now = datetime.now(UTC)
+    for o in rows:
+        # TZ 2.2 п.3: the employer sees that the invitation was viewed.
+        if o.status == "pending" and o.candidate_viewed_at is None:
+            o.candidate_viewed_at = now
+            changed = True
     if changed:
         await db.commit()
     return [{
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
+        "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
         "status": o.status, "created_at": o.created_at.isoformat(),

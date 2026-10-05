@@ -20,6 +20,7 @@ async def search(
     min_rank: str | None = None,
     skills: str | None = Query(None, max_length=400, description="Через запятую"),
     limit: int = Query(20, ge=1, le=50),
+    assessed_only: bool = Query(False, description="Только кандидаты с грейдом, подтверждённым тестом"),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),
 ):
@@ -34,4 +35,5 @@ async def search(
     return await search_candidates(
         db, role=role or None, grade=grade or None, discipline=discipline or None,
         min_rank=min_rank or None, skills=skill_list, q=q or None, limit=limit,
+        assessed_only=assessed_only,
     )

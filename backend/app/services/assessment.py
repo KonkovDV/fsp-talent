@@ -1,1 +1,382 @@
-IiIiCkFzc2Vzc21lbnQgc2VydmljZTogSVJULWJhc2VkIGdyYWRlIGV2YWx1YXRpb24gKDJQTCwgTUFQIGVzdGltYXRpb24pLgoKUChjb3JyZWN0IHwgdGhldGEsIGEsIGIpID0gc2lnbW9pZChhICogKHRoZXRhIC0gYikpCiAgYSA9IGRpc2NyaW1pbmF0aW9uIHBhcmFtZXRlciAoc3RvcmVkIGluIFRlc3RRdWVzdGlvbi5kaXNjcmltaW5hdGlvbiwgZGVmYXVsdCAxLjApCiAgYiA9IGRpZmZpY3VsdHkgcGFyYW1ldGVyICAgIChzdG9yZWQgaW4gVGVzdFF1ZXN0aW9uLmRpZmZpY3VsdHkpCgpQcmlvcjogdGhldGEgfiBOKDAsIDEpCk1AUCB2aWEgTmV3dG9uLVJhcGhzb24gKGNvbnZlcmdlcyA8IDEwIGl0ZXIgZm9yIE49MTUpCgpHcmFkZSB0aHJlc2hvbGRzICh0aGV0YSk6CiAgPCAtMC41ICAgLT4ganVuaW9yCiAgWy0wLjUsIDAuNSkgLT4gbWlkZGxlCiAgWzAuNSwgMS41KSAgLT4gc2VuaW9yCiAgPj0gMS41ICAgICAgLT4gbGVhZAoKR3JhZGUgdXBncmFkZSBwb2xpY3kgKFRaIHJlcXVpcmVtZW50KToKICBJZiB0aGV0YSBnZW51aW5lbHkgZXhjZWVkcyB0aGUgdGhyZXNob2xkIG9mIHRoZSBncmFkZSBhYm92ZSB0YXJnZXRfZ3JhZGUsCiAgdGhlIGNhbmRpZGF0ZSByZWNlaXZlcyB0aGF0IGhpZ2hlciBncmFkZSAobWF4ICsxIGxldmVsIHVwZ3JhZGUpLgogIFRoaXMgcmVmbGVjdHM6IMKr0LrQsNC90LTQuNC00LDRgiwg0YHQv9GA0LDQstC40LLRiNC40LnRgdGPINGD0LLQtdGA0LXQvdC90L4sINC80L7QttC10YIg0L/QvtCy0YvRgdC40YLRjCDQs9GA0LXQudC0wrsuCgpDb29sZG93biBmaXg6CiAgZ3JhZGVfbG9ja2VkX3VudGlsIGlzIHJlZnJlc2hlZCBhZnRlciBFVkVSWSBjb21wbGV0ZWQgdGVzdCwgbm90IGp1c3QgdGhlIGZpcnN0LgogIFByZXZpb3VzIGJ1ZzogYGlmIHBhcnRpY2lwYW50LmdyYWRlX2xvY2tlZF91bnRpbCBpcyBOb25lYCBmYWlsZWQgb24gYWxsIHJldGFrZXMKICBiZWNhdXNlIHRoZSBmaWVsZCBiZWNvbWVzIGEgcGFzdCBkYXRldGltZSBhZnRlciB0aGUgZmlyc3QgdGVzdCwgbmV2ZXIgTm9uZS4KIiIiCmZyb20gX19mdXR1cmVfXyBpbXBvcnQgYW5ub3RhdGlvbnMKCmltcG9ydCBtYXRoCmltcG9ydCByYW5kb20KaW1wb3J0IHV1aWQKZnJvbSBkYXRldGltZSBpbXBvcnQgVVRDLCBkYXRldGltZSwgdGltZWRlbHRhCgpmcm9tIHNxbGFsY2hlbXkgaW1wb3J0IGFuZF8sIGZ1bmMsIHNlbGVjdCwgdXBkYXRlCmZyb20gc3FsYWxjaGVteS5leHQuYXN5bmNpbyBpbXBvcnQgQXN5bmNTZXNzaW9uCgpmcm9tIGFwcC5tb2RlbHMuYXNzZXNzbWVudCBpbXBvcnQgKAogICAgR1JBREVfQ09PTERPV05fREFZUywKICAgIFNFU1NJT05fUVVFU1RJT05fQ09VTlQsCiAgICBTRVNTSU9OX1RUTF9NSU5VVEVTLAogICAgVGVzdEFuc3dlciwKICAgIFRlc3RRdWVzdGlvbiwKICAgIFRlc3RTZXNzaW9uLAopCmZyb20gYXBwLm1vZGVscy5wYXJ0aWNpcGFudCBpbXBvcnQgUGFydGljaXBhbnQKCkdSQURFX09SREVSID0gKCJqdW5pb3IiLCAibWlkZGxlIiwgInNlbmlvciIsICJsZWFkIikKX1RIUkVTSE9MRFMgPSB7Imp1bmlvciI6IC0wLjUsICJtaWRkbGUiOiAwLjUsICJzZW5pb3IiOiAxLjV9CgoKZGVmIF9zaWdtb2lkKHg6IGZsb2F0KSAtPiBmbG9hdDoKICAgICMgTnVtZXJpY2FsbHkgc3RhYmxlIHNpZ21vaWQKICAgIGlmIHggPj0gMDoKICAgICAgICByZXR1cm4gMS4wIC8gKDEuMCArIG1hdGguZXhwKC14KSkKICAgIGUgPSBtYXRoLmV4cCh4KQogICAgcmV0dXJuIGUgLyAoMS4wICsgZSkKCgpkZWYgX2lydF9tYXAoCiAgICByZXNwb25zZXM6IGxpc3RbdHVwbGVbZmxvYXQsIGZsb2F0LCBib29sXV0sICAjIChkaWZmaWN1bHR5IGIsIGRpc2NyaW1pbmF0aW9uIGEsIGNvcnJlY3QpCiAgICBwcmlvcl9tZWFuOiBmbG9hdCA9IDAuMCwKICAgIHByaW9yX3ZhcjogZmxvYXQgPSAxLjAsCikgLT4gZmxvYXQ6CiAgICAiIiJNQVAgZXN0aW1hdGUgb2YgdGhldGEgdmlhIE5ld3Rvbi1SYXBoc29uIHVzaW5nIDJQTCBJUlQuCgogICAgMlBMOiBQKGNvcnJlY3QpID0gc2lnbW9pZChhICogKHRoZXRhIC0gYikpCgogICAgUHJldmlvdXNseSB0aGUgY29kZSBzaWxlbnRseSB1c2VkIDFQTCAoaWdub3JlZCBgYWApIHdoaWxlIHN0b3JpbmcKICAgIGRpc2NyaW1pbmF0aW9uIGluIHRoZSBEQiAtLSB0aGF0IHdhcyBtaXNsZWFkaW5nIGFuZCBicm9rZSBJUlQgY2FsaWJyYXRpb24uCiAgICBOb3cgd2UgdXNlIHRoZSBmdWxsIDJQTCBtb2RlbCB3aXRoIHN0b3JlZCBkaXNjcmltaW5hdGlvbiB2YWx1ZXMuCiAgICAiIiIKICAgIGlmIG5vdCByZXNwb25zZXM6CiAgICAgICAgcmV0dXJuIDAuMAogICAgdGhldGEgPSBwcmlvcl9tZWFuCiAgICBmb3IgXyBpbiByYW5nZSgyMCk6CiAgICAgICAgZ3JhZCA9IC0odGhldGEgLSBwcmlvcl9tZWFuKSAvIHByaW9yX3ZhcgogICAgICAgIGhlc3MgPSAtMS4wIC8gcHJpb3JfdmFyCiAgICAgICAgZm9yIGIsIGEsIGNvcnJlY3QgaW4gcmVzcG9uc2VzOgogICAgICAgICAgICBwID0gX3NpZ21vaWQoYSAqICh0aGV0YSAtIGIpKQogICAgICAgICAgICBncmFkICs9IGEgKiAoKDEuMCBpZiBjb3JyZWN0IGVsc2UgMC4wKSAtIHApCiAgICAgICAgICAgIGhlc3MgLT0gYSAqIGEgKiBwICogKDEuMCAtIHApCiAgICAgICAgaWYgYWJzKGhlc3MpIDwgMWUtMTI6CiAgICAgICAgICAgIGJyZWFrCiAgICAgICAgc3RlcCA9IGdyYWQgLyBoZXNzCiAgICAgICAgdGhldGEgLT0gc3RlcAogICAgICAgIGlmIGFicyhzdGVwKSA8IDFlLTY6CiAgICAgICAgICAgIGJyZWFrCiAgICByZXR1cm4gbWF4KC00LjAsIG1pbiA0LjAsIHRoZXRhKSkKCgpkZWYgX3RoZXRhX3RvX2dyYWRlKHRoZXRhOiBmbG9hdCwgdGFyZ2V0X2dyYWRlOiBzdHIpIC0+IHN0cjoKICAgICIiIk1hcCBJUlQgdGhldGEgdG8gYSBncmFkZSwgYWxsb3dpbmcgdXAgdG8gKzEgbGV2ZWwgdXBncmFkZSBwZXIgVFouCgogICAgUnVsZXM6CiAgICAtIElmIHRoZXRhIGVhcm5zIGEgZ3JhZGUgYmVsb3cgdGFyZ2V0X2dyYWRlLCByZXR1cm4gdGhlIGVhcm5lZCBncmFkZQogICAgICAoY2FuZGlkYXRlIHNob3VsZCByZXRha2UgYXQgYSBsb3dlciB0YXJnZXQpLgogICAgLSBJZiB0aGV0YSBtYXRjaGVzIHRhcmdldF9ncmFkZSwgcmV0dXJuIHRhcmdldF9ncmFkZS4KICAgIC0gSWYgdGhldGEgZXhjZWVkcyB0YXJnZXRfZ3JhZGUgYnkgb25lIGxldmVsLCByZXR1cm4gdGhhdCBoaWdoZXIgZ3JhZGUKICAgICAgKFRaOiBjYW5kaWRhdGUgd2hvIHBlcmZvcm1zIGNvbmZpZGVudGx5IG1heSByYWlzZSB0aGVpciBncmFkZSkuCiAgICAtIElmIHRoZXRhIGV4Y2VlZHMgdGFyZ2V0X2dyYWRlIGJ5IG1vcmUgdGhhbiBvbmUgbGV2ZWwsIGNhcCBhdCB0YXJnZXQrMQogICAgICAoc2luZ2xlLXNlc3Npb24gdXBncmFkZSBsaW1pdCkuCiAgICAiIiIKICAgIGlmIHRoZXRhIDwgX1RIUkVTSE9MRFNbImp1bmlvciJdOgogICAgICAgIHJlc3VsdCA9ICJqdW5pb3IiCiAgICBlbGlmIHRoZXRhIDwgX1RIUkVTSE9MRFNbIm1pZGRsZSJdOgogICAgICAgIHJlc3VsdCA9ICJtaWRkbGUiCiAgICBlbGlmIHRoZXRhIDwgX1RIUkVTSE9MRFNbInNlbmlvciJdOgogICAgICAgIHJlc3VsdCA9ICJzZW5pb3IiCiAgICBlbHNlOgogICAgICAgIHJlc3VsdCA9ICJsZWFkIgoKICAgIHRhcmdldF9pZHggPSBHUkFERV9PUkRFUi5pbmRleCh0YXJnZXRfZ3JhZGUpCiAgICByZXN1bHRfaWR4ID0gR1JBREVfT1JERVIuaW5kZXgocmVzdWx0KQoKICAgICMgVFogcG9saWN5OiBhbGxvdyB1cCB0byArMSBsZXZlbCBhYm92ZSB0YXJnZXQKICAgIGlmIHJlc3VsdF9pZHggPiB0YXJnZXRfaWR4OgogICAgICAgIHJldHVybiBHUkFERV9PUkRFUlttaW4ocmVzdWx0X2lkeCwgdGFyZ2V0X2lkeCArIDEpXQogICAgcmV0dXJuIHJlc3VsdAoKCmFzeW5jIGRlZiBjaGVja19jb29sZG93bihkYjogQXN5bmNTZXNzaW9uLCBwYXJ0aWNpcGFudF9pZDogdXVpZC5VVUlEKSAtPiBkYXRldGltZSB8IE5vbmU6CiAgICByb3cgPSBhd2FpdCBkYi5nZXQoUGFydGljaXBhbnQsIHBhcnRpY2lwYW50X2lkKQogICAgaWYgcm93IGlzIE5vbmU6CiAgICAgICAgcmV0dXJuIE5vbmUKICAgIGxvY2tlZF91bnRpbCA9IGdldGF0dHIocm93LCAiZ3JhZGVfbG9ja2VkX3VudGlsIiwgTm9uZSkKICAgIGlmIGxvY2tlZF91bnRpbCBhbmQgbG9ja2VkX3VudGlsID4gZGF0ZXRpbWUubm93KFVUQyk6CiAgICAgICAgcmV0dXJuIGxvY2tlZF91bnRpbAogICAgcmV0dXJuIE5vbmUKCgphc3luYyBkZWYgZ2V0X2FjdGl2ZV9zZXNzaW9uKGRiOiBBc3luY1Nlc3Npb24sIHBhcnRpY2lwYW50X2lkOiB1dWlkLlVVSUQpIC0+IFRlc3RTZXNzaW9uIHwgTm9uZToKICAgIHJlc3VsdCA9IGF3YWl0IGRiLmV4ZWN1dGUoCiAgICAgICAgc2VsZWN0KFRlc3RTZXNzaW9uKS53aGVyZSgKICAgICAgICAgICAgYW5kXygKICAgICAgICAgICAgICAgIFRlc3RTZXNzaW9uLnBhcnRpY2lwYW50X2lkID09IHBhcnRpY2lwYW50X2lkLAogICAgICAgICAgICAgICAgVGVzdFNlc3Npb24uc3RhdHVzID09ICJpbl9wcm9ncmVzcyIsCiAgICAgICAgICAgICAgICBUZXN0U2Vzc2lvbi5leHBpcmVzX2F0ID4gZGF0ZXRpbWUubm93KFVUQyksCiAgICAgICAgICAgICkKICAgICAgICApCiAgICApCiAgICByZXR1cm4gcmVzdWx0LnNjYWxhcl9vbmVfb3Jfbm9uZSgpCgoKYXN5bmMgZGVmIGV4cGlyZV9zdGFsZV9zZXNzaW9ucyhkYjogQXN5bmNTZXNzaW9uLCBwYXJ0aWNpcGFudF9pZDogdXVpZC5VVUlEKSAtPiBOb25lOgogICAgYXdhaXQgZGIuZXhlY3V0ZSgKICAgICAgICB1cGRhdGUoVGVzdFNlc3Npb24pCiAgICAgICAgLndoZXJlKAogICAgICAgICAgICBhbmRfKAogICAgICAgICAgICAgICAgVGVzdFNlc3Npb24ucGFydGljaXBhbnRfaWQgPT0gcGFydGljaXBhbnRfaWQsCiAgICAgICAgICAgICAgICBUZXN0U2Vzc2lvbi5zdGF0dXMgPT0gImluX3Byb2dyZXNzIiwKICAgICAgICAgICAgICAgIFRlc3RTZXNzaW9uLmV4cGlyZXNfYXQgPD0gZGF0ZXRpbWUubm93KFVUQyksCiAgICAgICAgICAgICkKICAgICAgICApCiAgICAgICAgLnZhbHVlcyhzdGF0dXM9ImV4cGlyZWQiKQogICAgKQoKCmFzeW5jIGRlZiBzdGFydF9zZXNzaW9uKAogICAgZGI6IEFzeW5jU2Vzc2lvbiwKICAgIHBhcnRpY2lwYW50X2lkOiB1dWlkLlVVSUQsCiAgICB0YXJnZXRfZ3JhZGU6IHN0ciwKICAgIGRpc2NpcGxpbmU6IHN0ciB8IE5vbmUgPSBOb25lLAopIC0+IHR1cGxlW1Rlc3RTZXNzaW9uLCBsaXN0W1Rlc3RRdWVzdGlvbl1dOgogICAgaWYgdGFyZ2V0X2dyYWRlIG5vdCBpbiBHUkFERV9PUkRFUjoKICAgICAgICByYWlzZSBWYWx1ZUVycm9yKGYiSW52YWxpZCBncmFkZToge3RhcmdldF9ncmFkZX0iKQoKICAgIGF3YWl0IGV4cGlyZV9zdGFsZV9zZXNzaW9ucyhkYiwgcGFydGljaXBhbnRfaWQpCgogICAgZ3JhZGVzX3RvX2luY2x1ZGUgPSBbdGFyZ2V0X2dyYWRlXQogICAgdGd0X2lkeCA9IEdSQURFX09SREVSW(luZGV4KHRhcmdldF9ncmFkZSkKICAgIGlmIHRndF9pZHggPiAwOgogICAgICAgIGdyYWRlc190b19pbmNsdWRlLmFwcGVuZChHUkFERV9PUkRFUlt0Z3RfaWR4IC0gMV0pCiAgICBpZiB0Z3RfaWR4IDwgbGVuKEdSQURFX09SREVSKSB7IDECiAgICAgICAgZ3JhZGVzX3RvX2luY2x1ZGUuYXBwZW5kKEdSQURFX09SREVSW3RndF9pZHggKyAxXSkKCiAgICBxX2ZpbHRlciA9IFsKICAgICAgICBUZXN0UXVlc3Rpb24uYWN0aXZlLmlzXyhUcnVlKSwKICAgICAgICBUZXN0UXVlc3Rpb24udGFyZ2V0X2dyYWRlLmluXyhncmFkZXNfdG9faW5jbHVkZSksCiAgICBdCiAgICBpZiBkaXNjaXBsaW5lOgogICAgICAgIHFfZmlsdGVyLmFwcGVuZChUZXN0UXVlc3Rpb24uZGlzY2lwbGluZSA9PSBkaXNjaXBsaW5lKQoKICAgIHBvb2xfcmVzdWx0ID0gYXdhaXQgZGIuZXhlY3V0ZSgKICAgICAgICBzZWxlY3QoVGVzdFF1ZXN0aW9uKQogICAgICAgIC53aGVyZShhbmRfKCpxX2ZpbHRlcikpCiAgICAgICAgLm9yZGVyX2J5KFRlc3RRdWVzdGlvbi51c2FnZV9jb3VudC5hc2MoKSwgZnVuYy5yYW5kb20oKSkKICAgICAgICAubGltaXQoU0VTU0lPTl9RVUVTVE9OX0NPVU5UICogNCkKICAgICkKICAgIHBvb2w6IGxpc3RbVGVzdFF1ZXN0aW9uXSA9IGxpc3QocG9vbF9yZXN1bHQuc2NhbGFycygpLmFsbCgpKQoKICAgIGlmIGxlbihwb29sKSA8IDM6CiAgICAgICAgZmFsbGJhY2sgPSBhd2FpdCBkYi5leGVjdXRlKAogICAgICAgICAgICBzZWxlY3QoVGVzdFF1ZXN0aW9uKQogICAgICAgICAgICAud2hlcmUoVGVzdFF1ZXN0aW9uLmFjdGl2ZS5pc18oVHJ1ZSksIFRlc3RRdWVzdGlvbi50YXJnZXRfZ3JhZGUuaW5fKGdyYWRlc190b19pbmNsdWRlKSkKICAgICAgICAgICAgLm9yZGVyX2J5KFRlc3RRdWVzdGlvbi51c2FnZV9jb3VudC5hc2MoKSwgZnVuYy5yYW5kb20oKSkKICAgICAgICAgICAgLmxpbWl0KFNFU1NJT05fUVVFU1RJT05fQ09VTlQgKiA0KQogICAgICAgICkKICAgICAgICBwb29sID0gbGlzdChmYWxsYmFjay5zY2FsYXJzKCkuYWxsKCkpCgogICAgY2hvc2VuID0gcmFuZG9tLnNhbXBsZShwb29sLCBtaW4oU0VTU0lPTl9RVUVTVE9OX0NPVU5ULCBsZW4ocG9vbCkpKQogICAgcXVlc3Rpb25faWRzID0gW3N0cihxLmlkKSBmb3IgcSBpbiBjaG9zZW5dCgogICAgc2Vzc2lvbiA9IFRlc3RTZXNzaW9uKAogICAgICAgIHBhcnRpY2lwYW50X2lkPXBhcnRpY2lwYW50X2lkLAogICAgICAgIHRhcmdldF9ncmFkZT10YXJnZXRfZ3JhZGUsCiAgICAgICAgZGlzY2lwbGluZT1kaXNjaXBsaW5lLAogICAgICAgIHF1ZXN0aW9uc19qc29uPXF1ZXN0aW9uX2lkcywKICAgICAgICBleHBpcmVzX2F0PWRhdGV0aW1lLm5vdyhVVEMpICsgdGltZWRlbHRhKG1pbnV0ZXM9U0VTU0lPTl9UVExfTUlOVVRFUyksCiAgICApCiAgICBkYi5hZGQoc2Vzc2lvbikKCiAgICBpZiBjaG9zZW46CiAgICAgICAgYXdhaXQgZGIuZXhlY3V0ZSgKICAgICAgICAgICAgdXBkYXRlKFRlc3RRdWVzdGlvbikKICAgICAgICAgICAgLndoZXJlKFRlc3RRdWVzdGlvbi5pZC5pbl8oW3EuaWQgZm9yIHEgaW4gY2hvc2VuXSkpCiAgICAgICAgICAgIC52YWx1ZXModXNhZ2VfY291bnQ9VGVzdFF1ZXN0aW9uLnVzYWdlX2NvdW50ICsgMSkKICAgICAgICApCgogICAgYXdhaXQgZGIuZmx1c2goKQogICAgcmV0dXJuIHNlc3Npb24sIGNob3NlbgoKCmFzeW5jIGRlZiBzdWJtaXRfYW5zd2VycygKICAgIGRiOiBBc3luY1Nlc3Npb24sCiAgICBzZXNzaW9uX2lkOiB1dWlkLlVVSUQsCiAgICBwYXJ0aWNpcGFudF9pZDogdXVpZC5VVUlELAogICAgYW5zd2VyczogbGlzdFtkaWN0XSwKKSAtPiBUZXN0U2Vzc2lvbjoKICAgIHNlc3Npb24gPSBhd2FpdCBkYi5nZXQoVGVzdFNlc3Npb24sIHNlc3Npb25faWQpCiAgICBpZiBzZXNzaW9uIGlzIE5vbmU6CiAgICAgICAgcmFpc2UgVmFsdWVFcnJvcigiU2Vzc2lvbiBub3QgZm91bmQiKQogICAgaWYgc2Vzc2lvbi5wYXJ0aWNpcGFudF9pZCAhPSBwYXJ0aWNpcGFudF9pZDoKICAgICAgICByYWlzZSBWYWx1ZUVycm9yKCJGb3JiaWRkZW4iKQogICAgaWYgc2Vzc2lvbi5zdGF0dXMgIT0gImluX3Byb2dyZXNzIjoKICAgICAgICByYWlzZSBWYWx1ZUVycm9yKGYiU2Vzc2lvbiBhbHJlYWR5IHtzZXNzaW9uLnN0YXR1c30iKQogICAgaWYgc2Vzc2lvbi5leHBpcmVzX2F0IDwgZGF0ZXRpbWUubm93KFVUQyk6CiAgICAgICAgc2Vzc2lvbi5zdGF0dXMgPSAiZXhwaXJlZCIKICAgICAgICBhd2FpdCBkYi5mbHVzaCgpCiAgICAgICAgcmFpc2UgVmFsdWVFcnJvcigiU2Vzc2lvbiBleHBpcmVkIikKCiAgICBxX2lkcyA9IFt1dWlkLlVVSUQocWlkKSBmb3IgcWlkIGluIHNlc3Npb24ucXVlc3Rpb25zX2pzb25dCiAgICBxX3Jlc3VsdCA9IGF3YWl0IGRiLmV4ZWN1dGUoc2VsZWN0KFRlc3RRdWVzdGlvbikud2hlcmUoVGVzdFF1ZXN0aW9uLmlkLmluXyhxX2lkcykpKQogICAgcXVlc3Rpb25zOiBkaWN0W3N0ciwgVGVzdFF1ZXN0aW9uXSA9IHtzdHIocS5pZCk6IHEgZm9yIHEgaW4gcV9yZXN1bHQuc2NhbGFycygpLmFsbCgpfQoKICAgICMgMlBMOiByZXNwb25zZXMgYXJlIChkaWZmaWN1bHR5LCBkaXNjcmltaW5hdGlvbiwgY29ycmVjdCkKICAgIGlydF9pbnB1dHM6IGxpc3RbdHVwbGVbZmxvYXQsIGZsb2F0LCBib29sXV0gPSBbXQogICAgZm9yIGFucyBpbiBhbnN3ZXJzOgogICAgICAgIHFpZCA9IGFucy5nZXQoInF1ZXN0aW9uX2lkIikKICAgICAgICBhbnNfdGV4dCA9IGFucy5nZXQoImFuc3dlciIsICIiKQogICAgICAgIHEgPSBxdWVzdGlvbnMuZ2V0KHN0cihxaWQpKQogICAgICAgIGlmIHEgaXMgTm9uZToKICAgICAgICAgICAgY29udGludWUKICAgICAgICBpc19jb3JyZWN0OiBib29sIHwgTm9uZSA9IE5vbmUKICAgICAgICBpZiBxLnF1ZXN0aW9uX3R5cGUgPT0gIm1jcSIgYW5kIHEuY29ycmVjdF9vcHRpb246CiAgICAgICAgICAgIGlzX2NvcnJlY3QgPSBzdHIoYW5zX3RleHQpLnN0cmlwKCkubG93ZXIoKSA9PSBzdHIocS5jb3JyZWN0X29wdGlvbikuc3RyaXAoKS5sb3dlcigpCiAgICAgICAgICAgICMgVXNlIHN0b3JlZCBkaXNjcmltaW5hdGlvbiAoYSkgZm9yIDJQTDsgZmFsbCBiYWNrIHRvIDEuMCBpZiBOVUxMIGluIERCCiAgICAgICAgICAgIGEgPSBxLmRpc2NyaW1pbmF0aW9uIGlmIHEuZGlzY3JpbWluYXRpb24gaXMgbm90IE5vbmUgZWxzZSAxLjAKICAgICAgICAgICAgaXJ0X2lucHV0cy5hcHBlbmQoKHEuZGlmZmljdWx0eSwgYSwgaXNfY29ycmVjdCkpCiAgICAgICAgZGIuYWRkKAogICAgICAgICAgICBUZXN0QW5zd2VyKAogICAgICAgICAgICAgICAgc2Vzc2lvbl9pZD1zZXNzaW9uX2lkLAogICAgICAgICAgICAgICAgcXVlc3Rpb25faWQ9cS5pZCwKICAgICAgICAgICAgICAgIGFuc3dlcl90ZXh0PXN0cihhbnNfdGV4dClbOjIwMDBdLAogICAgICAgICAgICAgICAgaXNfY29ycmVjdD1pc19jb3JyZWN0LAogICAgICAgICAgICApCiAgICAgICAgKQoKICAgIHRoZXRhID0gX2lydF9tYXAoaXJ0X2lucHV0cykgaWYgaXJ0X2lucHV0cyBlbHNlIDAuMAogICAgcmF3X3Njb3JlID0gc3VtKDEgZm9yIF8sIF8sIGMgaW4gaXJ0X2lucHV0cyBpZiBjKSAvIGxlbihpcnRfaW5wdXRzKSBpZiBpcnRfaW5wdXRzIGVsc2UgMC4wCiAgICBncmFkZV9hc3NpZ25lZCA9IF90aGV0YV90b19ncmFkZSh0aGV0YSwgc2Vzc2lvbi50YXJnZXRfZ3JhZGUpCgogICAgc2Vzc2lvbi5zdGF0dXMgPSAiY29tcGxldGVkIgogICAgc2Vzc2lvbi5jb21wbGV0ZWRfYXQgPSBkYXRldGltZS5ub3coVVRDKQogICAgc2Vzc2lvbi5pcnRfdGhldGEgPSB0aGV0YQogICAgc2Vzc2lvbi5zY29yZSA9IHJhd19zY29yZQogICAgc2Vzc2lvbi5ncmFkZV9hc3NpZ25lZCA9IGdyYWRlX2Fzc2lnbmVkCgogICAgcGFydGljaXBhbnQgPSBhd2FpdCBkYi5nZXQoUGFydGljaXBhbnQsIHBhcnRpY2lwYW50X2lkKQogICAgaWYgcGFydGljaXBhbnQgaXMgbm90IE5vbmU6CiAgICAgICAgIyBGSVggW0NSSVRJQ0FMLTJdOiBhbHdheXMgcmVmcmVzaCBjb29sZG93biBsb2NrIGFmdGVyIGVhY2ggY29tcGxldGVkIHRlc3QuCiAgICAgICAgIyBQcmV2aW91cyBidWc6IGBpZiBwYXJ0aWNpcGFudC5ncmFkZV9sb2NrZWRfdW50aWwgaXMgTm9uZWAKICAgICAgICAjIEFmdGVyIHRoZSBmaXJzdCB0ZXN0IGdyYWRlX2xvY2tlZF91bnRpbCBpcyBhIHBhc3QgZGF0ZXRpbWUsIG5vdCBOb25lLAogICAgICAgICMgc28gdGhlIGNvb2xkb3duIHdhcyBORVZFUiByZWZyZXNoZWQgb24gYW55IHN1YnNlcXVlbnQgdGVzdC4KICAgICAgICBpZiAoCiAgICAgICAgICAgIHBhcnRpY2lwYW50LmdyYWRlX2xvY2tlZF91bnRpbCBpcyBOb25lCiAgICAgICAgICAgIG9yIHBhcnRpY2lwYW50LmdyYWRlX2xvY2tlZF91bnRpbCA8PSBkYXRldGltZS5ub3coVVRDKQogICAgICAgICk6CiAgICAgICAgICAgIHBhcnRpY2lwYW50LmdyYWRlX2xvY2tlZF91bnRpbCA9IGRhdGV0aW1lLm5vdyhVVEMpICsgdGltZWRlbHRhKGRheXM9R1JBREVfQ09PTERPV05fREFZUykKCiAgICBhd2FpdCBkYi5mbHVzaCgpCiAgICByZXR1cm4gc2Vzc2lvbgoKCmFzeW5jIGRlZiBnZXRfc2Vzc2lvbl93aXRoX3F1ZXN0aW9ucygKICAgIGRiOiBBc3luY1Nlc3Npb24sCiAgICBzZXNzaW9uX2lkOiB1dWlkLlVVSUQsCiAgICBwYXJ0aWNpcGFudF9pZDogdXVpZC5VVUlELAopIC0+IHR1cGxlW1Rlc3RTZXNzaW9uLCBsaXN0XToKICAgIHNlc3Npb24gPSBhd2FpdCBkYi5nZXQoVGVzdFNlc3Npb24sIHNlc3Npb25faWQpCiAgICBpZiBzZXNzaW9uIGlzIE5vbmUgb3Igc2Vzc2lvbi5wYXJ0aWNpcGFudF9pZCAhPSBwYXJ0aWNpcGFudF9pZDoKICAgICAgICByYWlzZSBWYWx1ZUVycm9yKCJOb3QgZm91bmQiKQogICAgcV9pZHMgPSBbdXVpZC5VVUlEKHFpZCkgZm9yIHFpZCBpbiBzZXNzaW9uLnF1ZXN0aW9uc19qc29uXQogICAgcmVzdWx0ID0gYXdhaXQgZGIuZXhlY3V0ZSgKICAgICAgICBzZWxlY3QoCiAgICAgICAgICAgIFRlc3RRdWVzdGlvbi5pZCwKICAgICAgICAgICAgVGVzdFF1ZXN0aW9uLnF1ZXN0aW9uX3RleHQsCiAgICAgICAgICAgIFRlc3RRdWVzdGlvbi5xdWVzdGlvbl90eXBlLAogICAgICAgICAgICBUZXN0UXVlc3Rpb24ub3B0aW9ucywKICAgICAgICAgICAgVGVzdFF1ZXN0aW9uLmRpc2NpcGxpbmUsCiAgICAgICAgICAgIFRlc3RRdWVzdGlvbi50YXJnZXRfZ3JhZGUsCiAgICAgICAgKS53aGVyZShUZXN0UXVlc3Rpb24uaWQuaW5fKHFfaWRzKSkKICAgICkKICAgIHFfbWFwID0ge3N0cihyb3cuaWQpOiByb3cgZm9yIHJvdyBpbiByZXN1bHQubWFwcGluZ3MoKS5hbGwoKX0KICAgIG9yZGVyZWQgPSBbcV9tYXBbcWlkXSBmb3IgcWlkIGluIFtzdHIoaSkgZm9yIGkgaW4gcV9pZHNdIGlmIHFpZCBpbiBxX21hcF0KICAgIHJldHVybiBzZXNzaW9uLCBvcmRlcmVkCg==
+"""
+Assessment service: 2PL IRT grade evaluation (MAP estimate) and the grade-change policy.
+
+P(correct | theta, a, b) = sigmoid(a * (theta - b))
+  a = discrimination (TestQuestion.discrimination), b = difficulty (TestQuestion.difficulty)
+Prior: theta ~ N(0, 1); MAP by Newton-Raphson.
+
+Grade thresholds (theta):
+  below -1.5      -> not confirmed (nothing is assigned)
+  [-1.5, -0.5)    -> junior
+  [-0.5, 0.5)     -> middle
+  [0.5, 1.5)      -> senior
+  >= 1.5          -> lead
+
+Policy (TZ section 2, "Категория и грейд"):
+  * A test never lowers a confirmed grade. A failed attempt at the target grade changes nothing in
+    the profile; the candidate may take a test one level lower instead.
+  * A confident result may raise the grade by one level above the target ("кандидат, справившийся
+    уверенно, может повысить грейд"). "Confident" means the next level's threshold is below
+    theta - UPGRADE_MARGIN_SE * SE(theta). In a simulation with candidates who declare their true
+    grade, the point estimate alone falsely upgraded 13% of them; the 1 SE margin cuts that to 1% and
+    raises retest agreement on the exact grade from 55% to 70%.
+  * Only an actual grade change starts the cooldown (GRADE_COOLDOWN_DAYS). A failed attempt does not,
+    otherwise the candidate could not retake a lower level as the TZ requires. Retakes of the same
+    target grade are throttled separately (RETAKE_INTERVAL_DAYS).
+
+Anti-gaming rules (see docs/TRIAGE_REDTEAM_MURDERBOARD_2026-10-05.md):
+  * Every served question is scored. A skipped question counts as wrong; the previous code ignored
+    it, so answering only the items you knew inflated theta, and answering none returned theta = 0,
+    which mapped to "middle".
+  * A session needs at least MIN_SCORED_QUESTIONS gradable items, otherwise it is not started.
+"""
+from __future__ import annotations
+
+import math
+import random
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.assessment import (
+    GRADE_COOLDOWN_DAYS,
+    GRADE_ORDER,
+    SESSION_QUESTION_COUNT,
+    SESSION_TTL_MINUTES,
+    TestAnswer,
+    TestQuestion,
+    TestSession,
+)
+from app.models.participant import Participant
+
+RETAKE_INTERVAL_DAYS = 7
+MIN_SCORED_QUESTIONS = 5
+UPGRADE_MARGIN_SE = 1.0
+_NOT_CONFIRMED_BELOW = -1.5
+_THRESHOLDS = {"junior": -0.5, "middle": 0.5, "senior": 1.5}
+
+
+class QuestionBankError(RuntimeError):
+    """The bank cannot supply enough gradable questions for a fair session."""
+
+
+def _sigmoid(x: float) -> float:
+    # Numerically stable logistic function
+    if x >= 0:
+        return 1.0 / (1.0 + math.exp(-x))
+    e = math.exp(x)
+    return e / (1.0 + e)
+
+
+def _irt_map(
+    responses: list[tuple[float, float, bool]],  # (difficulty b, discrimination a, correct)
+    prior_mean: float = 0.0,
+    prior_var: float = 1.0,
+) -> float:
+    """MAP estimate of theta by Newton-Raphson under the 2PL model.
+
+    With no responses the estimate is the prior mean. Callers must not grade a session on an empty
+    response list (see submit_answers): that would hand out theta = 0 for free.
+    The log-posterior is strictly concave (Gaussian prior), so Newton converges from the prior mean.
+    """
+    if not responses:
+        return prior_mean
+    theta = prior_mean
+    for _ in range(25):
+        grad = -(theta - prior_mean) / prior_var
+        hess = -1.0 / prior_var
+        for b, a, correct in responses:
+            p = _sigmoid(a * (theta - b))
+            grad += a * ((1.0 if correct else 0.0) - p)
+            hess -= a * a * p * (1.0 - p)
+        step = grad / hess
+        theta -= step
+        if abs(step) < 1e-8:
+            break
+    return max(-4.0, min(4.0, theta))
+
+
+def posterior_se(theta: float, responses: list[tuple[float, float, bool]], prior_var: float = 1.0) -> float:
+    """Standard error of the MAP estimate: 1 / sqrt(prior precision + 2PL test information at theta)."""
+    info = 1.0 / prior_var
+    for b, a, _ in responses:
+        p = _sigmoid(a * (theta - b))
+        info += a * a * p * (1.0 - p)
+    return 1.0 / math.sqrt(info)
+
+
+def grade_from_theta(theta: float) -> str | None:
+    """Grade a theta corresponds to, or None when the result is too low to confirm anything."""
+    if theta < _NOT_CONFIRMED_BELOW:
+        return None
+    if theta < _THRESHOLDS["junior"]:
+        return "junior"
+    if theta < _THRESHOLDS["middle"]:
+        return "middle"
+    if theta < _THRESHOLDS["senior"]:
+        return "senior"
+    return "lead"
+
+
+def earned_grade(theta: float, target_grade: str, se: float = 0.0) -> str | None:
+    """Grade a session targeting `target_grade` can vouch for, or None.
+
+    A session draws items from target-1 .. target+1, so it measures only that band. Above it the
+    result is capped at target+1, and that upgrade needs theta - UPGRADE_MARGIN_SE * se to clear the
+    next threshold; below target-1 it says "not confirmed" rather than extrapolating (all answers
+    wrong on a senior test must not read as "junior confirmed").
+    """
+    base = grade_from_theta(theta)
+    if base is None:
+        return None
+    target_idx = GRADE_ORDER.index(target_grade)
+    base_idx = GRADE_ORDER.index(base)
+    if base_idx < target_idx - 1:
+        return None
+    if base_idx > target_idx:
+        upper = GRADE_ORDER[min(target_idx + 1, len(GRADE_ORDER) - 1)]
+        confident = grade_from_theta(theta - UPGRADE_MARGIN_SE * se)
+        if confident is not None and GRADE_ORDER.index(confident) >= GRADE_ORDER.index(upper):
+            return upper
+        return target_grade
+    return base
+
+
+def passed_target(earned: str | None, target_grade: str) -> bool:
+    return earned is not None and GRADE_ORDER.index(earned) >= GRADE_ORDER.index(target_grade)
+
+
+@dataclass(frozen=True)
+class GradeDecision:
+    """What a completed session does to the profile."""
+    assessed_grade: str | None   # confirmed grade after applying the result
+    applied: bool                # the profile's confirmed grade changed (first confirmation or upgrade)
+    upgraded: bool               # a previously confirmed grade was raised
+    locked_until: datetime | None
+    reason: str                  # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed
+
+
+def decide_grade(current: str | None, earned: str | None, target_grade: str, now: datetime) -> GradeDecision:
+    """Pure policy function: confirmed grade + session outcome -> new confirmed grade and cooldown."""
+    if earned is None or not passed_target(earned, target_grade):
+        return GradeDecision(current, False, False, None, "not_passed")
+    if current is None:
+        # First confirmation is the baseline, not a change: it does not start the cooldown.
+        return GradeDecision(earned, True, False, None, "first_confirmation")
+    if GRADE_ORDER.index(earned) > GRADE_ORDER.index(current):
+        return GradeDecision(earned, True, True, now + timedelta(days=GRADE_COOLDOWN_DAYS), "upgrade")
+    if earned == current:
+        return GradeDecision(current, False, False, None, "confirmed_again")
+    return GradeDecision(current, False, False, None, "kept_higher_grade")
+
+
+async def check_cooldown(db: AsyncSession, participant_id: uuid.UUID) -> datetime | None:
+    row = await db.get(Participant, participant_id)
+    if row is None:
+        return None
+    locked_until = getattr(row, "grade_locked_until", None)
+    if locked_until and locked_until > datetime.now(UTC):
+        return locked_until
+    return None
+
+
+async def check_retake_interval(
+    db: AsyncSession, participant_id: uuid.UUID, target_grade: str,
+) -> datetime | None:
+    """When the candidate may retake the same target grade, or None if they may start now."""
+    since = datetime.now(UTC) - timedelta(days=RETAKE_INTERVAL_DAYS)
+    last = await db.scalar(
+        select(func.max(TestSession.completed_at)).where(
+            TestSession.participant_id == participant_id,
+            TestSession.target_grade == target_grade,
+            TestSession.status == "completed",
+            TestSession.completed_at > since,
+        )
+    )
+    return last + timedelta(days=RETAKE_INTERVAL_DAYS) if last else None
+
+
+async def get_active_session(db: AsyncSession, participant_id: uuid.UUID) -> TestSession | None:
+    result = await db.execute(
+        select(TestSession).where(
+            and_(
+                TestSession.participant_id == participant_id,
+                TestSession.status == "in_progress",
+                TestSession.expires_at > datetime.now(UTC),
+            )
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def expire_stale_sessions(db: AsyncSession, participant_id: uuid.UUID) -> None:
+    await db.execute(
+        update(TestSession)
+        .where(
+            and_(
+                TestSession.participant_id == participant_id,
+                TestSession.status == "in_progress",
+                TestSession.expires_at <= datetime.now(UTC),
+            )
+        )
+        .values(status="expired")
+    )
+
+
+def _gradable(q: TestQuestion) -> bool:
+    return q.question_type == "mcq" and bool(q.correct_option)
+
+
+async def start_session(
+    db: AsyncSession,
+    participant_id: uuid.UUID,
+    target_grade: str,
+    discipline: str | None = None,
+) -> tuple[TestSession, list[TestQuestion]]:
+    if target_grade not in GRADE_ORDER:
+        raise ValueError(f"Invalid grade: {target_grade}")
+
+    await expire_stale_sessions(db, participant_id)
+
+    tgt_idx = GRADE_ORDER.index(target_grade)
+    grades_to_include = [target_grade]
+    if tgt_idx > 0:
+        grades_to_include.append(GRADE_ORDER[tgt_idx - 1])
+    if tgt_idx < len(GRADE_ORDER) - 1:
+        grades_to_include.append(GRADE_ORDER[tgt_idx + 1])
+
+    base_filter = [
+        TestQuestion.active.is_(True),
+        TestQuestion.question_type == "mcq",
+        TestQuestion.correct_option.is_not(None),
+        TestQuestion.target_grade.in_(grades_to_include),
+    ]
+
+    async def _pool(extra: list) -> list[TestQuestion]:
+        rows = await db.execute(
+            select(TestQuestion)
+            .where(and_(*base_filter, *extra))
+            .order_by(TestQuestion.usage_count.asc(), func.random())
+            .limit(SESSION_QUESTION_COUNT * 4)
+        )
+        return list(rows.scalars().all())
+
+    pool = await _pool([TestQuestion.discipline == discipline] if discipline else [])
+    if len(pool) < MIN_SCORED_QUESTIONS and discipline:
+        # The bank is thin for this discipline: fall back to all disciplines at these grades.
+        pool = await _pool([])
+    if len(pool) < MIN_SCORED_QUESTIONS:
+        raise QuestionBankError(
+            f"Question bank has {len(pool)} gradable questions for grade {target_grade}; "
+            f"at least {MIN_SCORED_QUESTIONS} are required"
+        )
+
+    chosen = random.sample(pool, min(SESSION_QUESTION_COUNT, len(pool)))
+    session = TestSession(
+        participant_id=participant_id,
+        target_grade=target_grade,
+        discipline=discipline,
+        questions_json=[str(q.id) for q in chosen],
+        expires_at=datetime.now(UTC) + timedelta(minutes=SESSION_TTL_MINUTES),
+    )
+    db.add(session)
+    await db.execute(
+        update(TestQuestion)
+        .where(TestQuestion.id.in_([q.id for q in chosen]))
+        .values(usage_count=TestQuestion.usage_count + 1)
+    )
+    await db.flush()
+    return session, chosen
+
+
+async def submit_answers(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    answers: list[dict],
+) -> tuple[TestSession, GradeDecision]:
+    # Row lock: two concurrent submits of one session must not both be graded.
+    session = await db.get(TestSession, session_id, with_for_update=True)
+    if session is None or session.participant_id != participant_id:
+        raise ValueError("Session not found")
+    if session.status != "in_progress":
+        raise ValueError(f"Session already {session.status}")
+    now = datetime.now(UTC)
+    if session.expires_at < now:
+        session.status = "expired"
+        await db.flush()
+        raise ValueError("Session expired")
+
+    q_ids = [uuid.UUID(qid) for qid in session.questions_json]
+    q_rows = await db.execute(select(TestQuestion).where(TestQuestion.id.in_(q_ids)))
+    questions: dict[str, TestQuestion] = {str(q.id): q for q in q_rows.scalars().all()}
+
+    # First answer per question wins; ids that were not served in this session are ignored.
+    given: dict[str, str] = {}
+    for ans in answers:
+        qid = str(ans.get("question_id"))
+        if qid in questions and qid not in given:
+            given[qid] = str(ans.get("answer", "")).strip()
+
+    irt_inputs: list[tuple[float, float, bool]] = []
+    for qid in session.questions_json:
+        q = questions.get(str(qid))
+        if q is None or not _gradable(q):
+            continue
+        text = given.get(str(qid))
+        # A skipped question is a wrong answer.
+        is_correct = text is not None and text.lower() == str(q.correct_option).strip().lower()
+        a = q.discrimination if q.discrimination is not None else 1.0
+        irt_inputs.append((q.difficulty, a, is_correct))
+        db.add(TestAnswer(session_id=session_id, question_id=q.id,
+                          answer_text=text[:2000] if text is not None else None, is_correct=is_correct))
+
+    if len(irt_inputs) < MIN_SCORED_QUESTIONS:
+        raise ValueError("Session has too few gradable questions")
+
+    theta = _irt_map(irt_inputs)
+    earned = earned_grade(theta, session.target_grade, posterior_se(theta, irt_inputs))
+
+    session.status = "completed"
+    session.completed_at = now
+    session.irt_theta = theta
+    session.score = sum(1 for _, _, c in irt_inputs if c) / len(irt_inputs)
+    session.grade_assigned = earned
+
+    participant = await db.get(Participant, participant_id, with_for_update=True)
+    decision = decide_grade(
+        participant.assessed_grade if participant is not None else None, earned, session.target_grade, now)
+    if participant is not None and decision.applied:
+        participant.assessed_grade = decision.assessed_grade
+        participant.assessed_at = now
+        if decision.locked_until is not None:
+            participant.grade_locked_until = decision.locked_until
+    await db.flush()
+    return session, decision
+
+
+async def get_session_with_questions(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    participant_id: uuid.UUID,
+) -> tuple[TestSession, list]:
+    session = await db.get(TestSession, session_id)
+    if session is None or session.participant_id != participant_id:
+        raise ValueError("Not found")
+    q_ids = [uuid.UUID(qid) for qid in session.questions_json]
+    result = await db.execute(
+        select(
+            TestQuestion.id,
+            TestQuestion.question_text,
+            TestQuestion.question_type,
+            TestQuestion.options,
+            TestQuestion.discipline,
+            TestQuestion.target_grade,
+        ).where(TestQuestion.id.in_(q_ids))
+    )
+    q_map = {str(row.id): row for row in result.mappings().all()}
+    ordered = [q_map[str(i)] for i in q_ids if str(i) in q_map]
+    return session, ordered

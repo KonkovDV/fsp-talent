@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
 from app.models import Employer, Participant, Skill, Vacancy
+from app.seed.questions import seed_questions
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
 
@@ -85,6 +86,8 @@ async def main() -> None:
             jobs += 1
         await db.commit()
         print(f"seeded employers={employers} participants={created} vacancies={jobs}")
+    # Without a question bank /assessment/start cannot serve a session.
+    await seed_questions()
 
 
 if __name__ == "__main__":

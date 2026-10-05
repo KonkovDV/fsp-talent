@@ -45,8 +45,9 @@ class VacancyIn(BaseModel):
     min_rank: str | None = None
     # FIX (Pydantic v2): max_length on list must use Annotated
     skills: Annotated[list[str], Field(max_length=20)] = Field(default_factory=list)
-    salary_from_gross: int | None = Field(None, gt=0, le=100_000_000)
-    salary_to_gross: int | None = Field(None, gt=0, le=100_000_000)
+    # TZ 2.2 п.1: the salary range is mandatory in a vacancy, as in an offer.
+    salary_from_gross: int = Field(gt=0, le=100_000_000)
+    salary_to_gross: int = Field(gt=0, le=100_000_000)
     work_format: Literal["remote", "office", "hybrid"] = "remote"
     allows_minors: bool = False
 
@@ -60,7 +61,7 @@ class VacancyIn(BaseModel):
             raise ValueError("Неизвестная дисциплина")
         if self.min_rank and self.min_rank not in RANK_ORDER:
             raise ValueError("Неизвестный разряд")
-        if self.salary_from_gross and self.salary_to_gross and self.salary_to_gross < self.salary_from_gross:
+        if self.salary_to_gross < self.salary_from_gross:
             raise ValueError("Верхняя граница зарплаты меньше нижней")
         return self
 

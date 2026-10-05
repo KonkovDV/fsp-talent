@@ -10,10 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
 from app.core.database import get_db
+from app.core.ratelimit import too_many
 from app.models import AccessLog, Employer, Offer, Participant
 from app.services.offers import expire_if_stale, expire_stale
 
 router = APIRouter(prefix="/offers", tags=["offers"])
+
+_OFFERS_PER_DAY = 50
 
 
 def _eid(current: dict) -> uuid.UUID:
@@ -28,6 +31,8 @@ class OfferCreate(BaseModel):
     role: str = Field(min_length=2, max_length=100)
     work_format: Literal["remote", "office", "hybrid"] = "remote"
     message: str | None = Field(None, max_length=2000)
+    # TZ 2.2 п.2: how the candidate reaches the company (email, Telegram, phone of the recruiter).
+    contact_method: str = Field(min_length=3, max_length=300)
 
     @model_validator(mode="after")
     def _range(self):
@@ -43,6 +48,8 @@ def _offer_out(o: Offer) -> dict:
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
         "status": o.status, "created_at": o.created_at.isoformat(),
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
+        "contact_method": o.contact_method,
+        "candidate_viewed_at": o.candidate_viewed_at.isoformat() if o.candidate_viewed_at else None,
         "contacts_available": o.status == "accepted",
         # FIX BUG-A: expose contacts_revealed_at so the audit trail is queryable via API
         "contacts_revealed_at": o.contacts_revealed_at.isoformat() if o.contacts_revealed_at else None,
@@ -55,6 +62,9 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
     employer = await db.get(Employer, _eid(current))
     if not employer:
         raise HTTPException(404, "Работодатель не найден")
+    # Employers are not verified in the MVP: cap how many people one account can message per day.
+    if await too_many(f"offers:create:{employer.id}", limit=_OFFERS_PER_DAY, window_seconds=86_400):
+        raise HTTPException(429, "Лимит приглашений на сегодня исчерпан")
     candidate = await db.get(Participant, body.candidate_id)
     if not candidate or not candidate.discoverable:
         raise HTTPException(404, "Кандидат недоступен для предложений")
@@ -69,6 +79,7 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
         employer_id=employer.id, candidate_id=candidate.id,
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         currency=body.currency, role=body.role, work_format=body.work_format, message=body.message,
+        contact_method=body.contact_method.strip(),
         status="pending", expires_at=datetime.now(UTC) + timedelta(days=14),
     )
     db.add(offer)

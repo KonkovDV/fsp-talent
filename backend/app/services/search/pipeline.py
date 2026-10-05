@@ -1,7 +1,8 @@
 """
 Candidate search: SQL hard filters -> lexical / quality / optional dense rankings -> RRF fusion.
-Final order: (skill coverage, fused score, best LCB, id). Cards are anonymous: no name, no FSP id,
-evidence shown as status + year + percentile bucket instead of exact event and place.
+Final order: (skill coverage, grade confirmed by a test, fused score, best LCB, id). Cards are
+anonymous: no name, no FSP id, evidence shown as status + year + percentile bucket instead of
+exact event and place.
 
 When a discipline is selected, the quality signal (max LCB) is computed inside that discipline only:
 a strong algorithmic score must not lift a candidate in a security search.
@@ -14,7 +15,7 @@ import uuid
 from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Participant, Result, Skill
+from app.models import Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
@@ -73,6 +74,7 @@ async def search_candidates(
     skills: list[str] | None = None,
     q: str | None = None,
     limit: int = 20,
+    assessed_only: bool = False,
 ) -> dict:
     wanted = {n for s in (skills or []) if (n := normalize_skill(s))}
     if q:
@@ -114,6 +116,8 @@ async def search_candidates(
             .outerjoin(max_lcb, max_lcb.c.participant_id == Participant.id)
             .where(Participant.is_visible.is_(True),
                    or_(adult, Participant.minor_consent_given.is_(True))))
+    if assessed_only:
+        stmt = stmt.where(Participant.assessed_grade.is_not(None))
     if role:
         stmt = stmt.where(PSI.role == role)
     if grade:
@@ -160,6 +164,18 @@ async def search_candidates(
                     fused[pid] = 0.0
                     best.setdefault(pid, 0.0)
 
+    # TZ: inside a category, better test results rank higher. theta is on one IRT scale for every
+    # session, so the best completed result is comparable across candidates.
+    test_theta: dict[uuid.UUID, float] = {
+        pid: theta for pid, theta in await db.execute(
+            select(TestSession.participant_id, func.max(TestSession.irt_theta))
+            .where(TestSession.participant_id.in_(list(ids_set)), TestSession.status == "completed",
+                   TestSession.irt_theta.is_not(None))
+            .group_by(TestSession.participant_id))
+    }
+    if test_theta:
+        rankings.append(sorted(test_theta, key=lambda i: -test_theta[i]))
+
     for ranking in rankings:
         for pid, s in _rrf(ranking).items():
             if pid in fused:
@@ -173,7 +189,11 @@ async def search_candidates(
                     Skill.participant_id.in_(all_ids), Skill.confirmed.is_(True), Skill.name.in_(wanted))):
             have.setdefault(pid, set()).add(name)
 
-    ordered = sorted(all_ids, key=lambda i: (-len(have.get(i, ())), -fused[i], -best[i], str(i)))[:limit]
+    assessed: set[uuid.UUID] = set(await db.scalars(
+        select(Participant.id).where(Participant.id.in_(all_ids), Participant.assessed_grade.is_not(None))))
+    # Inside one skill-coverage level, a grade confirmed by a test outranks a self-described one.
+    ordered = sorted(all_ids, key=lambda i: (
+        -len(have.get(i, ())), -(i in assessed), -fused[i], -best[i], str(i)))[:limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list, "items": cards}
 
@@ -218,6 +238,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
                                 "score": ds.score, "lcb": ds.lcb, "confidence": ds.confidence,
                                 "best_rank": ds.best_rank, "events_count": ds.events_count,
                                 "evidence": evidence})
+        if cat and cat.grade_source == "assessed":
+            why.append(f"Грейд {cat.grade} подтверждён тестом")
         if disciplines:
             top = next((d for d in disciplines if d["discipline"] == discipline_filter), disciplines[0])
             if top["best_rank"]:

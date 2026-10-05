@@ -12,6 +12,7 @@ Difficulty is pre-calibrated on the Rasch scale:
 from __future__ import annotations
 
 import asyncio
+import random
 import uuid
 from typing import Any
 
@@ -206,6 +207,25 @@ QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
+def balanced(question: dict[str, Any], slot: int) -> dict[str, Any]:
+    """Copy of a question whose right answer sits at position `slot % len(options)`.
+
+    The hand-written bank keeps every right answer at "a" or "b": answering "b" to everything scored
+    about 55%. Callers pass the question's index, so positions cycle a, b, c, d and a constant answer
+    scores about 1/len(options). Distractors are shuffled with an RNG seeded by the question text,
+    so reseeding gives the same bank.
+    """
+    options = list(question["options"])
+    correct = next(o for o in options if o["id"] == question["correct_option"])
+    distractors = [o for o in options if o is not correct]
+    random.Random(question["question_text"]).shuffle(distractors)
+    position = slot % len(options)
+    ordered = distractors[:position] + [correct] + distractors[position:]
+    letters = "abcdefgh"
+    relettered = [{"id": letters[i], "text": o["text"]} for i, o in enumerate(ordered)]
+    return {**question, "options": relettered, "correct_option": letters[position]}
+
+
 async def seed_questions() -> None:
     from sqlalchemy import func, select
 
@@ -219,7 +239,8 @@ async def seed_questions() -> None:
             print(f"Question bank already has {existing} questions — skipping seed.")
             return
 
-        for q in QUESTIONS:
+        for slot, raw in enumerate(QUESTIONS):
+            q = balanced(raw, slot)
             db.add(TestQuestion(
                 id=uuid.uuid4(),
                 discipline=q["discipline"],

@@ -29,6 +29,7 @@ export default function CandidateOffers() {
                 {o.salary_from.toLocaleString('ru-RU')} — {o.salary_to.toLocaleString('ru-RU')} {o.currency}
               </p>
               {o.message && <p className="text-sm text-text-secondary mt-2">{o.message}</p>}
+              {o.contact_method && <p className="text-sm text-text-muted mt-1">Связь с компанией: {o.contact_method}</p>}
             </div>
             <span className="badge bg-gray-100 text-gray-700">{STATUS[o.status] ?? o.status}</span>
           </div>

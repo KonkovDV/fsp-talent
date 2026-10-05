@@ -48,7 +48,7 @@ def main():
     assert status == 409, duplicate
     status, bad_salary = call("POST", "/offers/", {
         "candidate_id": me["id"], "salary_from_gross": 200, "salary_to_gross": 100,
-        "role": "Backend", "work_format": "remote",
+        "role": "Backend", "work_format": "remote", "contact_method": "hr@yandex.demo",
     }, token=employer_token)
     assert status == 422, bad_salary
     status, found = call("GET", "/search/candidates?q=Python%20backend&skills=Go,FastAPI&limit=10", token=employer_token)
@@ -58,8 +58,16 @@ def main():
     status, offer = call("POST", "/offers/", {
         "candidate_id": me["id"], "salary_from_gross": 180000, "salary_to_gross": 260000,
         "role": "Backend-разработчик", "work_format": "remote", "message": "Ждём в команде",
+        "contact_method": "Telegram @yandex_hr",
     }, token=employer_token)
     assert status == 201, offer
+    status, seen = call("GET", "/candidates/me/offers", token=participant_token)
+    mine = next(o for o in seen if o["id"] == offer["id"])
+    assert status == 200 and mine["contact_method"] == "Telegram @yandex_hr", mine
+    status, listed = call("GET", "/offers/", token=employer_token)
+    assert next(o for o in listed if o["id"] == offer["id"])["candidate_viewed_at"], "viewed status not recorded"
+    status, no_salary = call("POST", "/vacancies/", {"title": "Без вилки", "skills": ["Python"]}, token=employer_token)
+    assert status == 422, no_salary
     status, denied = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
     assert status == 403, denied
     status, accepted = call("POST", f"/candidates/me/offers/{offer['id']}/respond",
@@ -89,7 +97,29 @@ def main():
     assert status == 200 and names == ["C++", "FastAPI", "Python"], parsed
     status, query = call("POST", "/ai/parse-query", {"q": "сеньор бэкенд python ctf"}, token=employer_token)
     assert status == 200 and query["role"] == "backend" and query["grade"] == "senior" and "Python" in query["skills"], query
+    check_assessment()
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
+
+
+def check_assessment():
+    """Test mechanic through the real API: answers stay hidden, skipping earns nothing, retakes wait."""
+    status, login = call("POST", "/auth/participant/token", form={"username": "FSP002", "password": "test"})
+    assert status == 200, login
+    token = login["access_token"]
+    status, before = call("GET", "/candidates/me", token=token)
+    assert status == 200 and before["grade_source"] != "assessed", before
+    status, session = call("POST", "/assessment/start",
+                           {"target_grade": "junior", "discipline": "security"}, token=token)
+    assert status == 201 and len(session["questions"]) >= 5, session
+    assert all("correct_option" not in q for q in session["questions"]), "right answers leaked to the client"
+    # Old bug: an empty submission scored theta=0 -> "middle". Every served question now counts.
+    status, result = call("POST", f"/assessment/{session['session_id']}/submit",
+                          {"answers": [{"question_id": "not-served", "answer": "a"}]}, token=token)
+    assert status == 200 and result["outcome"] == "not_passed" and result["confirmed_grade"] is None, result
+    status, again = call("POST", "/assessment/start", {"target_grade": "junior"}, token=token)
+    assert status == 429, again
+    status, after = call("GET", "/candidates/me", token=token)
+    assert status == 200 and after["grade"] == before["grade"] and after["assessed_grade"] is None, after
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 """
 Rule-based categorization: role x grade x stack.
 
-Grade and the FSP-verified level are independent axes: grade comes from experience
-(or the candidate's own declaration), never from competition results.
+Grade and the FSP-verified level are independent axes: grade comes from a test result when there is
+one, otherwise from the candidate's declaration or experience, never from competition results.
 """
 from __future__ import annotations
 
@@ -63,6 +63,7 @@ def assign_category(
     discipline_scores: list[dict],
     experience_years: int | None = None,
     declared_grade: str | None = None,
+    assessed_grade: str | None = None,
 ) -> CategoryResult:
     explanation: list[str] = []
 
@@ -85,9 +86,13 @@ def assign_category(
         role = "fullstack"
         explanation.append("Роль по умолчанию: недостаточно данных")
 
-    if declared_grade in GRADES:
+    if assessed_grade in GRADES:
+        # Confirmed by a test: outranks the self-described grade and the experience estimate.
+        grade, source = assessed_grade, "assessed"
+        explanation.append("Грейд подтверждён тестом")
+    elif declared_grade in GRADES:
         grade, source = declared_grade, "declared"
-        explanation.append("Грейд указан кандидатом")
+        explanation.append("Грейд указан кандидатом, тестом не подтверждён")
     elif experience_years is not None:
         grade, source = grade_from_experience(experience_years), "experience"
         explanation.append(

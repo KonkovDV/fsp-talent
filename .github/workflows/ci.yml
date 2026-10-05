@@ -48,6 +48,18 @@ jobs:
         run: cd backend && pip install -e .[test]
       - name: Run unit tests
         run: cd backend && pytest tests/unit/ -v --cov=app/services --cov-report=xml
+      # Unit tests never touch a database. These steps catch a broken migration chain, an
+      # unimportable module and a dead API path, which all reached main before.
+      - name: Apply migrations
+        run: cd backend && alembic upgrade head
+      - name: Seed demo data
+        run: cd backend && python -m seed.generate_seed
+      - name: API smoke test
+        run: |
+          cd backend
+          uvicorn app.main:app --host 127.0.0.1 --port 8010 > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8010/health && break; sleep 1; done
+          python tests/smoke_api.py || (cat /tmp/api.log; exit 1)
       - uses: codecov/codecov-action@v4
         if: always()
 

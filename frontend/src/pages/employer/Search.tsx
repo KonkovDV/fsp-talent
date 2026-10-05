@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { apiError, createOffer, parseQuery, searchCandidates } from '../../api/client'
 import { DISC_RU, ROLE_RU } from '../../labels'
 import { Search, X, SlidersHorizontal } from 'lucide-react'
@@ -28,7 +28,7 @@ export default function EmployerSearch() {
   const [discipline,  setDiscipline] = useState('')
   const [minRank,     setMinRank]    = useState('')
   const [skills,      setSkills]     = useState('')
-  const [enabled,     setEnabled]    = useState(false)
+  const [assessedOnly, setAssessedOnly] = useState(false)
   const [offerFor,    setOfferFor]   = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen]= useState(true)
 
@@ -39,13 +39,19 @@ export default function EmployerSearch() {
     discipline: discipline || undefined,
     min_rank:   minRank    || undefined,
     skills:     skills     || undefined,
+    assessed_only: assessedOnly || undefined,
   }
 
+  // Filters edit a draft. The shown selection changes only on "Найти" and stays on screen while the
+  // refined query loads (TZ: "уточнение запроса без потери ранее полученной подборки").
+  const [submitted, setSubmitted] = useState<typeof params | null>(null)
   const { data, isFetching } = useQuery({
-    queryKey: ['search', params],
-    queryFn:  () => searchCandidates(params).then(r => r.data),
-    enabled,
+    queryKey: ['search', submitted],
+    queryFn:  () => searchCandidates(submitted!).then(r => r.data),
+    enabled:  submitted !== null,
+    placeholderData: keepPreviousData,
   })
+  const draftChanged = submitted !== null && JSON.stringify(submitted) !== JSON.stringify(params)
 
   const parsed = useMutation({
     mutationFn: () => parseQuery(q).then(r => r.data),
@@ -57,13 +63,13 @@ export default function EmployerSearch() {
     },
   })
 
-  const doSearch = () => setEnabled(true)
+  const doSearch = () => setSubmitted({ ...params })
 
   const activeTags = [
-    role       && { label: ROLE_RU[role]          ?? role,       clear: () => { setRole('');       setEnabled(false) } },
-    grade      && { label: grade,                                clear: () => { setGrade('');      setEnabled(false) } },
-    discipline && { label: DISC_RU[discipline]     ?? discipline, clear: () => { setDiscipline('');setEnabled(false) } },
-    minRank    && { label: `разряд от ${minRank}`,               clear: () => { setMinRank('');    setEnabled(false) } },
+    role       && { label: ROLE_RU[role]          ?? role,       clear: () => { setRole('') } },
+    grade      && { label: grade,                                clear: () => { setGrade('') } },
+    discipline && { label: DISC_RU[discipline]     ?? discipline, clear: () => { setDiscipline('') } },
+    minRank    && { label: `разряд от ${minRank}`,               clear: () => { setMinRank('') } },
   ].filter(Boolean) as { label: string; clear: () => void }[]
 
   // Normalise: add mu from lcb when mu is missing
@@ -93,7 +99,7 @@ export default function EmployerSearch() {
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden />
             <input
               value={q}
-              onChange={e => { setQ(e.target.value); setEnabled(false) }}
+              onChange={e => { setQ(e.target.value) }}
               onKeyDown={e => e.key === 'Enter' && doSearch()}
               placeholder="сеньор бэкенд, Python, чемпионат…"
               className="input pl-10"
@@ -124,41 +130,52 @@ export default function EmployerSearch() {
 
         {filtersOpen && (
           <div className="flex gap-2 flex-wrap pt-2 border-t border-border">
-            <select value={role}       onChange={e => { setRole(e.target.value);       setEnabled(false) }} className="select text-xs w-auto">
+            <select value={role}       onChange={e => { setRole(e.target.value) }} className="select text-xs w-auto">
               {ROLES.map(v  => <option key={v} value={v}>{v ? ROLE_RU[v] : 'Любая роль'}</option>)}
             </select>
-            <select value={grade}      onChange={e => { setGrade(e.target.value);      setEnabled(false) }} className="select text-xs w-auto">
+            <select value={grade}      onChange={e => { setGrade(e.target.value) }} className="select text-xs w-auto">
               {GRADES.map(v => <option key={v} value={v}>{v || 'Любой грейд'}</option>)}
             </select>
-            <select value={discipline} onChange={e => { setDiscipline(e.target.value);setEnabled(false) }} className="select text-xs w-auto">
+            <select value={discipline} onChange={e => { setDiscipline(e.target.value) }} className="select text-xs w-auto">
               {DISCS.map(v  => <option key={v} value={v}>{v ? DISC_RU[v] : 'Любая дисциплина'}</option>)}
             </select>
-            <select value={minRank}    onChange={e => { setMinRank(e.target.value);    setEnabled(false) }} className="select text-xs w-auto">
+            <select value={minRank}    onChange={e => { setMinRank(e.target.value) }} className="select text-xs w-auto">
               {RANKS.map(v  => <option key={v} value={v}>{v ? `разряд от ${v}` : 'Любой разряд'}</option>)}
             </select>
             <input
               value={skills}
-              onChange={e => { setSkills(e.target.value); setEnabled(false) }}
+              onChange={e => { setSkills(e.target.value) }}
               placeholder="Навыки через запятую"
               className="input text-xs min-w-48 w-auto flex-1"
             />
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <input type="checkbox" checked={assessedOnly}
+                onChange={e => { setAssessedOnly(e.target.checked) }} />
+              Только грейд, подтверждённый тестом
+            </label>
           </div>
         )}
       </div>
 
-      {enabled && data && (
+      {draftChanged && (
+        <p className="text-xs text-text-muted" role="status">
+          Фильтры изменены. Ниже прежняя подборка, нажмите «Найти», чтобы обновить.
+        </p>
+      )}
+
+      {submitted && data && (
         <p className="text-xs text-text-muted">
           Найдено <strong className="text-text-secondary">{data.total}</strong> кандидатов · пул ≤ 1 000
         </p>
       )}
 
-      {isFetching && (
+      {isFetching && !data && (
         <div className="space-y-4">
           {[1,2,3].map(i => <div key={i} className="skeleton h-40" />)}
         </div>
       )}
 
-      {!isFetching && cards.map(card => (
+      {cards.map(card => (
         <CandidateCard key={card.candidate_id} card={card} onOffer={setOfferFor} />
       ))}
 
@@ -174,6 +191,7 @@ function OfferModal({ candidateId, onClose }: { candidateId: string; onClose: ()
     salary_to_gross:   250_000,
     work_format: 'remote',
     message: '',
+    contact_method: '',
   })
   const [error, setError] = useState('')
 
@@ -187,6 +205,7 @@ function OfferModal({ candidateId, onClose }: { candidateId: string; onClose: ()
     if (form.role.trim().length < 2) return setError('Укажите роль')
     if (form.salary_from_gross <= 0 || form.salary_to_gross < form.salary_from_gross)
       return setError('Проверьте вилку зарплаты')
+    if (form.contact_method.trim().length < 3) return setError('Укажите, как кандидату связаться с вами')
     setError('')
     mut.mutate()
   }
@@ -227,6 +246,11 @@ function OfferModal({ candidateId, onClose }: { candidateId: string; onClose: ()
               <option value="hybrid">гибрид</option>
               <option value="office">офис</option>
             </select>
+          </div>
+          <div>
+            <label className="text-xs text-text-muted block mb-1">Как связаться с вами</label>
+            <input value={form.contact_method} onChange={e => setForm({ ...form, contact_method: e.target.value })}
+              className="input" placeholder="Email или Telegram рекрутера" />
           </div>
           <div>
             <label className="text-xs text-text-muted block mb-1">Сообщение кандидату</label>

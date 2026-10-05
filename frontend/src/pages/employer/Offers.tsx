@@ -34,6 +34,7 @@ export default function EmployerOffers() {
             <p className="text-sm text-text-muted font-mono">
               {offer.salary_from.toLocaleString('ru-RU')}–{offer.salary_to.toLocaleString('ru-RU')} {offer.currency} · {offer.work_format}
             </p>
+            {offer.contact_method && <p className="text-xs text-text-muted">Связь: {offer.contact_method}</p>}
           </div>
           <div className="flex items-center gap-2">
             {offer.status === 'pending' && (
@@ -42,7 +43,9 @@ export default function EmployerOffers() {
             {offer.contacts_available && (
               <button onClick={() => reveal.mutate(offer.id)} className="btn-primary text-xs py-1.5">Контакты</button>
             )}
-            <span className="badge bg-gray-100 text-gray-700">{STATUS[offer.status] ?? offer.status}</span>
+            <span className="badge bg-gray-100 text-gray-700">
+              {offer.status === 'pending' && offer.candidate_viewed_at ? 'просмотрен' : STATUS[offer.status] ?? offer.status}
+            </span>
           </div>
         </div>
       ))}
@@ -69,4 +72,6 @@ interface Offer {
   work_format: string
   status: string
   contacts_available: boolean
+  contact_method: string | null
+  candidate_viewed_at: string | null
 }

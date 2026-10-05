@@ -19,9 +19,14 @@ class Offer(Base):
     role = Column(String(100), nullable=False)
     work_format = Column(String(20), nullable=False)
     message = Column(Text)
+    # TZ 2.2 п.2: the invitation carries the way to reach the company. Nullable only for rows created
+    # before migration 0010; the API requires it for every new offer.
+    contact_method = Column(String(300))
     status = Column(String(20), nullable=False, default="pending")
     contacts_revealed_at = Column(DateTime(timezone=True))
     employer_viewed_at = Column(DateTime(timezone=True))
+    # TZ 2.2 п.3: "просмотрено" — first time the candidate opened the list with this pending offer.
+    candidate_viewed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     expires_at = Column(DateTime(timezone=True),
                         default=lambda: datetime.now(UTC) + timedelta(days=14))

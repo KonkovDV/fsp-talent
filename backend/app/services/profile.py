@@ -98,7 +98,7 @@ async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
         db.add(DisciplineScore(participant_id=p.id, discipline=disc, **sd))
         scores.append({"discipline": disc, **sd})
 
-    cat = assign_category(skills, scores, p.experience_years, p.declared_grade)
+    cat = assign_category(skills, scores, p.experience_years, p.declared_grade, p.assessed_grade)
     existing = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == p.id))
     if existing:
         for k, v in cat.items():
