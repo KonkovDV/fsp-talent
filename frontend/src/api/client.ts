@@ -107,12 +107,23 @@ export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
 export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
-export const startAssessment = (data: { target_grade: string; discipline?: string | null }) =>
+export const assessmentBlueprint = () => api.get('/assessment/blueprint')
+export const startAssessment = (data: { target_grade: string; specialization?: string | null }) =>
   api.post('/assessment/start', data)
-export const submitAssessment = (sessionId: string, answers: { question_id: string; answer: string }[]) =>
-  api.post(`/assessment/${sessionId}/submit`, { answers })
-export const assessmentCooldown = () => api.get('/assessment/cooldown')
+export const activeAssessment = () => api.get('/assessment/active')
+export const answerAssessment = (sessionId: string, item_token: string, answer_index: number) =>
+  api.post(`/assessment/${sessionId}/answer`, { item_token, answer_index })
+export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
+export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
+export const assessmentCooldown = (specialization?: string) =>
+  api.get('/assessment/cooldown', { params: specialization ? { specialization } : {} })
 export const assessmentHistory = () => api.get('/assessment/history')
+export const itemHealth = () => api.get('/public/assessment/items')
+
+export const surveyOptions = () => api.get('/candidates/survey-options')
+export const saveSurvey = (data: {
+  specialization: string; industry: string; work_goal: string; declared_grade?: string | null; experience_years?: number | null
+}) => api.put('/candidates/me/survey', data)
 
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
 export const getLeaderboard = (discipline?: string) =>

@@ -14,8 +14,10 @@ from app.core.security import hash_password
 from app.legal import documents
 from app.models import Consent, Employer, Participant, Skill, Vacancy
 from app.seed.questions import seed_questions
+from app.services.categorization import DISCIPLINE_ROLE_MAP
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
+from app.services.survey import INDUSTRIES
 
 SKILLS = {
     "algorithmic": ["Python", "C++", "Algorithms", "Go", "Rust"],
@@ -31,6 +33,7 @@ EMPLOYERS = [
     ("РобоТех Урал", "hr@robotech.demo"),
 ]
 DEMO_PASSWORD = "demo12345"
+SPEC_OF = {"FSP001": "backend", "FSP002": "security"}
 NO_FSP_DEMO = ("nofsp@demo.talent", "Ирина Смирнова", "Казань", 2, "middle",
                ["Python", "Django", "PostgreSQL", "Docker", "Redis"])
 
@@ -85,6 +88,12 @@ async def main() -> None:
                              trust_level="self_reported", confirmed=True))
             participant.email = f"{fsp_id.lower()}@demo.talent"
             participant.email_verified_at = now
+            # Survey answers: the demo accounts have them; synthetic profiles get the role of their discipline.
+            first = data.results[0].discipline if data.results else "algorithmic"
+            participant.specialization = SPEC_OF.get(fsp_id) or DISCIPLINE_ROLE_MAP.get(first, "backend")
+            participant.industry = rng.choice(list(INDUSTRIES))
+            participant.work_goal = "both" if participant.is_minor else rng.choice(["job", "job", "both", "internship"])
+            participant.survey_at = now
             if fsp_id in DEMOS:
                 participant.password_hash = password_hash
             _consents(db, "participant", participant.id, now)
@@ -97,7 +106,8 @@ async def main() -> None:
             # TZ 2.1: a candidate without FSP history is a normal case, not an error.
             participant = Participant(email=email, display_name=name, region=region, experience_years=years,
                                       declared_grade=grade, password_hash=password_hash, email_verified_at=now,
-                                      is_minor=False, is_visible=True, public_profile=False)
+                                      is_minor=False, is_visible=True, public_profile=False,
+                                      specialization="backend", industry="fintech", work_goal="job", survey_at=now)
             db.add(participant)
             await db.flush()
             for skill in skill_names:

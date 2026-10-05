@@ -13,8 +13,9 @@ from app.api.deps import get_current_participant
 from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import ConsentLog, Offer, Participant
+from app.models import ConsentLog, GradeConfirmation, Offer, Participant
 from app.models.participant import Result, Skill
+from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.identity import active_consent
@@ -22,6 +23,7 @@ from app.services.offers import expire_if_stale, expire_stale
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
 from app.services.skills import normalize_skill
+from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -57,6 +59,13 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "email": p.email, "email_verified": p.email_verified_at is not None,
         "telegram": p.telegram, "phone": p.phone,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
+        "specialization": p.specialization, "industry": p.industry, "work_goal": p.work_goal,
+        "survey_done": p.survey_at is not None,
+        "confirmations": [{"specialization": c.specialization, "grade": c.grade, "p_pass": c.p_pass,
+                           "confirmed_at": c.confirmed_at.isoformat(),
+                           "locked_until": c.locked_until.isoformat() if c.locked_until else None}
+                          for c in await db.scalars(select(GradeConfirmation).where(
+                              GradeConfirmation.participant_id == p.id))],
         "assessed_grade": p.assessed_grade,
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
@@ -306,3 +315,41 @@ async def link_fsp(body: FspLinkIn, current: dict = Depends(get_current_particip
         raise ApiError(409, "fsp_taken") from e
     results = await db.scalar(select(func.count()).select_from(Result).where(Result.participant_id == p.id))
     return {"fsp_id": p.fsp_id, "results": results, "minor": p.minor_now()}
+
+
+@router.get("/survey-options")
+async def survey_options():
+    """Choices for the survey; public, so the registration flow can show them before login."""
+    return {"specializations": SPECIALIZATIONS, "industries": INDUSTRIES, "work_goals": WORK_GOALS,
+            "grades": list(GRADES)}
+
+
+class SurveyIn(BaseModel):
+    specialization: str
+    industry: str
+    work_goal: str = "job"
+    declared_grade: Literal["junior", "middle", "senior", "lead"] | None = None
+    experience_years: int | None = Field(None, ge=0, le=50)
+
+
+@router.put("/me/survey")
+async def save_survey(body: SurveyIn, current: dict = Depends(get_current_participant),
+                      db: AsyncSession = Depends(get_db)):
+    """TZ 2.1: specialization and industry from the survey define the category together with the test."""
+    if body.specialization not in SPECIALIZATIONS or body.industry not in INDUSTRIES or \
+            body.work_goal not in WORK_GOALS:
+        raise ApiError(422, "validation_error", "Неизвестное значение в опросе")
+    p = await db.get(Participant, _pid(current), with_for_update=True)
+    if not p:
+        raise HTTPException(404, "Профиль не найден")
+    p.specialization, p.industry, p.work_goal = body.specialization, body.industry, body.work_goal
+    if body.declared_grade is not None:
+        p.declared_grade = body.declared_grade
+    if body.experience_years is not None:
+        p.experience_years = body.experience_years
+    p.survey_at = datetime.now(UTC)
+    # The confirmed grade shown on the card is the one for the chosen specialization.
+    await sync_assessed_grade(db, p)
+    await rebuild_profile(db, p)
+    await db.commit()
+    return {"ok": True, "specialization": p.specialization, "assessed_grade": p.assessed_grade}

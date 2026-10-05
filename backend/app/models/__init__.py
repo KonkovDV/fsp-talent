@@ -1,4 +1,11 @@
-from app.models.assessment import TestAnswer, TestQuestion, TestSession
+from app.models.assessment import (
+    GradeConfirmation,
+    ItemStat,
+    TestAnswer,
+    TestQuestion,
+    TestSession,
+    TestSessionItem,
+)
 from app.models.audit import AccessLog, ConsentLog
 from app.models.employer import Employer
 from app.models.identity import Consent, EmailVerification
@@ -17,6 +24,8 @@ __all__ = [
     "DisciplineScore",
     "EmailVerification",
     "Employer",
+    "GradeConfirmation",
+    "ItemStat",
     "Offer",
     "Participant",
     "ProfileEmbedding",
@@ -27,6 +36,7 @@ __all__ = [
     "TestAnswer",
     "TestQuestion",
     "TestSession",
+    "TestSessionItem",
     "Vacancy",
     "VerifiableCredential",
 ]

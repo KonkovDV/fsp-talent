@@ -57,6 +57,7 @@ TAXONOMY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "CI/CD": (("devops",), ("ci/cd", "gitlab ci", "github actions", "jenkins")),
     "Linux": (("devops", "security", "embedded"), ("linux", "линукс", "bash")),
     "Nginx": (("devops",), ("nginx",)),
+    "Networking": (("devops", "security", "embedded"), ("networking", "сети tcp/ip", "tcp/ip", "ip-адресация")),
     "Prometheus/Grafana": (("devops",), ("prometheus", "grafana")),
     "Pentesting": (("security",), ("pentest", "pentesting", "пентест", "тестирование на проникновение")),
     "CTF": (("security",), ("ctf",)),

@@ -5,6 +5,7 @@ import { Eye, EyeOff, MailCheck } from 'lucide-react'
 import { LegalDocModal } from '../../components/LegalConsents'
 import FspLinkCard from '../../components/FspLinkCard'
 import ConsentsPanel from '../../components/ConsentsPanel'
+import SurveyCard from '../../components/SurveyCard'
 
 const GRADES = ['', 'junior', 'middle', 'senior', 'lead']
 
@@ -70,7 +71,7 @@ export default function CandidateProfile() {
     },
   })
 
-  if (isLoading) return <div className="animate-pulse h-64 bg-gray-100 rounded-2xl" />
+  if (isLoading) return <div className="animate-pulse h-64 bg-surface-2 rounded-2xl" />
   if (!profile) return null
   return (
     <div className="space-y-6">
@@ -83,7 +84,7 @@ export default function CandidateProfile() {
           </p>
         </div>
         <button onClick={() => visibility.mutate(!profile.is_visible)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${profile.is_visible ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${profile.is_visible ? 'bg-green-100 text-green-700' : 'bg-surface-2 text-gray-600'}`}>
           {profile.is_visible ? <Eye size={16} /> : <EyeOff size={16} />}
           {profile.discoverable ? 'Виден работодателям' : 'Скрыт из поиска'}
         </button>
@@ -93,18 +94,18 @@ export default function CandidateProfile() {
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="text-sm">Опыт, лет
             <input type="number" min={0} max={50} value={experience} onChange={e => setExperience(e.target.value)}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2" />
+              className="mt-1 w-full border border-border rounded-xl px-3 py-2" />
           </label>
           <label className="text-sm">Грейд (самооценка)
-            <select value={grade} onChange={e => setGrade(e.target.value)} className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2">
+            <select value={grade} onChange={e => setGrade(e.target.value)} className="mt-1 w-full border border-border rounded-xl px-3 py-2">
               {GRADES.map(item => <option key={item} value={item}>{item || 'не указан'}</option>)}
             </select>
           </label>
           <label className="text-sm">Telegram
-            <input value={telegram} onChange={e => setTelegram(e.target.value)} className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2" />
+            <input value={telegram} onChange={e => setTelegram(e.target.value)} className="mt-1 w-full border border-border rounded-xl px-3 py-2" />
           </label>
           <label className="text-sm">Телефон
-            <input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1 w-full border border-border rounded-xl px-3 py-2" />
           </label>
         </div>
         <label className="flex items-center gap-2 text-sm">
@@ -138,7 +139,7 @@ export default function CandidateProfile() {
         </div>
         <textarea value={resume} onChange={e => setResume(e.target.value)} rows={4}
           placeholder="Вставьте резюме: навыки извлекутся только если есть в тексте"
-          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+          className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
         <div className="flex gap-3">
           <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-secondary text-sm">Разобрать резюме</button>
           <button onClick={() => save.mutate()} className="btn-primary text-sm">{save.isPending ? 'Сохраняем…' : 'Сохранить'}</button>
@@ -155,6 +156,7 @@ export default function CandidateProfile() {
           </p>
         ))}
       </div>
+      <SurveyCard profile={profile} compact />
       <FspLinkCard profile={profile} />
       <ConsentsPanel />
     </div>

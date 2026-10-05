@@ -26,6 +26,11 @@ class Participant(Base):
     region = Column(String(100), index=True)
     experience_years = Column(Integer)
     declared_grade = Column(String(20))
+    # Survey (TZ 2.1): specialization drives the category and the test blueprint.
+    specialization = Column(String(30), index=True)
+    industry = Column(String(40))
+    work_goal = Column(String(20))   # job | internship | both
+    survey_at = Column(DateTime(timezone=True))
     # is_visible: anonymous card is searchable by employers; public_profile: named page + leaderboard
     is_visible = Column(Boolean, nullable=False, default=True)
     public_profile = Column(Boolean, nullable=False, default=False)

@@ -176,26 +176,79 @@ def main():
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
 
 
-def check_assessment():
-    """Test mechanic through the real API: answers stay hidden, skipping earns nothing, retakes wait."""
-    status, login = call("POST", "/auth/participant/token",
-                         form={"username": "fsp002@demo.talent", "password": "demo12345"})
+def _login(email):
+    status, login = call("POST", "/auth/participant/token", form={"username": email, "password": "demo12345"})
     assert status == 200, login
-    token = login["access_token"]
+    return login["access_token"]
+
+
+def _run_test(token, target, choose):
+    status, state = call("POST", "/assessment/start", {"target_grade": target}, token=token)
+    assert status == 201 and state["item"], state
+    first = state["item"]
+    assert "correct_index" not in json.dumps(state) and "explanation" not in first, "answer leaked to the client"
+    status, bad = call("POST", f"/assessment/{state['session_id']}/answer",
+                       {"item_token": "0" * 32, "answer_index": 0}, token=token)
+    assert status == 409 and bad["error"]["code"] == "item_token_invalid", bad
+    seen = 0
+    while state["item"]:
+        item = state["item"]
+        assert len(item["options"]) == 4
+        status, state = call("POST", f"/assessment/{state['session_id']}/answer",
+                             {"item_token": item["token"], "answer_index": choose(state["session_id"], item)},
+                             token=token)
+        assert status == 200, state
+        seen += 1
+        assert seen <= 20, "session longer than the maximum"
+    assert state["status"] == "completed" and state["result"], state
+    return state
+
+
+def _right_answer(session_id, item):
+    """Plays a strong candidate: reads the stored right answer straight from the database."""
+    import asyncio
+
+    import asyncpg
+
+    async def fetch():
+        url = os.environ.get("DATABASE_URL", "postgresql://fsp:fsp@localhost:5432/fsp_talent")
+        con = await asyncpg.connect(url.replace("+asyncpg", ""))
+        try:
+            return await con.fetchval("SELECT correct_index FROM test_session_items WHERE session_id = $1 AND seq = $2",
+                                      __import__("uuid").UUID(session_id), item["seq"])
+        finally:
+            await con.close()
+    return asyncio.run(fetch())
+
+
+def check_assessment():
+    """Adaptive test through the real API: one item at a time, answers hidden, retakes wait, grade per spec."""
+    status, blueprint = call("GET", "/assessment/blueprint")
+    assert status == 200 and "security" in blueprint["specializations"], blueprint
+    token = _login("fsp002@demo.talent")
     status, before = call("GET", "/candidates/me", token=token)
-    assert status == 200 and before["grade_source"] != "assessed", before
-    status, session = call("POST", "/assessment/start",
-                           {"target_grade": "junior", "discipline": "security"}, token=token)
-    assert status == 201 and len(session["questions"]) >= 5, session
-    assert all("correct_option" not in q for q in session["questions"]), "right answers leaked to the client"
-    # Old bug: an empty submission scored theta=0 -> "middle". Every served question now counts.
-    status, result = call("POST", f"/assessment/{session['session_id']}/submit",
-                          {"answers": [{"question_id": "not-served", "answer": "a"}]}, token=token)
-    assert status == 200 and result["outcome"] == "not_passed" and result["confirmed_grade"] is None, result
+    assert status == 200 and before["specialization"] == "security" and before["grade_source"] != "assessed", before
+    weak = _run_test(token, "junior", lambda sid, item: 0)
+    result = weak["result"]
+    assert not result["passed"] and result["confirmed_grade"] is None, result
     status, again = call("POST", "/assessment/start", {"target_grade": "junior"}, token=token)
-    assert status == 429, again
+    assert status == 429 and again["error"]["code"] == "retake_cooldown", again
     status, after = call("GET", "/candidates/me", token=token)
-    assert status == 200 and after["grade"] == before["grade"] and after["assessed_grade"] is None, after
+    assert after["grade"] == before["grade"] and after["assessed_grade"] is None, after
+
+    token = _login("fsp001@demo.talent")
+    strong = _run_test(token, "middle", _right_answer)
+    result = strong["result"]
+    assert result["passed"] and result["confirmed_grade"] in ("middle", "senior"), result
+    assert result["p_pass"] >= 0.75 and result["confirmed_skills"], result
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["grade_source"] == "assessed" and me["assessed_grade"] == result["confirmed_grade"], me
+    assert any(s["trust_level"] == "test_confirmed" for s in me["skills"]), me["skills"]
+    status, review = call("GET", f"/assessment/{strong['session_id']}/review", token=token)
+    assert status == 200 and all(i["correct"] for i in review["items"]), review
+    status, health = call("GET", "/public/assessment/items")
+    assert status == 200 and health and all("z" in row for row in health), health
+    print("ASSESSMENT OK", result["confirmed_grade"], f"p_pass={result['p_pass']}", f"items={result['items_count']}")
 
 
 if __name__ == "__main__":

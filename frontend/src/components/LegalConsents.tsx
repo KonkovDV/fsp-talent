@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileText, X } from 'lucide-react'
 import { legalDocument, legalDocuments, type LegalDoc, type Role } from '../api/client'
@@ -8,11 +8,16 @@ export function LegalDocModal({ kind, onClose }: { kind: string; onClose: () => 
   const { data, isLoading } = useQuery({
     queryKey: ['legal', kind], queryFn: () => legalDocument(kind).then(r => r.data),
   })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"
       onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85dvh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 p-5 border-b border-gray-100">
+      <div className="bg-surface-1 rounded-2xl max-w-2xl w-full max-h-[85dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 p-5 border-b border-border">
           <div>
             <h2 className="font-bold text-lg">{data?.title ?? 'Документ'}</h2>
             {data && <p className="text-xs text-text-muted font-mono">версия {data.version} · SHA-256 {data.sha256.slice(0, 12)}…</p>}

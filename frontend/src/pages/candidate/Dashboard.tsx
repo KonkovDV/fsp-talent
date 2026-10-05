@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { getMyProfile, getMyOffers } from '../../api/client'
 import GradeRadar from '../../components/GradeRadar'
 import ScoreBar from '../../components/ScoreBar'
+import SurveyCard from '../../components/SurveyCard'
 import { roleRu } from '../../labels'
 import { Trophy, Briefcase, Eye, TrendingUp, ShieldCheck } from 'lucide-react'
 
@@ -99,7 +100,9 @@ export default function CandidateDashboard() {
         )}
       </div>
 
-      {profile.grade_source !== 'assessed' && (
+      {!profile.survey_done && <SurveyCard profile={profile} />}
+
+      {profile.survey_done && profile.grade_source !== 'assessed' && (
         <div className="card flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm">
             Грейд не подтверждён тестом. Работодатели ставят подтверждённый грейд выше самооценки.

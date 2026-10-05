@@ -26,7 +26,7 @@ export default function ConsentsPanel() {
   return (
     <div className="card space-y-3">
       <h2 className="font-semibold flex items-center gap-2"><ShieldCheck size={18} className="text-fsp-violet" />Согласия</h2>
-      <ul className="divide-y divide-gray-100 text-sm">
+      <ul className="divide-y divide-border text-sm">
         {data.map(row => (
           <li key={row.kind} className="py-2 flex flex-wrap items-center gap-2 justify-between">
             <button onClick={() => setOpen(row.kind)} className="text-left hover:underline">{row.title}</button>

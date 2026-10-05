@@ -64,7 +64,7 @@ export default function RegisterPage() {
         <div className="flex gap-2 mb-6" role="tablist">
           {(['participant', 'employer'] as Role[]).map(r => (
             <Link key={r} to={`/register?role=${r}`} role="tab" aria-selected={r === role}
-              className={`flex-1 text-center text-sm py-2 rounded-lg ${r === role ? 'bg-fsp-violet text-white' : 'bg-gray-100 text-text-secondary'}`}>
+              className={`flex-1 text-center text-sm py-2 rounded-lg ${r === role ? 'bg-fsp-violet text-white' : 'bg-surface-2 text-text-secondary'}`}>
               {r === 'participant' ? 'Кандидат' : 'Работодатель'}
             </Link>
           ))}
@@ -82,12 +82,12 @@ export default function RegisterPage() {
               <input type="checkbox" className="mt-1" {...pf.register('is_adult')} />
               <span>Мне исполнилось 18 лет. <span className="text-text-muted">Если нет, карточка будет скрыта от работодателей до согласия родителя.</span></span>
             </label>
-            <p className="text-xs text-text-muted bg-gray-50 rounded-lg p-3">
+            <p className="text-xs text-text-muted bg-surface-2 rounded-lg p-3">
               История соревнований ФСП не нужна для регистрации. Привязать ФСП ID можно позже в профиле:
               подтверждённые результаты появятся в карточке отдельным блоком.
             </p>
             <ConsentChecklist role={role} value={consents} onChange={setConsents} />
-            {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2" role="alert">{error}</p>}
+            {error && <p className="text-fsp-red text-sm bg-fsp-red/10 rounded-lg px-4 py-2" role="alert">{error}</p>}
             <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full">
               {submitting ? 'Отправляем код…' : 'Получить код на email'}
             </button>
@@ -103,7 +103,7 @@ export default function RegisterPage() {
             <label className="block text-sm">ИНН (необязательно)<input {...ef.register('inn')} inputMode="numeric" className={field} />
               {err(ef.formState.errors.inn?.message)}</label>
             <ConsentChecklist role={role} value={consents} onChange={setConsents} />
-            {error && <p className="text-fsp-red text-sm bg-red-50 rounded-lg px-4 py-2" role="alert">{error}</p>}
+            {error && <p className="text-fsp-red text-sm bg-fsp-red/10 rounded-lg px-4 py-2" role="alert">{error}</p>}
             <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full">
               {submitting ? 'Отправляем код…' : 'Получить код на email'}
             </button>

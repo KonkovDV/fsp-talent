@@ -173,3 +173,20 @@ async def get_leaderboard(
         }
         for i, (ds, cat, p) in enumerate(rows)
     ]
+
+
+@router.get("/assessment/items")
+async def item_health(db: AsyncSession = Depends(get_db)):
+    """Open statistics of the item bank: answers, solve rate against the model and leak status.
+
+    z is (right − expected) / sd, with ability measured without the item's own family. z ≥ 3.5 on 30+
+    answers sends the key to quarantine: it is no longer served and its answers stop counting.
+    """
+    from app.models.assessment import ItemStat
+    rows = list(await db.scalars(select(ItemStat).order_by(ItemStat.z.desc())))
+    return [{
+        "item_key": r.item_key, "family_id": r.family_id, "level": r.level, "answers": r.n,
+        "solve_rate": round(r.correct / r.n, 3) if r.n else None,
+        "expected_rate": round(r.expected / r.n, 3) if r.n else None,
+        "z": round(r.z, 2), "status": r.status, "b_offset": round(r.b_offset, 2), "sessions": r.sessions,
+    } for r in rows]
