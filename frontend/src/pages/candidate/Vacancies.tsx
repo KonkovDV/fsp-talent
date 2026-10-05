@@ -74,7 +74,7 @@ export default function CandidateVacancies() {
         <section className="mb-6">
           <h2 className="section-title">Мои отклики</h2>
           <ul className="mt-3 divide-y divide-line rounded-lg border border-line bg-panel">
-            {mine.map(a => <li key={a.id} className="flex justify-between px-4 py-2 text-sm"><span>{a.title}</span><span className="text-ink-3">{a.status}</span></li>)}
+            {mine.map(a => <li key={a.id} className="flex justify-between px-4 py-2 text-sm"><span>{a.title}</span><span className="text-ink-3">{({ applied: 'отправлен', reviewing: 'смотрят', invited: 'приглашение', rejected: 'отказ', closed: 'закрыт' } as Record<string, string>)[a.status] ?? a.status}</span></li>)}
           </ul>
         </section>
       )}

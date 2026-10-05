@@ -2,7 +2,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -15,12 +16,15 @@ from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import CategoryAssignment, ConsentLog, GradeConfirmation, Offer, Participant
 from app.models.participant import Result, Skill
+from app.models.profile import DisciplineScore
+from app.services.ai.assistant import parse_resume
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.identity import active_consent
 from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
+from app.services.pdf_profile import extract_pdf_text, profile_lines, render_profile_pdf
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
@@ -358,6 +362,46 @@ async def link_fsp(body: FspLinkIn, current: dict = Depends(get_current_particip
         raise ApiError(409, "fsp_taken") from e
     results = await db.scalar(select(func.count()).select_from(Result).where(Result.participant_id == p.id))
     return {"fsp_id": p.fsp_id, "results": results, "minor": p.minor_now()}
+
+
+@router.post("/me/resume")
+async def upload_resume(file: UploadFile = File(...), current: dict = Depends(get_current_participant)):
+    """Read a PDF resume. The file is not stored; only the extracted text is parsed."""
+    _pid(current)
+    data = await file.read()
+    try:
+        text = extract_pdf_text(data)
+    except ValueError as e:
+        raise ApiError(422, "validation_error", "Нужен обычный PDF не больше 5 МБ") from e
+    if not text:
+        raise ApiError(422, "validation_error", "В PDF не нашлось текста")
+    parsed = await parse_resume(text)
+    return {"text": text[:4000], **parsed}
+
+
+async def _profile_pdf(db: AsyncSession, participant: Participant, named: bool) -> bytes:
+    category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == participant.id))
+    skills = list(await db.scalars(select(Skill.name).where(Skill.participant_id == participant.id)))
+    scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
+    lines = profile_lines(
+        participant.display_name if named else None,
+        SPECIALIZATIONS.get(category.primary_role, category.primary_role) if category else None,
+        category.grade if category else participant.assessed_grade,
+        skills,
+        [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank}
+         for s in scores],
+    )
+    return render_profile_pdf(lines)
+
+
+@router.get("/me/profile.pdf")
+async def my_profile_pdf(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    participant = await db.get(Participant, _pid(current))
+    if participant is None:
+        raise HTTPException(404, "Профиль не найден")
+    pdf = await _profile_pdf(db, participant, named=True)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=profile.pdf"})
 
 
 @router.get("/survey-options")

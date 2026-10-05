@@ -61,6 +61,13 @@ def test_wrong_role_and_lower_grade_cost_points():
     assert score(NEED, _cand(grade="junior")).score < good.score
 
 
+def test_category_percentile_counts_only_the_others():
+    from app.services.matching import category_percentile
+    assert category_percentile(0.9, [0.1, 0.2, 0.4, 0.8]) == 100
+    assert category_percentile(0.3, [0.1, 0.2, 0.4, 0.9]) == 50
+    assert category_percentile(0.5, []) is None
+
+
 def test_compare_stays_anonymous():
     from app.services.matching import anonymous_compare
     cards = [{"candidate_id": "a", "role": "backend", "grade": "middle", "display_name": "Иван",

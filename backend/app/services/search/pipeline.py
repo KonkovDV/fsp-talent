@@ -13,18 +13,19 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import and_, func, literal, or_, select
+from sqlalchemy import and_, func, literal, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import GradeConfirmation, Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
-from app.services.matching import RELATED, CandidateFacts, NeedSpec, recommended_categories
+from app.services.matching import RELATED, CandidateFacts, NeedSpec, category_percentile, recommended_categories
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.engine import RANK_ORDER, STATUS_LABELS, percentile
 from app.services.skills import extract_skills, normalize_skill
+from app.services.survey import SPECIALIZATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +281,36 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
     return out
 
 
+async def _category_percentiles(db, cats: dict) -> dict:
+    """One query: where each confirmed candidate stands inside role × grade, by test probability."""
+    keys = {(c.primary_role, c.grade) for c in cats.values() if c and c.primary_role and c.grade}
+    if not keys:
+        return {}
+    rows = await db.execute(
+        select(CategoryAssignment.participant_id, CategoryAssignment.primary_role,
+               CategoryAssignment.grade, GradeConfirmation.p_pass)
+        .join(GradeConfirmation, and_(
+            GradeConfirmation.participant_id == CategoryAssignment.participant_id,
+            GradeConfirmation.specialization == CategoryAssignment.primary_role,
+        ))
+        .where(tuple_(CategoryAssignment.primary_role, CategoryAssignment.grade).in_(list(keys)))
+    )
+    groups: dict[tuple, list[tuple]] = {}
+    for pid, role, grade, p_pass in rows:
+        if p_pass is None:
+            continue
+        groups.setdefault((role, grade), []).append((pid, float(p_pass)))
+    out = {}
+    for (role, grade), members in groups.items():
+        label = f"{SPECIALIZATIONS.get(role, role)} × {grade}"
+        for pid, value in members:
+            others = [item for other, item in members if other != pid]
+            pct = category_percentile(value, others)
+            if pct is not None:
+                out[pid] = f"Лучше {pct} % кандидатов категории {label}"
+    return out
+
+
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) -> list[dict]:
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
@@ -296,6 +327,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
         if (uid := _safe_uuid(e)) is not None
     ]
     results = {r.id: r for r in await db.scalars(select(Result).where(Result.id.in_(event_ids)))} if event_ids else {}
+    percentiles = await _category_percentiles(db, cats)
 
     cards = []
     for pid in ordered:
@@ -333,6 +365,9 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
         if p.practice_at is not None and p.practice_topic:
             mark = "верно" if p.practice_ok else "с ошибкой"
             why.append(f"Короткая практика ({p.practice_topic}): {mark}")
+        line = percentiles.get(pid)
+        if line:
+            why.append(line)
         cards.append({
             "candidate_id": str(pid),
             "role": cat.primary_role if cat else None,

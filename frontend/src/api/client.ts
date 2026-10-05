@@ -36,6 +36,9 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token
   if (token) config.headers.Authorization = `Bearer ${token}`
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type')
+  }
   return config
 })
 
@@ -103,7 +106,18 @@ export const getMyEmployerOffers = () => api.get('/offers/')
 export const getOfferContacts = (id: string) => api.get(`/offers/${id}/contacts`)
 export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
 
+export const getEmployerMe = () => api.get('/employer/me')
+export const updateEmployerMe = (data: object) => api.patch('/employer/me', data)
 export const getMyVacancies = () => api.get('/vacancies/mine')
+export const updateVacancy = (id: string, data: object) => api.put(`/vacancies/${id}`, data)
+export const updateApplicationStatus = (id: string, status: string) =>
+  api.patch(`/vacancies/applications/${id}/status`, { status })
+export const uploadResumePdf = (file: File) => {
+  const body = new FormData()
+  body.append('file', file)
+  return api.post('/candidates/me/resume', body)
+}
+export const downloadMyProfilePdf = () => api.get('/candidates/me/profile.pdf', { responseType: 'blob' })
 export const createVacancy = (data: object) => api.post('/vacancies/', data)
 export const needExam = (id: string) => api.get(`/needs/${id}/exam`)
 export const previewVacancyExam = (data: object) => api.post('/vacancies/exam', data)

@@ -225,6 +225,17 @@ def _mean(factors: list[Factor]) -> float | None:
     return sum(f.weight * f.value for f in active) / weight
 
 
+def category_percentile(value: float, others: list[float]) -> int | None:
+    """How many of the other people in the same category this value beats, in percent.
+
+    `others` must not include `value` itself. Alone in the category there is no percent.
+    """
+    if not others:
+        return None
+    below = sum(1 for item in others if item < value)
+    return round(100 * below / len(others))
+
+
 def anonymous_compare(cards: list[dict], ids: list[str]) -> list[dict]:
     """Up to three cards from the current shortlist, without name, contacts or FSP id."""
     by_id = {c.get("candidate_id"): c for c in cards}

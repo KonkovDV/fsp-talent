@@ -2,6 +2,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,7 +11,9 @@ from app.core.database import get_db
 from app.models import Consent, Participant, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
+from app.services.survey import SPECIALIZATIONS
 from app.services.vc.issuer import issuer_document, verify_credential
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -66,6 +69,7 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
         "stack": cat.stack if cat else [],
         "explanation": cat.explanation if cat else [],
         "skills": [s.name for s in p.skills if s.confirmed],
+        "profile_pdf": f"/api/v1/public/candidates/{p.id}/profile.pdf",
         "discipline_scores": [
             {
                 "discipline": ds.discipline,
@@ -79,6 +83,29 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
             for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)
         ],
     }
+
+
+@router.get("/candidates/{participant_id}/profile.pdf")
+async def public_profile_pdf(participant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    p = await db.scalar(
+        select(Participant)
+        .where(Participant.id == participant_id, *_public_filter())
+        .options(selectinload(Participant.skills), selectinload(Participant.discipline_scores),
+                 selectinload(Participant.category))
+    )
+    if not p:
+        raise HTTPException(404, "Публичный профиль не найден")
+    cat = p.category
+    lines = profile_lines(
+        p.display_name,
+        SPECIALIZATIONS.get(cat.primary_role, cat.primary_role) if cat else None,
+        cat.grade if cat else None,
+        [s.name for s in p.skills if s.confirmed],
+        [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank}
+         for s in p.discipline_scores],
+    )
+    return Response(content=render_profile_pdf(lines), media_type="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=profile.pdf"})
 
 
 @router.get("/credentials/verify/{credential_id}")

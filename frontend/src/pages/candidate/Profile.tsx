@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, apiErrorCode, getMyProfile, giveConsent, parseResume, updateMyProfile, updateVisibility } from '../../api/client'
+import { apiError, apiErrorCode, downloadMyProfilePdf, getMyProfile, giveConsent, parseResume, updateMyProfile, updateVisibility, uploadResumePdf } from '../../api/client'
 import { Eye, EyeOff, MailCheck, X } from 'lucide-react'
 import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
@@ -110,9 +110,38 @@ export default function CandidateProfile() {
               <textarea id="resume" value={resume} onChange={e => setResume(e.target.value)} rows={4}
                 placeholder="Вставьте резюме: навык попадёт в список, только если он прямо упомянут в тексте"
                 className="input" />
-              <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-ghost mt-2 px-0 text-accent">
+              <div className="mt-2 flex flex-wrap gap-x-4">
+              <label className="btn-ghost cursor-pointer px-0 text-accent">
+                Загрузить PDF
+                <input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={e => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!file) return
+                  uploadResumePdf(file).then(r => {
+                    setResume(r.data.text ?? '')
+                    const found = (r.data.skills ?? []) as { name: string }[]
+                    if (found.length) setSkills(prev => {
+                      const names = new Set(prev.map(s => s.name))
+                      return [...prev, ...found.filter(s => !names.has(s.name))]
+                    })
+                    setNote(found.length ? `Из PDF: ${found.map(s => s.name).join(', ')}` : 'В PDF не нашлось навыков из словаря')
+                  }).catch((err: unknown) => setNote(apiError(err, 'PDF не разобран')))
+                }} />
+              </label>
+              <button type="button" className="btn-ghost px-0 text-accent" onClick={() => {
+                downloadMyProfilePdf().then(r => {
+                  const url = URL.createObjectURL(r.data)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = 'profile.pdf'
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }).catch(() => setNote('PDF профиля не собрался'))
+              }}>Скачать PDF профиля</button>
+              <button onClick={() => parsed.mutate()} disabled={!resume || parsed.isPending} className="btn-ghost px-0 text-accent">
                 {parsed.isPending ? 'Разбираем…' : 'Найти навыки в резюме'}
               </button>
+              </div>
             </div>
           </section>
 

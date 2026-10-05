@@ -15,6 +15,7 @@ import EmployerSearch from './pages/employer/Search'
 import EmployerNeeds from './pages/employer/Needs'
 import EmployerOffers from './pages/employer/Offers'
 import EmployerVacancies from './pages/employer/Vacancies'
+import EmployerCompany from './pages/employer/Company'
 import CandidateVacancies from './pages/candidate/Vacancies'
 import CandidateAssessment from './pages/candidate/Assessment'
 import LeaderboardPage from './pages/LeaderboardPage'
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="search" element={<EmployerSearch />} />
           <Route path="offers" element={<EmployerOffers />} />
           <Route path="vacancies" element={<EmployerVacancies />} />
+          <Route path="company" element={<EmployerCompany />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
-import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, previewVacancyExam, vacancyApplications } from '../../api/client'
+import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, previewVacancyExam, updateApplicationStatus, updateVacancy, vacancyApplications } from '../../api/client'
 import { DISC_RU, ROLE_RU } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, date, rub } from '../../components/ui'
 
-const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', skills: '', salary_from_gross: 150000,
+const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
-interface Vacancy { id: string; title: string; role: string | null; grade: string | null; is_open: boolean; skills: string[]
+interface Vacancy { id: string; title: string; description?: string | null; role: string | null; grade: string | null
+  discipline?: string | null; min_rank?: string | null; allows_minors?: boolean; is_open: boolean; skills: string[]
   salary_from: number | null; salary_to: number | null; work_format: string }
 interface Application { id: string; vacancy_title: string; status: string; created_at: string | null }
+const APP_STATUS: Record<string, string> = {
+  applied: 'отклик', reviewing: 'смотрим', invited: 'приглашён', rejected: 'отказ', closed: 'закрыт',
+}
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
 /** The second path of the TZ: a published vacancy that candidates can apply to themselves. */
@@ -18,15 +22,23 @@ export default function EmployerVacancies() {
   const [form, setForm] = useState(EMPTY)
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
+  const [statusError, setStatusError] = useState('')
   const [exam, setExam] = useState<Exam | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
   const [contacts, setContacts] = useState<Record<string, string>>({})
   const { data: vacancies = [] } = useQuery<Vacancy[]>({ queryKey: ['myVacancies'], queryFn: () => getMyVacancies().then(r => r.data) })
   const { data: applications = [] } = useQuery<Application[]>({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
+  const payload = () => ({ ...form, skills: form.skills.split(',').map(s => s.trim()).filter(Boolean),
+    discipline: form.discipline || null, min_rank: form.min_rank || null, description: form.description || null })
   const create = useMutation({
-    mutationFn: () => createVacancy({ ...form, skills: form.skills.split(',').map(s => s.trim()).filter(Boolean),
-      discipline: form.discipline || null, description: form.description || null }),
-    onSuccess: () => { setError(''); setExam(null); setOpen(false); setForm(EMPTY); qc.invalidateQueries({ queryKey: ['myVacancies'] }) },
-    onError: e => setError(apiError(e, 'Вакансия не опубликована')),
+    mutationFn: () => editing ? updateVacancy(editing, payload()) : createVacancy(payload()),
+    onSuccess: () => { setError(''); setExam(null); setOpen(false); setEditing(null); setForm(EMPTY); qc.invalidateQueries({ queryKey: ['myVacancies'] }) },
+    onError: e => setError(apiError(e, 'Вакансия не сохранена')),
+  })
+  const setAppStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => updateApplicationStatus(id, status),
+    onSuccess: () => { setStatusError(''); qc.invalidateQueries({ queryKey: ['applications'] }) },
+    onError: e => setStatusError(apiError(e, 'Статус не изменён')),
   })
   const close = useMutation({ mutationFn: (id: string) => closeVacancy(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['myVacancies'] }) })
   const reveal = useMutation({
@@ -45,7 +57,7 @@ export default function EmployerVacancies() {
   return (
     <div>
       <PageHeader title="Вакансии" lead="Опубликованная вакансия видна подходящим кандидатам, и они могут откликнуться сами. Зарплатная вилка обязательна."
-        actions={!open && <button onClick={() => setOpen(true)} className="btn-primary">Новая вакансия</button>} />
+        actions={!open && <button onClick={() => { setEditing(null); setForm(EMPTY); setOpen(true) }} className="btn-primary">Новая вакансия</button>} />
 
       {open && (
         <form className="card mb-8 space-y-5" onSubmit={e => { e.preventDefault(); create.mutate() }}>
@@ -82,10 +94,10 @@ export default function EmployerVacancies() {
           </div>
           {error && <p className="notice-error" role="alert">{error}</p>}
           <div className="flex gap-3">
-            <button className="btn-primary" type="submit" disabled={create.isPending || form.title.length < 3}>Опубликовать</button>
+            <button className="btn-primary" type="submit" disabled={create.isPending || form.title.length < 3}>{editing ? 'Сохранить' : 'Опубликовать'}</button>
             <button type="button" className="btn-secondary" disabled={preview.isPending || form.title.length < 3}
               onClick={() => preview.mutate()}>Какой тест получится</button>
-            <button type="button" className="btn-secondary" onClick={() => { setOpen(false); setExam(null) }}>Отмена</button>
+            <button type="button" className="btn-secondary" onClick={() => { setOpen(false); setExam(null); setEditing(null) }}>Отмена</button>
           </div>
           {exam && <div className="rounded-lg border border-line bg-sunken/60 p-4"><ExamPreview exam={exam} /></div>}
         </form>
@@ -104,6 +116,13 @@ export default function EmployerVacancies() {
               </div>
               <div className="flex items-center gap-4">
                 <span className="num text-sm text-ink">{rub(v.salary_from)} – {rub(v.salary_to)}</span>
+                {v.is_open && <button className="btn-ghost btn-sm" onClick={() => {
+                  setEditing(v.id); setOpen(true); setExam(null)
+                  setForm({ ...EMPTY, title: v.title, description: v.description ?? '', role: v.role ?? 'backend', grade: v.grade ?? 'middle',
+                    discipline: v.discipline ?? '', min_rank: v.min_rank ?? '', allows_minors: Boolean(v.allows_minors),
+                    skills: v.skills.join(', '), salary_from_gross: v.salary_from ?? 150000, salary_to_gross: v.salary_to ?? 250000,
+                    work_format: v.work_format })
+                }}>Изменить</button>}
                 {v.is_open ? <button className="btn-ghost btn-sm" onClick={() => close.mutate(v.id)}>Закрыть</button> : <span className="badge-vc">закрыта</span>}
               </div>
             </li>
@@ -113,15 +132,24 @@ export default function EmployerVacancies() {
 
       <section className="mt-10">
         <h2 className="section-title">Отклики</h2>
+        {statusError && <p className="notice-error mt-3" role="alert">{statusError}</p>}
         {applications.length === 0 ? <p className="mt-3 text-sm text-ink-2">Откликов пока нет.</p> : (
           <div className="card mt-4 overflow-x-auto p-0">
             <table className="protocol">
-              <thead><tr><th>Вакансия</th><th>Дата</th><th>Контакты</th></tr></thead>
+              <thead><tr><th>Вакансия</th><th>Дата</th><th>Статус</th><th>Контакты</th></tr></thead>
               <tbody>
                 {applications.map(a => (
                   <tr key={a.id}>
                     <td className="text-ink">{a.vacancy_title}</td>
                     <td className="num text-ink-2">{date(a.created_at)}</td>
+                    <td>
+                      <select className="select" value={a.status} aria-label={`Статус отклика ${a.vacancy_title}`}
+                        disabled={a.status === 'rejected' || a.status === 'accepted'}
+                        onChange={e => setAppStatus.mutate({ id: a.id, status: e.target.value })}>
+                        {Object.entries(APP_STATUS).filter(([k]) => k === a.status || k !== 'applied')
+                          .map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                      </select>
+                    </td>
                     <td>{contacts[a.id] ? <span className="text-ink">{contacts[a.id]}</span>
                       : <button className="btn-primary btn-sm" onClick={() => reveal.mutate(a.id)}>Показать</button>}</td>
                   </tr>

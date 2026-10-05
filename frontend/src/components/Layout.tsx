@@ -20,6 +20,7 @@ const EMPLOYER_LINKS = [
   { to: '/employer/search', label: 'Поиск', end: false },
   { to: '/employer/offers', label: 'Приглашения', end: false },
   { to: '/employer/vacancies', label: 'Вакансии', end: false },
+  { to: '/employer/company', label: 'Компания', end: false },
 ]
 
 export function ThemeToggle() {

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.models.employer import Employer
+from app.services.inn import inn_is_valid
 
 router = APIRouter(prefix="/employer", tags=["employer"])
 
@@ -32,7 +33,8 @@ class EmployerProfileOut(BaseModel):
 
 class EmployerProfileUpdate(BaseModel):
     company_name: str | None = Field(None, min_length=1, max_length=200)
-    website: str | None = Field(None, max_length=500)
+    website: str | None = Field(None, max_length=200)
+    inn: str | None = Field(None, max_length=12)
     description: str | None = Field(None, max_length=4000)
     industry: str | None = Field(None, max_length=200)
 
@@ -63,7 +65,15 @@ async def update_me(
     emp = await db.get(Employer, uuid.UUID(current["sub"]))
     if emp is None:
         raise HTTPException(404, "Работодатель не найден")
-    for field, value in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "inn" in data and data["inn"]:
+        digits = "".join(ch for ch in data["inn"] if ch.isdigit())
+        if not inn_is_valid(digits):
+            raise HTTPException(422, "ИНН не проходит контрольную сумму")
+        data["inn"] = digits
+    elif "inn" in data:
+        data["inn"] = None
+    for field, value in data.items():
         if hasattr(emp, field):
             setattr(emp, field, value)
     await db.commit()

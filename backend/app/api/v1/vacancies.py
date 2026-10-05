@@ -90,15 +90,10 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
     employer = await db.get(Employer, _uuid(current))
     if not employer:
         raise HTTPException(404, "Работодатель не найден")
-    skills = []
-    for raw in body.skills:
-        name = normalize_skill(raw)
-        if name and name not in skills:
-            skills.append(name)
     vacancy = Vacancy(
         employer_id=employer.id, title=body.title, description=(body.description or "").strip() or None,
         role=body.role, grade=body.grade,
-        discipline=body.discipline, min_rank=body.min_rank, skills=skills,
+        discipline=body.discipline, min_rank=body.min_rank, skills=_skills(body.skills),
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         work_format=body.work_format, allows_minors=body.allows_minors,
     )
@@ -106,6 +101,38 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
     await db.flush()
     vacancy.employer = employer
     await db.commit()
+    return _out(vacancy)
+
+
+def _skills(raw_skills: list[str]) -> list[str]:
+    skills = []
+    for raw in raw_skills:
+        name = normalize_skill(raw)
+        if name and name not in skills:
+            skills.append(name)
+    return skills
+
+
+@router.put("/{vacancy_id}")
+async def update_vacancy(vacancy_id: uuid.UUID, body: VacancyIn,
+                         current: dict = Depends(get_current_employer),
+                         db: AsyncSession = Depends(get_db)):
+    vacancy = await db.get(Vacancy, vacancy_id)
+    if not vacancy or vacancy.employer_id != _uuid(current):
+        raise HTTPException(404, "Вакансия не найдена")
+    vacancy.title = body.title
+    vacancy.description = (body.description or "").strip() or None
+    vacancy.role = body.role
+    vacancy.grade = body.grade
+    vacancy.discipline = body.discipline
+    vacancy.min_rank = body.min_rank
+    vacancy.skills = _skills(body.skills)
+    vacancy.salary_from_gross = body.salary_from_gross
+    vacancy.salary_to_gross = body.salary_to_gross
+    vacancy.work_format = body.work_format
+    vacancy.allows_minors = body.allows_minors
+    await db.commit()
+    vacancy.employer = await db.get(Employer, vacancy.employer_id)
     return _out(vacancy)
 
 
