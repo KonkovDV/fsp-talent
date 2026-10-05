@@ -16,7 +16,7 @@ export default function AuthShell({ title, lead, children, aside }: {
       </header>
       <main id="main" className="flex flex-1 items-start justify-center px-4 pb-16 pt-4 sm:pt-10">
         <div className="w-full max-w-md animate-rise">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">{title}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink">{title}</h1>
           {lead && <div className="mt-2 text-sm text-ink-2">{lead}</div>}
           <div className="mt-7 rounded-xl border border-line bg-panel p-6 sm:p-7">{children}</div>
           {aside && <div className="mt-5 text-center text-sm text-ink-2">{aside}</div>}

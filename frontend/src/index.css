@@ -1,5 +1,4 @@
 @import '@fontsource-variable/golos-text';
-@import '@fontsource-variable/unbounded';
 @import '@fontsource-variable/jetbrains-mono';
 
 @tailwind base;
@@ -11,49 +10,55 @@
    places, ranks, tabular numbers, hairline rules. Colours are RGB triplets so Tailwind can apply opacity. */
 
 @layer base {
+  /* Colours from the FSP brandbook (fsp-russia.ru/press/brandbook): #402FFF, #EC1D35, #EDEDED, #C8C9CA, #1B1C21.
+     Shades around them are tuned for WCAG AA: text tokens are ≥ 4.5:1 on the surfaces they sit on. */
   :root, [data-theme='light'] {
-    --paper: 245 246 250;
+    --paper: 237 237 237;       /* #EDEDED brand light gray */
     --panel: 255 255 255;
-    --sunken: 238 240 246;
-    --ink: 14 22 48;
-    --ink-2: 74 83 112;
-    --ink-3: 112 120 145;
-    --line: 221 225 236;
-    --line-strong: 186 192 210;
-    --accent: 27 63 160;        /* ФСП blue: actions, links, focus */
-    --accent-soft: 232 237 250;
+    --sunken: 245 245 246;
+    --ink: 27 28 33;            /* #1B1C21 brand dark */
+    --ink-2: 74 76 85;
+    --ink-3: 99 101 110;
+    --line: 220 220 223;
+    --line-strong: 200 201 202; /* #C8C9CA brand gray */
+    --accent: 64 47 255;        /* #402FFF brand: actions, links, focus */
+    --accent-soft: 236 234 255;
     --accent-ink: 255 255 255;
-    --invite: 212 35 48;        /* ФСП red: the invitation, nothing else */
-    --invite-soft: 253 236 237;
-    --ok: 22 122 77;
-    --ok-soft: 230 245 237;
-    --warn: 176 106 0;
-    --warn-soft: 253 243 224;
-    --medal: 179 120 0;         /* gold: sport ranks only */
-    --medal-soft: 252 244 222;
+    --invite: 217 23 47;        /* brand red #EC1D35, one step darker so white text passes AA: the invitation only */
+    --invite-soft: 253 232 234;
+    --invite-ink: 255 255 255;
+    --ok: 14 122 78;
+    --ok-soft: 227 245 236;
+    --warn: 161 92 0;
+    --warn-soft: 253 242 222;
+    --medal: 154 101 0;         /* gold: sport ranks only */
+    --medal-soft: 252 243 220;
+    --brand-red: 236 29 53;     /* #EC1D35 exact, for the stripe and the mark */
     color-scheme: light;
   }
 
   [data-theme='dark'] {
-    --paper: 7 13 31;
-    --panel: 13 22 48;
-    --sunken: 10 17 39;
-    --ink: 236 240 248;
-    --ink-2: 165 174 200;
-    --ink-3: 120 130 160;
-    --line: 32 44 80;
-    --line-strong: 55 70 112;
-    --accent: 110 150 255;
-    --accent-soft: 23 36 78;
-    --accent-ink: 7 13 31;
-    --invite: 255 92 102;
-    --invite-soft: 60 18 28;
+    --paper: 18 19 23;
+    --panel: 27 28 33;          /* #1B1C21 */
+    --sunken: 22 23 27;
+    --ink: 237 237 237;         /* #EDEDED */
+    --ink-2: 180 181 188;
+    --ink-3: 138 140 149;
+    --line: 44 45 53;
+    --line-strong: 67 69 79;
+    --accent: 138 127 255;
+    --accent-soft: 38 33 79;
+    --accent-ink: 18 19 23;
+    --invite: 255 90 107;
+    --invite-soft: 64 20 28;
+    --invite-ink: 18 19 23;
     --ok: 72 199 138;
     --ok-soft: 14 46 36;
     --warn: 240 180 70;
     --warn-soft: 52 38 12;
     --medal: 240 190 70;
     --medal-soft: 50 40 12;
+    --brand-red: 255 90 107;
     color-scheme: dark;
   }
 
@@ -85,7 +90,7 @@
            transition-colors duration-150 select-none disabled:opacity-45 disabled:pointer-events-none;
   }
   .btn-primary { @apply btn bg-accent text-accent-ink hover:bg-accent/90; }
-  .btn-invite, .btn-danger { @apply btn bg-invite text-white hover:bg-invite/90; }
+  .btn-invite, .btn-danger { @apply btn bg-invite text-invite-ink hover:bg-invite/90; }
   .btn-secondary { @apply btn border border-line-strong bg-panel text-ink hover:border-accent hover:text-accent; }
   .btn-ghost { @apply btn px-3 text-ink-2 hover:text-ink hover:bg-sunken; }
   .btn-sm { @apply px-3 py-1.5 text-xs; }
@@ -100,9 +105,9 @@
   .panel-quiet { @apply rounded-lg bg-sunken p-4; }
 
   .page-head { @apply flex flex-wrap items-end justify-between gap-4 pb-6; }
-  .page-title { @apply font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl; }
+  .page-title { @apply font-display text-2xl font-bold tracking-[-0.02em] text-ink sm:text-3xl; }
   .page-lead { @apply mt-1.5 max-w-prose text-sm text-ink-2; }
-  .section-title { @apply font-display text-base font-semibold text-ink; }
+  .section-title { @apply font-display text-base font-bold tracking-tight text-ink; }
 
   /* Inputs */
   .input {
@@ -120,7 +125,7 @@
   .badge-junior { @apply badge bg-sunken text-ink-2 ring-1 ring-inset ring-line-strong; }
   .badge-middle { @apply badge bg-accent-soft text-accent ring-1 ring-inset ring-accent/25; }
   .badge-senior { @apply badge bg-accent text-accent-ink; }
-  .badge-lead { @apply badge bg-navy text-white dark:bg-ink dark:text-paper; }
+  .badge-lead { @apply badge bg-ink text-paper; }
   .badge-brand { @apply badge bg-accent-soft text-accent; }
   .badge-ok { @apply badge bg-ok-soft text-ok; }
   .badge-warn { @apply badge bg-warn-soft text-warn; }
@@ -138,7 +143,7 @@
   .protocol th { @apply border-b border-line-strong px-3 py-2 text-left text-xs font-medium text-ink-3; }
   .protocol td { @apply border-b border-line px-3 py-3 align-middle; }
   .protocol tr:last-child td { @apply border-b-0; }
-  .place { @apply font-display text-lg font-semibold tabular-nums text-ink; font-feature-settings: 'tnum' 1; }
+  .place { @apply font-display text-lg font-bold tabular-nums text-ink; font-feature-settings: 'tnum' 1; }
   .num { font-variant-numeric: tabular-nums; }
 
   .meter { @apply relative h-1.5 overflow-hidden rounded-full bg-sunken; }
@@ -151,7 +156,7 @@
   }
 
   .stat-card { @apply rounded-lg border border-line bg-panel p-4; }
-  .stat-card-value { @apply font-display text-2xl font-semibold tabular-nums text-ink; }
+  .stat-card-value { @apply font-display text-2xl font-bold tabular-nums text-ink; }
   .stat-card-label { @apply text-xs text-ink-3; }
   .stat-card-delta { @apply text-xs text-ink-2; }
 
@@ -163,13 +168,23 @@
   .empty { @apply rounded-lg border border-dashed border-line-strong px-6 py-10 text-center text-sm text-ink-2; }
 
   /* The brand stripe: Federation blue and red, used once at the top of every page. */
-  .brand-stripe { height: 3px; background: linear-gradient(90deg, #1B3FA0 0 72%, #D42330 72% 100%); }
+  .brand-stripe { height: 3px; background: linear-gradient(90deg, #402FFF 0 72%, #EC1D35 72% 100%); }
 
   .code-block { @apply overflow-x-auto rounded-lg border border-line bg-sunken p-4 font-mono text-[13px] leading-relaxed text-ink; font-variant-ligatures: none; tab-size: 4; }
+}
+
+/* The single orchestrated moment of the landing page: the regional network draws itself once. */
+.network-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.6s cubic-bezier(.4,.1,.2,1) .2s forwards; }
+.network-node { opacity: 0; animation: node-in .4s ease forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes node-in { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .network-line { stroke-dashoffset: 0; animation: none; }
+  .network-node { opacity: 1; animation: none; }
 }
 
 @layer utilities {
   .tabular { font-variant-numeric: tabular-nums; }
   .text-balance { text-wrap: balance; }
-  .font-display { font-family: 'Unbounded Variable', 'Golos Text Variable', sans-serif; }
+  .font-display { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-feature-settings: 'zero' 0, 'calt' 0; }
 }

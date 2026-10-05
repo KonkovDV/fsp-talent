@@ -35,12 +35,12 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     setForm({ ...form, [k]: k.startsWith('salary') ? Number(e.target.value) : e.target.value })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#1B1C21]/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog" aria-modal="true" aria-labelledby="invite-title" onClick={e => e.target === e.currentTarget && onClose()}>
       <form onSubmit={submit} className="w-full max-w-lg animate-rise rounded-t-xl border border-line bg-panel p-6 shadow-pop sm:rounded-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id="invite-title" className="font-display text-lg font-semibold text-ink">Приглашение кандидату</h2>
+            <h2 id="invite-title" className="font-display text-lg font-bold text-ink">Приглашение кандидату</h2>
             <p className="mt-1 text-sm text-ink-2">Кандидат увидит компанию, должность и зарплату. Его контакты откроются, если он примет приглашение.</p>
           </div>
           <button type="button" onClick={onClose} className="btn-ghost h-8 w-8 p-0" aria-label="Закрыть"><X size={18} /></button>

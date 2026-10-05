@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown, Columns3, Star } from 'lucide-react'
 import { CategoryPlate, Meter, RankBadge } from './ui'
@@ -16,6 +17,7 @@ export interface CandidateCardData {
   shortlisted?: boolean
   match?: {
     score: number
+    basis?: 'fit' | 'evidence'
     plus: string[]
     minus: string[]
     info: string[]
@@ -54,6 +56,8 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
   const disc = card.disciplines[0]
   const score = card.match ? Math.round(card.match.score * 100) : null
   const testFactor = card.match?.factors.find(f => f.key === 'test')
+  const active = card.match?.factors.filter(f => f.value != null) ?? []
+  const idle = card.match?.factors.filter(f => f.value == null) ?? []
 
   return (
     <article className="card p-0" data-testid="candidate-card">
@@ -83,19 +87,28 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
         </div>
         {score !== null && (
           <div className="col-span-2 flex items-baseline gap-2 sm:col-span-1 sm:block sm:text-right">
-            <span className="font-display text-3xl font-semibold tabular-nums text-ink">{score}</span>
-            <span className="text-xs text-ink-3 sm:block">совпадение из 100</span>
+            <span className="font-display text-3xl font-bold tabular-nums text-ink">{score}</span>
+            <span className="text-xs text-ink-3 sm:block"
+              title={card.match?.basis === 'evidence' ? 'Критериев нет: порядок задают тест и результаты ФСП' : 'Насколько кандидат подходит под критерии'}>
+              {card.match?.basis === 'evidence' ? 'сила профиля из 100' : 'совпадение из 100'}
+            </span>
           </div>
         )}
       </div>
 
-      {card.match && (
-        <div className="grid grid-cols-4 gap-x-3 gap-y-2 border-t border-line px-5 py-3 sm:grid-cols-7 sm:px-6" aria-label="Факторы совпадения">
-          {card.match.factors.map(f => (
-            <div key={f.key} title={`${f.label}: ${f.value == null ? 'не учитывается' : Math.round(f.value * 100) + ' %'}; вес ${Math.round(f.weight * 100)} %`}>
-              <Meter value={f.value} label={f.label} />
-            </div>
-          ))}
+      {card.match && active.length > 0 && (
+        <div className="border-t border-line px-5 py-3 sm:px-6">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]"
+            style={{ '--n': active.length } as React.CSSProperties} aria-label="Факторы скора">
+            {active.map(f => (
+              <div key={f.key} title={`${f.label}: ${Math.round((f.value ?? 0) * 100)} %; вес ${Math.round(f.weight * 100)} %`}>
+                <Meter value={f.value} label={f.label} />
+              </div>
+            ))}
+          </div>
+          {idle.length > 0 && (
+            <p className="mt-2 text-2xs text-ink-3">Не учитываются: {idle.map(f => f.label === f.label.toUpperCase() ? f.label : f.label.toLowerCase()).join(', ')}</p>
+          )}
         </div>
       )}
 

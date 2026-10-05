@@ -145,7 +145,7 @@ export default function EmployerNeeds() {
             <section aria-label={current.title} className="min-w-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-xl font-semibold text-ink">{current.title}</h2>
+                  <h2 className="font-display text-xl font-bold text-ink">{current.title}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
                     <span>{current.params.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params.grade ?? 'любой грейд'}</span>
                     {current.params.skills.map(s => <span key={s} className="chip-active">{s}</span>)}
