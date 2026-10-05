@@ -171,6 +171,16 @@
   .brand-stripe { height: 3px; background: linear-gradient(90deg, #402FFF 0 72%, #EC1D35 72% 100%); }
 
   .code-block { @apply overflow-x-auto rounded-lg border border-line bg-sunken p-4 font-mono text-[13px] leading-relaxed text-ink; font-variant-ligatures: none; tab-size: 4; }
+
+  /* Native <dialog>: the browser keeps focus inside and closes on Escape. Backdrop is the brand dark, not the text token. */
+  .modal {
+    @apply m-auto max-h-[calc(100dvh-2rem)] w-[min(42rem,calc(100vw-2rem))] border-0 bg-transparent p-0 text-ink;
+  }
+  .modal::backdrop { background: rgb(27 28 33 / 0.6); backdrop-filter: blur(4px); }
+  .modal-sheet {
+    @apply fixed inset-x-0 bottom-0 top-auto m-0 h-fit w-full max-w-none
+           sm:inset-0 sm:m-auto sm:h-fit sm:w-[min(32rem,calc(100vw-2rem))];
+  }
 }
 
 /* The single orchestrated moment of the landing page: the regional network draws itself once. */

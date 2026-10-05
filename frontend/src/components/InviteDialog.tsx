@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiError, createOffer } from '../api/client'
+import Modal from './Modal'
 
 /** The invitation: role, salary range in roubles (mandatory, TZ 2.2), format and how to reach the employer. */
 export default function InviteDialog({ candidateId, defaultRole = '', onClose, onSent }: {
@@ -12,11 +13,6 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '',
   })
   const [error, setError] = useState('')
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const send = useMutation({
     mutationFn: () => createOffer({ ...form, candidate_id: candidateId }),
@@ -35,9 +31,8 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     setForm({ ...form, [k]: k.startsWith('salary') ? Number(e.target.value) : e.target.value })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#1B1C21]/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      role="dialog" aria-modal="true" aria-labelledby="invite-title" onClick={e => e.target === e.currentTarget && onClose()}>
-      <form onSubmit={submit} className="w-full max-w-lg animate-rise rounded-t-xl border border-line bg-panel p-6 shadow-pop sm:rounded-xl">
+    <Modal titleId="invite-title" onClose={onClose} sheet>
+      <form onSubmit={submit} className="w-full animate-rise rounded-t-xl border border-line bg-panel p-6 shadow-pop sm:rounded-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="invite-title" className="font-display text-lg font-bold text-ink">Приглашение кандидату</h2>
@@ -73,6 +68,6 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
           <button type="submit" disabled={send.isPending} className="btn-invite">{send.isPending ? 'Отправляем…' : 'Отправить приглашение'}</button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
