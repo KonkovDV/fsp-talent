@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, createNeed, listNeeds, needMatches, needShortlist, removeShortlist, setShortlist, surveyOptions, updateNeed,
+  apiError, compareNeed, needExam, createNeed, listNeeds, needMatches, needShortlist, removeShortlist, setShortlist, surveyOptions, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
+import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 import { ROLE_RU } from '../../labels'
 
@@ -26,7 +27,7 @@ export default function EmployerNeeds() {
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [error, setError] = useState('')
   const [offerFor, setOfferFor] = useState<string | null>(null)
-  const [tab, setTab] = useState<'matches' | 'shortlist'>('matches')
+  const [tab, setTab] = useState<'matches' | 'shortlist' | 'exam'>('matches')
   const [picked, setPicked] = useState<string[]>([])
   const [sent, setSent] = useState(false)
 
@@ -41,6 +42,8 @@ export default function EmployerNeeds() {
     enabled: !!selected && picked.length >= 2,
     queryFn: () => compareNeed(selected!, picked).then(r => r.data as { items: { candidate_id: string; role: string; grade: string; score: number; factors: { key: string; label: string; value: number | null }[] }[] }),
   })
+  const exam = useQuery({ queryKey: ['needExam', selected, current?.version], enabled: !!selected && tab === 'exam',
+    queryFn: () => needExam(selected!).then(r => r.data as Exam) })
   const shortlist = useQuery({ queryKey: ['needShortlist', selected], enabled: !!selected,
     queryFn: () => needShortlist(selected!).then(r => r.data) })
 
@@ -139,7 +142,7 @@ export default function EmployerNeeds() {
           </nav>
 
           {current && (
-            <section aria-label={current.title}>
+            <section aria-label={current.title} className="min-w-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-xl font-semibold text-ink">{current.title}</h2>
@@ -168,7 +171,7 @@ export default function EmployerNeeds() {
               )}
 
               <div className="mt-6 flex gap-6 border-b border-line" role="tablist">
-                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`]] as const).map(([key, title]) => (
+                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`], ['exam', 'Как проверим']] as const).map(([key, title]) => (
                   <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
                     className={`-mb-px border-b-2 pb-3 text-sm ${tab === key ? 'border-accent font-semibold text-ink' : 'border-transparent text-ink-2 hover:text-ink'}`}>{title}</button>
                 ))}
@@ -219,6 +222,14 @@ export default function EmployerNeeds() {
                   ))}
                 </div>
               )}
+              {tab === 'exam' && (
+                <div className="card mt-5">
+                  <p className="mb-4 text-sm text-ink-2">Кандидат, которого вы пригласите, подтверждает грейд этим тестом. Состав считается из навыков и текста потребности; задания каждый раз генерируются заново.</p>
+                  {exam.isLoading && <Skeleton className="h-40" />}
+                  {exam.data && <ExamPreview exam={exam.data} />}
+                </div>
+              )}
+
               {tab === 'shortlist' && (
                 <div className="mt-5">
                   {shortlist.data && (

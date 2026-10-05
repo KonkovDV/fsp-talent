@@ -20,6 +20,7 @@ from app.services.matching import NeedSpec, anonymous_compare
 from app.services.search.pipeline import score_pool, search_candidates
 from app.services.skills import normalize_skill
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS
+from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/needs", tags=["needs"])
 Grade = Literal["junior", "middle", "senior", "lead"]
@@ -151,6 +152,17 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
     for card in result["items"]:
         card["shortlisted"] = card["candidate_id"] in listed
     return {**result, "need": _out(need, await _params(db, need))}
+
+
+@router.get("/{need_id}/exam")
+async def exam_preview(need_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                       db: AsyncSession = Depends(get_db)):
+    """The grade test this need would form: topic mix from its skills and text, three samples, no answer keys."""
+    need = await _own(db, need_id, current)
+    p = NeedParams(**(await _params(db, need)).params)
+    exam = form_exam(need.title, p.q or "", [*p.skills, *p.nice_to_have], p.role, p.grade)
+    exam.pop("topic_shares", None)
+    return exam
 
 
 @router.get("/{need_id}/compare")

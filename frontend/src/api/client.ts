@@ -105,6 +105,7 @@ export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
 
 export const getMyVacancies = () => api.get('/vacancies/mine')
 export const createVacancy = (data: object) => api.post('/vacancies/', data)
+export const needExam = (id: string) => api.get(`/needs/${id}/exam`)
 export const previewVacancyExam = (data: object) => api.post('/vacancies/exam', data)
 export const closeVacancy = (id: string) => api.post(`/vacancies/${id}/close`)
 export const vacanciesForMe = () => api.get('/vacancies/for-me')
