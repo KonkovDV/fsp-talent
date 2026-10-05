@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_employer, get_current_participant
+from app.api.errors import ApiError
 from app.core.database import get_db
 from app.models import (
     AccessLog,
@@ -23,6 +24,7 @@ from app.models import (
     Vacancy,
 )
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
+from app.services.privacy import contacts_allowed
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
 from app.services.vacancies import match_vacancy
@@ -307,6 +309,8 @@ async def application_contacts(application_id: uuid.UUID, current: dict = Depend
     candidate = await db.get(Participant, application.candidate_id)
     if not candidate:
         raise HTTPException(404, "Кандидат не найден")
+    if not await contacts_allowed(db, candidate):
+        raise ApiError(403, "consent_withdrawn")
     db.add(AccessLog(employer_id=vacancy.employer_id, participant_id=candidate.id, access_type="application_contacts"))
     if getattr(application, "viewed_at", None) is None:
         try:

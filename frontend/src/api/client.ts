@@ -83,6 +83,7 @@ export const linkFsp = (fsp_id: string, fsp_secret: string) => api.post('/candid
 
 export const getMyProfile = () => api.get('/candidates/me')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)
+export const deleteMyAccount = (confirm: string) => api.delete('/candidates/me', { data: { confirm } })
 export const getMyResults = () => api.get('/candidates/me/results')
 export const getMyOffers = () => api.get('/candidates/me/offers')
 export const respondToOffer = (offerId: string, action: 'accept' | 'reject') =>

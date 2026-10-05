@@ -100,6 +100,20 @@ def expire_offers():
     run_async(_inner())
 
 
+@celery_app.task(name="app.workers.tasks.purge_withdrawn")
+def purge_withdrawn():
+    """Erase candidates 30 days after they withdrew the processing consent (152-FZ, art. 21, part 5)."""
+    async def _inner():
+        from app.core.database import AsyncSessionLocal
+        from app.services.privacy import purge_withdrawn as purge
+        async with AsyncSessionLocal() as db:
+            erased = await purge(db)
+            await db.commit()
+            if erased:
+                logger.info("purge_withdrawn: erased %d candidates", erased)
+    run_async(_inner())
+
+
 @celery_app.task(name="app.workers.tasks.watchdog_stuck_tasks")
 def watchdog_stuck_tasks():
     """Revoke tasks running longer than task_soft_time_limit (300 s).

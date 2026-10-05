@@ -26,11 +26,11 @@ export default function ConsentsPanel() {
   return (
     <div className="card space-y-3">
       <h2 className="section-title flex items-center gap-2"><ShieldCheck size={18} className="text-accent" />Согласия</h2>
-      <ul className="divide-y divide-border text-sm">
+      <ul className="divide-y divide-line text-sm">
         {data.map(row => (
           <li key={row.kind} className="py-2 flex flex-wrap items-center gap-2 justify-between">
             <button onClick={() => setOpen(row.kind)} className="text-left hover:underline">{row.title}</button>
-            <span className="text-text-muted text-xs">
+            <span className="text-ink-3 text-xs">
               {row.active
                 ? `дано ${new Date(row.given_at!).toLocaleDateString('ru-RU')}, версия ${row.accepted_version}${row.outdated ? ' (текст обновлён)' : ''}`
                 : 'не дано'}
@@ -44,7 +44,7 @@ export default function ConsentsPanel() {
           </li>
         ))}
       </ul>
-      {note && <p className="text-sm text-text-secondary" role="status">{note}</p>}
+      {note && <p className="text-sm text-ink-2" role="status">{note}</p>}
       {open && <LegalDocModal kind={open} onClose={() => setOpen(null)} />}
     </div>
   )

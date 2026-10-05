@@ -6,6 +6,7 @@ import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
 import FspLinkCard from '../../components/FspLinkCard'
 import ConsentsPanel from '../../components/ConsentsPanel'
+import DeleteAccountCard from '../../components/DeleteAccountCard'
 import SurveyCard from '../../components/SurveyCard'
 
 interface SkillRow { name: string; source_quote?: string | null; trust_level?: string }
@@ -153,6 +154,7 @@ export default function CandidateProfile() {
           <SurveyCard profile={profile} compact />
           <FspLinkCard profile={profile} />
           <ConsentsPanel />
+          <DeleteAccountCard />
         </aside>
       </div>
     </div>

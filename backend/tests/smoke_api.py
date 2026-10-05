@@ -105,6 +105,45 @@ def check_registration():
     assert status == 401 and old["error"]["code"] == "invalid_credentials", old
 
 
+def _new_candidate(tag: str) -> tuple[str, str, str]:
+    email = f"{tag}-{int(time.time() * 1000)}@example.com"
+    status, sent = call("POST", "/auth/participant/register", {
+        "email": email, "password": "smoke-pass-1", "display_name": "Удаляемый Кандидат", "is_adult": True,
+        "consents": REQUIRED_CANDIDATE_CONSENTS})
+    assert status == 202, sent
+    status, tokens = call("POST", "/auth/verify-email", {"email": email, "code": last_letter(email)["code"]})
+    assert status == 200, tokens
+    status, me = call("GET", "/candidates/me", token=tokens["access_token"])
+    return email, tokens["access_token"], me["id"]
+
+
+def check_erasure(employer_token):
+    """152-FZ: no contacts after the consent is withdrawn; deleting the account erases the person."""
+    email, token, cid = _new_candidate("erase")
+    status, offer = call("POST", "/offers/", {
+        "candidate_id": cid, "salary_from_gross": 150000, "salary_to_gross": 200000, "role": "Backend",
+        "work_format": "remote", "contact_method": "hr@sibcode.demo"}, token=employer_token)
+    assert status == 201, offer
+    status, _ = call("POST", f"/candidates/me/offers/{offer['id']}/respond", {"action": "accept"}, token=token)
+    assert status == 200
+    status, contacts = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
+    assert status == 200 and contacts["email"] == email, contacts
+    status, _ = call("DELETE", "/me/consents/pd_candidate", token=token)
+    assert status == 200
+    status, closed = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
+    assert status == 403 and closed["error"]["code"] == "consent_withdrawn", closed
+    status, wrong = call("DELETE", "/candidates/me", {"confirm": "да"}, token=token)
+    assert status == 422 and wrong["error"]["code"] == "delete_confirm", wrong
+    status, gone = call("DELETE", "/candidates/me", {"confirm": "удалить"}, token=token)
+    assert status == 200 and gone["deleted"], gone
+    status, login = call("POST", "/auth/participant/token", form={"username": email, "password": "smoke-pass-1"})
+    assert status == 401, login
+    status, me = call("GET", "/candidates/me", token=token)
+    assert status == 404, me
+    status, closed = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
+    assert status == 403, closed
+
+
 def main():
     with urllib.request.urlopen(BASE.replace("/api/v1", "/health")) as response:
         print("health", json.loads(response.read().decode()))
@@ -173,6 +212,7 @@ def main():
     assert status == 200 and query["role"] == "backend" and query["grade"] == "senior", query
     assert "Python" in query["skills"], query
     check_needs(employer_token)
+    check_erasure(employer_token)
     check_assessment()
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
 

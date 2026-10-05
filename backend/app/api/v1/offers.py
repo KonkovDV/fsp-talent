@@ -9,10 +9,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
+from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
 from app.services.offers import expire_if_stale, expire_stale
+from app.services.privacy import contacts_allowed
 
 router = APIRouter(prefix="/offers", tags=["offers"])
 
@@ -136,6 +138,8 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
     candidate = await db.get(Participant, offer.candidate_id)
     if not candidate:
         raise HTTPException(404, "Кандидат не найден")
+    if not await contacts_allowed(db, candidate):
+        raise ApiError(403, "consent_withdrawn")
     now = datetime.now(UTC)
     if offer.contacts_revealed_at is None:
         offer.contacts_revealed_at = now

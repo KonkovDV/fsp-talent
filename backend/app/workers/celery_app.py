@@ -23,11 +23,16 @@ celery_app.conf.update(
         "app.workers.tasks.compute_embeddings":  {"queue": "embeddings"},
         "app.workers.tasks.expire_offers":        {"queue": "maintenance"},
         "app.workers.tasks.watchdog_stuck_tasks": {"queue": "maintenance"},
+        "app.workers.tasks.purge_withdrawn":      {"queue": "maintenance"},
     },
     beat_schedule={
         "expire-offers-hourly": {
             "task": "app.workers.tasks.expire_offers",
             "schedule": 3600,
+        },
+        "purge-withdrawn-daily": {
+            "task": "app.workers.tasks.purge_withdrawn",
+            "schedule": 86400,
         },
         "watchdog-stuck-tasks": {
             "task": "app.workers.tasks.watchdog_stuck_tasks",
