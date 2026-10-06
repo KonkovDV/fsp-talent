@@ -5,11 +5,13 @@ generators compute answers in-process; this test makes sure that what the candid
 cannot drift apart.
 """
 import ipaddress  # noqa: F401 - used by eval of verify expressions
+import os
 import random
 import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 
 import pytest
 
@@ -18,7 +20,27 @@ from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, FAMILIES, families
 NODE = shutil.which("node")
 GO = shutil.which("go")
 JAVA = shutil.which("java")
+KOTLIN = shutil.which("kotlinc")
+DOTNET = shutil.which("dotnet")
 SEEDS = range(4)
+_CSPROJ = """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+</Project>
+"""
+
+
+def _require(binary: str | None, name: str) -> None:
+    """Skip a language the machine does not have. In CI a missing compiler is a failure."""
+    if binary:
+        return
+    if os.environ.get("CI"):
+        pytest.fail(f"{name} must be installed when CI is set")
+    pytest.skip(f"{name} is not installed")
 
 
 def _cases():
@@ -54,15 +76,32 @@ def _run(verify: dict) -> str:
         assert out.returncode == 0, out.stderr
         text = out.stdout.strip()
         return " ".join(text.splitlines()) if verify.get("join_lines") else text
-    if runner in ("go", "java"):
-        import tempfile
+    if runner in ("go", "java", "kotlin", "csharp"):
         with tempfile.TemporaryDirectory() as tmp:
-            name = "main.go" if runner == "go" else "Main.java"
-            path = f"{tmp}/{name}"
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(verify["code"])
-            cmd = [GO, "run", path] if runner == "go" else [JAVA, path]
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=tmp)
+            if runner == "kotlin":
+                path = os.path.join(tmp, "Main.kt")
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(verify["code"])
+                jar = os.path.join(tmp, "app.jar")
+                compiled = subprocess.run([KOTLIN, path, "-include-runtime", "-d", jar],
+                                          capture_output=True, text=True, timeout=120)
+                assert compiled.returncode == 0, compiled.stderr
+                out = subprocess.run([JAVA, "-jar", jar], capture_output=True, text=True, timeout=30)
+            elif runner == "csharp":
+                with open(os.path.join(tmp, "App.csproj"), "w", encoding="utf-8") as fh:
+                    fh.write(_CSPROJ)
+                with open(os.path.join(tmp, "Program.cs"), "w", encoding="utf-8") as fh:
+                    fh.write(verify["code"])
+                env = {**os.environ, "DOTNET_NOLOGO": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1"}
+                out = subprocess.run([DOTNET, "run", "--nologo", "-v", "q"],
+                                     capture_output=True, text=True, timeout=180, cwd=tmp, env=env)
+            else:
+                name = "main.go" if runner == "go" else "Main.java"
+                path = os.path.join(tmp, name)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(verify["code"])
+                cmd = [GO, "run", path] if runner == "go" else [JAVA, path]
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=tmp)
             assert out.returncode == 0, out.stderr
             return out.stdout.strip()
     if runner == "sqlite":
@@ -89,8 +128,8 @@ def test_stored_answer_matches_an_independent_run(family_id):
                 verify = item.verify
                 if not verify or verify["runner"] in ("formula", "graph"):
                     continue
-                if verify["runner"] == "node" and NODE is None:
-                    pytest.skip("node is not installed")
+                if verify["runner"] == "node":
+                    _require(NODE, "node")
                 got = _run(verify)
                 if "expect_mode" in verify:
                     assert int(got, 8) == verify["expect_mode"]
@@ -140,13 +179,30 @@ def test_items_are_practically_unique():
         assert len(stems) >= 120, (fid, len(stems))
 
 
-@pytest.mark.parametrize("lang", ["python", "javascript", "go", "java"])
+@pytest.mark.parametrize("lang", ["python", "javascript", "go", "java", "kotlin", "csharp"])
 def test_counting_programs_agree_across_languages(lang):
     """The candidate may read loops in another language; the answer must be the same program's answer."""
-    if lang == "javascript" and NODE is None or lang == "go" and GO is None or lang == "java" and JAVA is None:
-        pytest.skip(f"{lang} toolchain is not installed")
+    tools = {"javascript": (NODE, "node"), "go": (GO, "go"), "java": (JAVA, "java"),
+             "kotlin": (KOTLIN, "kotlinc"), "csharp": (DOTNET, "dotnet")}
+    if lang in tools:
+        _require(*tools[lang])
+    if lang == "kotlin":
+        _require(JAVA, "java")
     family = FAMILIES["algo_ops"]
     for level in family.levels:
         item = family.generate(random.Random(level * 7), level, "backend", lang=lang)
         assert item.language == lang
         assert _run(item.verify) == item.options[item.correct], (lang, level, item.code)
+
+
+def test_kotlin_and_csharp_show_the_python_answer():
+    """The scored number comes from the Python program; the other languages only change the source shown."""
+    family = FAMILIES["algo_ops"]
+    for level in family.levels:
+        base = family.generate(random.Random(level * 7), level, "backend", lang="python")
+        expect = base.options[base.correct]
+        for lang, marker in (("kotlin", "println"), ("csharp", "Console.WriteLine")):
+            item = family.generate(random.Random(level * 7), level, "backend", lang=lang)
+            assert item.language == lang and marker in item.code
+            assert item.options[item.correct] == expect
+            assert item.verify["expect"] == expect and item.verify["runner"] == lang

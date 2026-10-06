@@ -1,14 +1,15 @@
 """The same counting programs written in several languages.
 
-Loop counting has identical semantics in Python, JavaScript, Go and Java for the non-negative integers used
-here (integer division of positive numbers, half-open ranges, naive recursion), so the answer is computed once
-from the Python program and the candidate reads the language they chose before the test. Unit tests run
-every language that is installed (node, go, java) and compare.
+Loop counting has identical semantics in Python, JavaScript, Go, Java, Kotlin and C# for the non-negative
+integers used here (integer division of positive numbers, half-open ranges, naive recursion), so the answer
+is computed once from the Python program and the candidate reads the language they chose before the test.
+Unit tests run every language whose compiler is installed and compare. In CI the compilers are required.
 """
 from __future__ import annotations
 
-LANGUAGES = ("python", "javascript", "go", "java")
-LANGUAGE_LABELS = {"python": "Python", "javascript": "JavaScript", "go": "Go", "java": "Java"}
+LANGUAGES = ("python", "javascript", "go", "java", "kotlin", "csharp")
+LANGUAGE_LABELS = {"python": "Python", "javascript": "JavaScript", "go": "Go", "java": "Java",
+                   "kotlin": "Kotlin", "csharp": "C#"}
 
 
 def _indent(text: str, prefix: str) -> str:
@@ -44,6 +45,27 @@ def loop_body(lang: str, kind: str, p: dict) -> str:
             "pairs": f"for i := 0; i < {n}; i++ {{\n\tfor j := 0; j < {n}; j++ {{\n"
                      f"\t\tif (i+j)%{k} == 0 {{\n\t\t\tcount++\n\t\t}}\n\t}}\n}}",
         }[kind]
+    if lang == "kotlin":
+        # until is exclusive, the same as a Python range. Int division truncates toward zero.
+        return {
+            "range": f"for (i in {a} until {b} step {s}) {{\n    count++\n}}",
+            "tri_lt": f"for (i in 0 until {n}) {{\n    for (j in 0 until i) {{\n        count++\n    }}\n}}",
+            "tri_ge": f"for (i in 0 until {n}) {{\n    for (j in i until {n}) {{\n        count++\n    }}\n}}",
+            "halve": f"var i = {n}\nwhile (i > 1) {{\n    i /= {d}\n    count++\n}}",
+            "pairs": (f"for (i in 0 until {n}) {{\n    for (j in 0 until {n}) {{\n"
+                      f"        if ((i + j) % {k} == 0) count++\n    }}\n}}"),
+        }[kind]
+    if lang == "csharp":
+        return {
+            "range": f"for (int i = {a}; i < {b}; i += {s}) {{\n    count++;\n}}",
+            "tri_lt": (f"for (int i = 0; i < {n}; i++) {{\n    for (int j = 0; j < i; j++) {{\n"
+                       f"        count++;\n    }}\n}}"),
+            "tri_ge": (f"for (int i = 0; i < {n}; i++) {{\n    for (int j = i; j < {n}; j++) {{\n"
+                       f"        count++;\n    }}\n}}"),
+            "halve": f"int i = {n};\nwhile (i > 1) {{\n    i /= {d};\n    count++;\n}}",
+            "pairs": (f"for (int i = 0; i < {n}; i++) {{\n    for (int j = 0; j < {n}; j++) {{\n"
+                      f"        if ((i + j) % {k} == 0) count++;\n    }}\n}}"),
+        }[kind]
     return {   # java
         "range": f"for (int i = {a}; i < {b}; i += {s}) {{\n    count++;\n}}",
         "tri_lt": f"for (int i = 0; i < {n}; i++) {{\n    for (int j = 0; j < i; j++) {{\n        count++;\n    }}\n}}",
@@ -62,6 +84,10 @@ def loop_program(lang: str, kind: str, p: dict) -> str:
         return f"let count = 0;\n{body}\nconsole.log(count);"
     if lang == "go":
         return f'package main\n\nimport "fmt"\n\nfunc main() {{\n\tcount := 0\n{_indent(body, chr(9))}\n\tfmt.Println(count)\n}}'
+    if lang == "kotlin":
+        return f"fun main() {{\n    var count = 0\n{_indent(body, '    ')}\n    println(count)\n}}\n"
+    if lang == "csharp":
+        return f"int count = 0;\n{body}\nConsole.WriteLine(count);\n"
     return (f"public class Main {{\n    public static void main(String[] args) {{\n        int count = 0;\n"
             f"{_indent(body, ' ' * 8)}\n        System.out.println(count);\n    }}\n}}")
 
@@ -76,6 +102,14 @@ def fib_program(lang: str, n: int) -> str:
     if lang == "go":
         return ('package main\n\nimport "fmt"\n\nvar count = 0\n\nfunc f(n int) int {\n\tcount++\n\tif n < 2 {\n\t\treturn n\n'
                 f'\t}}\n\treturn f(n-1) + f(n-2)\n}}\n\nfunc main() {{\n\tf({n})\n\tfmt.Println(count)\n}}')
+    if lang == "kotlin":
+        return ("var count = 0\n\nfun f(n: Int): Int {\n    count++\n    if (n < 2) return n\n"
+                "    return f(n - 1) + f(n - 2)\n}\n\nfun main() {\n"
+                f"    f({n})\n    println(count)\n}}\n")
+    if lang == "csharp":
+        return ("int count = 0;\n\nint F(int n) {\n    count++;\n    if (n < 2) return n;\n"
+                "    return F(n - 1) + F(n - 2);\n}\n\n"
+                f"F({n});\nConsole.WriteLine(count);\n")
     return ("public class Main {\n    static int count = 0;\n\n    static int f(int n) {\n        count++;\n"
             "        if (n < 2) return n;\n        return f(n - 1) + f(n - 2);\n    }\n\n"
             f"    public static void main(String[] args) {{\n        f({n});\n        System.out.println(count);\n    }}\n}}")

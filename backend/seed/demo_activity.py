@@ -92,7 +92,7 @@ async def _simulate_tests(db, now: datetime) -> int:
         target = next((g for g in (p.declared_grade, cat.grade if cat else None) if g in GRADES), None)
         target = target or rng.choices(GRADES, weights=(35, 40, 20, 5))[0]
         theta = rng.gauss(THETA_CENTER[target], 0.7)
-        lang = rng.choice(["python", "python", "javascript", "go", "java"])
+        lang = rng.choice(["python", "python", "javascript", "go", "java", "kotlin", "csharp"])
         session, item = await assessment.start_session(db, p.id, p.specialization, target, code_language=lang)
         for _ in range(25):
             # Answer 30-90 s after the item was served, like a person reading the code.

@@ -62,7 +62,7 @@ TOPIC_LABELS = {"python": "Python", "sql": "SQL", "algorithms": "Алгорит�
 class StartIn(BaseModel):
     target_grade: Grade
     specialization: str | None = Field(None, description="По умолчанию — специализация из опроса")
-    code_language: Literal["python", "javascript", "go", "java"] = Field(
+    code_language: Literal["python", "javascript", "go", "java", "kotlin", "csharp"] = Field(
         "python", description="Язык, на котором показывать задания на чтение кода")
     vacancy_id: uuid.UUID | None = Field(None, description="Собрать темы теста из этой вакансии")
 
