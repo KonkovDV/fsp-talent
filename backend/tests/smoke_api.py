@@ -81,6 +81,20 @@ def last_letter(email, purpose="verify", timeout=10.0):
     raise AssertionError(f"no {purpose} letter for {email} in {MAIL_DIR}")
 
 
+def link_fsp(token, fsp_id, password="test"):
+    """FSP ID by OpenID Connect: start, log in on the (demo) provider page, return with code and state."""
+    status, started = call("POST", "/candidates/me/fsp/authorize", token=token)
+    assert status == 200 and started["provider"] == "mock", started
+    query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(started["authorize_url"]).query).items()}
+    assert query["code_challenge_method"] == "S256", query
+    status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": password, **{
+        k: query[k] for k in ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method")}})
+    if status != 200:
+        return status, login
+    back = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(login["redirect_to"]).query).items()}
+    return call("POST", "/candidates/me/fsp/callback", {"code": back["code"], "state": back["state"]}, token=token)
+
+
 def check_registration():
     """TZ 2.2 п.4 and TZ 2.1: email registration with confirmation, a candidate without FSP history."""
     email = f"smoke-{int(time.time() * 1000)}@example.com"
@@ -112,12 +126,12 @@ def check_registration():
     assert status == 200 and active == sorted(REQUIRED_CANDIDATE_CONSENTS), consents
     status, public = call("PUT", "/candidates/me/profile", {"public_profile": True}, token=token)
     assert status == 409 and public["error"]["details"]["missing"] == ["pd_distribution"], public
-    status, taken_fsp = call("POST", "/candidates/me/fsp", {"fsp_id": "FSP001", "fsp_secret": "test"}, token=token)
+    status, taken_fsp = link_fsp(token, "FSP001")
     assert status == 409 and taken_fsp["error"]["code"] == "fsp_taken", taken_fsp
-    status, bad_fsp = call("POST", "/candidates/me/fsp", {"fsp_id": "FSP2001", "fsp_secret": "nope"}, token=token)
+    status, bad_fsp = link_fsp(token, "FSP2001", password="nope")
     assert status == 400 and bad_fsp["error"]["code"] == "fsp_invalid", bad_fsp
     fsp_id = f"FSP{2000 + int(time.time()) % 100}"
-    status, linked = call("POST", "/candidates/me/fsp", {"fsp_id": fsp_id, "fsp_secret": "test"}, token=token)
+    status, linked = link_fsp(token, fsp_id)
     if status == 409:   # a previous smoke run on the same database already linked this id
         assert linked["error"]["code"] == "fsp_taken", linked
     else:

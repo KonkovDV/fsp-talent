@@ -65,9 +65,16 @@ class Settings(BaseSettings):
     SMTP_SSL: bool = False
     EMAIL_CODE_TTL_MINUTES: int = 30
 
-    # FSP API (real mode)
-    FSP_API_URL: str = "https://api.fsp.ru/v1"
+    # FSP registry API (FSP_MODE=real): the contract we propose is in docs/FSP_INTEGRATION.md
+    FSP_API_URL: str = ""
     FSP_API_KEY: str = ""
+
+    # FSP ID login (OpenID Connect, Keycloak-compatible). mock: demo provider page on this site.
+    FSP_ID_MODE: str = "mock"   # mock | oidc
+    FSP_ID_ISSUER: str = ""     # https://<keycloak>/realms/<realm>
+    FSP_ID_CLIENT_ID: str = "fsp-talent"
+    FSP_ID_CLIENT_SECRET: str = ""
+    FSP_ID_CLAIM: str = "fsp_id"
 
 
 def _read_key(path: Path) -> str:

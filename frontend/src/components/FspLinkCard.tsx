@@ -1,26 +1,21 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { Link2, Medal } from 'lucide-react'
-import { apiError, linkFsp } from '../api/client'
+import { apiError, fspAuthorize } from '../api/client'
 
 interface Props { profile: { fsp_id: string | null; has_fsp: boolean; fsp_linked_at: string | null; results_count: number } }
 
 /**
  * TZ 2.1: a candidate without FSP history is a normal case. The card says so plainly and offers to link
- * an FSP account. The form checks the demo mock; a real FSP ID login is not connected.
+ * an FSP ID. Linking is an OpenID Connect login on the provider's page (Keycloak in production, a marked
+ * demo page here): this site never sees the FSP password.
  */
 export default function FspLinkCard({ profile }: Props) {
-  const qc = useQueryClient()
-  const [fspId, setFspId] = useState('')
-  const [secret, setSecret] = useState('')
-  const [message, setMessage] = useState('')
-  const link = useMutation({
-    mutationFn: () => linkFsp(fspId.trim(), secret).then(r => r.data),
-    onSuccess: (data) => {
-      setMessage(`Привязано: ${data.fsp_id}, протоколов: ${data.results}`)
-      qc.invalidateQueries({ queryKey: ['myProfile'] })
-    },
-    onError: (e: unknown) => setMessage(apiError(e, 'Не удалось привязать')),
+  const [error, setError] = useState('')
+  const start = useMutation({
+    mutationFn: () => fspAuthorize().then(r => r.data as { authorize_url: string }),
+    onSuccess: data => window.location.assign(data.authorize_url),
+    onError: (e: unknown) => setError(apiError(e, 'Не удалось начать привязку')),
   })
 
   if (profile.has_fsp) {
@@ -40,17 +35,14 @@ export default function FspLinkCard({ profile }: Props) {
         <div className="text-sm">
           <p className="section-title">Нет истории ФСП — это нормально</p>
           <p className="text-ink-2">Категория строится по опросу, заявленному грейду и тесту. Если вы участвовали
-            в соревнованиях ФСП, привяжите аккаунт: подтверждённые результаты добавятся в карточку.</p>
+            в соревнованиях ФСП, войдите через ФСП ID: подтверждённые результаты добавятся в карточку.
+            Пароль от ФСП вводится только на странице ФСП ID, этот сайт его не видит.</p>
         </div>
       </div>
-      <form className="grid sm:grid-cols-[1fr_1fr_auto] gap-2" onSubmit={e => { e.preventDefault(); link.mutate() }}>
-        <input value={fspId} onChange={e => setFspId(e.target.value)} placeholder="ФСП ID" aria-label="ФСП ID" className="input" />
-        <input value={secret} onChange={e => setSecret(e.target.value)} type="password" placeholder="Пароль ФСП"
-          aria-label="Пароль ФСП" className="input" />
-        <button disabled={!fspId || !secret || link.isPending} className="btn-primary text-sm">Привязать</button>
-      </form>
-      <p className="text-xs text-ink-3">Демо-реестр: FSP2000–FSP2099, пароль test.</p>
-      {message && <p className="text-sm" role="status">{message}</p>}
+      <button type="button" className="btn-primary text-sm" disabled={start.isPending} onClick={() => start.mutate()}>
+        {start.isPending ? 'Открываем ФСП ID…' : 'Войти через ФСП ID'}
+      </button>
+      {error && <p className="notice-error" role="alert">{error}</p>}
     </div>
   )
 }

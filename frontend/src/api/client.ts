@@ -82,7 +82,10 @@ export const legalDocument = (kind: string) => api.get<LegalDoc & { body_md: str
 export const myConsents = () => api.get('/me/consents')
 export const giveConsent = (kind: string) => api.post('/me/consents', { kind })
 export const withdrawConsent = (kind: string) => api.delete(`/me/consents/${kind}`)
-export const linkFsp = (fsp_id: string, fsp_secret: string) => api.post('/candidates/me/fsp', { fsp_id, fsp_secret })
+// FSP ID by OpenID Connect (code flow + PKCE): the password is typed only on the provider's page.
+export const fspAuthorize = () => api.post('/candidates/me/fsp/authorize')
+export const fspCallback = (code: string, state: string) => api.post('/candidates/me/fsp/callback', { code, state })
+export const fspDemoLogin = (body: Record<string, string>) => api.post('/fsp-id-demo/login', body)
 
 export const getMyProfile = () => api.get('/candidates/me')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)
