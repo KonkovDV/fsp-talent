@@ -1,4 +1,8 @@
-"""Candidate survey (TZ 2.1): specialization, industry and what the person is looking for."""
+"""Candidate survey (TZ 2.1): direction and specialization, an optional subject area and what the person seeks.
+
+The TZ word «отрасль» means the IT direction, which is the specialization. INDUSTRIES is the optional
+subject area (fintech, retail…), shown in the interface as «Предметная область (необязательно)».
+"""
 from __future__ import annotations
 
 SPECIALIZATIONS: dict[str, str] = {

@@ -258,6 +258,7 @@ def main():
     assert status == 409, again
     status, contacts = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
     assert status == 200 and contacts["display_name"] and contacts["email"], contacts
+    check_messages(offer["id"], employer_token, participant_token)
     status, bell = call("GET", "/notifications", token=employer_token)
     assert status == 200 and any(n["kind"] == "offer_accepted" for n in bell["items"]), bell
     status, public = call("GET", f"/public/candidates/{me['id']}")
@@ -281,9 +282,132 @@ def main():
     assert status == 200 and query["role"] == "backend" and query["grade"] == "senior", query
     assert "Python" in query["skills"], query
     check_needs(employer_token)
+    check_employer_tasks(employer_token, participant_token, me["id"])
+    check_fsp_signin(me["id"])
+    check_revoke_contacts(offer["id"], employer_token, participant_token)
     check_erasure(employer_token)
     check_assessment()
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
+
+
+def check_employer_tasks(employer_token, participant_token, candidate_id):
+    """Q&A: the employer writes a task; a reference answer is checked by the system, an open one by the employer."""
+    status, task = call("POST", "/tasks/", {
+        "title": "Сколько раз выполнится тело цикла", "answer_type": "number", "reference_number": "12",
+        "statement": "for i in range(3):\n    for j in range(4):\n        work()\nСколько раз вызовется work()?",
+        "visibility": "addressed", "candidate_id": candidate_id}, token=employer_token)
+    assert status == 201 and task["reference_number"] == "12", task
+    status, mine = call("GET", "/tasks/for-me", token=participant_token)
+    seen = next(t for t in mine if t["id"] == task["id"])
+    assert status == 200 and seen["addressed"] and "reference" not in seen and "reference_number" not in seen, seen
+    _, other, _ = _new_candidate("task-other")
+    status, foreign = call("POST", f"/tasks/{task['id']}/answer", {"answer_text": "12"}, token=other)
+    assert status == 404, foreign   # an addressed task does not exist for anyone else
+    status, done = call("POST", f"/tasks/{task['id']}/answer", {"answer_text": " 12 "}, token=participant_token)
+    assert status == 200 and done["submission"]["status"] == "checked" and done["submission"]["passed"], done
+    assert done["reference"] == "12", done
+    status, twice = call("POST", f"/tasks/{task['id']}/answer", {"answer_text": "13"}, token=participant_token)
+    assert status == 409 and twice["error"]["code"] == "task_answered", twice
+    status, subs = call("GET", f"/tasks/{task['id']}/submissions", token=employer_token)
+    assert status == 200 and len(subs["submissions"]) == 1 and "display_name" not in subs["submissions"][0], subs
+    status, review = call("POST", f"/tasks/submissions/{subs['submissions'][0]['id']}/review",
+                          {"passed": False}, token=employer_token)
+    assert status == 409, review   # the system already checked it
+    # An open task: the employer reviews the answer.
+    status, open_task = call("POST", "/tasks/", {
+        "title": "Как ускорить отчёт", "answer_type": "open", "visibility": "addressed",
+        "statement": "Отчёт строится 40 минут. Опишите, с чего начнёте и что измерите.",
+        "candidate_id": candidate_id}, token=employer_token)
+    assert status == 201, open_task
+    status, sent = call("POST", f"/tasks/{open_task['id']}/answer",
+                        {"answer_text": "Сначала профилирую самый долгий запрос, потом индекс и кэш."},
+                        token=participant_token)
+    assert status == 200 and sent["submission"]["status"] == "review" and "reference" not in sent, sent
+    status, subs = call("GET", f"/tasks/{open_task['id']}/submissions", token=employer_token)
+    status, reviewed = call("POST", f"/tasks/submissions/{subs['submissions'][0]['id']}/review",
+                            {"passed": True, "comment": "Верный порядок"}, token=employer_token)
+    assert status == 200 and reviewed["status"] == "reviewed" and reviewed["passed"], reviewed
+    status, bell = call("GET", "/notifications", token=participant_token)
+    assert {"task_new", "task_reviewed"} <= {n["kind"] for n in bell["items"]}, bell
+    status, alien = call("GET", f"/tasks/{open_task['id']}/submissions", token=_employer_login("hr@quantumlab.demo"))
+    assert status == 404, alien
+    status, found = call("GET", "/search/candidates?q=Python%20backend&skills=Go,FastAPI&limit=10",
+                         token=employer_token)
+    card = next(item for item in found["items"] if item["candidate_id"] == candidate_id)
+    assert any(line.startswith("Задание работодателя «Как ускорить отчёт»: зачтено") for line in card["why"]), card
+    print("TASKS OK", task["title"], "|", open_task["title"])
+
+
+def _fsp_signin(fsp_id):
+    status, started = call("POST", "/auth/fsp/authorize")
+    assert status == 200, started
+    query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(started["authorize_url"]).query).items()}
+    assert query["redirect_uri"] == "/auth/fsp-callback", query
+    status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": "test", **{
+        k: query[k] for k in ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method")}})
+    assert status == 200, login
+    back = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(login["redirect_to"]).query).items()}
+    status, out = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]})
+    assert status == 200, out
+    status, replay = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]})
+    assert status == 400 and replay["error"]["code"] == "fsp_invalid", replay
+    return out
+
+
+def check_fsp_signin(linked_id):
+    """Q&A: FSP ID is the single entry point. A linked account signs in; a new person consents first."""
+    out = _fsp_signin("FSP001")
+    assert out["status"] == "signed_in", out
+    status, me = call("GET", "/candidates/me", token=out["access_token"])
+    assert status == 200 and me["id"] == linked_id, me
+    fresh = f"FSP{2000 + int(time.time()) % 100}"
+    out = _fsp_signin(fresh)
+    if out["status"] == "needs_consent":   # the first run on this database
+        status, refused = call("POST", "/auth/fsp/signup", {"ticket": out["ticket"], "consents": ["terms"]})
+        assert status == 422 and refused["error"]["code"] == "consent_required", refused
+        status, tokens = call("POST", "/auth/fsp/signup",
+                              {"ticket": out["ticket"], "consents": REQUIRED_CANDIDATE_CONSENTS})
+        assert status == 200, tokens
+        status, again = call("POST", "/auth/fsp/signup",
+                             {"ticket": out["ticket"], "consents": REQUIRED_CANDIDATE_CONSENTS})
+        assert status == 400 and again["error"]["code"] == "fsp_ticket_invalid", again
+        out = tokens
+    status, me = call("GET", "/candidates/me", token=out["access_token"])
+    assert status == 200 and me["fsp_id"] == fresh and me["email"] is None, me
+    print("FSP ID SIGN-IN OK", fresh)
+
+
+def check_messages(offer_id, employer_token, participant_token):
+    """After acceptance both sides write on the platform; the other side has an unread badge."""
+    status, posted = call("POST", f"/offers/{offer_id}/messages", {"body": "Удобно созвониться в четверг?"},
+                          token=employer_token)
+    assert status == 201 and posted["mine"], posted
+    status, seen = call("GET", "/candidates/me/offers", token=participant_token)
+    assert next(o for o in seen if o["id"] == offer_id)["unread_messages"] == 1, seen
+    status, thread = call("GET", f"/offers/{offer_id}/messages", token=participant_token)
+    assert status == 200 and thread["can_post"] and thread["messages"][-1]["body"].startswith("Удобно"), thread
+    status, reply = call("POST", f"/offers/{offer_id}/messages", {"body": "Да, после 15:00"}, token=participant_token)
+    assert status == 201, reply
+    status, alien = call("GET", f"/offers/{offer_id}/messages", token=_employer_login("hr@quantumlab.demo"))
+    assert status == 404, alien
+
+
+def check_revoke_contacts(offer_id, employer_token, participant_token):
+    """Q&A: the candidate closes the contacts for one company; the global consent stays as it was."""
+    status, closed = call("POST", f"/candidates/me/offers/{offer_id}/revoke-contacts", token=participant_token)
+    assert status == 200 and closed["contacts_revoked_at"], closed
+    status, denied = call("GET", f"/offers/{offer_id}/contacts", token=employer_token)
+    assert status == 403 and denied["error"]["code"] == "contacts_revoked", denied
+    status, listed = call("GET", "/offers/", token=employer_token)
+    row = next(o for o in listed if o["id"] == offer_id)
+    assert row["contacts_available"] is False and row["contacts_revoked_at"], row
+    status, bell = call("GET", "/notifications", token=employer_token)
+    assert any(n["kind"] == "offer_contacts_revoked" for n in bell["items"]), bell
+    status, thread = call("POST", f"/offers/{offer_id}/messages", {"body": "Ещё вопрос"}, token=employer_token)
+    assert status == 403, thread
+    status, consents = call("GET", "/me/consents", token=participant_token)
+    assert status == 200, consents
+    print("REVOKE OK", offer_id)
 
 
 def check_needs(token):
@@ -308,6 +432,12 @@ def check_needs(token):
     status, no_fsp = call("GET", "/search/candidates?skills=Python,Django&has_fsp=false", token=token)
     assert status == 200 and no_fsp["items"], no_fsp
     assert any("Нет истории ФСП" in line for line in no_fsp["items"][0]["match"]["info"]), no_fsp["items"][0]
+
+
+def _employer_login(email):
+    status, login = call("POST", "/auth/employer/token", form={"username": email, "password": "demo12345"})
+    assert status == 200, login
+    return login["access_token"]
 
 
 def _login(email):

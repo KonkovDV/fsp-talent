@@ -5,6 +5,8 @@
   the 3PL model of each served item, so confirmed grades, item statistics and topic results are real outputs.
 - The demo employer «Сибирский код» gets three needs with shortlists; employers send invitations in every
   status; candidates apply to vacancies; notifications are written for each step (no letters are sent).
+- «Сибирский код» also writes three tasks: a public one with a numeric reference, a public open one with an
+  answer waiting for its review, and one addressed to fsp001@demo.talent.
 
 Deterministic (fixed seeds) and idempotent: it does nothing if the demo needs already exist.
 Demo accounts used by the smoke test (FSP001, FSP002, nofsp, offers from hr@sibcode.demo to FSP001) are left
@@ -25,11 +27,13 @@ from app.models import (
     Application,
     CategoryAssignment,
     Employer,
+    EmployerTask,
     Need,
     NeedShortlist,
     NeedVersion,
     Offer,
     Participant,
+    TaskSubmission,
     Vacancy,
 )
 from app.services import assessment
@@ -37,6 +41,7 @@ from app.services.notify import Outbox, category_label, notify, salary
 from app.services.practice import offer_weekly_tasks
 from app.services.profile import rebuild_profile
 from app.services.search.pipeline import search_candidates
+from app.services.tasks import check_answer, record_verdict
 
 GRADES = ("junior", "middle", "senior", "lead")
 THETA_CENTER = {"junior": -0.6, "middle": 0.4, "senior": 1.4, "lead": 2.3}
@@ -241,6 +246,94 @@ async def _company_profiles(db) -> None:
             employer.industry, employer.website, employer.description = industry, site, about
 
 
+# title, statement, answer type, options, right option, reference number, audience
+DEMO_TASKS = [
+    ("Сколько строк вернёт JOIN",
+     "В таблице orders 1000 строк, у 250 из них status = 'paid'. У каждого оплаченного заказа ровно две строки "
+     "в order_items, у остальных строк в order_items нет.\n\nСколько строк вернёт запрос\n"
+     "SELECT o.id FROM orders o JOIN order_items i ON i.order_id = o.id WHERE o.status = 'paid'?",
+     "number", [], None, "500", "public"),
+    ("Платёж списался дважды",
+     "Клиент дважды нажал «Оплатить», и деньги списались два раза. Опишите, как сделать API платежей "
+     "идемпотентным: что хранить, где проверять повтор и что вернуть клиенту на повторный запрос. "
+     "Достаточно подхода, код не обязателен.",
+     "open", [], None, None, "public"),
+    ("Индекс для выборки заказов",
+     "Запрос SELECT * FROM orders WHERE customer_id = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT 20 "
+     "выполняется 2 секунды на 30 млн строк. Какой индекс ускорит его сильнее всего?",
+     "choice", ["(created_at)", "(customer_id, created_at)", "(created_at, customer_id)", "(status)"], 1, None,
+     "addressed"),
+]
+OPEN_ANSWERS = [
+    "Клиент передаёт ключ идемпотентности в заголовке. Сервер в одной транзакции вставляет ключ в таблицу "
+    "с уникальным индексом и создаёт платёж; повтор с тем же ключом получает сохранённый ответ, а не новый "
+    "платёж. Ключи храню сутки, а на время обработки ставлю статус in_progress, чтобы параллельный повтор "
+    "получил 409.",
+    "Проверять в базе, был ли такой же платёж за последнюю минуту с той же суммой, и не проводить второй.",
+]
+
+
+async def _employer_tasks(db, now: datetime) -> int:
+    """Three tasks of «Сибирский код» and a few answers. Idempotent: does nothing if the first task exists."""
+    employer = await db.scalar(select(Employer).where(Employer.email == DEMO_EMPLOYER))
+    if employer is None or await db.scalar(select(EmployerTask.id).where(
+            EmployerTask.employer_id == employer.id, EmployerTask.title == DEMO_TASKS[0][0])):
+        return 0
+    demo = await db.scalar(select(Participant).where(Participant.email == "fsp001@demo.talent"))
+    vacancy = await db.scalar(select(Vacancy).where(Vacancy.employer_id == employer.id, Vacancy.role == "backend")
+                              .order_by(Vacancy.title).limit(1))
+    outbox = Outbox()
+    tasks = []
+    for k, (title, text, kind, options, right, number, audience) in enumerate(DEMO_TASKS):
+        if audience == "addressed" and demo is None:
+            continue
+        task = EmployerTask(
+            employer_id=employer.id, vacancy_id=vacancy.id if vacancy else None, title=title, statement=text,
+            answer_type=kind, options=options, correct_index=right, reference_number=number,
+            visibility=audience, specialization="backend",
+            candidate_id=demo.id if audience == "addressed" else None,
+            deadline=now + timedelta(days=14), created_at=now - timedelta(days=3 - k))
+        db.add(task)
+        tasks.append(task)
+        await db.flush()
+        if audience == "addressed":
+            await notify(db, outbox, "participant", demo.id, "task_new", f"Задание от «{employer.company_name}»",
+                         f"Компания предлагает вам задание «{title}». Ответ проверит система. Грейд оно не меняет, "
+                         "а результат появится в вашей карточке для работодателей.",
+                         f"/candidate/tasks?task={task.id}")
+    # Backend candidates of the synthetic pool answer the public tasks.
+    pool = list(await db.scalars(
+        select(Participant).where(Participant.fsp_id.like("FSP1%"), Participant.specialization == "backend",
+                                  Participant.is_visible.is_(True), Participant.is_minor.is_(False))
+        .order_by(Participant.fsp_id).limit(4)))
+    number_task, open_task = tasks[0], tasks[1]
+    made = 0
+    for k, (person, answer) in enumerate(zip(pool[:3], ("500", "1000", "500"), strict=False)):
+        checked = check_answer(number_task, answer, None)
+        at = now - timedelta(days=2 - k, hours=k)
+        db.add(TaskSubmission(task_id=number_task.id, participant_id=person.id, answer_text=checked.answer_text,
+                              status="checked", passed=checked.passed, submitted_at=at, reviewed_at=at))
+        record_verdict(person, number_task, checked.passed, at)
+        made += 1
+    if len(pool) >= 2:
+        reviewed_at = now - timedelta(days=1)
+        db.add(TaskSubmission(task_id=open_task.id, participant_id=pool[0].id, answer_text=OPEN_ANSWERS[0],
+                              status="reviewed", passed=True, comment="Хороший подход: ключ и уникальный индекс.",
+                              submitted_at=reviewed_at - timedelta(hours=5), reviewed_at=reviewed_at))
+        record_verdict(pool[0], open_task, True, reviewed_at)
+        # Waits for hr@sibcode.demo to review it in the demo.
+        db.add(TaskSubmission(task_id=open_task.id, participant_id=pool[1].id, answer_text=OPEN_ANSWERS[1],
+                              status="review", submitted_at=now - timedelta(hours=6)))
+        await notify(db, outbox, "employer", employer.id, "task_submission",
+                     f"Новый ответ на задание «{open_task.title}»",
+                     "Кандидат прислал решение. Оно ждёт вашей проверки: зачтено или нет и короткий комментарий.",
+                     f"/employer/tasks?task={open_task.id}")
+        made += 2
+    await db.flush()
+    outbox.letters.clear()   # seed writes the bell, it does not mail fictional addresses
+    return made
+
+
 async def main() -> None:
     now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
@@ -248,6 +341,10 @@ async def main() -> None:
         if employer is None:
             print("demo activity: run seed.generate_seed first")
             return
+        answers = await _employer_tasks(db, now)
+        if answers:
+            await db.commit()
+            print(f"demo activity: employer task answers={answers}")
         if await db.scalar(select(Need.id).where(Need.employer_id == employer.id, Need.title == NEEDS[0][0])):
             print("demo activity: already seeded")
             return

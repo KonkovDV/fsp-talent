@@ -27,6 +27,7 @@ from app.services.profile import adult_cutoff
 from app.services.scoring.engine import RANK_ORDER, STATUS_LABELS, percentile
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
+from app.services.tasks import card_signal
 from app.services.vacancy_exam import TOPIC_LABELS
 
 logger = logging.getLogger(__name__)
@@ -379,6 +380,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
             mark = "верно" if p.practice_ok else "с ошибкой"
             topic = TOPIC_LABELS.get(p.practice_topic, p.practice_topic)
             why.append(f"Короткая практика ({topic}): {mark}, {days_ago(p.practice_at)}")
+        if task_line := card_signal(p, days_ago):
+            why.append(task_line)
         line = percentiles.get(pid)
         if line:
             why.append(line)
