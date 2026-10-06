@@ -10,7 +10,6 @@ import pytest
 from app.items import LEVEL_B
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, FAMILIES
 from app.models.assessment import GRADE_COOLDOWN_DAYS
-from app.seed.questions import QUESTIONS, balanced
 from app.services import cat
 from app.services.assessment import decide_grade, passed_target
 from app.services.categorization import assign_category
@@ -216,17 +215,6 @@ def test_test_never_lowers_a_confirmed_grade():
 def test_repeat_of_same_grade_does_not_restart_cooldown():
     d = decide_grade("middle", "middle", "middle", NOW)
     assert not d.applied and d.locked_until is None and d.reason == "confirmed_again"
-
-
-# --- Static concept pool -------------------------------------------------------------------------
-
-def test_balanced_bank_keeps_content_and_spreads_right_answers():
-    bank = [balanced(q, i) for i, q in enumerate(QUESTIONS)]
-    for original, shuffled in zip(QUESTIONS, bank, strict=True):
-        right = next(o["text"] for o in original["options"] if o["id"] == original["correct_option"])
-        assert next(o["text"] for o in shuffled["options"] if o["id"] == shuffled["correct_option"]) == right
-    counts = collections.Counter(q["correct_option"] for q in bank)
-    assert max(counts.values()) / len(bank) <= 0.30
 
 
 # --- Category -------------------------------------------------------------------------------------

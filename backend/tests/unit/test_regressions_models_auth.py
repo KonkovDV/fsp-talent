@@ -1,12 +1,10 @@
-"""
-Round-3 audit -- static regression tests (no DB, no Redis, no network).
+"""Regression checks for models, credentials and registration (no DB, no Redis, no network).
 
-BUG-E: ProfileSearchIndex.updated_at must have onupdate=
-BUG-F: Result must have UniqueConstraint(participant_id, event_id)
-BUG-G: public_key_multibase() must be cached (lru_cache)
-BUG-G2: verify_credential must reject future validFrom
-BUG-I: register_participant must catch IntegrityError -> 409
-       register_employer flush IntegrityError -> 409
+- ProfileSearchIndex.updated_at is refreshed on update
+- one Result per (participant, event)
+- the issuer public key is computed once
+- a credential with validFrom in the future is rejected
+- a registration race returns 409, not 500
 """
 from __future__ import annotations
 
@@ -22,7 +20,7 @@ def _src(relpath: str) -> str:
     return (ROOT / relpath).read_text()
 
 
-class TestBugE_ProfileSearchIndexUpdatedAt:
+class TestProfileSearchIndexUpdatedAt:
     def test_psi_updated_at_has_onupdate(self):
         src = _src("app/models/profile.py")
         tree = ast.parse(src)
@@ -47,7 +45,7 @@ class TestBugE_ProfileSearchIndexUpdatedAt:
         ast.parse(_src("app/models/profile.py"))
 
 
-class TestBugF_ResultUniqueConstraint:
+class TestResultUniqueConstraint:
     def test_result_has_uq_participant_event(self):
         src = _src("app/models/participant.py")
         assert "uq_result_participant_event" in src, (
@@ -59,7 +57,7 @@ class TestBugF_ResultUniqueConstraint:
         ast.parse(_src("app/models/participant.py"))
 
 
-class TestBugG_PublicKeyMultibaseCached:
+class TestPublicKeyMultibaseCached:
     def test_public_key_multibase_has_lru_cache(self):
         src = _src("app/services/vc/issuer.py")
         tree = ast.parse(src)
@@ -82,7 +80,7 @@ class TestBugG_PublicKeyMultibaseCached:
         ast.parse(_src("app/services/vc/issuer.py"))
 
 
-class TestBugG2_VerifyCredentialValidFrom:
+class TestVerifyCredentialValidFrom:
     def test_verify_credential_checks_valid_from(self):
         src = _src("app/services/vc/issuer.py")
         tree = ast.parse(src)
@@ -99,7 +97,7 @@ class TestBugG2_VerifyCredentialValidFrom:
         )
 
 
-class TestBugI_RegisterTOCTOU:
+class TestRegisterTOCTOU:
     def _auth_fn(self, name: str) -> tuple[str, ast.AsyncFunctionDef]:
         src = _src("app/api/v1/auth.py")
         tree = ast.parse(src)

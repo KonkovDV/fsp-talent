@@ -1,10 +1,9 @@
 from app.services.categorization import (
     GRADES,
+    _ru_word,
     assign_category,
     grade_from_experience,
-    _ru_word,
 )
-
 
 # ---------------------------------------------------------------------------
 # Existing tests (unchanged)
