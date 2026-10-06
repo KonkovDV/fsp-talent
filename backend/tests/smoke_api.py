@@ -182,7 +182,7 @@ def check_erasure(employer_token):
     status, login = call("POST", "/auth/participant/token", form={"username": email, "password": "smoke-pass-1"})
     assert status == 401, login
     status, me = call("GET", "/candidates/me", token=token)
-    assert status == 404, me
+    assert status == 401, me
     status, closed = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
     assert status == 403, closed
 
