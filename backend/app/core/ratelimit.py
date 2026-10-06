@@ -29,7 +29,7 @@ async def too_many(bucket: str, limit: int = 5, window_seconds: int = 60, *, fai
     between the two commands the key would never expire, permanently blocking
     the account.  With NX the next pipeline call sets the TTL on INCR's new key.
 
-    Requires Redis 7.0+ for the NX flag on EXPIRE (docker-compose: redis:7-alpine).
+    Requires Redis 7.0+ for the NX flag on EXPIRE (docker-compose: redis:7.2-alpine).
     """
     try:
         redis = await get_redis()

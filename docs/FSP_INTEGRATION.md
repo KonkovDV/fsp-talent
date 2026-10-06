@@ -30,7 +30,7 @@ sequenceDiagram
     П->>A: POST /candidates/me/fsp/callback {code, state}
     A->>ID: обмен кода на токены (client_secret + code_verifier)
     A->>ID: ключи realm (JWKS)
-    A->>A: проверка подписи, iss, aud, exp; ФСП ID из утверждения fsp_id
+    A->>A: проверка подписи, iss, aud, exp, ФСП ID из утверждения fsp_id
     A->>Р: GET /participants/{fsp_id}
     Р-->>A: строки протокола
     A->>A: запись результатов, удостоверения VC, пересчёт оси ФСП

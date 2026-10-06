@@ -101,7 +101,7 @@ make check
 | Сквозная проверка API | `make check` | `docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py` |
 | Нагрузка: 40 пользователей в течение минуты | `make load` | `docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/load_api.py` |
 
-Внутри контейнера нет Node.js, Go и Java, поэтому тесты, которые перезапускают задания на этих языках, пропускаются с пометкой `skipped`. В CI все языки установлены и эти тесты выполняются.
+Внутри контейнера нет Node.js, Go, Java, Kotlin и .NET, поэтому тесты, которые перезапускают задания на этих языках, пропускаются с пометкой `skipped`. В CI все языки установлены и эти тесты выполняются.
 
 Полные цифры из документации воспроизводятся так:
 
@@ -132,7 +132,7 @@ docker compose exec -T backend python -m app.validation.matching --seed 7
 | `worker` | тот же образ | Celery: пересчёт профилей, истечение приглашений, задача недели, удаление данных по 152-ФЗ |
 | `beat` | тот же образ | Расписание задач Celery |
 | `postgres` | pgvector/pgvector:pg16 | PostgreSQL 16 с pgvector и pg_trgm |
-| `redis` | redis:7-alpine | Лимиты запросов, состояние входа через ФСП ID, брокер Celery |
+| `redis` | redis:7.2-alpine | Лимиты запросов, состояние входа через ФСП ID, брокер Celery |
 | `mailpit` | axllent/mailpit | Почтовый ящик для писем на локальном стенде |
 
 Наружу открыт только порт nginx. API (8010), отдельный frontend (3010) и Mailpit (8025) слушают только 127.0.0.1. У базы и Redis портов на хосте нет.
