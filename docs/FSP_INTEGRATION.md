@@ -56,14 +56,47 @@ sequenceDiagram
 ### Что настроить в Keycloak Федерации
 
 1. Клиент `fsp-talent`: Client authentication — On (конфиденциальный клиент), Standard flow — On, остальные потоки выключены.
-2. Valid redirect URIs: `https://<адрес стенда>/candidate/fsp-callback`.
+2. Valid redirect URIs: `https://<адрес стенда>/candidate/fsp-callback` (привязка) и `https://<адрес стенда>/auth/fsp-callback` (вход).
 3. Advanced → Proof Key for Code Exchange Code Challenge Method: `S256`.
 4. Client scopes → mapper типа «User Attribute»: атрибут пользователя с номером ФСП ID → утверждение `fsp_id` в ID-токене.
 5. В `.env` платформы: `FSP_ID_MODE=oidc`, `FSP_ID_ISSUER=https://<keycloak>/realms/<realm>`, `FSP_ID_CLIENT_ID=fsp-talent`, `FSP_ID_CLIENT_SECRET=<секрет клиента>`.
 
 Код: `backend/app/services/fsp/identity.py` (`KeycloakFspIdProvider`, `MockFspIdProvider`), методы API — `backend/app/api/v1/candidates.py` (`/me/fsp/authorize`, `/me/fsp/callback`), демо-провайдер — `backend/app/api/v1/fsp_id_demo.py`.
 
-Регистрация на платформе остаётся по email (ТЗ 2.2, п. 4), ФСП ID привязывается к готовому аккаунту. Следующий шаг — вход в платформу целиком через ФСП ID: тот же клиент, плюс создание аккаунта по первому входу.
+### Вход в платформу через ФСП ID
+
+Федерация ответила, что ФСП ID — единая точка входа, а вход на хакатоне можно имитировать. Поэтому ФСП ID работает двумя способами: привязка к готовому аккаунту (схема выше) и вход без регистрации по email. Регистрация по email (ТЗ 2.2, п. 4) остаётся.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor К as Кандидат
+    participant П as ФСП Талант (frontend)
+    participant A as ФСП Талант (API)
+    participant ID as ФСП ID (Keycloak)
+    К->>П: «Войти через ФСП ID» на странице входа
+    П->>A: POST /auth/fsp/authorize
+    A-->>П: authorize_url (state не привязан к аккаунту)
+    П->>ID: страница входа ФСП ID
+    ID-->>П: возврат на /auth/fsp-callback?code&state
+    П->>A: POST /auth/fsp/callback {code, state}
+    alt ФСП ID уже привязан к аккаунту
+        A-->>П: signed_in и токены
+    else новый человек
+        A-->>П: needs_consent, одноразовый билет (Redis, 15 минут) и данные реестра
+        К->>П: согласия на обработку и условия
+        П->>A: POST /auth/fsp/signup {ticket, consents}
+        A-->>П: аккаунт из реестра, записи согласий, токены
+    end
+```
+
+- Тот же поток кода с PKCE, что и привязка, но свой адрес возврата: `/auth/fsp-callback` (привязка — `/candidate/fsp-callback`). Код, выданный для одного адреса, другой поток не примет. `state` и код одноразовые.
+- Без обязательных согласий (`terms`, `pd_candidate`) аккаунт не создаётся: 422 `consent_required`, билет не тратится. Повтор билета — 400 `fsp_ticket_invalid`.
+- Такой аккаунт работает без email и пароля: личность подтверждает ФСП ID. Для связи кандидат добавляет Telegram или телефон в профиле, уведомления приходят в колокольчик.
+- В Keycloak добавляется второй адрес возврата: `https://<адрес стенда>/auth/fsp-callback`.
+- Как показать: «Вход» → «Войти через ФСП ID» → `FSP001` / `test` (аккаунт `fsp001@demo.talent` уже привязан, вход сразу) или любой из FSP2000–FSP2099 / `test` (новый человек, экран согласий).
+
+Код: `backend/app/api/v1/auth.py` (`/fsp/authorize`, `/fsp/callback`, `/fsp/signup`), тесты — `backend/tests/unit/test_fsp_signin.py` (вход привязанного аккаунта, согласия до создания, одноразовые `state` и билет, разделение адресов возврата).
 
 ## 2. Контракт реестра ФСП
 
