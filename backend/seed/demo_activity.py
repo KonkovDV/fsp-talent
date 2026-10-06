@@ -202,7 +202,7 @@ async def _applications(db, now: datetime) -> int:
             select(Participant).join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
             .where(CategoryAssignment.primary_role == vacancy.role, Participant.fsp_id.like("FSP1%"),
                    Participant.is_visible.is_(True), Participant.is_minor.is_(False))
-            .order_by(Participant.fsp_id).limit(3)))
+            .order_by(Participant.fsp_id).limit(2)))
         for cand in cands:
             status = statuses[made % len(statuses)]
             created = now - timedelta(days=3 - made % 3, hours=made)
