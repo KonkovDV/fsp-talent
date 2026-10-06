@@ -70,7 +70,7 @@ class Session:
     theta: float
     earned: str | None
     passed: bool
-    upgraded: bool
+    recommended: str | None    # next grade recommended for a separate test (never assigned by this session)
     n: int
     keys: list[str]
     # key, family, a, b, c, correct
@@ -123,7 +123,7 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         keys.append(key)
         answers.append((key, ch.family.id, ch.a, ch.b, c, correct))
     out = decide(state)
-    s = Session(spec, target, theta, out.earned, out.passed, out.upgraded, state.n, keys, answers, out.theta)
+    s = Session(spec, target, theta, out.earned, out.passed, out.recommend_next, state.n, keys, answers, out.theta)
     return s
 
 
@@ -145,7 +145,7 @@ class CohortReport:
     accuracy_clear: float      # the same for candidates more than 0.5 from the cut (one grade band is 1.0)
     sensitivity: float         # pass rate of those truly at or above the declared grade
     false_pass: float          # pass rate of those truly below the declared grade
-    false_upgrade: float       # upgraded although θ < cut of the next grade
+    false_recommend: float     # a test at the next grade recommended although θ < its cut (share of all sessions)
     mean_len: float
     p90_len: float
     stopped_early: float       # share of sessions decided before MAX_ITEMS
@@ -177,7 +177,7 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
     clear = [s for s in sessions if abs(s.theta - CUTS[s.target]) > 0.5]
     above = [s for s in sessions if s.theta >= CUTS[s.target]]
     below = [s for s in sessions if s.theta < CUTS[s.target]]
-    false_up = sum(1 for s in sessions if s.upgraded and s.theta < CUTS[s.earned])
+    false_rec = sum(1 for s in sessions if s.recommended and s.theta < CUTS[s.recommended])
     lengths = sorted(s.n for s in sessions)
     exposure = collections.Counter(k for s in sessions for k in set(s.keys))
     concept = sum(1 for s in sessions for k in s.keys if FAMILIES[k.split(":")[0]].kind == "concept")
@@ -186,7 +186,7 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
         accuracy_clear=sum(s.passed == (s.theta >= CUTS[s.target]) for s in clear) / max(1, len(clear)),
         sensitivity=sum(s.passed for s in above) / max(1, len(above)),
         false_pass=sum(s.passed for s in below) / max(1, len(below)),
-        false_upgrade=false_up / n, mean_len=statistics.mean(lengths),
+        false_recommend=false_rec / n, mean_len=statistics.mean(lengths),
         p90_len=lengths[int(0.9 * (len(lengths) - 1))],
         stopped_early=sum(s.n < MAX_ITEMS for s in sessions) / n,
         max_exposure=max(exposure.values()) / n,
@@ -264,7 +264,7 @@ class Retest:
     agreement: float           # same pass/fail
     kappa: float               # Cohen's kappa of pass/fail: agreement beyond what the pass rate gives by chance
     agreement_clear: float     # pairs more than 0.5 from the cut
-    same_grade: float          # same confirmed grade, upgrades included
+    same_grade: float          # same confirmed grade (a test confirms only its target, or nothing)
     theta_r: float             # correlation of the two ability estimates
 
 
@@ -348,7 +348,7 @@ def run(n: int = 3000, seed: int = 7) -> Report:
 CHECKS = {
     "accuracy_clear ≥ 0.85": lambda r: r.clean.accuracy_clear >= 0.85,
     "false_pass ≤ 0.12": lambda r: r.clean.false_pass <= 0.12,
-    "false_upgrade ≤ 0.03": lambda r: r.clean.false_upgrade <= 0.03,
+    "false_recommend ≤ 0.03": lambda r: r.clean.false_recommend <= 0.03,
     "retest kappa ≥ 0.35": lambda r: r.retest.kappa >= 0.35,
     "guesser_pass ≤ 0.02": lambda r: r.guesser_pass <= 0.02,
     # Guessing flattens an item with options, so its floor is lower.
@@ -359,7 +359,7 @@ CHECKS = {
 
 def _row(name: str, r: CohortReport) -> str:
     return (f"| {name} | {r.accuracy:.1%} | {r.accuracy_clear:.1%} | {r.sensitivity:.1%} | "
-            f"{r.false_pass:.1%} | {r.false_upgrade:.1%} | "
+            f"{r.false_pass:.1%} | {r.false_recommend:.1%} | "
             f"{r.mean_len:.1f} / {r.p90_len} | {r.stopped_early:.0%} | {r.max_exposure:.0%} | {r.concept_share:.0%} |")
 
 
@@ -380,7 +380,7 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"с вариантами» проходят одни и те же кандидаты; ответ вводится в {r.typed_share:.0%} выданных заданий.",
         "",
         "| Сценарий | Точность «сдал/не сдал» | Точность вне ±0,5 от порога | Сдали из тех, кто на уровне | "
-        "Ложно сдали | Ложное повышение | "
+        "Ложно сдали | Ложная рекомендация теста выше | "
         "Заданий: среднее / 90 % | Решено до лимита | Макс. экспозиция ключа | Доля концептуальных |",
         "|---|---|---|---|---|---|---|---|---|---|",
         _row("Без утечки", r.clean),

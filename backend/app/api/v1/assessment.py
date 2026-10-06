@@ -70,7 +70,9 @@ class StartIn(BaseModel):
     specialization: str | None = Field(None, description="По умолчанию — специализация из опроса")
     code_language: Literal["python", "javascript", "go", "java", "kotlin", "csharp"] = Field(
         "python", description="Язык, на котором показывать задания на чтение кода")
-    vacancy_id: uuid.UUID | None = Field(None, description="Собрать темы теста из этой вакансии")
+    vacancy_id: uuid.UUID | None = Field(
+        None, description="Собрать темы теста из этой вакансии. Такой тест грейд не меняет: грейд даёт только "
+                          "основной тест специализации")
 
 
 class VacancyExamIn(BaseModel):
@@ -122,9 +124,13 @@ class TopicOut(BaseModel):
 
 
 class ResultOut(BaseModel):
-    outcome: str        # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed
+    # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed | vacancy_test
+    outcome: str
     passed: bool
-    upgraded: bool
+    upgraded: bool = Field(description="Грейд в профиле вырос: тест на уровень выше подтверждённого сдан")
+    vacancy_test: bool = Field(False, description="Тест по вакансии: грейд не меняет")
+    recommended_grade: str | None = Field(
+        None, description="Уровень, на который стоит пройти отдельный основной тест; сам грейд не меняется")
     earned_grade: str | None
     confirmed_grade: str | None
     p_pass: float
@@ -179,9 +185,11 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
         t[1] += int(bool(it.is_correct))
     passed = session.grade_assigned is not None and \
         GRADE_ORDER.index(session.grade_assigned) >= GRADE_ORDER.index(session.target_grade)
-    upgraded = passed and session.grade_assigned != session.target_grade
+    flags = session.flags or {}
+    outcome = reason or flags.get("outcome") or ("passed" if passed else "not_passed")
     return ResultOut(
-        outcome=reason or ("passed" if passed else "not_passed"), passed=passed, upgraded=upgraded,
+        outcome=outcome, passed=passed, upgraded=outcome == "upgrade",
+        vacancy_test=bool(flags.get("vacancy_id")), recommended_grade=flags.get("recommended_grade"),
         earned_grade=session.grade_assigned, confirmed_grade=confirmed,
         p_pass=round(session.p_pass or 0.0, 3),
         p_upgrade=round(session.p_upgrade, 3) if session.p_upgrade is not None else None,
@@ -232,7 +240,7 @@ async def blueprint():
     return {
         "min_items": cat.MIN_ITEMS, "max_items": cat.MAX_ITEMS, "pass_probability": cat.PASS_P,
         "code_languages": LANGUAGE_LABELS,
-        "upgrade_probability": cat.UPGRADE_P, "concept_max_share": CONCEPT_MAX_SHARE,
+        "next_test_probability": cat.RECOMMEND_NEXT_P, "concept_max_share": CONCEPT_MAX_SHARE,
         "cuts": cat.CUTS,
         "specializations": {
             spec: {"label": SPECIALIZATIONS[spec],
@@ -269,7 +277,8 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
     if locked and conf and GRADE_ORDER.index(body.target_grade) > GRADE_ORDER.index(conf.grade):
         raise ApiError(429, "grade_locked", f"Повышение грейда доступно после {locked:%d.%m.%Y}",
                        details={"locked_until": locked.isoformat()})
-    retake = await check_retake_interval(db, participant_id, body.target_grade, spec)
+    retake = await check_retake_interval(db, participant_id, body.target_grade, spec,
+                                         vacancy_test=body.vacancy_id is not None)
     if retake:
         raise ApiError(429, "retake_cooldown", f"Пересдача на этот грейд доступна после {retake:%d.%m.%Y}",
                        details={"retake_at": retake.isoformat()})
@@ -278,7 +287,7 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
         raise ApiError(409, "conflict", "Уже есть незавершённый тест", details={"session_id": str(existing.id)})
     try:
         session, item = await start_session(
-            db, participant_id, spec, body.target_grade, body.code_language, topic_shares)
+            db, participant_id, spec, body.target_grade, body.code_language, topic_shares, body.vacancy_id)
         await db.commit()
     except QuestionBankError as e:
         raise ApiError(503, "question_bank_empty") from e
@@ -370,6 +379,8 @@ async def session_history(limit: int = Query(20, ge=1, le=100), offset: int = Qu
         "session_id": str(s.id), "status": s.status, "specialization": s.specialization,
         "target_grade": s.target_grade, "grade_assigned": s.grade_assigned, "score": s.score,
         "p_pass": s.p_pass, "items_count": s.items_count, "stop_reason": s.stop_reason,
+        "vacancy_test": bool((s.flags or {}).get("vacancy_id")),
+        "recommended_grade": (s.flags or {}).get("recommended_grade"),
         "started_at": s.started_at.isoformat(),
         "completed_at": s.completed_at.isoformat() if s.completed_at else None,
     } for s in rows], "limit": limit, "offset": offset}

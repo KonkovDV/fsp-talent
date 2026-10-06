@@ -11,7 +11,14 @@ from app.items import LEVEL_B
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, FAMILIES
 from app.models.assessment import GRADE_COOLDOWN_DAYS
 from app.services import cat
-from app.services.assessment import decide_grade, passed_target
+from app.services.assessment import (
+    RETAKE_INTERVAL_DAYS,
+    Attempt,
+    decide_grade,
+    passed_target,
+    recommended_grade,
+    retake_available_at,
+)
 from app.services.categorization import assign_category
 from app.services.item_monitor import KeyStats, calibrate_offset, leave_family_out
 
@@ -106,12 +113,15 @@ def test_skipping_or_all_wrong_confirms_nothing():
         assert not out.passed and out.earned is None and state.n >= cat.MIN_ITEMS
 
 
-def test_upgrade_needs_strong_evidence():
+def test_next_test_recommendation_needs_strong_evidence_and_never_assigns_the_grade():
     rng = random.Random(5)
-    ups = [_simulate(1.2, "backend", "middle", rng)[1].upgraded for _ in range(40)]   # true grade: senior
-    stay = [_simulate(0.0, "backend", "middle", rng)[1].upgraded for _ in range(40)]  # true grade: middle
-    # "Уверенно": the upgrade is deliberately conservative (P ≥ 0.9), so not every true senior gets it.
-    assert sum(ups) >= 12 and sum(stay) <= 1
+    strong = [_simulate(1.2, "backend", "middle", rng)[1] for _ in range(40)]   # true grade: senior
+    stay = [_simulate(0.0, "backend", "middle", rng)[1] for _ in range(40)]     # true grade: middle
+    # A test at middle confirms middle at most: the higher grade needs its own test (Q&A with ФСП).
+    assert all(o.earned in (None, "junior", "middle") for o in strong + stay)
+    # "Уверенно": the recommendation is deliberately conservative (P ≥ 0.9), so not every true senior gets it.
+    assert sum(o.recommend_next == "senior" for o in strong) >= 12
+    assert sum(o.recommend_next is not None for o in stay) <= 1
 
 
 def test_randomesque_choice_spreads_items():
@@ -196,15 +206,76 @@ def test_first_confirmation_is_a_baseline_without_cooldown():
     assert d.assessed_grade == "middle" and d.applied and not d.upgraded and d.locked_until is None
 
 
-def test_upgrade_raises_grade_and_starts_cooldown():
+def test_separate_test_at_higher_grade_raises_grade_and_starts_cooldown():
     d = decide_grade("middle", "senior", "senior", NOW)
     assert d.assessed_grade == "senior" and d.applied and d.upgraded
     assert d.locked_until == NOW + timedelta(days=GRADE_COOLDOWN_DAYS)
 
 
-def test_confident_result_upgrades_one_level_above_target():
+def test_test_at_a_grade_never_assigns_a_higher_one():
+    # Even if the outcome claimed a grade above the target, a test at middle confirms middle only.
     d = decide_grade("middle", "senior", "middle", NOW)
-    assert d.assessed_grade == "senior" and d.upgraded
+    assert d.assessed_grade == "middle" and not d.upgraded and d.reason == "confirmed_again"
+    d = decide_grade(None, "senior", "middle", NOW)
+    assert d.assessed_grade == "middle" and d.reason == "first_confirmation" and d.locked_until is None
+
+
+def _outcome(passed: bool, recommend: str | None = None, target: str = "middle") -> cat.Outcome:
+    return cat.Outcome(target if passed else None, passed, recommend, 0.9 if passed else 0.2, 0.95, 0.0, 0.3)
+
+
+def test_confident_result_recommends_the_next_test():
+    assert recommended_grade("middle", _outcome(True, "senior"), "middle") == "senior"
+    assert recommended_grade(None, _outcome(True, "senior"), "middle") == "senior"
+    assert recommended_grade("middle", _outcome(True), "middle") is None
+    # Nothing at or below a grade already confirmed is recommended.
+    assert recommended_grade("lead", _outcome(True, "senior"), "middle") is None
+    assert recommended_grade(None, _outcome(False), "middle") is None
+
+
+def test_vacancy_test_never_changes_the_grade():
+    for current in (None, "junior", "middle", "senior"):
+        d = decide_grade(current, "middle", "middle", NOW, vacancy_test=True)
+        assert d.assessed_grade == current and not d.applied and d.locked_until is None
+        assert d.reason == "vacancy_test"
+    # It points to the primary test instead.
+    assert recommended_grade("junior", _outcome(True), "middle", vacancy_test=True) == "middle"
+    assert recommended_grade("junior", _outcome(True, "senior"), "middle", vacancy_test=True) == "senior"
+    assert recommended_grade("middle", _outcome(True), "middle", vacancy_test=True) is None
+    assert recommended_grade("junior", _outcome(False), "middle", vacancy_test=True) is None
+
+
+# --- Retake rules (Q&A: no jumping day after day; stepping down after a failure is free) -------------
+
+def _at(days_ago: float, target: str, failed: bool = False) -> Attempt:
+    return Attempt(target, NOW - timedelta(days=days_ago), failed)
+
+
+def test_same_grade_retake_waits_seven_days():
+    attempts = [_at(2, "middle", failed=True)]
+    assert retake_available_at(attempts, "middle", NOW) == NOW + timedelta(days=RETAKE_INTERVAL_DAYS - 2)
+    assert retake_available_at([_at(RETAKE_INTERVAL_DAYS + 1, "middle", True)], "middle", NOW) is None
+
+
+def test_abandoned_attempt_counts_for_the_retake():
+    attempts = [_at(1, "middle", failed=False)]   # abandoned: not passed, not "failed", still an attempt
+    assert retake_available_at(attempts, "middle", NOW) is not None
+
+
+def test_failed_test_allows_a_lower_grade_at_once():
+    assert retake_available_at([_at(0.01, "middle", failed=True)], "junior", NOW) is None
+    assert retake_available_at([_at(0.01, "middle", failed=True)], "intern", NOW) is None
+
+
+def test_failure_above_lifts_an_earlier_lower_attempt():
+    # Junior abandoned three days ago, middle failed today: junior is available now.
+    attempts = [_at(3, "junior"), _at(0.01, "middle", failed=True)]
+    assert retake_available_at(attempts, "junior", NOW) is None
+    # A passed middle does not lift it, and neither does a failure that came before the junior attempt.
+    assert retake_available_at([_at(3, "junior"), _at(0.01, "middle")], "junior", NOW) is not None
+    assert retake_available_at([_at(1, "junior"), _at(3, "middle", True)], "junior", NOW) is not None
+    # Going up is never unlocked by a failure.
+    assert retake_available_at([_at(3, "middle"), _at(1, "junior", True)], "middle", NOW) is not None
 
 
 def test_test_never_lowers_a_confirmed_grade():

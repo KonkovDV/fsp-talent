@@ -4,14 +4,18 @@ Flow: start → (serve item → answer)* → finalize. One item is on screen at 
 the server. The selector, stop rule and decision live in app.services.cat; this module stores sessions,
 applies the grade policy, updates item statistics and quarantines leaked items.
 
-Policy (TZ section 2, "Категория и грейд"):
-  * A test never lowers a confirmed grade. A failed attempt changes nothing; the candidate may take a test
-    one level lower instead.
-  * A confident result raises the grade one level above the target: P(θ ≥ next cut) ≥ cat.UPGRADE_P.
+Policy (TZ section 2, "Категория и грейд", and the Q&A with ФСП):
+  * The grade comes only from the primary test of the specialization. A test built from a vacancy
+    (flags["vacancy_id"]) shows topic results and confirms skills, but never changes the grade.
+  * A test at grade G confirms G or nothing. A result confidently above the next cut
+    (P(θ ≥ next cut) ≥ cat.RECOMMEND_NEXT_P) does not raise the grade: the session stores a recommendation
+    to take a separate test at the next grade (flags["recommended_grade"]).
+  * A test never lowers a confirmed grade. A failed attempt changes nothing.
   * Grades are confirmed per specialization: a backend confirmation says nothing about security.
   * Only an actual grade change starts the cooldown (GRADE_COOLDOWN_DAYS) for that specialization.
     Retakes of the same target are throttled separately (RETAKE_INTERVAL_DAYS); an abandoned or expired
-    session counts as an attempt, otherwise the items could be previewed for free.
+    session counts as an attempt, otherwise the items could be previewed for free. A failed test at G does
+    not burn the lower grade: a test at a lower grade is available at once (see retake_available_at).
 """
 from __future__ import annotations
 
@@ -75,12 +79,18 @@ class GradeDecision:
     applied: bool
     upgraded: bool
     locked_until: datetime | None
-    reason: str   # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed
+    # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed | vacancy_test
+    reason: str
 
 
-def decide_grade(current: str | None, earned: str | None, target_grade: str, now: datetime) -> GradeDecision:
+def decide_grade(current: str | None, earned: str | None, target_grade: str, now: datetime,
+                 vacancy_test: bool = False) -> GradeDecision:
+    """A test at target_grade confirms target_grade or nothing; a vacancy test confirms nothing."""
+    if vacancy_test:
+        return GradeDecision(current, False, False, None, "vacancy_test")
     if earned is None or not passed_target(earned, target_grade):
         return GradeDecision(current, False, False, None, "not_passed")
+    earned = target_grade   # no automatic jump above the grade that was tested
     if current is None:
         # First confirmation is the baseline, not a change: it does not start the cooldown.
         return GradeDecision(earned, True, False, None, "first_confirmation")
@@ -89,6 +99,54 @@ def decide_grade(current: str | None, earned: str | None, target_grade: str, now
     if earned == current:
         return GradeDecision(current, False, False, None, "confirmed_again")
     return GradeDecision(current, False, False, None, "kept_higher_grade")
+
+
+def recommended_grade(confirmed: str | None, outcome: cat.Outcome, target_grade: str,
+                      vacancy_test: bool = False) -> str | None:
+    """Grade worth a separate primary test after this session, or None.
+
+    Primary test: the next grade when the result is confidently above its cut. Vacancy test: the target grade
+    it passed (and the next one on a confident result), since only the primary test confirms a grade.
+    Nothing at or below the grade already confirmed is recommended.
+    """
+    options = []
+    if vacancy_test and outcome.passed:
+        options.append(target_grade)
+    if outcome.passed and outcome.recommend_next:
+        options.append(outcome.recommend_next)
+    floor = GRADE_ORDER.index(confirmed) if confirmed in GRADE_ORDER else -1
+    above = [g for g in options if GRADE_ORDER.index(g) > floor]
+    return max(above, key=GRADE_ORDER.index) if above else None
+
+
+@dataclass(frozen=True)
+class Attempt:
+    """A finished or dropped attempt of one specialization and one kind (primary or vacancy test)."""
+    target_grade: str
+    completed_at: datetime
+    failed: bool   # completed without passing the target; abandoned or expired attempts are not "failed"
+
+
+def retake_available_at(attempts: list[Attempt], target_grade: str, now: datetime) -> datetime | None:
+    """When a test at target_grade may be started again; None means now.
+
+    The same grade can be retaken RETAKE_INTERVAL_DAYS after the last attempt at it. Stepping down after a
+    failure is free: a failed attempt at a higher grade made after that attempt lifts the lock, so a candidate
+    who failed middle can take junior at once even if a junior attempt was made a few days earlier.
+    """
+    since = now - timedelta(days=RETAKE_INTERVAL_DAYS)
+    same = [a.completed_at for a in attempts if a.target_grade == target_grade and a.completed_at > since]
+    if not same:
+        return None
+    last = max(same)
+    rank = GRADE_ORDER.index(target_grade)
+    if any(a.failed and a.completed_at > last and GRADE_ORDER.index(a.target_grade) > rank for a in attempts):
+        return None
+    return last + timedelta(days=RETAKE_INTERVAL_DAYS)
+
+
+def is_vacancy_session(session: TestSession) -> bool:
+    return bool((session.flags or {}).get("vacancy_id"))
 
 
 def item_token(session_id: uuid.UUID, seq: int, item_id: uuid.UUID) -> str:
@@ -113,15 +171,22 @@ async def check_cooldown(db: AsyncSession, participant_id: uuid.UUID, spec: str 
 
 
 async def check_retake_interval(db: AsyncSession, participant_id: uuid.UUID, target_grade: str,
-                                spec: str | None = None) -> datetime | None:
-    since = datetime.now(UTC) - timedelta(days=RETAKE_INTERVAL_DAYS)
-    query = select(func.max(TestSession.completed_at)).where(
-        TestSession.participant_id == participant_id, TestSession.target_grade == target_grade,
-        TestSession.status.in_(("completed", "abandoned", "expired")), TestSession.completed_at > since)
+                                spec: str | None = None, vacancy_test: bool = False) -> datetime | None:
+    """Retake lock for target_grade. Primary and vacancy tests are throttled separately: a vacancy test does
+    not change the grade, so it must not block the primary test, and the other way round."""
+    now = datetime.now(UTC)
+    since = now - timedelta(days=RETAKE_INTERVAL_DAYS)
+    kind = TestSession.flags.has_key("vacancy_id")
+    query = select(TestSession.target_grade, TestSession.completed_at, TestSession.status,
+                   TestSession.grade_assigned).where(
+        TestSession.participant_id == participant_id,
+        TestSession.status.in_(("completed", "abandoned", "expired")), TestSession.completed_at > since,
+        kind if vacancy_test else ~kind)
     if spec:
         query = query.where(TestSession.specialization == spec)
-    last = await db.scalar(query)
-    return last + timedelta(days=RETAKE_INTERVAL_DAYS) if last else None
+    attempts = [Attempt(target, done, status == "completed" and not passed_target(assigned, target))
+                for target, done, status, assigned in await db.execute(query)]
+    return retake_available_at(attempts, target_grade, now)
 
 
 async def get_active_session(db: AsyncSession, participant_id: uuid.UUID) -> TestSession | None:
@@ -174,8 +239,8 @@ def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: s
 # ── session flow ────────────────────────────────────────────────────────────
 
 async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, target_grade: str,
-                        code_language: str = "python",
-                        topic_shares: dict[str, float] | None = None) -> tuple[TestSession, TestSessionItem]:
+                        code_language: str = "python", topic_shares: dict[str, float] | None = None,
+                        vacancy_id: uuid.UUID | None = None) -> tuple[TestSession, TestSessionItem]:
     if target_grade not in GRADE_ORDER:
         raise ValueError(f"Invalid grade: {target_grade}")
     now = datetime.now(UTC)
@@ -185,6 +250,9 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
     flags: dict = {"code_language": code_language}
     if topic_shares:
         flags["topic_shares"] = topic_shares
+    if vacancy_id is not None:
+        # A vacancy test: same items and scale, but it never changes the grade (see decide_grade).
+        flags["vacancy_id"] = str(vacancy_id)
     session = TestSession(
         participant_id=participant_id, target_grade=target_grade, discipline=spec, specialization=spec,
         engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags=flags,
@@ -363,8 +431,9 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
 
     participant = await db.get(Participant, session.participant_id, with_for_update=True)
     conf = await confirmation(db, session.participant_id, session.specialization)
+    vacancy_test = is_vacancy_session(session)
     decision = decide_grade(conf.grade if conf else None, outcome.earned if outcome.passed else None,
-                            session.target_grade, now)
+                            session.target_grade, now, vacancy_test)
     if decision.applied:
         if conf is None:
             conf = GradeConfirmation(participant_id=session.participant_id, specialization=session.specialization,
@@ -378,6 +447,12 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
         await db.flush()
     if participant is not None:
         await sync_assessed_grade(db, participant)
+    flags = dict(session.flags or {})
+    flags["outcome"] = decision.reason
+    recommend = recommended_grade(decision.assessed_grade, outcome, session.target_grade, vacancy_test)
+    if recommend:
+        flags["recommended_grade"] = recommend
+    session.flags = flags
 
     await _update_item_stats(db, answered, cat.CUTS[session.target_grade])
     confirmed = await _confirm_skills(db, session, answered, now)

@@ -25,6 +25,7 @@ interface ReviewItem {
 const WHOLE = /^[+\-\u2212]?\d{1,12}$/
 interface Result {
   outcome: string; passed: boolean; upgraded: boolean; earned_grade: string | null; confirmed_grade: string | null
+  vacancy_test: boolean; recommended_grade: string | null
   p_pass: number; p_upgrade: number | null; theta: number; se: number; items_count: number; score: number
   stop_reason: string | null; grade_locked_until: string | null
   confirmed_skills: { name: string; share: number }[]
@@ -39,14 +40,16 @@ interface SessionState {
 interface HistoryItem {
   session_id: string; status: string; specialization: string | null; target_grade: string
   grade_assigned: string | null; p_pass: number | null; items_count: number | null; started_at: string
+  vacancy_test?: boolean
 }
 
 const OUTCOME_TEXT: Record<string, string> = {
   first_confirmation: 'Грейд подтверждён. Работодатели видят его с отметкой «подтверждён тестом».',
-  upgrade: 'Грейд повышен. Следующее повышение в этой специализации — после периода ожидания.',
+  upgrade: 'Грейд повышен. Следующее повышение в этой специализации — через 90 дней.',
   confirmed_again: 'Результат совпал с уже подтверждённым грейдом. Профиль не изменился.',
   kept_higher_grade: 'У вас уже подтверждён более высокий грейд. Тест его не понижает.',
-  not_passed: 'Заявленный уровень не подтверждён. Профиль не изменился: можно пройти тест на уровень ниже.',
+  not_passed: 'Заявленный уровень не подтверждён. Профиль не изменился. Тест на уровень ниже можно пройти сразу, ждать не нужно.',
+  vacancy_test: 'Это тест по вакансии: он показывает результат по темам вакансии и подтверждает навыки, но грейд не меняет. Грейд даёт только основной тест специализации.',
 }
 const pct = (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`)
 
@@ -65,7 +68,7 @@ function useCountdown(item: Item | null) {
 
 export default function CandidateAssessment() {
   const qc = useQueryClient()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const vacancyId = params.get('vacancy')
   const [target, setTarget] = useState('')
   const levelTouched = useRef(false)
@@ -156,7 +159,7 @@ export default function CandidateAssessment() {
                   </button>
                 ))}
               </div>
-              <p className="field-hint">Уверенный результат поднимет грейд на ступень выше выбранного.</p>
+              <p className="field-hint">Тест подтверждает только выбранный уровень. Если результат уверенно выше, предложим отдельный тест на следующий.</p>
             </fieldset>
             <fieldset>
               <legend className="field-label">Язык в заданиях на чтение кода</legend>
@@ -168,7 +171,7 @@ export default function CandidateAssessment() {
               </div>
               <p className="field-hint">Задания на подсчёт операций будут на выбранном языке; остальные зависят от темы (SQL, JavaScript, сети).</p>
             </fieldset>
-            {vacancyId && <p className="text-sm text-ink-2">Темы этого теста собраны из выбранной вакансии, а не из общего плана специализации.</p>}
+            {vacancyId && <p className="text-sm text-ink-2">Темы этого теста собраны из выбранной вакансии, а не из общего плана специализации. Тест по вакансии грейд не меняет: покажет результат по темам и подтвердит навыки, а грейд даёт только основной тест.</p>}
             <button onClick={() => start.mutate()} disabled={!target || start.isPending} className="btn-primary px-6 py-3">
               <ClipboardCheck size={16} aria-hidden />{start.isPending ? 'Готовим задания…' : 'Начать тест'}
             </button>
@@ -193,8 +196,9 @@ export default function CandidateAssessment() {
               <li>{blueprint?.min_items}–{blueprint?.max_items} заданий, тест заканчивается, как только результат ясен.</li>
               <li>3 минуты на задание с кодом, 75 секунд на вопрос.</li>
               <li>Если ответ на задание с кодом — целое число, его вводят сами: вариантов нет, угадать нельзя.</li>
-              <li>Уровень подтверждается при вероятности не ниже {pct(blueprint?.pass_probability)}, повышение — при {pct(blueprint?.upgrade_probability)}.</li>
+              <li>Уровень подтверждается при вероятности не ниже {pct(blueprint?.pass_probability)}. Тест на ступень выше предлагаем при {pct(blueprint?.next_test_probability)}, но грейд сам не повышается.</li>
               <li>Пересдача того же уровня — через 7 дней. Прерванная попытка засчитывается.</li>
+              <li>Не сдали — тест на уровень ниже доступен сразу. После смены грейда следующее повышение — через 90 дней.</li>
             </ul>
           </aside>
         </div>
@@ -249,7 +253,8 @@ export default function CandidateAssessment() {
           <div className={result.passed ? 'hero-ink -m-5 mb-0 p-6 sm:-m-6 sm:mb-0 sm:p-8' : 'flex items-start gap-3'}>
             {result.passed ? (
               <>
-                <p className="flex items-center gap-2 text-sm on-hero-muted"><CheckCircle2 size={18} aria-hidden /> Уровень подтверждён{result.upgraded ? ' с повышением на ступень' : ''}</p>
+                <p className="flex items-center gap-2 text-sm on-hero-muted"><CheckCircle2 size={18} aria-hidden />
+                  {result.vacancy_test ? 'Тест по вакансии пройден на уровне' : result.upgraded ? 'Грейд повышен' : 'Уровень подтверждён'}</p>
                 <p className="mt-3 font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3rem,7vw,4.5rem)]">{result.earned_grade}</p>
                 <p className="mt-3 max-w-[56ch] text-sm on-hero-muted">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
               </>
@@ -263,6 +268,20 @@ export default function CandidateAssessment() {
               </>
             )}
           </div>
+          {result.recommended_grade && (
+            <div className="notice-info flex-wrap items-center justify-between" data-testid="next-test">
+              <p className="text-sm text-ink">
+                {result.vacancy_test
+                  ? <>Можно пройти основной тест на {gradeRu(result.recommended_grade)}: грейд в профиле даёт только он.</>
+                  : <>Результат уверенно выше уровня {gradeRu(state.target_grade)}. Можно пройти тест на {gradeRu(result.recommended_grade)}: грейд сам не повышается, нужен отдельный тест.</>}
+                {result.grade_locked_until && !result.vacancy_test && <> Повышение доступно после {new Date(result.grade_locked_until).toLocaleDateString('ru-RU')}.</>}
+              </p>
+              <button type="button" className="btn-primary btn-sm" onClick={() => {
+                levelTouched.current = true; setTarget(result.recommended_grade!); setState(null); setShowReview(false)
+                if (vacancyId) setParams({}, { replace: true })
+              }}>Выбрать тест на {gradeRu(result.recommended_grade)}</button>
+            </div>
+          )}
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
             <div className="stat-card"><dt className="stat-card-label">Вероятность уровня {state.target_grade}</dt><dd className="stat-card-value">{pct(result.p_pass)}</dd></div>
             <div className="stat-card"><dt className="stat-card-label">Заданий, из них верно</dt><dd className="stat-card-value">{result.items_count}<span className="text-base text-ink-3">, {pct(result.score)}</span></dd></div>
@@ -319,7 +338,7 @@ export default function CandidateAssessment() {
           <ul className="text-sm divide-y divide-border">
             {(history.items as HistoryItem[]).map(h => (
               <li key={h.session_id} className="py-2 flex justify-between gap-2">
-                <span>{new Date(h.started_at).toLocaleDateString('ru-RU')}, {h.specialization ?? '—'}, {h.target_grade}</span>
+                <span>{new Date(h.started_at).toLocaleDateString('ru-RU')}, {h.specialization ?? '—'}, {h.target_grade}{h.vacancy_test ? ', по вакансии' : ''}</span>
                 <span className="text-ink-3">{h.status === 'completed' ? (h.grade_assigned ?? 'не подтверждён') : h.status}
                   {h.p_pass != null && `, ${pct(h.p_pass)}`}</span>
               </li>
