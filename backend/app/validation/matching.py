@@ -180,7 +180,7 @@ class Row:
 
 METHODS = ("random", "keyword", "full", "no_trust", "no_test", "no_fsp", "no_related")
 TITLES = {"random": "Случайный порядок", "keyword": "Базовая линия: совпадение заявленных навыков",
-          "full": "FSP Talent: разложимый скор", "no_trust": "  без весов доверия к навыкам",
+          "full": "ФСП Талант: оценка соответствия", "no_trust": "  без весов доверия к навыкам",
           "no_test": "  без теста", "no_fsp": "  без оси ФСП", "no_related": "  без близких технологий"}
 
 
