@@ -1,4 +1,5 @@
-# Host ports are bound to 127.0.0.1: only nginx (:80) is reachable from the network.
+# Local run and demo. Host ports are bound to 127.0.0.1: only nginx (:80) is reachable from the network.
+# The volume vc_keys holds the credential signing key and, unless SECRET_KEY is set in .env, the JWT key.
 services:
   backend:
     build: ./backend
@@ -17,8 +18,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
-    # FIX: backend was missing healthcheck; worker/beat depend on service_healthy
-    # and would hang forever at startup without it.
+    # worker and beat start after this check passes.
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
@@ -35,6 +35,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
+      MAIL_MODE: ${MAIL_MODE:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
     command: celery -A app.workers.celery_app worker --loglevel=info -Q scoring,embeddings,maintenance --concurrency=2
     volumes: [vc_keys:/secrets]
     depends_on:
@@ -50,6 +53,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
     command: celery -A app.workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    volumes: [vc_keys:/secrets]
     depends_on:
       backend: {condition: service_healthy}
     healthcheck:

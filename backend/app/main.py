@@ -9,24 +9,18 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.api.docs import install_docs
 from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
-from app.core.config import settings
+from app.core.config import PUBLISHED_SECRETS, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-# These strings are in the repo. A token signed with either of them can be forged by anyone who cloned it.
-_PUBLISHED_SECRETS = frozenset({
-    "change-me-32-chars-minimum-secret",
-    "change-me-use-openssl-rand-hex-32",
-})
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.SECRET_KEY in _PUBLISHED_SECRETS:
+    if settings.SECRET_KEY in PUBLISHED_SECRETS:
         raise RuntimeError(
-            "SECRET_KEY is a published placeholder. Set a private value in .env before starting the API.")
+            "SECRET_KEY is a published placeholder and SECRET_KEY_FILE is not writable. "
+            "Set a private value in .env: python -c \"import secrets; print(secrets.token_hex(32))\"")
     logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")
     yield
     logger.info("Shutting down")
