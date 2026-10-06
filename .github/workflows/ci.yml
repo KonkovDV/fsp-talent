@@ -101,7 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: make demo (build, start, wait for health checks, load demo data)
-        run: make demo
+        run: make demo 2>&1 | tee /tmp/demo.log; exit ${PIPESTATUS[0]}
       - name: The site, Swagger and health answer through nginx
         run: |
           curl -fsS http://localhost/health
@@ -112,7 +112,15 @@ jobs:
         run: make check
       - name: Logs on failure
         if: failure()
-        run: docker compose ps && docker compose logs --no-color --tail 200
+        run: |
+          docker compose ps -a; docker compose logs --no-color --tail 200
+          # Annotations stay readable through the API when the raw log archive is not.
+          enc() { sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g'; }
+          echo "::error title=make demo::$(tail -n 60 /tmp/demo.log 2>/dev/null | enc)"
+          echo "::error title=compose ps::$(docker compose ps -a 2>&1 | enc)"
+          for s in backend frontend nginx worker; do
+            echo "::error title=$s::$(docker compose logs --no-color --tail 40 $s 2>&1 | enc)"
+          done
 
   docker-build:
     needs: [lint, test-backend, test-frontend]
