@@ -73,6 +73,6 @@ def generate(rng: random.Random, level: int, spec: str) -> Item:
 
 FAMILY = Family(
     id="py_eval", title="Python: вывод программы", topic="python", kind="code",
-    specs=frozenset({"backend", "fullstack", "ml", "devops", "security", "embedded"}),
+    specs=frozenset({"backend", "fullstack", "ml", "devops", "security", "embedded", "qa", "analyst", "data"}),
     skills=("Python",), generate=generate, a=1.5,
 )

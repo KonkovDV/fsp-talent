@@ -116,7 +116,8 @@ async def public_profile_pdf(participant_id: uuid.UUID, db: AsyncSession = Depen
          for s in p.discipline_scores],
     )
     return Response(content=render_profile_pdf(lines), media_type="application/pdf",
-                    headers={"Content-Disposition": "attachment; filename=profile.pdf"})
+                    headers={"Content-Disposition": "attachment; filename=profile.pdf",
+                             "Cache-Control": "private, no-store"})
 
 
 @router.get("/credentials/verify/{credential_id}")

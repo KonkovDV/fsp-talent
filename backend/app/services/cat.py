@@ -151,11 +151,18 @@ class Verdict:
     stop_reason: str | None
 
 
-def evaluate(state: State) -> Verdict:
+# A jury trial is six items and stops on the count, not on the grade decision.
+EXPRESS_ITEMS = 6
+
+
+def evaluate(state: State, item_limit: int | None = None) -> Verdict:
     post = state.post()
     p_pass = post.prob_at_least(CUTS[state.target])
     up = next_grade(state.target)
     p_up = post.prob_at_least(CUTS[up]) if up else None
+    if item_limit is not None and item_limit < MIN_ITEMS:
+        done = state.n >= item_limit
+        return Verdict(done, p_pass, p_up, post.theta, post.se, "express" if done else None)
     decided_pass = p_pass <= DECIDED_LOW or p_pass >= DECIDED_HIGH
     decided_up = p_up is None or p_pass <= DECIDED_LOW or p_up <= UPGRADE_GIVE_UP or p_up >= DECIDED_HIGH
     if state.n >= MAX_ITEMS:
@@ -250,6 +257,16 @@ def decide(state: State) -> Outcome:
     if lower and post.prob_at_least(CUTS[lower]) >= PASS_P:
         return Outcome(lower, False, None, p_pass, p_up, post.theta, post.se)
     return Outcome(None, False, None, p_pass, p_up, post.theta, post.se)
+
+
+# A claimed grade is not confirmed when any topic with enough items was mostly wrong.
+TOPIC_FLOOR_N = 2
+TOPIC_FLOOR = 0.50
+
+
+def topic_fails(topics: dict[str, tuple[int, int]]) -> bool:
+    """True when a topic with at least TOPIC_FLOOR_N items is below TOPIC_FLOOR right."""
+    return any(n >= TOPIC_FLOOR_N and right < TOPIC_FLOOR * n for n, right in topics.values())
 
 
 def skill_scores(rows: list[tuple[tuple[str, ...], bool]], min_items: int = 3) -> dict[str, float]:

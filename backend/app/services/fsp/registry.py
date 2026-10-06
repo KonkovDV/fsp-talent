@@ -16,12 +16,12 @@ Nothing else is requested: no gender, no contacts, no documents.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import httpx
 
 from app.core.config import settings
-from app.services.fsp.mock import FSPParticipant, FSPResult
+from app.services.fsp.mock import FSPChanges, FSPParticipant, FSPResult
 
 DISCIPLINES = {"algorithmic", "product", "security", "bas", "robotics", "ai"}
 
@@ -42,6 +42,7 @@ def _result(row: dict) -> FSPResult | None:
         is_team=bool(row.get("is_team", False)), team_size=max(1, int(row.get("team_size") or 1)),
         event_date=date.fromisoformat(row["event_date"]), regions_count=row.get("regions_count"),
         role=str(row.get("role") or "participant"), protocol_url=row.get("protocol_url"),
+        ekp_number=(str(row["ekp_number"]) if row.get("ekp_number") else None),
     )
 
 
@@ -78,4 +79,30 @@ class HttpFSPAdapter:
         try:
             return parse_participant(response.json())
         except (KeyError, TypeError, ValueError) as e:
+            raise FSPRegistryError("registry payload does not match the contract") from e
+
+    async def changes_since(self, since: datetime) -> FSPChanges:
+        if not settings.FSP_API_URL:
+            raise FSPRegistryError("FSP_API_URL is not set")
+        client = self._http or httpx.AsyncClient(timeout=10)
+        try:
+            response = await client.get(
+                f"{settings.FSP_API_URL.rstrip('/')}/participants/changes",
+                params={"since": since.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")},
+                headers={"Authorization": f"Bearer {settings.FSP_API_KEY}", "Accept": "application/json"},
+            )
+        except httpx.HTTPError as e:
+            raise FSPRegistryError("registry unreachable") from e
+        finally:
+            if self._http is None:
+                await client.aclose()
+        if response.status_code != 200:
+            raise FSPRegistryError(f"registry answered {response.status_code}")
+        try:
+            payload = response.json()
+            ids = [str(item) for item in payload.get("fsp_ids", [])]
+            nxt = payload.get("next_since")
+            moment = datetime.fromisoformat(nxt.replace("Z", "+00:00")) if nxt else datetime.now(UTC)
+            return FSPChanges(ids, moment)
+        except (AttributeError, TypeError, ValueError) as e:
             raise FSPRegistryError("registry payload does not match the contract") from e

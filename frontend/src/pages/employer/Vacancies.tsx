@@ -56,7 +56,7 @@ export default function EmployerVacancies() {
 
   return (
     <div>
-      <PageHeader title="Вакансии" lead="Опубликованная вакансия видна подходящим кандидатам, и они могут откликнуться сами. Зарплатная вилка обязательна."
+      <PageHeader title="Вакансии" lead="Необязательный путь рядом с приглашением из подборки. Зарплата указывается до вычета НДФЛ. Грейд подтверждает тест по специализации; по вакансии кандидат решает одно задание, и система его проверяет."
         actions={!open && <button onClick={() => { setEditing(null); setForm(EMPTY); setOpen(true) }} className="btn-primary">Новая вакансия</button>} />
 
       {open && (
@@ -80,9 +80,9 @@ export default function EmployerVacancies() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="sm:col-span-1"><label className="field-label" htmlFor="v-skills">Навыки</label>
               <input id="v-skills" className="input" value={form.skills} onChange={set('skills')} placeholder="Python, PostgreSQL" /></div>
-            <div><label className="field-label" htmlFor="v-from">Зарплата от, ₽</label>
+            <div><label className="field-label" htmlFor="v-from">От, ₽ в месяц до вычета НДФЛ</label>
               <input id="v-from" type="number" step={5000} className="input num" value={form.salary_from_gross} onChange={set('salary_from_gross')} /></div>
-            <div><label className="field-label" htmlFor="v-to">Зарплата до, ₽</label>
+            <div><label className="field-label" htmlFor="v-to">До, ₽ в месяц до вычета НДФЛ</label>
               <input id="v-to" type="number" step={5000} className="input num" value={form.salary_to_gross} onChange={set('salary_to_gross')} /></div>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -115,7 +115,7 @@ export default function EmployerVacancies() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <span className="num text-sm text-ink">{rub(v.salary_from)} – {rub(v.salary_to)}</span>
+                <span className="text-right text-sm text-ink"><span className="num">{rub(v.salary_from)} – {rub(v.salary_to)}</span><span className="block text-xs text-ink-3">до вычета НДФЛ</span></span>
                 {v.is_open && <button className="btn-ghost btn-sm" onClick={() => {
                   setEditing(v.id); setOpen(true); setExam(null)
                   setForm({ ...EMPTY, title: v.title, description: v.description ?? '', role: v.role ?? 'backend', grade: v.grade ?? 'middle',

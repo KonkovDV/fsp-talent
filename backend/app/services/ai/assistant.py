@@ -35,6 +35,9 @@ _ROLE_WORDS = {
     "security": ("безопасност", "пентест", "security", "иб"),
     "embedded": ("embedded", "встраиваем", "микроконтроллер"),
     "mobile": ("mobile", "мобильн", "ios", "android"),
+    "qa": ("тестиров", "qa", "quality assurance"),
+    "analyst": ("аналитик", "analyst"),
+    "data": ("инженер данных", "data engineer", "дата-инжен"),
 }
 _DISC_WORDS = {
     "algorithmic": ("алгоритм", "олимпиад"),

@@ -139,6 +139,7 @@ class ItemStat(Base):
     b_offset: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     z: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    cusum: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
                                                  default=lambda: datetime.now(UTC))

@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "mermaid": "^11.17.2",
+    "pptxgenjs": "^4.0.1"
+  }
+}

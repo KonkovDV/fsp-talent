@@ -16,7 +16,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +25,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_participant
 from app.api.errors import ApiError
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.idempotency import (
+    IdempotencyConflict,
+    IdempotencyUnavailable,
+    fingerprint,
+    idem_abort,
+    idem_begin,
+    idem_finish,
+)
 from app.core.ratelimit import too_many
 from app.items.families.langs import LANGUAGE_LABELS
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
@@ -62,7 +72,9 @@ router = APIRouter(prefix="/assessment", tags=["assessment"])
 Grade = Literal["intern", "junior", "middle", "senior", "lead"]
 TOPIC_LABELS = {"python": "Python", "sql": "SQL", "algorithms": "Алгоритмы", "javascript": "JavaScript",
                 "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",
-                "embedded": "Встраиваемые системы", "concept": "Понимание"}
+                "embedded": "Встраиваемые системы", "concept": "Понимание",
+                "testing": "Тестирование", "metrics": "Метрики", "pipelines": "Конвейеры данных",
+                "requirements": "Требования"}
 
 
 class StartIn(BaseModel):
@@ -73,6 +85,7 @@ class StartIn(BaseModel):
     vacancy_id: uuid.UUID | None = Field(
         None, description="Собрать темы теста из этой вакансии. Такой тест грейд не меняет: грейд даёт только "
                           "основной тест специализации")
+    mode: Literal["grade", "express"] = "grade"
 
 
 class VacancyExamIn(BaseModel):
@@ -144,6 +157,8 @@ class ResultOut(BaseModel):
     confirmed_skills: list[SkillOut]
     topics: list[TopicOut]
     excluded_items: int
+    trial: bool = False
+    note: str | None = None
 
 
 class ProgressOut(BaseModel):
@@ -183,14 +198,17 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
         t = topics.setdefault(it.topic, [0, 0])
         t[0] += 1
         t[1] += int(bool(it.is_correct))
-    passed = session.grade_assigned is not None and \
+    trial = (session.flags or {}).get("mode") == "express"
+    passed = (not trial) and session.grade_assigned is not None and \
         GRADE_ORDER.index(session.grade_assigned) >= GRADE_ORDER.index(session.target_grade)
     flags = session.flags or {}
     outcome = reason or flags.get("outcome") or ("passed" if passed else "not_passed")
     return ResultOut(
-        outcome=outcome, passed=passed, upgraded=outcome == "upgrade",
+        outcome="trial" if trial else outcome, passed=passed, upgraded=outcome == "upgrade", trial=trial,
         vacancy_test=bool(flags.get("vacancy_id")), recommended_grade=flags.get("recommended_grade"),
-        earned_grade=session.grade_assigned, confirmed_grade=confirmed,
+        note="Пробный проход: грейд не подтверждается и в поиске не учитывается." if trial else None,
+        earned_grade=None if trial else session.grade_assigned,
+        confirmed_grade=None if trial else confirmed,
         p_pass=round(session.p_pass or 0.0, 3),
         p_upgrade=round(session.p_upgrade, 3) if session.p_upgrade is not None else None,
         theta=round(session.irt_theta or 0.0, 3), se=round(session.theta_se or 0.0, 3),
@@ -206,10 +224,16 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
 def _session_out(session: TestSession, items: list[TestSessionItem], result: ResultOut | None = None) -> SessionOut:
     current = items[-1] if items and items[-1].answered_at is None and session.status == "in_progress" else None
     answered = sum(1 for it in items if it.answered_at is not None)
+    trial = (session.flags or {}).get("mode") == "express"
     return SessionOut(
         session_id=str(session.id), status=session.status, specialization=session.specialization,
         target_grade=session.target_grade, expires_at=session.expires_at.isoformat(),
-        progress=ProgressOut(answered=answered), item=_item_out(session.id, current) if current else None,
+        progress=ProgressOut(
+            answered=answered,
+            min_items=cat.EXPRESS_ITEMS if trial else cat.MIN_ITEMS,
+            max_items=cat.EXPRESS_ITEMS if trial else cat.MAX_ITEMS,
+        ),
+        item=_item_out(session.id, current) if current else None,
         result=result,
     )
 
@@ -239,6 +263,7 @@ async def blueprint():
     """Test structure per specialization: topics, shares and item families. Nothing here helps to cheat."""
     return {
         "min_items": cat.MIN_ITEMS, "max_items": cat.MAX_ITEMS, "pass_probability": cat.PASS_P,
+        "express": settings.DEMO_MODE, "express_items": cat.EXPRESS_ITEMS,
         "code_languages": LANGUAGE_LABELS,
         "next_test_probability": cat.RECOMMEND_NEXT_P, "concept_max_share": CONCEPT_MAX_SHARE,
         "cuts": cat.CUTS,
@@ -253,7 +278,28 @@ async def blueprint():
 
 @router.post("/start", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
 async def start_test(body: StartIn, current: dict = Depends(get_current_participant),
-                     db: AsyncSession = Depends(get_db)):
+                     db: AsyncSession = Depends(get_db),
+                     idempotency_key: str | None = Header(None, alias="Idempotency-Key")):
+    scope = f"assessment-start:{current['sub']}"
+    digest = fingerprint(body.model_dump(mode="json"))
+    try:
+        stored = await idem_begin(scope, idempotency_key, digest)
+    except IdempotencyConflict as e:
+        raise ApiError(409, "conflict", e.message) from e
+    except IdempotencyUnavailable as e:
+        raise ApiError(503, "unavailable") from e
+    if stored:
+        return JSONResponse(stored["body"], status_code=stored["status"])
+    try:
+        out = await _start_test(body, current, db)
+    except Exception:
+        await idem_abort(scope, idempotency_key)
+        raise
+    await idem_finish(scope, idempotency_key, digest, 201, out.model_dump(mode="json"))
+    return out
+
+
+async def _start_test(body: StartIn, current: dict, db: AsyncSession) -> SessionOut:
     participant_id = uuid.UUID(current["sub"])
     participant = await db.get(Participant, participant_id)
     if participant is None:
@@ -270,24 +316,29 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
         topic_shares = exam["topic_shares"]
     if spec not in BLUEPRINTS:
         raise ApiError(422, "survey_required")
-    if await too_many(f"assessment_start:{participant_id}", limit=3, window_seconds=3600):
+    express = body.mode == "express"
+    if express and not settings.DEMO_MODE:
+        raise ApiError(404, "not_found", "Пробный тест включён только на демонстрационном стенде")
+    if not express and await too_many(f"assessment_start:{participant_id}", limit=3, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Не больше трёх попыток в час")
-    locked = await check_cooldown(db, participant_id, spec)
-    conf = await confirmation(db, participant_id, spec)
-    if locked and conf and GRADE_ORDER.index(body.target_grade) > GRADE_ORDER.index(conf.grade):
-        raise ApiError(429, "grade_locked", f"Повышение грейда доступно после {locked:%d.%m.%Y}",
-                       details={"locked_until": locked.isoformat()})
-    retake = await check_retake_interval(db, participant_id, body.target_grade, spec,
-                                         vacancy_test=body.vacancy_id is not None)
-    if retake:
-        raise ApiError(429, "retake_cooldown", f"Пересдача на этот грейд доступна после {retake:%d.%m.%Y}",
-                       details={"retake_at": retake.isoformat()})
+    if not express:
+        locked = await check_cooldown(db, participant_id, spec)
+        conf = await confirmation(db, participant_id, spec)
+        if locked and conf and GRADE_ORDER.index(body.target_grade) > GRADE_ORDER.index(conf.grade):
+            raise ApiError(429, "grade_locked", f"Повышение грейда доступно после {locked:%d.%m.%Y}",
+                           details={"locked_until": locked.isoformat()})
+        retake = await check_retake_interval(db, participant_id, body.target_grade, spec,
+                                             vacancy_test=body.vacancy_id is not None)
+        if retake:
+            raise ApiError(429, "retake_cooldown", f"Пересдача на этот грейд доступна после {retake:%d.%m.%Y}",
+                           details={"retake_at": retake.isoformat()})
     existing = await get_active_session(db, participant_id)
     if existing and existing.expires_at > datetime.now(UTC):
         raise ApiError(409, "conflict", "Уже есть незавершённый тест", details={"session_id": str(existing.id)})
     try:
         session, item = await start_session(
-            db, participant_id, spec, body.target_grade, body.code_language, topic_shares, body.vacancy_id)
+            db, participant_id, spec, body.target_grade, body.code_language, topic_shares, body.vacancy_id,
+            mode="express" if express else "grade")
         await db.commit()
     except QuestionBankError as e:
         raise ApiError(503, "question_bank_empty") from e
@@ -404,7 +455,31 @@ async def get_session(session_id: uuid.UUID, current: dict = Depends(get_current
 
 @router.post("/{session_id}/answer", response_model=SessionOut)
 async def answer(session_id: uuid.UUID, body: AnswerIn, current: dict = Depends(get_current_participant),
-                 db: AsyncSession = Depends(get_db)):
+                 db: AsyncSession = Depends(get_db),
+                 idempotency_key: str | None = Header(None, alias="Idempotency-Key")):
+    scope = f"assessment-answer:{current['sub']}"
+    digest = fingerprint({"session_id": str(session_id), **body.model_dump(mode="json")})
+    try:
+        stored = await idem_begin(scope, idempotency_key, digest)
+    except IdempotencyConflict as e:
+        raise ApiError(409, "conflict", e.message) from e
+    except IdempotencyUnavailable as e:
+        raise ApiError(503, "unavailable") from e
+    if stored:
+        return JSONResponse(stored["body"], status_code=stored["status"])
+    try:
+        out = await _answer(session_id, body, current, db)
+    except Exception:
+        await idem_abort(scope, idempotency_key)
+        raise
+    try:
+        await idem_finish(scope, idempotency_key, digest, 200, out.model_dump(mode="json"))
+    except IdempotencyUnavailable as e:
+        raise ApiError(503, "unavailable") from e
+    return out
+
+
+async def _answer(session_id: uuid.UUID, body: AnswerIn, current: dict, db: AsyncSession) -> SessionOut:
     try:
         session, nxt, fin = await answer_item(db, session_id, uuid.UUID(current["sub"]), body.item_token,
                                               body.answer_index, body.answer_text)

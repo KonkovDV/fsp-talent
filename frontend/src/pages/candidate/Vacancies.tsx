@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, answerPractice, applyToVacancy, myApplications, startPractice, vacanciesForMe } from '../../api/client'
 import { CategoryPlate, Empty, PageHeader, Skeleton, rub } from '../../components/ui'
@@ -148,8 +148,7 @@ export default function CandidateVacancies() {
                 className={card.applied ? 'btn-secondary btn-sm' : 'btn-primary btn-sm'}>
                 {card.applied ? 'Отклик отправлен' : card.can_apply ? 'Откликнуться' : 'Нужно согласие представителя'}
               </button>
-              <Link to={`/candidate/assessment?vacancy=${card.id}`} className="btn-secondary btn-sm">Тест по этой вакансии</Link>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => practice.mutate({ vacancy_id: card.id })}>Короткая практика, 1 задание</button>
+              <button type="button" className="btn-secondary btn-sm" onClick={() => practice.mutate({ vacancy_id: card.id })}>Проверочное задание</button>
             </div>
           </li>
         ))}

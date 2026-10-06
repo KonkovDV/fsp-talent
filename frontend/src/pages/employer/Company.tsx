@@ -49,7 +49,7 @@ export default function EmployerCompany() {
             placeholder="10 или 12 цифр" /></div>
         <div><label className="field-label" htmlFor="co-web">Сайт</label>
           <input id="co-web" className="input" value={form.website} onChange={set('website')} maxLength={200} /></div>
-        <div><label className="field-label" htmlFor="co-ind">Отрасль</label>
+        <div><label className="field-label" htmlFor="co-ind">Сфера</label>
           <input id="co-ind" className="input" value={form.industry} onChange={set('industry')} maxLength={200} /></div>
         <div><label className="field-label" htmlFor="co-desc">О компании</label>
           <textarea id="co-desc" className="input min-h-28" value={form.description} onChange={set('description')} maxLength={4000} /></div>

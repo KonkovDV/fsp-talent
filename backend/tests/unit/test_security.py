@@ -71,6 +71,62 @@ def test_birth_date_not_the_stored_flag_decides_adulthood():
     assert not born_adult(None, is_minor=True, today=date(2026, 10, 4))
 
 
+def test_password_reset_epoch_rejects_the_old_token():
+    from app.core.security import epochs_match
+    assert epochs_match(0, 0)
+    assert epochs_match(None, 0)
+    assert not epochs_match(0, 1)
+
+
+def test_refresh_stops_when_the_account_is_gone():
+    from types import SimpleNamespace
+
+    from app.api.v1.auth import account_can_refresh
+
+    live = SimpleNamespace(deleted_at=None)
+    gone = SimpleNamespace(deleted_at=date(2026, 10, 1))
+    assert account_can_refresh(live)
+    assert not account_can_refresh(gone)
+    assert not account_can_refresh(None)
+
+
+async def test_erasure_invalidates_tokens_and_hides_the_card():
+    import uuid
+
+    from app.services.privacy import erase_participant
+
+    class Db:
+        def add(self, _obj):
+            return None
+
+        async def execute(self, *_args, **_kwargs):
+            return None
+
+        async def flush(self):
+            return None
+
+    person = Participant(id=uuid.uuid4(), token_epoch=2, display_name="Анна", email="a@example.test",
+                         is_visible=True)
+    await erase_participant(Db(), person, "account_deleted")
+    assert person.token_epoch == 3
+    assert person.deleted_at is not None
+    assert person.display_name is None and person.email is None
+    assert person.discoverable is False
+
+
+def test_offer_terms_stay_immutable_and_one_pending_pair_is_unique():
+    from pathlib import Path
+
+    from app.api.v1.offers import router
+
+    methods: set[str] = set()
+    for route in router.routes:
+        methods |= set(getattr(route, "methods", ()))
+    assert "PUT" not in methods and "PATCH" not in methods
+    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0002_integrity.py"
+    assert "uq_offers_pending_pair" in migration.read_text(encoding="utf-8")
+
+
 def test_settings_secret_is_the_signing_key():
     token = create_access_token("person-1", "participant")
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

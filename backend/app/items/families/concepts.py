@@ -10,7 +10,7 @@ import random
 from app.items import Family, Item
 from app.items.families.concept_pools import has_bank, pick_bank, pick_http
 
-ALL_SPECS = frozenset({"backend", "frontend", "fullstack", "ml", "devops", "security", "embedded", "mobile"})
+ALL_SPECS = frozenset({"backend", "frontend", "fullstack", "ml", "devops", "security", "embedded", "mobile", "data"})
 
 
 def bank_generate(rng: random.Random, level: int, spec: str, avoid: set[str] | None = None,

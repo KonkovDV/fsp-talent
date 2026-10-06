@@ -39,6 +39,11 @@ from app.services.vacancy_exam import TOPIC_LABELS
 logger = logging.getLogger(__name__)
 
 
+def order_pool(ids: list, scores: dict, fused: dict, best: dict) -> list:
+    """Rank the whole pool, then the caller slices a page. A later page cannot reorder an earlier one."""
+    return sorted(ids, key=lambda i: (-scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
+
+
 def days_ago(moment: datetime, now: datetime | None = None) -> str:
     """How fresh a signal is, in words an HR reads at a glance."""
     days = ((now or datetime.now(UTC)) - moment).days
@@ -205,11 +210,13 @@ async def search_candidates(
     # TZ: inside a category, better test results rank higher. theta is on one IRT scale for every
     # session, so the best completed result is comparable across candidates. Only the primary test of the
     # specialization counts: a test built from a vacancy is practice and does not move the candidate.
+    # A jury trial stores an ability estimate for the candidate's own screen and must not move the ranking.
+    not_trial = or_(TestSession.flags["mode"].astext.is_(None), TestSession.flags["mode"].astext != "express")
     test_theta: dict[uuid.UUID, float] = {
         pid: theta for pid, theta in await db.execute(
             select(TestSession.participant_id, func.max(TestSession.irt_theta))
             .where(TestSession.participant_id.in_(list(ids_set)), TestSession.status == "completed",
-                   TestSession.irt_theta.is_not(None), ~TestSession.flags.has_key("vacancy_id"))
+                   TestSession.irt_theta.is_not(None), not_trial, ~TestSession.flags.has_key("vacancy_id"))
             .group_by(TestSession.participant_id))
     }
     if test_theta:
@@ -231,7 +238,7 @@ async def search_candidates(
     need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
     matches = await score_pool(db, all_ids, need, fused, discipline)
     # One explainable score orders the list; ties fall back to the fused retrieval rank.
-    ordered = sorted(all_ids, key=lambda i: (-matches[i].score, -fused[i], -best[i], str(i)))
+    ordered = order_pool(all_ids, {i: matches[i].score for i in all_ids}, fused, best)
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)])
     ordered = ordered[:limit]
@@ -239,6 +246,7 @@ async def search_candidates(
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
         card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
+                         "reasons": [{"code": r.code, "text": r.text, "tone": r.tone} for r in m.reasons],
                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
                                      for f in m.factors]}
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
@@ -255,6 +263,7 @@ class PoolMatch:
     info: list
     facts: CandidateFacts | None
     basis: str = "fit"
+    reasons: list | None = None
 
 
 async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
@@ -298,7 +307,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             text_rank=fused.get(pid, 0.0) / top,
         )
         m = match_score(need, facts)
-        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis)
+        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons)
     return out
 
 

@@ -31,16 +31,21 @@ def create_token(data: dict, expire_minutes: int) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(subject: str, role: str) -> str:
+def epochs_match(token_epoch: int | None, account_epoch: int | None) -> bool:
+    """A token from before a password reset must not open a new session."""
+    return int(token_epoch or 0) == int(account_epoch or 0)
+
+
+def create_access_token(subject: str, role: str, epoch: int = 0) -> str:
     return create_token(
-        {"sub": subject, "role": role, "type": "access"},
+        {"sub": subject, "role": role, "type": "access", "ep": int(epoch)},
         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
 
 
-def create_refresh_token(subject: str, role: str) -> str:
+def create_refresh_token(subject: str, role: str, epoch: int = 0) -> str:
     return create_token(
-        {"sub": subject, "role": role, "type": "refresh"},
+        {"sub": subject, "role": role, "type": "refresh", "ep": int(epoch)},
         settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60,
     )
 

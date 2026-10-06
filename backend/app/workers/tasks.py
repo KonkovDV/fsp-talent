@@ -114,6 +114,25 @@ def offer_weekly_tasks():
     run_async(_inner())
 
 
+@celery_app.task(name="app.workers.tasks.sync_fsp_changes")
+def sync_fsp_changes():
+    """Re-read FSP protocols that appeared after the last cursor. Linked accounts only."""
+    async def _inner():
+        from app.core.database import AsyncSessionLocal
+        from app.core.redis_client import get_redis
+        from app.services.fsp.mock import get_fsp_adapter
+        from app.services.fsp.sync import pull_registry_changes
+        async with AsyncSessionLocal() as db:
+            from app.services.fsp.sync import remember_cursor
+            redis = await get_redis()
+            updated, nxt = await pull_registry_changes(db, redis, get_fsp_adapter())
+            await db.commit()
+            await remember_cursor(redis, nxt)
+            if updated:
+                logger.info("sync_fsp_changes: updated %d profiles", updated)
+    run_async(_inner())
+
+
 @celery_app.task(name="app.workers.tasks.purge_withdrawn")
 def purge_withdrawn():
     """Erase candidates 30 days after they withdrew the processing consent (152-FZ, art. 21, part 5)."""

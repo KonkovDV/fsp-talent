@@ -27,7 +27,7 @@ interface Result {
   outcome: string; passed: boolean; upgraded: boolean; earned_grade: string | null; confirmed_grade: string | null
   vacancy_test: boolean; recommended_grade: string | null
   p_pass: number; p_upgrade: number | null; theta: number; se: number; items_count: number; score: number
-  stop_reason: string | null; grade_locked_until: string | null
+  stop_reason: string | null; grade_locked_until: string | null; trial?: boolean; note?: string | null
   confirmed_skills: { name: string; share: number }[]
   topics: { topic: string; label: string; answered: number; correct: number }[]
   excluded_items: number
@@ -46,6 +46,7 @@ interface HistoryItem {
 const OUTCOME_TEXT: Record<string, string> = {
   first_confirmation: 'Грейд подтверждён. Работодатели видят его с отметкой «подтверждён тестом».',
   upgrade: 'Грейд повышен. Следующее повышение в этой специализации — через 90 дней.',
+  trial: 'Пробный проход: грейд не подтверждается и в поиске не учитывается.',
   confirmed_again: 'Результат совпал с уже подтверждённым грейдом. Профиль не изменился.',
   kept_higher_grade: 'У вас уже подтверждён более высокий грейд. Тест его не понижает.',
   not_passed: 'Заявленный уровень не подтверждён. Профиль не изменился. Тест на уровень ниже можно пройти сразу, ждать не нужно.',
@@ -90,11 +91,9 @@ export default function CandidateAssessment() {
   useEffect(() => {
     if (!profile || levelTouched.current) return
     const order = [...GRADES]
-    const base = profile.declared_grade ?? profile.grade ?? (profile.work_goal === 'internship' ? 'intern' : 'junior')
-    const next = profile.grade_source === 'assessed'
-      ? order[Math.min(Math.max(order.indexOf(profile.grade), 0) + 1, order.length - 1)]
-      : base
-    setTarget(order.includes(next) ? next : 'junior')
+    const base = (profile.grade_source === 'assessed' ? profile.grade : null)
+      ?? profile.declared_grade ?? profile.grade ?? (profile.work_goal === 'internship' ? 'intern' : 'junior')
+    setTarget(order.includes(base) ? base : 'junior')
   }, [profile])
 
   const spec: string | null = profile?.specialization ?? null
@@ -108,7 +107,8 @@ export default function CandidateAssessment() {
     for (const key of ['myProfile', 'assessmentHistory', 'assessmentActive']) qc.invalidateQueries({ queryKey: [key] })
   }
   const start = useMutation({
-    mutationFn: () => startAssessment({ target_grade: target, code_language: lang, vacancy_id: vacancyId }).then(r => r.data),
+    mutationFn: (mode: 'grade' | 'express' = 'grade') =>
+      startAssessment({ target_grade: target, code_language: lang, mode, vacancy_id: mode === 'grade' ? vacancyId : null }).then(r => r.data),
     onSuccess: (data: SessionState) => { setState(data); setPicked(null); setTyped(''); setError(''); setShowReview(false) },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось начать тест')),
   })
@@ -159,7 +159,7 @@ export default function CandidateAssessment() {
                   </button>
                 ))}
               </div>
-              <p className="field-hint">Тест подтверждает только выбранный уровень. Если результат уверенно выше, предложим отдельный тест на следующий.</p>
+              <p className="field-hint">Тест подтверждает только выбранный уровень. Если результат уверенно выше, предложим отдельный тест на следующий. После подтверждения следующий уровень ждёт 90 дней, уровень ниже доступен сразу.</p>
             </fieldset>
             <fieldset>
               <legend className="field-label">Язык в заданиях на чтение кода</legend>
@@ -172,9 +172,17 @@ export default function CandidateAssessment() {
               <p className="field-hint">Задания на подсчёт операций будут на выбранном языке; остальные зависят от темы (SQL, JavaScript, сети).</p>
             </fieldset>
             {vacancyId && <p className="text-sm text-ink-2">Темы этого теста собраны из выбранной вакансии, а не из общего плана специализации. Тест по вакансии грейд не меняет: покажет результат по темам и подтвердит навыки, а грейд даёт только основной тест.</p>}
-            <button onClick={() => start.mutate()} disabled={!target || start.isPending} className="btn-primary px-6 py-3">
-              <ClipboardCheck size={16} aria-hidden />{start.isPending ? 'Готовим задания…' : 'Начать тест'}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => start.mutate('grade')} disabled={!target || start.isPending} className="btn-primary px-6 py-3">
+                <ClipboardCheck size={16} aria-hidden />{start.isPending ? 'Готовим задания…' : 'Начать тест'}
+              </button>
+              {blueprint?.express && !vacancyId && (
+                <button onClick={() => start.mutate('express')} disabled={!target || start.isPending} className="btn-secondary px-6 py-3">
+                  Пробный тест, {blueprint.express_items ?? 6} заданий
+                </button>
+              )}
+            </div>
+            {blueprint?.express && !vacancyId && <p className="field-hint">Пробный проход для знакомства: грейд не подтверждается и в поиске не учитывается.</p>}
           </div>
           <aside className="card space-y-4">
             <h2 className="section-title">Из чего состоит тест</h2>
@@ -250,6 +258,7 @@ export default function CandidateAssessment() {
 
       {result && state && (
         <div className="card mx-auto max-w-3xl space-y-5" data-testid="assessment-result">
+          {result.trial && <p className="notice" role="status">{result.note || 'Пробный проход: грейд не подтверждается и в поиске не учитывается.'}</p>}
           <div className={result.passed ? 'hero-ink -m-5 mb-0 p-6 sm:-m-6 sm:mb-0 sm:p-8' : 'flex items-start gap-3'}>
             {result.passed ? (
               <>

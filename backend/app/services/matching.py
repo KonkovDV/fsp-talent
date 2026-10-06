@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.services.survey import SPECIALIZATIONS
+
 GRADES = ("intern", "junior", "middle", "senior", "lead")
 
 # Fit to the need (skills, grade, role) decides who belongs in the list. Inside one hundredth of
@@ -32,7 +34,7 @@ WEIGHTS = {
 UNTESTED = 0.20
 LABELS = {
     "skills": "Навыки", "grade": "Грейд", "test": "Тест", "role": "Специализация",
-    "fsp": "ФСП", "text": "Запрос", "industry": "Отрасль",
+    "fsp": "ФСП", "text": "Запрос", "industry": "Сфера",
 }
 TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
 RELATED_CREDIT = 0.3
@@ -49,12 +51,17 @@ RELATED = [
     {"Docker", "Kubernetes"},
     {"Kafka", "RabbitMQ"},
     {"Pentesting", "Web Security", "CTF"},
+    {"pytest", "Playwright", "Selenium"},
+    {"Airflow", "Spark"},
     {"Swift", "Flutter", "Android", "Kotlin"},
 ]
 ROLE_NEIGHBOURS = {
-    "fullstack": {"backend", "frontend"}, "backend": {"fullstack", "devops"}, "frontend": {"fullstack", "mobile"},
-    "mobile": {"frontend"}, "devops": {"backend", "security"}, "security": {"devops"},
-    "ml": {"backend"}, "embedded": set(),
+    "fullstack": {"backend", "frontend", "qa"}, "backend": {"fullstack", "devops", "qa", "analyst", "data"},
+    "frontend": {"fullstack", "mobile"},
+    "mobile": {"frontend"}, "devops": {"backend", "security", "data"}, "security": {"devops"},
+    "ml": {"backend", "analyst", "data"}, "embedded": set(),
+    "qa": {"backend", "fullstack"}, "analyst": {"backend", "ml", "data"},
+    "data": {"backend", "ml", "devops"},
 }
 FSP_FULL_LCB = 0.6     # LCB at which the FSP factor saturates
 
@@ -90,6 +97,14 @@ class Factor:
     value: float | None                   # None: not applicable
 
 
+@dataclass(frozen=True)
+class Reason:
+    """One line of the explanation. `code` is stable; the Russian `text` is what the card shows."""
+    code: str
+    text: str
+    tone: str   # plus | minus | info
+
+
 @dataclass
 class MatchResult:
     score: float
@@ -100,6 +115,12 @@ class MatchResult:
     # "fit": the need names criteria and the score measures them. "evidence": no criteria at all,
     # so the score is the strength of the confirmed profile (test, FSP) and the UI says so.
     basis: str = "fit"
+    reasons: list[Reason] = field(default_factory=list)
+
+
+def _note(bucket: list[str], reasons: list[Reason], tone: str, code: str, text: str) -> None:
+    bucket.append(text)
+    reasons.append(Reason(code, text, tone))
 
 
 def _related(skill: str, have: dict[str, str]) -> str | None:
@@ -128,6 +149,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     plus: list[str] = []
     minus: list[str] = []
     info: list[str] = []
+    reasons: list[Reason] = []
 
     wanted = [(s, 1.0) for s in need.skills] + [(s, 0.5) for s in need.nice if s not in need.skills]
     if wanted:
@@ -150,13 +172,15 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         values["skills"] = got / total
         have_n = sum(1 for s, w in wanted if w == 1.0 and s in c.skills)
         if need.skills:
-            plus.append(f"Навыки: {have_n} из {len(need.skills)} обязательных")
+            _note(plus, reasons, "plus", "SKILL_COVERAGE",
+                  f"Навыки: {have_n} из {len(need.skills)} обязательных")
         if confirmed:
-            plus.append("Подтверждены тестом: " + ", ".join(confirmed))
+            _note(plus, reasons, "plus", "VERIFIED_SKILL", "Подтверждены тестом: " + ", ".join(confirmed))
         if related:
-            info.append("Близкие технологии (частичный зачёт): " + ", ".join(related))
+            _note(info, reasons, "info", "RELATED_SKILL",
+                  "Близкие технологии (частичный зачёт): " + ", ".join(related))
         if missing:
-            minus.append("Нет навыков: " + ", ".join(missing))
+            _note(minus, reasons, "minus", "SKILL_GAP", "Нет навыков: " + ", ".join(missing))
 
     if need.grade in GRADES and c.grade in GRADES:
         gap = GRADES.index(c.grade) - GRADES.index(need.grade)
@@ -165,38 +189,47 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         values["grade"] = base * (1.0 if assessed or not use_test else 0.85)
         if gap == 0:
             tail = " подтверждён тестом" if assessed else " указан кандидатом, тестом не подтверждён"
-            (plus if assessed else info).append(f"Грейд {c.grade}{tail}")
+            text = f"Грейд {c.grade}{tail}"
+            if assessed:
+                _note(plus, reasons, "plus", "CATEGORY_MATCH", text)
+            else:
+                _note(info, reasons, "info", "GRADE_DECLARED", text)
         elif gap > 0:
-            info.append(f"Грейд выше запрошенного: {c.grade}")
+            _note(info, reasons, "info", "GRADE_ABOVE", f"Грейд выше запрошенного: {c.grade}")
         else:
-            minus.append(f"Грейд ниже запрошенного: {c.grade}")
+            _note(minus, reasons, "minus", "GRADE_BELOW", f"Грейд ниже запрошенного: {c.grade}")
 
     if use_test:
         if c.test_p is not None and (need.role is None or c.test_spec in (None, need.role)):
             values["test"] = c.test_p
-            plus.append(f"Тест: вероятность уровня {round(c.test_p * 100)}%")
+            _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
         else:
             values["test"] = UNTESTED
             if not any("тестом не подтверждён" in line for line in info):
-                info.append("Грейд не проверен тестом")
+                _note(info, reasons, "info", "UNTESTED", "Грейд не проверен тестом")
 
     if need.role:
         if c.role == need.role:
             values["role"] = 1.0
+            _note(plus, reasons, "plus", "CATEGORY_MATCH",
+                  f"Специализация совпадает: {SPECIALIZATIONS.get(c.role, c.role)}")
         elif c.role in ROLE_NEIGHBOURS.get(need.role, set()):
             values["role"] = 0.5
-            info.append(f"Смежная специализация: {c.role}")
+            _note(info, reasons, "info", "RELATED_ROLE",
+                  f"Смежная специализация: {SPECIALIZATIONS.get(c.role, c.role)}")
         else:
             values["role"] = 0.0
-            minus.append(f"Другая специализация: {c.role or 'не указана'}")
+            label = SPECIALIZATIONS.get(c.role, c.role) if c.role else "не указана"
+            _note(minus, reasons, "minus", "OTHER_ROLE", f"Другая специализация: {label}")
 
     if use_fsp:
         if c.fsp_lcb is None:
-            info.append("Нет истории ФСП — ось не учитывается и не штрафует")
+            _note(info, reasons, "info", "FSP_NEUTRAL", "Нет истории ФСП — ось не учитывается и не штрафует")
         else:
             values["fsp"] = min(1.0, max(0.0, c.fsp_lcb / FSP_FULL_LCB))
             if values["fsp"] >= 0.5:
-                plus.append(f"Подтверждённый уровень ФСП (нижняя граница {c.fsp_lcb:.2f})")
+                _note(plus, reasons, "plus", "FSP_BONUS",
+                      f"Подтверждённый уровень ФСП (нижняя граница {c.fsp_lcb:.2f})")
 
     if need.text:
         values["text"] = max(0.0, min(1.0, c.text_rank))
@@ -204,17 +237,17 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     if need.industry and need.industry != "any":
         values["industry"] = 1.0 if c.industry in (need.industry, "any") else 0.0
         if values["industry"] == 1.0 and c.industry == need.industry:
-            plus.append("Интересна ваша отрасль")
+            _note(plus, reasons, "plus", "INDUSTRY", "Интересна ваша сфера")
 
     factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
     fit = _mean([f for f in factors if f.key in FIT_KEYS])
     evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
     if fit is None:
         # Nothing to match against (an empty search): rank by how well the profile is confirmed.
-        return MatchResult(round(evidence or 0.0, 4), factors, plus, minus, info, basis="evidence")
+        return MatchResult(round(evidence or 0.0, 4), factors, plus, minus, info, "evidence", reasons)
     # Evidence moves the score by less than 0.01, so it reorders only candidates the need fits equally.
     total = fit + (0.009 * evidence if evidence is not None else 0.0)
-    return MatchResult(round(total, 4), factors, plus, minus, info)
+    return MatchResult(round(total, 4), factors, plus, minus, info, "fit", reasons)
 
 
 def _mean(factors: list[Factor]) -> float | None:
@@ -254,6 +287,7 @@ def anonymous_compare(cards: list[dict], ids: list[str]) -> list[dict]:
             "factors": match.get("factors") or [],
             "plus": match.get("plus") or [],
             "minus": match.get("minus") or [],
+            "reasons": match.get("reasons") or [],
         })
     return rows
 

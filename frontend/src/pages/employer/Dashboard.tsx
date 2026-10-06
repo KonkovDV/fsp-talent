@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getMyEmployerOffers, listNeeds, vacancyApplications } from '../../api/client'
+import { apiError, getMyEmployerOffers, listNeeds, vacancyApplications } from '../../api/client'
 import { PageHeader, plural } from '../../components/ui'
 
 interface Need { id: string; title: string; version: number; shortlist_count: number }
@@ -8,9 +8,13 @@ interface OfferRow { status: string; candidate_viewed_at: string | null; contact
 
 /** Employer home: three numbers that matter and the next step for each. */
 export default function EmployerDashboard() {
-  const { data: offers = [] } = useQuery<OfferRow[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
-  const { data: needs = [] } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
-  const { data: apps = [] } = useQuery({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
+  const offersQ = useQuery<OfferRow[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
+  const needsQ = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
+  const appsQ = useQuery({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
+  const offers = offersQ.data ?? []
+  const needs = needsQ.data ?? []
+  const apps = appsQ.data ?? []
+  const loadError = offersQ.error ?? needsQ.error ?? appsQ.error
   const accepted = offers.filter(o => o.status === 'accepted').length
   const pending = offers.filter(o => o.status === 'pending').length
   const funnel = [
@@ -29,6 +33,7 @@ export default function EmployerDashboard() {
     <div>
       <PageHeader title="Кабинет работодателя" lead="Начните с потребности: опишите роль и навыки — подборка с объяснением появится сразу."
         actions={<><Link to="/employer/search" className="btn-secondary">Свободный поиск</Link><Link to="/employer/needs" className="btn-primary">Новая потребность</Link></>} />
+      {loadError && <p className="notice-error mb-4" role="alert">{apiError(loadError, 'Не удалось загрузить кабинет')}</p>}
       <section className="hero-ink mb-6 p-6 sm:p-8" aria-label="Воронка приглашений">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

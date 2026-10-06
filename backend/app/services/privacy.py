@@ -50,6 +50,7 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
         setattr(participant, field, None)
     participant.is_visible = False
     participant.public_profile = False
+    participant.token_epoch = (participant.token_epoch or 0) + 1
     pid = participant.id
     await db.execute(delete(Skill).where(Skill.participant_id == pid))
     await db.execute(delete(ProfileEmbedding).where(ProfileEmbedding.participant_id == pid))

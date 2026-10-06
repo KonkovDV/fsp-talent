@@ -19,6 +19,13 @@ class Participant(Base):
     # so it is always a confirmed address.
     email = Column(String(200), unique=True)
     password_hash = Column(String(200))
+    # Bumped on password reset. Tokens carry the same number and die when it moves.
+    token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
+    # Bumped on every profile save. A stale form sends the number it loaded and gets a conflict.
+    profile_version = Column(Integer, nullable=False, default=0, server_default="0")
+    # What the candidate hopes to earn, gross, before tax. Optional. Used only as a hint to employers.
+    salary_from_gross = Column(Integer)
+    salary_to_gross = Column(Integer)
     email_verified_at = Column(DateTime(timezone=True))
     telegram = Column(String(64))
     phone = Column(String(20))

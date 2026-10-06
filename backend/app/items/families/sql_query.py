@@ -105,5 +105,5 @@ def generate(rng: random.Random, level: int, spec: str) -> Item:
 
 FAMILY = Family(
     id="sql_query", title="SQL: результат запроса", topic="sql", kind="code",
-    specs=frozenset({"backend", "fullstack", "ml"}), skills=("SQL",), generate=generate, a=1.4,
+    specs=frozenset({"backend", "fullstack", "ml", "qa", "analyst", "data"}), skills=("SQL",), generate=generate, a=1.4,
 )

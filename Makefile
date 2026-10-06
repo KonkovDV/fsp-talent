@@ -47,7 +47,7 @@ lint:
 
 validate:
 	docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check
-	docker compose exec -T backend python -m app.validation.matching
+	docker compose exec -T backend python -m app.validation.matching --check
 
 check:
 	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py

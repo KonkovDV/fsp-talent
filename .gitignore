@@ -27,3 +27,5 @@ redis_data/
 deploy/backups/
 dump.rdb
 docs/tools/node_modules/
+frontend/test-results/
+frontend/playwright-report/

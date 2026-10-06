@@ -125,3 +125,15 @@ def test_rules_version_is_present():
     result = assign_category([], [])
     assert result["rules_version"] == RULES_VERSION
     assert result["rules_version"].startswith("v")
+
+
+def test_survey_specialization_of_a_tester_is_kept():
+    result = assign_category(["Python", "PostgreSQL"], [], specialization="qa")
+    assert result["primary_role"] == "qa"
+    assert any("Тестирование" in line for line in result["explanation"])
+
+
+def test_survey_specialization_of_a_data_engineer_is_kept():
+    result = assign_category(["Python", "SQL"], [], specialization="data")
+    assert result["primary_role"] == "data"
+    assert any("Инженерия данных" in line for line in result["explanation"])

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { apiError, createOffer } from '../api/client'
+import { apiError, createOffer, previewOffer } from '../api/client'
 import Modal from './Modal'
 
 /** The invitation: role, salary range in roubles (mandatory, TZ 2.2), format and how to reach the employer. */
@@ -13,9 +13,11 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '',
   })
   const [error, setError] = useState('')
+  const [hint, setHint] = useState('')
+  const [idem] = useState(() => crypto.randomUUID())
 
   const send = useMutation({
-    mutationFn: () => createOffer({ ...form, candidate_id: candidateId }),
+    mutationFn: () => createOffer({ ...form, candidate_id: candidateId }, idem),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employerOffers'] }); onSent?.(); onClose() },
     onError: e => setError(apiError(e, 'Приглашение не отправлено')),
   })
@@ -29,6 +31,9 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   }
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: k.startsWith('salary') ? Number(e.target.value) : e.target.value })
+  const look = () => {
+    previewOffer(candidateId, form.salary_to_gross).then(r => setHint(r.data.salary_hint || '')).catch(() => setHint(''))
+  }
 
   return (
     <Modal titleId="invite-title" onClose={onClose} sheet>
@@ -47,8 +52,9 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
             <legend className="field-label">Зарплата до вычета НДФЛ, ₽ в месяц</legend>
             <div className="grid grid-cols-2 gap-3">
               <input type="number" min={0} step={5000} value={form.salary_from_gross} onChange={set('salary_from_gross')} className="input num" aria-label="От" />
-              <input type="number" min={0} step={5000} value={form.salary_to_gross} onChange={set('salary_to_gross')} className="input num" aria-label="До" />
+              <input type="number" min={0} step={5000} value={form.salary_to_gross} onChange={set('salary_to_gross')} onBlur={look} className="input num" aria-label="До" />
             </div>
+            {hint && <p className="mt-2 text-sm text-ink-2" role="status">{hint} Отправить приглашение всё равно можно.</p>}
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><label className="field-label" htmlFor="inv-format">Формат</label>

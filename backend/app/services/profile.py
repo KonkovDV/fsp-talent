@@ -62,7 +62,7 @@ async def ingest_from_fsp(
             competition_status=r.competition_status, place=r.place, total_participants=r.total_participants,
             regions_count=r.regions_count, is_team=r.is_team, team_size=r.team_size, role=r.role,
             event_date=r.event_date, protocol_url=r.protocol_url, trust_level=r.trust_level,
-            raw_data={"source": settings.FSP_MODE},
+            raw_data={"source": settings.FSP_MODE, "ekp_number": r.ekp_number},
         )
         db.add(res)
         await db.flush()
@@ -86,6 +86,26 @@ async def ingest_from_fsp(
             proof_value=credential["proof"]["proofValue"],
         ))
     return p
+
+
+def unseen_results(known_event_ids: set[str], data: FSPParticipant) -> list:
+    """Protocol lines the profile does not have yet. A repeat of the same event is not a second result."""
+    return [row for row in data.results if row.event_id not in known_event_ids]
+
+
+async def append_new_results(db: AsyncSession, participant: Participant, data: FSPParticipant) -> int:
+    """Add protocol lines that are not stored yet and return how many were added."""
+    known = set(await db.scalars(select(Result.event_id).where(Result.participant_id == participant.id)))
+    fresh = unseen_results(known, data)
+    if not fresh:
+        return 0
+    original = data.results
+    data.results = fresh
+    try:
+        await ingest_from_fsp(db, data, participant)
+    finally:
+        data.results = original
+    return len(fresh)
 
 
 async def rebuild_profile(db: AsyncSession, p: Participant) -> None:

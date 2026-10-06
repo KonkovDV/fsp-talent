@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { Search as SearchIcon, Sparkles } from 'lucide-react'
-import { parseQuery, searchCandidates } from '../../api/client'
+import { apiError, parseQuery, searchCandidates } from '../../api/client'
 import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
 
-const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile']
+const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile', 'qa', 'analyst', 'data']
 const DISCS = ['algorithmic', 'product', 'security', 'bas', 'robotics', 'ai']
 const RANKS = ['МС', 'КМС', 'I', 'II', 'III']
 const EXAMPLES = ['senior backend Python Kafka', 'middle фронтенд React TypeScript', 'специалист по ИБ с КМС']
@@ -38,7 +38,7 @@ export default function EmployerSearch() {
   }
   // Filters edit a draft; the list on screen changes only on «Найти» and stays visible while the new one loads.
   const [submitted, setSubmitted] = useState<Params>({})
-  const { data, isFetching, isLoading } = useQuery({
+  const { data, isFetching, isLoading, isError, error } = useQuery({
     queryKey: ['search', submitted],
     queryFn: () => searchCandidates(submitted).then(r => r.data),
     placeholderData: keepPreviousData,
@@ -117,6 +117,8 @@ export default function EmployerSearch() {
 
         <section aria-live="polite" aria-busy={isFetching} className="min-w-0">
           {sent && <p className="notice-ok mb-4" role="status">Приглашение отправлено. Ответ кандидата появится в разделе «Приглашения».</p>}
+          {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось выполнить поиск')}</p>}
+          {parsed.isError && <p className="notice-error mb-4" role="alert">{apiError(parsed.error, 'Не удалось разобрать запрос')}</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
               <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{draftChanged && ' — фильтры изменены, список ещё прежний'}</p>
@@ -133,7 +135,7 @@ export default function EmployerSearch() {
             </div>
           )}
           {isLoading && <div className="space-y-4"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>}
-          {data && cards.length === 0 && <Empty title="Никого не нашли">Ослабьте фильтры: например, уберите разряд или грейд. Кандидаты без истории ФСП тоже есть в базе.</Empty>}
+          {data && !isError && cards.length === 0 && <Empty title="Никого не нашли">Ослабьте фильтры: например, уберите разряд или грейд. Кандидаты без истории ФСП тоже есть в базе.</Empty>}
           <div className={`space-y-4 transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
             {cards.map((card, i) => <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setInviteFor} onTask={setTaskFor} />)}
           </div>

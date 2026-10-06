@@ -5,6 +5,7 @@ candidate can also sign in with it (OIDC code flow + PKCE, /auth/fsp/*): an exis
 tokens; a new person gets an account built from the FSP registry only after accepting the required consents.
 An account linked to FSP ID in the profile (/candidates/me/fsp/*) signs in the same way.
 """
+import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -24,6 +25,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
+    epochs_match,
     hash_password,
     verify_password,
 )
@@ -63,10 +65,10 @@ class VerificationSent(BaseModel):
     resend_after_seconds: int = 60
 
 
-def _tokens(subject: str, role: str) -> TokenOut:
+def _tokens(subject: str, role: str, epoch: int = 0) -> TokenOut:
     return TokenOut(
-        access_token=create_access_token(subject, role),
-        refresh_token=create_refresh_token(subject, role),
+        access_token=create_access_token(subject, role, epoch),
+        refresh_token=create_refresh_token(subject, role, epoch),
         role=role,
     )
 
@@ -208,7 +210,7 @@ async def verify_email(body: VerifyIn, db: AsyncSession = Depends(get_db)):
             # Only confirmed accounts enter the employer search index.
             await rebuild_profile(db, account)
     await db.commit()
-    return _tokens(str(account.id), row.subject_type)
+    return _tokens(str(account.id), row.subject_type, int(account.token_epoch or 0))
 
 
 class ResendIn(BaseModel):
@@ -240,7 +242,7 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         raise ApiError(401, "invalid_credentials")
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
-    return _tokens(str(account.id), role)
+    return _tokens(str(account.id), role, int(account.token_epoch or 0))
 
 
 @router.post("/participant/token", response_model=TokenOut)
@@ -288,8 +290,9 @@ async def reset_password(body: ResetIn, db: AsyncSession = Depends(get_db)):
     if account is None or account.id != row.subject_id:
         raise ApiError(400, "verification_invalid")
     account.password_hash = _password_hash(body.new_password)
+    account.token_epoch = int(account.token_epoch or 0) + 1
     await db.commit()
-    return _tokens(str(account.id), body.role)
+    return _tokens(str(account.id), body.role, int(account.token_epoch))
 
 
 # ── tokens ──────────────────────────────────────────────────────────────────
@@ -298,14 +301,29 @@ class RefreshIn(BaseModel):
     refresh_token: str = Field(min_length=10)
 
 
+def account_can_refresh(account) -> bool:
+    """A refresh token dies with the account. An erased profile must not mint a new access token."""
+    return account is not None and getattr(account, "deleted_at", None) is None
+
+
 @router.post("/refresh", response_model=TokenOut)
-async def refresh(body: RefreshIn):
-    """Обновить access-токен по refresh-токену (без обращения к БД)."""
+async def refresh(body: RefreshIn, db: AsyncSession = Depends(get_db)):
+    """Обновить access-токен. Удалённый или отсутствующий аккаунт токен не продлевает."""
     try:
         payload = decode_refresh_token(body.refresh_token)
     except ValueError as e:
         raise ApiError(401, "unauthorized", str(e)) from e
-    return _tokens(payload["sub"], payload["role"])
+    role = payload.get("role")
+    model = Participant if role == "participant" else Employer if role == "employer" else None
+    account = None
+    if model is not None:
+        try:
+            account = await db.get(model, uuid.UUID(payload["sub"]))
+        except ValueError:
+            account = None
+    if not account_can_refresh(account) or not epochs_match(payload.get("ep"), account.token_epoch):
+        raise ApiError(401, "unauthorized")
+    return _tokens(payload["sub"], role, int(account.token_epoch or 0))
 
 
 @router.get("/me")

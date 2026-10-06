@@ -5,11 +5,27 @@ import random
 from functools import cache
 
 from app.items import CHOICE_C, TYPED_C, Family, typed_answer
-from app.items.families import algorithms, concepts, embedded, javascript, ml, network, python_code, security, sql_query
+from app.items.families import (
+    algorithms,
+    analyst,
+    concepts,
+    data,
+    embedded,
+    javascript,
+    ml,
+    network,
+    python_code,
+    qa,
+    requirements,
+    security,
+    sql_query,
+)
 
 FAMILIES: dict[str, Family] = {f.id: f for f in [
     python_code.FAMILY, sql_query.FAMILY, algorithms.OPS, algorithms.GRAPH, javascript.FAMILY, security.FAMILY,
-    network.FAMILY, ml.FAMILY, embedded.FAMILY, concepts.BANK, concepts.HTTP_FAMILY,
+    network.FAMILY, ml.FAMILY, embedded.FAMILY, qa.FAMILY, qa.FAMILY_DIFF, analyst.FAMILY, analyst.FAMILY_SHARE,
+    data.FAMILY, data.FAMILY_LATE, requirements.FAMILY, requirements.FAMILY_STEPS,
+    concepts.BANK, concepts.HTTP_FAMILY,
 ]}
 
 # Target share of each topic in a session. "concept" is also hard-capped at 30 % (CONCEPT_MAX_SHARE).
@@ -22,6 +38,9 @@ BLUEPRINTS: dict[str, dict[str, float]] = {
     "devops":    {"network": 0.35, "security": 0.20, "python": 0.20, "algorithms": 0.05, "concept": 0.20},
     "security":  {"security": 0.40, "network": 0.20, "python": 0.15, "embedded": 0.05, "concept": 0.20},
     "embedded":  {"embedded": 0.45, "algorithms": 0.25, "python": 0.10, "network": 0.05, "concept": 0.15},
+    "qa":        {"testing": 0.50, "python": 0.25, "sql": 0.25},
+    "analyst":   {"metrics": 0.35, "requirements": 0.25, "sql": 0.25, "python": 0.15},
+    "data":      {"pipelines": 0.40, "sql": 0.25, "python": 0.20, "concept": 0.15},
 }
 SPECIALIZATIONS = tuple(BLUEPRINTS)
 CONCEPT_MAX_SHARE = 0.30

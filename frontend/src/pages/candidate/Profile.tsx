@@ -56,6 +56,7 @@ export default function CandidateProfile() {
       phone: phone || null,
       public_profile: publicProfile,
       ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
+      ...(profile?.profile_version != null ? { expected_version: profile.profile_version } : {}),
     }),
     onSuccess: () => { setNote('Сохранено'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: (error: unknown) => {
@@ -94,7 +95,7 @@ export default function CandidateProfile() {
   })
   const applySurvey = (patch: Omit<SurveyHint, 'nonce'>, message: string) => {
     setHint(prev => ({ ...(prev ?? { nonce: 0 }), ...patch, nonce: Date.now() }))
-    setNote(profile?.industry ? message : `${message} Отрасль выберите в опросе.`)
+    setNote(profile?.industry ? message : `${message} Сферу выберите в опросе.`)
   }
 
   if (isLoading || !profile) return <div className="space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-96" /></div>

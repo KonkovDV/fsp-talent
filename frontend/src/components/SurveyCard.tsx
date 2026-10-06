@@ -13,7 +13,8 @@ export interface SurveyHint {
 
 interface Props {
   profile: { specialization: string | null; industry: string | null; work_goal: string | null
-    declared_grade: string | null; experience_years: number | null; survey_done: boolean }
+    declared_grade: string | null; experience_years: number | null; survey_done: boolean
+    salary_from?: number | null; salary_to?: number | null }
   compact?: boolean
   hint?: SurveyHint | null
 }
@@ -28,6 +29,8 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
   const [goal, setGoal] = useState(profile.work_goal ?? 'job')
   const [grade, setGrade] = useState(profile.declared_grade ?? '')
   const [years, setYears] = useState(profile.experience_years == null ? '' : String(profile.experience_years))
+  const [payFrom, setPayFrom] = useState(profile.salary_from == null ? '' : String(profile.salary_from))
+  const [payTo, setPayTo] = useState(profile.salary_to == null ? '' : String(profile.salary_to))
   const [note, setNote] = useState('')
   useEffect(() => {
     setSpec(profile.specialization ?? ''); setIndustry(profile.industry === 'any' ? '' : profile.industry ?? '')
@@ -42,7 +45,9 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
 
   const save = useMutation({
     mutationFn: () => saveSurvey({ specialization: spec, industry: industry || 'any', work_goal: goal, declared_grade: grade || null,
-      experience_years: years === '' ? null : Number(years) }),
+      experience_years: years === '' ? null : Number(years),
+      salary_from_gross: payFrom === '' ? null : Number(payFrom),
+      salary_to_gross: payTo === '' ? null : Number(payTo) }),
     onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: (e: unknown) => setNote(apiError(e)),
   })
@@ -67,10 +72,11 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
           </select>
         </label>
         <label>Предметная область (необязательно)
-          <select value={industry} onChange={e => setIndustry(e.target.value)} className={select}>
+          <select value={industry} onChange={e => setIndustry(e.target.value)} className={select} aria-label="Предметная область">
             <option value="">не важно</option>
             {entries(opts?.industries).filter(([k]) => k !== 'any').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
+          <span className="field-hint">Индустрия компании. Направление разработки задаёт специализация.</span>
         </label>
         <label>Что ищете
           <select value={goal} onChange={e => {
@@ -89,6 +95,12 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         </label>
         <label>Опыт, лет
           <input type="number" min={0} max={50} value={years} onChange={e => setYears(e.target.value)} className="input mt-1" />
+        </label>
+        <label>Ожидания по зарплате, от
+          <input type="number" min={0} step={5000} value={payFrom} onChange={e => setPayFrom(e.target.value)} className="input mt-1 num" placeholder="до НДФЛ" />
+        </label>
+        <label>Ожидания по зарплате, до
+          <input type="number" min={0} step={5000} value={payTo} onChange={e => setPayTo(e.target.value)} className="input mt-1 num" placeholder="до НДФЛ" />
         </label>
       </div>
       <div className="flex items-center gap-3">

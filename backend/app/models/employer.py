@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, String, Text
+from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -14,6 +14,7 @@ class Employer(Base):
     company_name = Column(String(200), nullable=False)
     email = Column(String(200), unique=True, nullable=False)
     password_hash = Column(String(200), nullable=False)
+    token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
     email_verified_at = Column(DateTime(timezone=True))
     inn = Column(String(12))
     website = Column(String(200))

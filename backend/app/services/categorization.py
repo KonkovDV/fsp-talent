@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TypedDict
 
 from app.services.skills import ROLES, roles_for
+from app.services.survey import SPECIALIZATIONS
 
 RULES_VERSION = "v2.1.0"
 GRADES = ("intern", "junior", "middle", "senior", "lead")
@@ -81,12 +82,12 @@ def assign_category(
     if specialization in ROLES:
         # TZ 2.1: the survey decides the specialization; skills and FSP only explain it.
         role = specialization
-        explanation.append(f"Специализация из опроса: {role}")
+        explanation.append(f"Специализация из опроса: {SPECIALIZATIONS.get(role, role)}")
     elif role_votes[best_skill_role] >= MIN_SKILLS_FOR_ROLE:
         role = best_skill_role
         count = role_votes[role]
         skills_word = _ru_word(count, "подтверждённый навык", "подтверждённых навыка", "подтверждённых навыков")
-        explanation.append(f"Роль по навыкам: {count} {skills_word} направления {role}")
+        explanation.append(f"Роль по навыкам: {count} {skills_word} направления {SPECIALIZATIONS.get(role, role)}")
     elif best_disc:
         role = DISCIPLINE_ROLE_MAP.get(best_disc["discipline"], "fullstack")
         explanation.append(f"Роль по дисциплине ФСП: {DISCIPLINE_LABELS.get(best_disc['discipline'], '')}")

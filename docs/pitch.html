@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><style>
+  @page { size: 13.333in 7.5in; margin: 0; }
+  body { margin: 0; font-family: Arial, sans-serif; }
+  section { width: 13.333in; height: 7.5in; page-break-after: always; box-sizing: border-box; position: relative; overflow: hidden; }
+  section:last-child { page-break-after: auto; }
+  .dark { background: #1B1C21; color: #fff; }
+  .light { background: #F7F7F8; color: #1B1C21; }
+  .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0.12in; background: #402FFF; }
+  .red { position: absolute; left: 0.12in; top: 0; bottom: 0; width: 0.06in; background: #EC1D35; }
+  .pad { padding: 0.55in 0.6in 0.4in 0.55in; }
+  h1 { font-size: 36px; line-height: 1.15; margin: 0.2in 0; }
+  .kicker { color: #402FFF; font-size: 13px; letter-spacing: 0.08em; }
+  .card { background: #fff; border-radius: 8px; padding: 0.22in 0.28in; margin: 0.12in 0; }
+  .num { color: #402FFF; font-size: 28px; font-weight: 700; }
+  .muted { color: #5C5E66; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.18in; margin-top: 0.3in; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2in; }
+  table { width: 100%; border-collapse: collapse; margin-top: 0.2in; font-size: 16px; }
+  td { padding: 0.12in 0.15in; }
+  tr:nth-child(odd) td { background: #EFEFF1; }
+</style></head><body>
+<section class="dark"><div class="bar"></div><div class="red"></div><div class="pad" style="padding-top:1.7in">
+  <div style="color:#C8C9CA;font-size:13px">ЛЦТ 2026 · ФЕДЕРАЦИЯ СПОРТИВНОГО ПРОГРАММИРОВАНИЯ</div>
+  <h1>Работодатель находит человека.<br>Не наоборот.</h1>
+  <p style="font-size:18px;color:#EDEDED;max-width:10in">Подтверждённый профиль, объяснимая подборка и контакты только после согласия кандидата.</p>
+</div></section>
+<section class="light"><div class="bar"></div><div class="pad">
+  <div class="kicker">КАК УСТРОЕН НАЙМ</div><h1>Потребность, подборка, приглашение</h1>
+  <div class="card"><b>01 Кандидат.</b> Опрос задаёт специализацию. Тест подтверждает грейд. История ФСП — отдельная ось, без неё человек не теряет место.</div>
+  <div class="card"><b>02 Работодатель.</b> Описывает, кого ищет. Получает порядок с объяснением каждой строки и может вернуть прошлую версию потребности.</div>
+  <div class="card"><b>03 Контакты.</b> Приглашение с вилкой. Имя и почта открываются, только когда кандидат принял приглашение.</div>
+</div></section>
+<section class="light"><div class="bar"></div><div class="pad">
+  <div class="kicker">ТЕСТ</div><h1>Выученный ответ не подходит</h1>
+  <div class="grid">
+    <div class="card"><div class="num">0 %</div><p>сдают с ключом от другого экземпляра того же семейства</p></div>
+    <div class="card"><div class="num">100 %</div><p>сдают, если ключ от того же экземпляра, как в фиксированном банке</p></div>
+    <div class="card"><div class="num">16 из 42</div><p>утёкших ключей уходит в карантин, на чистых данных 3 из 83</p></div>
+  </div>
+  <p class="muted">python -m app.validation.assessment --n 2000 --seed 7</p>
+</div></section>
+<section class="light"><div class="bar"></div><div class="pad">
+  <div class="kicker">ПОДБОР</div><h1>Место в списке можно разобрать</h1>
+  <p style="font-size:18px">Навыки, грейд, специализация, текст и сфера складываются в одну оценку. У каждой строки объяснения свой код.</p>
+  <div class="pair">
+    <div class="card"><div class="num">+0,045</div><p>nDCG@10 к поиску по словам, зерно 2026</p></div>
+    <div class="card"><div class="num">+0,089</div><p>nDCG@10 к поиску по словам, зерно 7</p></div>
+  </div>
+  <p class="muted">python -m app.validation.matching и --seed 7</p>
+</div></section>
+<section class="light"><div class="bar"></div><div class="pad">
+  <div class="kicker">ОСЬ ФСП</div><h1>Соревнования не поднимают грейд</h1>
+  <p style="font-size:18px">Грейд подтверждает только тест. Нет истории ФСП — ось выпадает из оценки, штрафа нет.</p>
+  <div class="card"><span class="num">0,660 и 0,661</span> nDCG@10 с осью и без неё, зерно 2026</div>
+  <div class="card"><span class="num">0,715 и 0,715</span> nDCG@10 с осью и без неё, зерно 7</div>
+</div></section>
+<section class="light"><div class="bar"></div><div class="pad">
+  <div class="kicker">ПРОВЕРКА</div><h1>Те же команды, что в документации</h1>
+  <table>
+    <tr><td>Точность вдали от границы грейда</td><td class="num">90,9 %</td><td class="muted">assessment --n 2000 --seed 7</td></tr>
+    <tr><td>Повторная сдача, каппа Коэна</td><td class="num">0,50</td><td class="muted">та же команда</td></tr>
+    <tr><td>Завышение грейда</td><td class="num">3,4 %</td><td class="muted">та же команда</td></tr>
+    <tr><td>Случайное угадывание</td><td class="num">0 %</td><td class="muted">та же команда</td></tr>
+    <tr><td>Подбор против ключевых слов</td><td class="num">+0,045 и +0,089</td><td class="muted">matching и --seed 7</td></tr>
+  </table>
+</div></section>
+<section class="dark"><div class="bar"></div><div class="red"></div><div class="pad">
+  <div class="kicker">ДАЛЬШЕ</div><h1>Что остаётся за этим стендом</h1>
+  <p>Настоящий ФСП ID и реестр по уже описанному контракту. Дельта протоколов забирается по расписанию.</p>
+  <p>Порог по слабой теме не включён: точность падает с 77,8 % до 59,5 %, ложные сдачи — с 8,6 % до 5,8 %.</p>
+  <p>Оценку различимости заданий в банк не пишем: ошибка растёт с 0,139 до 0,262.</p>
+  <p>Исходы найма из ATS, чтобы калибровать подбор на реальных решениях людей.</p>
+</div></section>
+</body></html>

@@ -23,6 +23,8 @@ class Offer(Base):
     # before migration 0010; the API requires it for every new offer.
     contact_method = Column(String(300))
     status = Column(String(20), nullable=False, default="pending")
+    # Optional, set when the candidate declines: salary, format, stack, not_looking, other.
+    decline_reason = Column(String(20))
     contacts_revealed_at = Column(DateTime(timezone=True))
     # The candidate closed the contacts for this company after accepting. Other companies are not affected.
     contacts_revoked_at = Column(DateTime(timezone=True))

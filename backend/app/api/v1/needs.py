@@ -43,7 +43,7 @@ class NeedParams(BaseModel):
         if self.role and self.role not in SPECIALIZATIONS:
             raise ValueError("Неизвестная специализация")
         if self.industry and self.industry not in INDUSTRIES:
-            raise ValueError("Неизвестная отрасль")
+            raise ValueError("Неизвестная сфера")
         if self.salary_from and self.salary_to and self.salary_from > self.salary_to:
             raise ValueError("Зарплата «от» больше, чем «до»")
         self.skills = sorted({n for s in self.skills if (n := normalize_skill(s))})
@@ -58,6 +58,7 @@ class NeedParams(BaseModel):
 class NeedIn(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     params: NeedParams
+    expected_version: int | None = Field(None, ge=1)
 
 
 async def _own(db: AsyncSession, need_id: uuid.UUID, current: dict) -> Need:
@@ -129,10 +130,28 @@ async def update_need(need_id: uuid.UUID, body: NeedIn, current: dict = Depends(
     need = await db.get(Need, need_id, with_for_update=True)
     if need is None or need.employer_id != uuid.UUID(current["sub"]):
         raise ApiError(404, "need_not_found")
+    if body.expected_version is not None and body.expected_version != need.version:
+        raise ApiError(409, "conflict", "Потребность уже изменилась. Обновите страницу.")
     need.version += 1
     need.title = body.title
     need.updated_at = datetime.now(UTC)
     ver = NeedVersion(need_id=need.id, version=need.version, params=body.params.model_dump())
+    db.add(ver)
+    await db.commit()
+    return _out(need, ver)
+
+
+@router.post("/{need_id}/versions/{version}/restore")
+async def restore_need(need_id: uuid.UUID, version: int, current: dict = Depends(get_current_employer),
+                       db: AsyncSession = Depends(get_db)):
+    """Copy an older version into a new one. The shortlist stays; nothing is rewritten in place."""
+    need = await db.get(Need, need_id, with_for_update=True)
+    if need is None or need.employer_id != uuid.UUID(current["sub"]):
+        raise ApiError(404, "need_not_found")
+    old = await _params(db, need, version)
+    need.version += 1
+    need.updated_at = datetime.now(UTC)
+    ver = NeedVersion(need_id=need.id, version=need.version, params=dict(old.params))
     db.add(ver)
     await db.commit()
     return _out(need, ver)
@@ -194,7 +213,11 @@ async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
     p = NeedParams(**(await _params(db, need)).params)
     result = await search_candidates(
         db, skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal, need=p.spec())
-    return {"items": anonymous_compare(result["items"], wanted[:3])}
+    picked = wanted[:3]
+    items = anonymous_compare(result["items"], picked)
+    if picked and len(items) != len(picked):
+        raise ApiError(404, "not_found", "Кто-то из выбранных кандидатов недоступен")
+    return {"items": items}
 
 
 class ShortlistIn(BaseModel):
@@ -243,6 +266,11 @@ async def get_shortlist(need_id: uuid.UUID, current: dict = Depends(get_current_
     need = await _own(db, need_id, current)
     rows = list(await db.scalars(select(NeedShortlist).where(NeedShortlist.need_id == need.id)
                                  .order_by(NeedShortlist.added_at)))
+    # A withdrawn publication drops the card from the shortlist at once. The row stays, so the
+    # decision returns if the candidate publishes again.
+    people = {p.id: p for p in await db.scalars(select(Participant).where(
+        Participant.id.in_([r.participant_id for r in rows])))} if rows else {}
+    rows = [r for r in rows if (person := people.get(r.participant_id)) is not None and person.discoverable]
     cats = {c.participant_id: c for c in await db.scalars(select(CategoryAssignment).where(
         CategoryAssignment.participant_id.in_([r.participant_id for r in rows])))} if rows else {}
     funnel = {s: sum(1 for r in rows if r.status == s) for s in ("shortlisted", "invited", "rejected")}

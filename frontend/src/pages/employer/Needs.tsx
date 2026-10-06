@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, needExam, createNeed, listNeeds, needMatches, needShortlist, removeShortlist, setShortlist, surveyOptions, updateNeed,
+  apiError, compareNeed, needExam, createNeed, getNeed, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
@@ -49,16 +49,20 @@ export default function EmployerNeeds() {
   const shortlist = useQuery({ queryKey: ['needShortlist', selected], enabled: !!selected,
     queryFn: () => needShortlist(selected!).then(r => r.data) })
 
+  const detail = useQuery({ queryKey: ['need', selected], enabled: !!selected,
+    queryFn: () => getNeed(selected!).then(r => r.data as Need & { versions: { version: number; params: NeedParams }[] }) })
   const body = () => ({
     title: form.title,
     params: { role: form.role || null, grade: form.grade || null, skills: csv(form.skills), nice_to_have: csv(form.nice),
       industry: form.industry || null, work_goal: form.internship ? 'internship' : null },
+    ...(editing && editing !== 'new' && current ? { expected_version: current.version } : {}),
   })
   const save = useMutation({
     mutationFn: () => (editing === 'new' ? createNeed(body()) : updateNeed(editing!, body())).then(r => r.data),
     onSuccess: (need: Need) => {
       setEditing(null); setSelected(need.id); setError('')
       qc.invalidateQueries({ queryKey: ['needs'] })
+      qc.invalidateQueries({ queryKey: ['need', need.id] })
     },
     onError: (e: unknown) => setError(apiError(e)),
   })
@@ -67,6 +71,15 @@ export default function EmployerNeeds() {
     onSuccess: () => {
       for (const k of ['needMatches', 'needShortlist', 'needs']) qc.invalidateQueries({ queryKey: [k] })
     },
+  })
+  const restore = useMutation({
+    mutationFn: (version: number) => restoreNeed(selected!, version).then(r => r.data),
+    onSuccess: () => {
+      setError('')
+      qc.invalidateQueries({ queryKey: ['needs'] })
+      qc.invalidateQueries({ queryKey: ['need', selected] })
+    },
+    onError: (e: unknown) => setError(apiError(e, 'Не удалось вернуть версию')),
   })
   const edit = (n: Need) => {
     setEditing(n.id)
@@ -100,7 +113,7 @@ export default function EmployerNeeds() {
                 {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{gradeRu(g)}</option>)}
               </select></div>
             <div><label className={field} htmlFor="n-ind">Предметная область (необязательно)</label>
-              <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select">
+              <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select" aria-label="Предметная область">
                 <option value="">Не важна</option>
                 {Object.entries(opts?.industries ?? {}).filter(([k]) => k !== 'any').map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
               </select></div>
@@ -155,8 +168,22 @@ export default function EmployerNeeds() {
                     {current.params.work_goal === 'internship' && <span className="badge-warn">стажировка</span>}
                   </div>
                 </div>
-                <button onClick={() => edit(current)} className="btn-secondary btn-sm"><Pencil size={14} aria-hidden />Изменить</button>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => edit(current)} className="btn-secondary btn-sm"><Pencil size={14} aria-hidden />Изменить</button>
+                </div>
               </div>
+
+              {(detail.data?.versions?.length ?? 0) > 1 && (
+                <ul className="mt-3 flex flex-wrap gap-2 text-xs text-ink-2">
+                  {detail.data!.versions.filter((v: { version: number }) => v.version !== current.version).map((v: { version: number }) => (
+                    <li key={v.version}>
+                      <button type="button" className="chip-default" disabled={restore.isPending} onClick={() => restore.mutate(v.version)}>
+                        Вернуть версию {v.version}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               {matches.data?.recommended_categories?.length > 0 && (
                 <div className="panel-quiet mt-5 text-sm">

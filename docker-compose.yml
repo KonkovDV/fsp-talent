@@ -9,6 +9,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      # Six-item trial for the jury. A production deploy sets DEMO_MODE=false.
+      DEMO_MODE: ${DEMO_MODE:-true}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       # Letters with confirmation codes land in Mailpit: http://localhost:8025. Override in .env for real SMTP.
       MAIL_MODE: ${MAIL_MODE:-smtp}

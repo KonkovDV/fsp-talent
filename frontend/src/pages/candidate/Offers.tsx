@@ -17,29 +17,40 @@ const STATUS: Record<string, [string, string]> = {
   expired: ['срок истёк', 'badge-vc'], withdrawn: ['отозвано', 'badge-vc'],
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
+const REASONS: [string, string][] = [
+  ['', 'Причина не обязательна'],
+  ['salary', 'Зарплата'],
+  ['format', 'Формат работы'],
+  ['stack', 'Стек'],
+  ['not_looking', 'Сейчас не ищу'],
+  ['other', 'Другое'],
+]
 
 export default function CandidateOffers() {
   const qc = useQueryClient()
-  const { data: offers = [], isLoading } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
+  const { data: offers = [], isLoading, isError, error } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
+  const [reason, setReason] = useState('')
   const respond = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) => respondToOffer(id, action),
+    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
+      respondToOffer(id, action, action === 'reject' ? reason : undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
   })
   const [params] = useSearchParams()
   const [thread, setThread] = useState<string | null>(params.get('thread'))
   const [confirm, setConfirm] = useState<string | null>(null)
-  const [error, setError] = useState('')
+  const [revokeError, setRevokeError] = useState('')
   const revoke = useMutation({
     mutationFn: (id: string) => revokeContacts(id),
-    onSuccess: () => { setConfirm(null); setError(''); qc.invalidateQueries({ queryKey: ['myOffers'] }) },
-    onError: e => setError(apiError(e, 'Не удалось закрыть контакты')),
+    onSuccess: () => { setConfirm(null); setRevokeError(''); qc.invalidateQueries({ queryKey: ['myOffers'] }) },
+    onError: e => setRevokeError(apiError(e, 'Не удалось закрыть контакты')),
   })
   return (
     <div>
       <PageHeader title="Приглашения"
         lead="Работодатель пишет первым и сразу называет зарплату. Ваши имя и контакты он увидит, только если вы примете приглашение." />
       {isLoading && <Skeleton className="h-40" />}
-      {!isLoading && offers.length === 0 && <Empty title="Приглашений пока нет">Подтвердите грейд тестом и заполните навыки — так вас быстрее найдут.</Empty>}
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить приглашения')}</p>}
+      {!isLoading && !isError && offers.length === 0 && <Empty title="Приглашений пока нет">Подтвердите грейд тестом и заполните навыки — так вас быстрее найдут.</Empty>}
       <ul className="space-y-4">
         {offers.map(o => {
           const [label, cls] = STATUS[o.status] ?? [o.status, 'badge-vc']
@@ -94,13 +105,18 @@ export default function CandidateOffers() {
                       </div>
                     </div>
                   )}
-                  {error && confirm === o.id && <p className="notice-error mt-3" role="alert">{error}</p>}
+                  {revokeError && confirm === o.id && <p className="notice-error mt-3" role="alert">{revokeError}</p>}
                   {thread === o.id && <MessageThread offerId={o.id} listKey="myOffers" other={o.company} />}
                 </div>
               )}
               {o.status === 'pending' && (
-                <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-4">
+                <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
                   <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
+                  <label className="text-sm text-ink-2">Причина отказа
+                    <select value={reason} onChange={e => setReason(e.target.value)} className="select ml-2" aria-label="Причина отказа">
+                      {REASONS.map(([value, label]) => <option key={value || 'none'} value={value}>{label}</option>)}
+                    </select>
+                  </label>
                   <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending} className="btn-secondary">Отклонить</button>
                 </div>
               )}

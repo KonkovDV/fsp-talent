@@ -27,9 +27,8 @@ import statistics
 from dataclasses import asdict, dataclass
 
 from app.services.matching import GRADES, ROLE_NEIGHBOURS, CandidateFacts, NeedSpec, score
-from app.services.skills import TAXONOMY
+from app.services.skills import ROLES, TAXONOMY
 
-ROLES = ("backend", "frontend", "fullstack", "ml", "devops", "security", "embedded", "mobile")
 CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
 TESTABLE = {"Python", "SQL", "JavaScript", "Algorithms", "Networking", "Web Security", "Machine Learning", "C"}
 INDUSTRIES = ("fintech", "ecommerce", "gamedev", "edtech", "govtech", "telecom", "industry", "any")
@@ -209,6 +208,47 @@ def markdown(rows: list[Row], dataset: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def load_pairs(path: str) -> dict:
+    """JSONL of jury pairs: each line is need, candidate.observed and label 0..3.
+
+    A JSON object in the same shape as --export is accepted too.
+    """
+    text = open(path, encoding="utf-8").read().strip()
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    # One JSON object (possibly pretty-printed) versus one pair per line.
+    if not (len(lines) > 1 and all(ln.lstrip().startswith("{") for ln in lines)):
+        return json.loads(text)
+    needs: dict[str, dict] = {}
+    candidates: dict[str, dict] = {}
+    labels: dict[str, dict[str, int]] = {}
+    for i, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        need = dict(row["need"])
+        obs = row["candidate"]
+        observed = obs["observed"] if isinstance(obs, dict) and "observed" in obs else obs
+        nid = str(need.get("id") or f"n{i}")
+        cid = str(row.get("candidate_id") or (obs.get("id") if isinstance(obs, dict) else None) or f"c{i}")
+        need["id"] = nid
+        needs[nid] = need
+        candidates[cid] = {"id": cid, "observed": observed}
+        labels.setdefault(nid, {})[cid] = int(row["label"])
+    return {"seed": None, "candidates": list(candidates.values()), "needs": list(needs.values()), "labels": labels}
+
+
+def checks_ok(rows: list[Row]) -> list[str]:
+    """The production ranker must beat the keyword baseline and a random order."""
+    by = {r.method: r for r in rows}
+    failed = []
+    if not by["full"].ndcg10 > by["keyword"].ndcg10:
+        failed.append("full nDCG@10 > keyword")
+    if not by["full"].ndcg10 > by["random"].ndcg10:
+        failed.append("full nDCG@10 > random")
+    return failed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--candidates", type=int, default=800)
@@ -216,8 +256,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--export", help="write the generated dataset (with labels) to this JSON file")
     parser.add_argument("--import", dest="imported", help="evaluate a labelled dataset in the same JSON format")
+    parser.add_argument("--pairs", help="JSONL of jury pairs: need, candidate, label 0..3")
+    parser.add_argument("--check", action="store_true", help="fail unless the full model beats the baselines")
     args = parser.parse_args()
-    if args.imported:
+    if args.pairs and args.imported:
+        raise SystemExit("Укажите либо --pairs, либо --import")
+    if args.pairs:
+        dataset = load_pairs(args.pairs)
+    elif args.imported:
         with open(args.imported, encoding="utf-8") as fh:
             dataset = json.load(fh)
     else:
@@ -225,8 +271,18 @@ def main() -> None:
     if args.export:
         with open(args.export, "w", encoding="utf-8") as fh:
             json.dump(dataset, fh, ensure_ascii=False)
-    print(markdown(evaluate(dataset), dataset))
+    rows = evaluate(dataset)
+    print(markdown(rows, dataset))
+    no_fsp = next(r for r in rows if r.method == "no_fsp")
+    full = next(r for r in rows if r.method == "full")
+    print(f"ось ФСП: nDCG@10 {full.ndcg10:.3f} с осью, {no_fsp.ndcg10:.3f} без неё. "
+          "Ось задаёт порядок среди одинакового соответствия и не обязана поднимать nDCG.")
     print("sha256", sha256(dataset))
+    if args.check:
+        failed = checks_ok(rows)
+        print("checks:", "failed " + ", ".join(failed) if failed else "passed")
+        if failed:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

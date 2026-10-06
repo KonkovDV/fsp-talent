@@ -16,6 +16,7 @@ Policy (TZ section 2, "Категория и грейд", and the Q&A with ФС�
     Retakes of the same target are throttled separately (RETAKE_INTERVAL_DAYS); an abandoned or expired
     session counts as an attempt, otherwise the items could be previewed for free. A failed test at G does
     not burn the lower grade: a test at a lower grade is available at once (see retake_available_at).
+  * A jury express session (flags mode "express") confirms nothing, starts no pause and stays out of search.
 """
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -81,6 +82,15 @@ class GradeDecision:
     locked_until: datetime | None
     # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed | vacancy_test
     reason: str
+
+
+def is_trial(flags: dict | None) -> bool:
+    """A jury express session. It does not confirm a grade, start a pause or enter search."""
+    return (flags or {}).get("mode") == "express"
+
+
+def trial_decision() -> GradeDecision:
+    return GradeDecision(None, False, False, None, "trial")
 
 
 def decide_grade(current: str | None, earned: str | None, target_grade: str, now: datetime,
@@ -177,11 +187,12 @@ async def check_retake_interval(db: AsyncSession, participant_id: uuid.UUID, tar
     now = datetime.now(UTC)
     since = now - timedelta(days=RETAKE_INTERVAL_DAYS)
     kind = TestSession.flags.has_key("vacancy_id")
+    not_trial = or_(TestSession.flags["mode"].astext.is_(None), TestSession.flags["mode"].astext != "express")
     query = select(TestSession.target_grade, TestSession.completed_at, TestSession.status,
                    TestSession.grade_assigned).where(
         TestSession.participant_id == participant_id,
         TestSession.status.in_(("completed", "abandoned", "expired")), TestSession.completed_at > since,
-        kind if vacancy_test else ~kind)
+        kind if vacancy_test else ~kind, not_trial)
     if spec:
         query = query.where(TestSession.specialization == spec)
     attempts = [Attempt(target, done, status == "completed" and not passed_target(assigned, target))
@@ -240,7 +251,8 @@ def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: s
 
 async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, target_grade: str,
                         code_language: str = "python", topic_shares: dict[str, float] | None = None,
-                        vacancy_id: uuid.UUID | None = None) -> tuple[TestSession, TestSessionItem]:
+                        vacancy_id: uuid.UUID | None = None, mode: str = "grade",
+                        ) -> tuple[TestSession, TestSessionItem]:
     if target_grade not in GRADE_ORDER:
         raise ValueError(f"Invalid grade: {target_grade}")
     now = datetime.now(UTC)
@@ -248,6 +260,8 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
         TestSession.participant_id == participant_id, TestSession.status == "in_progress",
         TestSession.expires_at <= now).values(status="expired", completed_at=now))
     flags: dict = {"code_language": code_language}
+    if mode == "express":
+        flags["mode"] = "express"
     if topic_shares:
         flags["topic_shares"] = topic_shares
     if vacancy_id is not None:
@@ -389,7 +403,7 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     bank = await bank_state(db)
     state = build_state(session.specialization, session.target_grade, items, bank.blocked,
                         _topic_shares(session))
-    verdict = cat.evaluate(state)
+    verdict = cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS if is_trial(session.flags) else None)
     if verdict.done:
         finished = await finalize(db, session, items, bank, verdict.stop_reason or "decided")
         return session, None, finished
@@ -422,19 +436,27 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
                         _topic_shares(session))
     outcome = cat.decide(state)
     answered = [it for it in items if it.is_correct is not None and not it.excluded]
+    trial = is_trial(session.flags)
     session.status, session.completed_at, session.stop_reason = "completed", now, stop_reason
     session.irt_theta, session.theta_se = outcome.theta, outcome.se
     session.p_pass, session.p_upgrade = outcome.p_pass, outcome.p_upgrade
     session.items_count = len(answered)
     session.score = sum(1 for it in answered if it.is_correct) / len(answered) if answered else 0.0
-    session.grade_assigned = outcome.earned
+    session.grade_assigned = None if trial else outcome.earned
 
     participant = await db.get(Participant, session.participant_id, with_for_update=True)
-    conf = await confirmation(db, session.participant_id, session.specialization)
     vacancy_test = is_vacancy_session(session)
-    decision = decide_grade(conf.grade if conf else None, outcome.earned if outcome.passed else None,
-                            session.target_grade, now, vacancy_test)
-    if decision.applied:
+    if trial:
+        # Shown to the person who sat it. No grade, no pause, no skill confirmation, no leak counters:
+        # a short jury pass must not move the bank or the category.
+        decision = trial_decision()
+        confirmed: list[tuple[str, float]] = []
+        conf = None
+    else:
+        conf = await confirmation(db, session.participant_id, session.specialization)
+        decision = decide_grade(conf.grade if conf else None, outcome.earned if outcome.passed else None,
+                                session.target_grade, now, vacancy_test)
+    if not trial and decision.applied:
         if conf is None:
             conf = GradeConfirmation(participant_id=session.participant_id, specialization=session.specialization,
                                      grade=decision.assessed_grade)
@@ -445,7 +467,7 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
         if decision.locked_until is not None:
             conf.locked_until = decision.locked_until
         await db.flush()
-    if participant is not None:
+    if participant is not None and not trial:
         await sync_assessed_grade(db, participant)
     flags = dict(session.flags or {})
     flags["outcome"] = decision.reason
@@ -454,8 +476,9 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
         flags["recommended_grade"] = recommend
     session.flags = flags
 
-    await _update_item_stats(db, answered, cat.CUTS[session.target_grade])
-    confirmed = await _confirm_skills(db, session, answered, now)
+    if not trial:
+        await _update_item_stats(db, answered, cat.CUTS[session.target_grade])
+        confirmed = await _confirm_skills(db, session, answered, now)
     topics: dict[str, tuple[int, int]] = {}
     for it in answered:
         n, right = topics.get(it.topic, (0, 0))
@@ -487,18 +510,20 @@ async def _update_item_stats(db: AsyncSession, answered: list[TestSessionItem], 
         if key not in rows:
             sample = next(it for it in answered if it.item_key == key)
             rows[key] = ItemStat(item_key=key, family_id=sample.family_id, level=sample.level, n=0, correct=0,
-                                 expected=0.0, variance=0.0, sessions=0, b_offset=0.0, status="active", z=0.0)
+                                 expected=0.0, variance=0.0, sessions=0, b_offset=0.0, status="active", z=0.0,
+                                 cusum=0.0)
             db.add(rows[key])
         rows[key].sessions += 1
     expected = leave_family_out(
         [(it.item_key, it.family_id, it.a, it.b, it.c, bool(it.is_correct)) for it in answered], prior_mean)
     for key, p, ok in expected:
         r = rows[key]
-        st = KeyStats(r.n, r.correct, r.expected, r.variance)
+        st = KeyStats(r.n, r.correct, r.expected, r.variance, r.cusum or 0.0)
         st.add(p, ok)
-        r.n, r.correct, r.expected, r.variance, r.z = st.n, st.correct, st.expected, st.variance, st.z
+        r.n, r.correct, r.expected, r.variance, r.z, r.cusum = (
+            st.n, st.correct, st.expected, st.variance, st.z, st.cusum)
         r.updated_at = now
-        if st.alarm and r.status == "active":
+        if (st.alarm or st.cusum_alarm) and r.status == "active":
             r.status, r.quarantined_at = "quarantined", now
 
 

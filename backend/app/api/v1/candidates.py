@@ -94,6 +94,8 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile,
         "is_minor": p.is_minor, "minor_consent_given": p.minor_consent_given,
+        "profile_version": p.profile_version,
+        "salary_from": p.salary_from_gross, "salary_to": p.salary_to_gross,
         "discoverable": p.discoverable,
         "primary_role": cat.primary_role if cat else None,
         "grade": cat.grade if cat else None,
@@ -137,6 +139,9 @@ class ProfileUpdate(BaseModel):
     phone: str | None = Field(None, max_length=20)
     public_profile: bool | None = None
     is_visible: bool | None = None
+    salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
+    salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
+    expected_version: int | None = Field(None, ge=0)
 
 
 @router.put("/me/profile")
@@ -146,6 +151,8 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     if not p:
         raise HTTPException(404, "Профиль не найден")
     data = body.model_dump(exclude_unset=True)
+    if body.expected_version is not None and body.expected_version != (p.profile_version or 0):
+        raise ApiError(409, "conflict", "Профиль уже изменился. Обновите страницу.")
     if data.get("public_profile") and p.minor_now():
         raise HTTPException(403, "Именная страница недоступна для несовершеннолетних")
     if data.get("public_profile") and not p.public_profile and \
@@ -173,6 +180,12 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     if "region" in data and p.fsp_id is None:
         # With FSP linked, the region comes from the protocols.
         p.region = (data["region"] or "").strip() or None
+    for field in ("salary_from_gross", "salary_to_gross"):
+        if field in data:
+            setattr(p, field, data[field])
+    if p.salary_from_gross and p.salary_to_gross and p.salary_from_gross > p.salary_to_gross:
+        raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")
+    p.profile_version = (p.profile_version or 0) + 1
     if "skills" in data:
         existing = list(await db.scalars(select(Skill).where(Skill.participant_id == p.id)))
         incoming = []
@@ -263,6 +276,7 @@ async def get_my_results(
         "rank_equivalent": rank_equivalent(r.competition_status, r.place, r.total_participants),
         "is_team": r.is_team, "team_size": r.team_size, "event_date": r.event_date.isoformat(),
         "protocol_url": r.protocol_url, "trust_level": r.trust_level,
+        "ekp_number": (r.raw_data or {}).get("ekp_number"),
     } for r in rows]
 
 
@@ -308,6 +322,7 @@ async def get_my_offers(
 
 class RespondIn(BaseModel):
     action: Literal["accept", "reject"]
+    reason: Literal["salary", "format", "stack", "not_looking", "other"] | None = None
 
 
 @router.post("/me/offers/{offer_id}/respond")
@@ -328,8 +343,10 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:
         offer.status = "rejected"
+        offer.decline_reason = body.reason
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
-                          actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
+                          actor_id=offer.candidate_id,
+                          meta={"offer_id": str(offer.id), "reason": body.reason}))
     cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == offer.candidate_id))
     who = category_label(cat.primary_role if cat else None, cat.grade if cat else None)
     outbox = Outbox()
@@ -475,7 +492,8 @@ async def my_profile_pdf(current: dict = Depends(get_current_participant), db: A
         raise HTTPException(404, "Профиль не найден")
     pdf = await _profile_pdf(db, participant, named=True)
     return Response(content=pdf, media_type="application/pdf",
-                    headers={"Content-Disposition": "attachment; filename=profile.pdf"})
+                    headers={"Content-Disposition": "attachment; filename=profile.pdf",
+                             "Cache-Control": "private, no-store"})
 
 
 @router.get("/survey-options")
@@ -492,6 +510,8 @@ class SurveyIn(BaseModel):
     work_goal: str = "job"
     declared_grade: Literal["intern", "junior", "middle", "senior", "lead"] | None = None
     experience_years: int | None = Field(None, ge=0, le=50)
+    salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
+    salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
 
 
 @router.put("/me/survey")
@@ -509,6 +529,12 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
         p.declared_grade = body.declared_grade
     elif body.work_goal == "internship" and not p.declared_grade:
         p.declared_grade = "intern"
+    if "salary_from_gross" in body.model_fields_set or "salary_to_gross" in body.model_fields_set:
+        if body.salary_from_gross and body.salary_to_gross and body.salary_from_gross > body.salary_to_gross:
+            raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")
+        p.salary_from_gross = body.salary_from_gross
+        p.salary_to_gross = body.salary_to_gross
+    p.profile_version = (p.profile_version or 0) + 1
     if body.experience_years is not None:
         p.experience_years = body.experience_years
     p.survey_at = datetime.now(UTC)

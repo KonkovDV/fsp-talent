@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CalendarClock, Check, Circle, ClipboardList } from 'lucide-react'
-import { getMyOffers, getMyProfile, tasksForMe, weeklyTask } from '../../api/client'
+import { apiError, getMyOffers, getMyProfile, tasksForMe, weeklyTask } from '../../api/client'
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, rub } from '../../components/ui'
@@ -13,12 +13,15 @@ interface Weekly { vacancy_id: string; title: string; company: string | null; to
 
 /** Candidate home: the category employers see, what is missing for it, and fresh invitations. */
 export default function CandidateDashboard() {
-  const { data: p, isLoading } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
-  const { data: offers = [] } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
+  const profile = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
+  const offersQ = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const { data: weekly } = useQuery<Weekly | null>({ queryKey: ['weeklyTask'], queryFn: () => weeklyTask().then(r => r.data) })
   const { data: tasks = [] } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
+  const p = profile.data
+  const offers = offersQ.data ?? []
 
-  if (isLoading || !p) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48" /><Skeleton className="h-64" /></div>
+  if (profile.isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48" /><Skeleton className="h-64" /></div>
+  if (profile.isError || !p) return <p className="notice-error" role="alert">{apiError(profile.error, 'Не удалось открыть кабинет')}</p>
 
   const pending = offers.filter(o => o.status === 'pending')
   const steps = [
@@ -140,7 +143,9 @@ export default function CandidateDashboard() {
             <h2 className="section-title">Приглашения{pending.length > 0 && <span className="ml-2 rounded-full bg-invite px-2 py-0.5 align-middle font-sans text-xs text-invite-ink num">{pending.length}</span>}</h2>
             <Link to="/candidate/offers" className="text-sm text-accent hover:underline">Все</Link>
           </div>
-          {pending.length === 0
+          {offersQ.isError
+            ? <p className="notice-error mt-4" role="alert">{apiError(offersQ.error, 'Не удалось загрузить приглашения')}</p>
+            : pending.length === 0
             ? <p className="mt-4 text-sm text-ink-2">Новых приглашений нет. Работодатели пишут первыми: подтверждённый грейд и полный профиль поднимают вас в выдаче.</p>
             : <ul className="mt-3 divide-y divide-line">
                 {pending.slice(0, 4).map(o => (
@@ -153,7 +158,7 @@ export default function CandidateDashboard() {
                         <span className="block truncate font-medium text-ink">{o.role}</span>
                         <span className="block truncate text-sm text-ink-2">{o.company}</span>
                       </span>
-                      <span className="text-right font-display text-sm font-bold text-ink num">{rub(o.salary_from)}<span className="block text-xs font-normal text-ink-3">до {rub(o.salary_to)}</span></span>
+                      <span className="text-right font-display text-sm font-bold text-ink num">{rub(o.salary_from)}<span className="block text-xs font-normal text-ink-3">до {rub(o.salary_to)}, до НДФЛ</span></span>
                     </Link>
                   </li>
                 ))}

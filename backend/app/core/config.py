@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://fsp:fsp@localhost:5432/fsp_talent"
     REDIS_URL: str = "redis://localhost:6379/0"
     DEBUG: bool = False
+    # The six-item jury trial is offered only when this is on. The demo compose turns it on.
+    DEMO_MODE: bool = False
     VERSION: str = "1.1.0"
     PUBLIC_BASE_URL: str = "http://localhost"
     CORS_ORIGINS: str = "http://localhost,http://localhost:5173"

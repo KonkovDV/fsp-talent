@@ -4,6 +4,7 @@ Logins (password demo12345): candidates fsp001@demo.talent, fsp002@demo.talent (
 nofsp@demo.talent (no FSP history); employer hr@sibcode.demo. Companies are fictional.
 """
 import asyncio
+import os
 import random
 from datetime import UTC, datetime
 
@@ -28,7 +29,7 @@ SKILLS = {
 # Survey answer of a synthetic participant: competitors of one discipline go to different jobs.
 # Without this every algorithmic athlete would be "backend" and an ML need would find nobody of its own.
 SPEC_CHOICE = {
-    "algorithmic": (("backend", "ml", "fullstack", "devops"), (50, 30, 12, 8)),
+    "algorithmic": (("backend", "ml", "fullstack", "devops", "data"), (42, 28, 12, 8, 10)),
     "product": (("fullstack", "frontend", "backend", "mobile"), (40, 35, 15, 10)),
     "security": (("security", "devops"), (80, 20)),
     "bas": (("embedded",), (1,)),
@@ -39,6 +40,7 @@ SKILLS_OF_SPEC = {
     "frontend": ["TypeScript", "React", "JavaScript", "HTML/CSS", "Next.js"],
     "mobile": ["Kotlin", "TypeScript", "React", "Algorithms"],
     "devops": ["Docker", "Kubernetes", "Linux", "Nginx", "Python"],
+    "data": ["Python", "SQL", "PostgreSQL", "Airflow", "Spark", "Kafka"],
 }
 # Fictional companies: a demo must not look like a real employer is hiring here.
 EMPLOYERS = [
@@ -107,6 +109,7 @@ DEMO_VACANCIES = [
 
 
 async def main() -> None:
+    _refuse_production()
     adapter = MockFSPAdapter()
     async with AsyncSessionLocal() as db:
         password_hash = hash_password(DEMO_PASSWORD)
@@ -214,5 +217,11 @@ async def main() -> None:
     await demo_activity()
 
 
+def _refuse_production() -> None:
+    if os.environ.get("ENV", "").lower() == "production":
+        raise SystemExit("Демо-данные не загружаются, когда ENV=production")
+
+
 if __name__ == "__main__":
+    _refuse_production()
     asyncio.run(main())

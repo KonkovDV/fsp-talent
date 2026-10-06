@@ -1,0 +1,15 @@
+title = "ФСП Талант"
+
+[allowlist]
+description = "Placeholders and the demo password. They are not live secrets."
+regexTarget = "line"
+regexes = [
+  '''change-me-32-chars-minimum-secret''',
+  '''change-me-use-openssl-rand-hex-32''',
+  '''test-secret-key-for-ci-only''',
+  '''demo12345''',
+]
+paths = [
+  '''docs/.*''',
+  '''backend/tests/.*''',
+]

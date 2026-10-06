@@ -10,7 +10,7 @@ import pytest
 from app.items import LEVEL_B
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, FAMILIES
 from app.models.assessment import GRADE_COOLDOWN_DAYS
-from app.services import cat
+from app.services import assessment, cat
 from app.services.assessment import (
     RETAKE_INTERVAL_DAYS,
     Attempt,
@@ -92,6 +92,24 @@ def test_random_guessing_does_not_pass():
     passed = [_simulate(0, "frontend", "junior", rng, answer=lambda ch: rng.random() < 0.25)[1].passed
               for _ in range(60)]
     assert sum(passed) <= 2
+
+
+def test_express_stops_at_six_items_and_does_not_confirm_a_grade():
+    state = cat.State(spec="backend", target="middle")
+    assert cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS).done is False
+    for _ in range(cat.EXPRESS_ITEMS):
+        state.responses.append(cat.Response(1.4, 0.0, 0.02, True))
+    verdict = cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS)
+    assert verdict.done and verdict.stop_reason == "express"
+    decision = assessment.trial_decision()
+    assert decision.applied is False and decision.assessed_grade is None and decision.locked_until is None
+    assert assessment.is_trial({"mode": "express"})
+    assert assessment.is_trial({}) is False
+
+
+def test_a_weak_topic_is_visible_to_the_floor():
+    assert cat.topic_fails({"sql": (4, 1), "python": (4, 4)})
+    assert cat.topic_fails({"sql": (1, 0)}) is False
 
 
 def test_intern_is_the_step_below_junior():
@@ -201,9 +219,11 @@ def test_failed_attempt_changes_nothing_and_does_not_lock():
     assert d.assessed_grade is None and not d.applied and d.locked_until is None
 
 
-def test_first_confirmation_is_a_baseline_without_cooldown():
+def test_first_confirmation_does_not_start_the_cooldown():
     d = decide_grade(None, "middle", "middle", NOW)
-    assert d.assessed_grade == "middle" and d.applied and not d.upgraded and d.locked_until is None
+    assert d.assessed_grade == "middle" and d.applied and not d.upgraded
+    assert d.reason == "first_confirmation"
+    assert d.locked_until is None
 
 
 def test_separate_test_at_higher_grade_raises_grade_and_starts_cooldown():

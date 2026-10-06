@@ -14,6 +14,9 @@ SPECIALIZATIONS: dict[str, str] = {
     "devops": "DevOps / инфраструктура",
     "security": "Информационная безопасность",
     "embedded": "Встраиваемые системы, робототехника, БАС",
+    "qa": "Тестирование",
+    "analyst": "Аналитика",
+    "data": "Инженерия данных",
 }
 INDUSTRIES: dict[str, str] = {
     "fintech": "Финансы и финтех",

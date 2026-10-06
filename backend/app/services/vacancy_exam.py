@@ -30,12 +30,15 @@ SKILL_TOPIC = {
     "Machine Learning": "ml", "NLP": "ml", "LLM": "ml", "Computer Vision": "ml",
     "C": "embedded", "C++": "embedded", "STM32": "embedded", "Arduino": "embedded",
     "ROS": "embedded", "RTOS": "embedded", "PX4/ArduPilot": "embedded",
+    "Airflow": "pipelines", "Spark": "pipelines",
 }
 GRADE_LEVEL = {"intern": 1, "junior": 2, "middle": 3, "senior": 4, "lead": 5}
 TOPIC_LABELS = {
     "python": "Python", "sql": "SQL", "algorithms": "Алгоритмы", "javascript": "JavaScript",
     "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",
     "embedded": "Встраиваемые системы", "concept": "Понимание",
+    "testing": "Тестирование", "metrics": "Метрики", "pipelines": "Конвейеры данных",
+    "requirements": "Требования",
 }
 # How much the vacancy's own skills move the mix. The rest stays the specialization plan,
 # so a vacancy that names one library does not drop algorithms and SQL entirely.

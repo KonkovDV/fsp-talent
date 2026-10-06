@@ -19,7 +19,7 @@ from app.core.config import settings
 
 # canonical -> (roles, aliases); aliases are matched case-insensitively on word boundaries
 TAXONOMY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
-    "Python": (("backend", "ml"), ("python", "питон", "пайтон")),
+    "Python": (("backend", "ml", "qa", "analyst", "data"), ("python", "питон", "пайтон")),
     "Go": (("backend",), ("golang", "голанг", "go", "гоу")),
     "Java": (("backend",), ("java", "джава", "жава")),
     "Kotlin": (("backend", "mobile"), ("kotlin", "котлин")),
@@ -31,13 +31,13 @@ TAXONOMY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "Django": (("backend",), ("django", "джанго")),
     "Flask": (("backend",), ("flask", "фласк")),
     "Spring": (("backend",), ("spring", "spring boot", "спринг")),
-    "SQL": (("backend", "ml"), ("sql",)),
-    "PostgreSQL": (("backend",), ("postgresql", "postgres", "постгрес", "постгре", "постгрескл")),
+    "SQL": (("backend", "ml", "analyst", "data"), ("sql",)),
+    "PostgreSQL": (("backend", "data"), ("postgresql", "postgres", "постгрес", "постгре", "постгрескл")),
     "MySQL": (("backend",), ("mysql", "майскл")),
     "MongoDB": (("backend",), ("mongodb", "mongo", "монго", "монгодб")),
     "Redis": (("backend",), ("redis", "редис")),
     "ClickHouse": (("backend", "ml"), ("clickhouse", "кликхаус")),
-    "Kafka": (("backend",), ("kafka", "кафка")),
+    "Kafka": (("backend", "data"), ("kafka", "кафка")),
     "RabbitMQ": (("backend",), ("rabbitmq", "рэббит")),
     "gRPC": (("backend",), ("grpc",)),
     "JavaScript": (("frontend", "fullstack"), ("javascript", "js", "джаваскрипт", "жаваскрипт")),
@@ -51,7 +51,7 @@ TAXONOMY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "PyTorch": (("ml",), ("pytorch", "torch", "пайторч")),
     "TensorFlow": (("ml",), ("tensorflow", "keras", "тензорфлоу")),
     "scikit-learn": (("ml",), ("scikit-learn", "sklearn", "сайкит")),
-    "Pandas": (("ml",), ("pandas", "пандас")),
+    "Pandas": (("ml", "analyst", "data"), ("pandas", "пандас")),
     "NumPy": (("ml",), ("numpy", "нампи", "нампай")),
     "NLP": (("ml",), ("nlp", "обработка естественного языка")),
     "Computer Vision": (("ml", "embedded"), ("computer vision", "компьютерное зрение", "opencv")),
@@ -84,9 +84,15 @@ TAXONOMY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "Flutter": (("mobile",), ("flutter", "dart", "флаттер")),
     "Android": (("mobile",), ("android", "андроид")),
     "Algorithms": (("backend", "ml"), ("алгоритмы", "algorithms", "структуры данных", "data structures")),
+    "pytest": (("qa",), ("pytest", "пайтест")),
+    "Playwright": (("qa",), ("playwright", "плейрайт")),
+    "Selenium": (("qa",), ("selenium", "селениум")),
+    "A/B-тесты": (("analyst",), ("a/b-тесты", "a/b тесты", "аб-тесты")),
+    "Airflow": (("data",), ("airflow", "эйрфлоу")),
+    "Spark": (("data",), ("spark", "apache spark", "спарк")),
 }
 
-ROLES = ("backend", "frontend", "fullstack", "ml", "devops", "security", "embedded", "mobile")
+ROLES = ("backend", "frontend", "fullstack", "ml", "devops", "security", "embedded", "mobile", "qa", "analyst", "data")
 
 # Cyrillic letters that look like Latin ones; folded only when the whole token becomes ASCII
 _LOOKALIKES = str.maketrans("сореахкмтвнСОРЕАХКМТВН", "copeaxkmtbhCOPEAXKMTBH")

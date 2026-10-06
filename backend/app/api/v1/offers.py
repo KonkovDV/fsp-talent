@@ -2,7 +2,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,8 +13,17 @@ from app.api.deps import get_current_employer
 from app.api.errors import ApiError
 from app.api.v1.messages import unread_counts
 from app.core.database import get_db
+from app.core.idempotency import (
+    IdempotencyConflict,
+    IdempotencyUnavailable,
+    fingerprint,
+    idem_abort,
+    idem_begin,
+    idem_finish,
+)
 from app.core.ratelimit import too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
+from app.services.market import quartiles, reason_shares, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.privacy import contacts_allowed
@@ -57,12 +67,77 @@ def _offer_out(o: Offer) -> dict:
         "contacts_available": o.status == "accepted" and o.contacts_revoked_at is None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "contacts_revealed_at": o.contacts_revealed_at.isoformat() if o.contacts_revealed_at else None,
+        "decline_reason": o.decline_reason,
     }
+
+
+class SalaryPreview(BaseModel):
+    candidate_id: uuid.UUID
+    salary_to_gross: int = Field(gt=0, le=100_000_000)
+
+
+@router.post("/preview")
+async def preview_offer(body: SalaryPreview, current: dict = Depends(get_current_employer),
+                        db: AsyncSession = Depends(get_db)):
+    """Hint only: the invitation can still be sent when the range is below the candidate's ask."""
+    if await db.get(Employer, _eid(current)) is None:
+        raise HTTPException(404, "Работодатель не найден")
+    candidate = await db.get(Participant, body.candidate_id)
+    if not candidate or not candidate.discoverable:
+        raise HTTPException(404, "Кандидат недоступен для предложений")
+    return {"salary_hint": salary_gap_hint(body.salary_to_gross, candidate.salary_from_gross)}
+
+
+@router.get("/market")
+async def offer_market(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Decline shares and salary quartiles. A cell with fewer than five people is omitted."""
+    if await db.get(Employer, _eid(current)) is None:
+        raise HTTPException(404, "Работодатель не найден")
+    reasons = list(await db.scalars(select(Offer.decline_reason).where(Offer.status == "rejected")))
+    rows = (await db.execute(
+        select(CategoryAssignment.primary_role, CategoryAssignment.grade, Participant.salary_from_gross)
+        .join(Participant, Participant.id == CategoryAssignment.participant_id)
+        .where(Participant.salary_from_gross.is_not(None), Participant.deleted_at.is_(None),
+               Participant.is_visible.is_(True)))).all()
+    buckets: dict[tuple[str, str], list[int]] = {}
+    for role, grade, amount in rows:
+        if role and grade and amount:
+            buckets.setdefault((role, grade), []).append(int(amount))
+    salaries = []
+    for (role, grade), amounts in sorted(buckets.items()):
+        cell = quartiles(amounts)
+        if cell:
+            salaries.append({"role": role, "grade": grade, **cell})
+    return {"reasons": reason_shares(list(reasons)), "salaries": salaries}
 
 
 @router.post("/", status_code=201)
 async def create_offer(body: OfferCreate, current: dict = Depends(get_current_employer),
-                       db: AsyncSession = Depends(get_db)):
+                       db: AsyncSession = Depends(get_db),
+                       idempotency_key: str | None = Header(None, alias="Idempotency-Key")):
+    scope = f"offer:{current['sub']}"
+    digest = fingerprint(body.model_dump(mode="json"))
+    try:
+        stored = await idem_begin(scope, idempotency_key, digest)
+    except IdempotencyConflict as e:
+        raise HTTPException(409, e.message) from e
+    except IdempotencyUnavailable as e:
+        raise HTTPException(503, "Повтор запроса сейчас невозможен") from e
+    if stored:
+        return JSONResponse(stored["body"], status_code=stored["status"])
+    try:
+        payload = await _create_offer(body, current, db)
+    except Exception:
+        await idem_abort(scope, idempotency_key)
+        raise
+    try:
+        await idem_finish(scope, idempotency_key, digest, 201, payload)
+    except IdempotencyUnavailable as e:
+        raise HTTPException(503, "Повтор запроса сейчас невозможен") from e
+    return payload
+
+
+async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> dict:
     employer = await db.get(Employer, _eid(current))
     if not employer:
         raise HTTPException(404, "Работодатель не найден")
@@ -102,7 +177,9 @@ async def create_offer(body: OfferCreate, current: dict = Depends(get_current_em
                  "/candidate/offers")
     await db.commit()
     await outbox.deliver()
-    return _offer_out(offer)
+    out = _offer_out(offer)
+    out["salary_hint"] = salary_gap_hint(offer.salary_to_gross, candidate.salary_from_gross)
+    return out
 
 
 @router.get("/")
@@ -121,7 +198,8 @@ async def list_my_offers(current: dict = Depends(get_current_employer), db: Asyn
         card["unread_messages"] = unread.get(o.id, 0)
         cat = cats.get(o.candidate_id)
         card["candidate"] = (
-            {"role": cat.primary_role, "grade": cat.grade, "grade_source": cat.grade_source} if cat else None)
+            {"role": cat.primary_role, "grade": cat.grade, "grade_source": cat.grade_source, "label": None}
+            if cat else {"role": None, "grade": None, "grade_source": None, "label": "Кандидат"})
         out.append(card)
     return out
 

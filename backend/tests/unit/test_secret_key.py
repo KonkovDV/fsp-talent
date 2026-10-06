@@ -1,4 +1,6 @@
 """A fresh `docker compose up` must not run on the published placeholder key, and must not need .env edits."""
+import os
+
 from app.core.config import PUBLISHED_SECRETS, Settings, resolve_secret_key
 
 
@@ -12,7 +14,8 @@ def test_placeholder_is_replaced_by_a_generated_key(tmp_path):
     assert s.SECRET_KEY not in PUBLISHED_SECRETS
     assert len(s.SECRET_KEY) == 64
     assert (tmp_path / "secret_key").read_text() == s.SECRET_KEY
-    assert (tmp_path / "secret_key").stat().st_mode & 0o077 == 0
+    if os.name != "nt":
+        assert (tmp_path / "secret_key").stat().st_mode & 0o077 == 0
 
 
 def test_every_process_reads_the_same_key(tmp_path):

@@ -22,6 +22,7 @@ export interface CandidateCardData {
     plus: string[]
     minus: string[]
     info: string[]
+    reasons?: { code: string; text: string; tone: string }[]
     factors: { key: string; label: string; weight: number; value: number | null }[]
   }
   disciplines: {
@@ -35,6 +36,24 @@ export interface CandidateCardData {
     events_count?: number
     evidence: { status: string; year: number; bucket: string; team: boolean }[]
   }[]
+}
+
+const REASON_RU: Record<string, string> = {
+  CATEGORY_MATCH: 'Категория совпала',
+  VERIFIED_SKILL: 'Навык подтверждён',
+  TEST_SCORE: 'Результат теста',
+  SKILL_GAP: 'Нет навыка',
+  FSP_BONUS: 'Протокол ФСП',
+  FSP_NEUTRAL: 'Без истории ФСП',
+  RELATED_ROLE: 'Смежная специализация',
+  RELATED_SKILL: 'Близкая технология',
+  SKILL_COVERAGE: 'Навыки',
+  GRADE_DECLARED: 'Грейд заявлен',
+  GRADE_ABOVE: 'Грейд выше',
+  GRADE_BELOW: 'Грейд ниже',
+  OTHER_ROLE: 'Другая специализация',
+  UNTESTED: 'Тест не сдан',
+  INDUSTRY: 'Сфера',
 }
 
 interface Props {
@@ -74,7 +93,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
   const idle = card.match?.factors.filter(f => f.value == null) ?? []
 
   return (
-    <article className="card p-0" data-testid="candidate-card">
+    <article className="card p-0" data-testid="candidate-card" data-candidate-id={card.candidate_id}>
       <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 p-5 sm:grid-cols-[2.5rem_1fr_auto] sm:p-6">
         {place !== undefined && <span className="place pt-0.5 text-ink-3" aria-label={`Место ${place}`}>{place}</span>}
         <div className="min-w-0 space-y-3">
@@ -87,7 +106,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {card.grade_source === 'assessed'
               ? <span className="badge-ok">Грейд подтверждён тестом</span>
-              : <span className="badge-vc">Грейд заявлен</span>}
+              : <span className="badge-vc">Грейд не подтверждён</span>}
             {disc ? <><RankBadge rank={disc.best_rank} /><span className="text-ink-2">{disc.label}</span></>
               : <span className="text-ink-3">Без истории ФСП</span>}
           </div>
@@ -160,12 +179,21 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
       {open && (
         <div className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6">
           {card.match ? (
-            <ul className="space-y-1" data-testid="match">
-              {card.match.plus.map(l => <li key={l} className="text-ok">+ {l}</li>)}
-              {card.match.minus.map(l => <li key={l} className="text-invite">− {l}</li>)}
-              {card.match.info.map(l => <li key={l} className="text-ink-2">{l}</li>)}
-              {fresh.map(l => <li key={l} className="text-ink-2">{l}</li>)}
-            </ul>
+            <div data-testid="match">
+              {!!card.match.reasons?.length && (
+                <ul className="mb-2 flex flex-wrap gap-1.5">
+                  {card.match.reasons.map(r => (
+                    <li key={`${r.code}-${r.text}`} className={r.tone === 'minus' ? 'badge-warn' : r.tone === 'plus' ? 'badge-ok' : 'badge-vc'}>{REASON_RU[r.code] ?? r.code}</li>
+                  ))}
+                </ul>
+              )}
+              <ul className="space-y-1">
+                {card.match.plus.map(l => <li key={l} className="text-ok">+ {l}</li>)}
+                {card.match.minus.map(l => <li key={l} className="text-invite">− {l}</li>)}
+                {card.match.info.map(l => <li key={l} className="text-ink-2">{l}</li>)}
+                {fresh.map(l => <li key={l} className="text-ink-2">{l}</li>)}
+              </ul>
+            </div>
           ) : <ul className="space-y-1 text-ink-2">{card.why.map(l => <li key={l}>{l}</li>)}</ul>}
           {disc && disc.evidence.length > 0 && (
             <div>

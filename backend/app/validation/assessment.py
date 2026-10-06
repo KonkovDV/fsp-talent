@@ -28,15 +28,17 @@ import sys
 from dataclasses import dataclass, field
 
 from app.items import CHOICE_C, LEVEL_B, TYPED_C
-from app.items.registry import BLUEPRINTS, FAMILIES, typed_share
+from app.items.registry import FAMILIES, typed_share
 from app.models.assessment import GRADE_ORDER
 from app.services import cat as cat_module
 from app.services.cat import CUTS, MAX_ITEMS, Response, State, choose, decide, evaluate, item_key, p3, posterior
 from app.services.item_monitor import KeyStats, calibrate_offset, leave_family_out
 
-SPECS = tuple(BLUEPRINTS)
+# Who sits the published exam: every specialization, including data engineering.
+SPECS = ("backend", "fullstack", "frontend", "mobile", "ml", "devops", "security", "embedded", "qa", "analyst", "data")
 MAIN_FAMILY = {"backend": "py_eval", "fullstack": "js_eval", "frontend": "js_eval", "mobile": "js_eval",
-               "ml": "ml_metrics", "devops": "net_ipv4", "security": "sec_decode", "embedded": "emb_bits"}
+               "ml": "ml_metrics", "devops": "net_ipv4", "security": "sec_decode", "embedded": "emb_bits",
+               "qa": "qa_checks", "analyst": "analyst_metrics", "data": "data_batches"}
 
 
 def true_grade(theta: float) -> str | None:
@@ -97,7 +99,8 @@ def choices_only():
 
 def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.Random,
                 leaked_family: str | None = None, blocked: set[str] | None = None,
-                guesser: bool = False, offsets: dict[str, float] | None = None) -> Session:
+                guesser: bool = False, offsets: dict[str, float] | None = None,
+                attack: str | None = None, collision: dict[str, float] | None = None) -> Session:
     state = State(spec=spec, target=target)
     keys: list[str] = []
     answers = []
@@ -109,7 +112,11 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         key = item_key(ch.family, ch.level)
         typed = _TYPED and rng.random() < typed_share(ch.family.id, ch.level)
         c = TYPED_C if typed else CHOICE_C
-        if guesser:
+        if attack == "fixed":
+            correct = True
+        elif attack == "transfer":
+            correct = rng.random() < (collision or {}).get(ch.family.id, 0.0)
+        elif guesser:
             correct = rng.random() < c
         elif leaked_family and ch.family.id == leaked_family:
             correct = True
@@ -151,6 +158,9 @@ class CohortReport:
     stopped_early: float       # share of sessions decided before MAX_ITEMS
     max_exposure: float        # highest share of sessions that served one item key
     concept_share: float
+    exact_grade: float         # earned grade equals the true grade (None counts)
+    within_one: float          # earned grade is at most one step from the truth
+    overgrade: float           # earned grade is strictly above the truth
 
 
 Person = tuple[float, str, str]   # true ability, specialization, declared grade
@@ -181,6 +191,19 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
     lengths = sorted(s.n for s in sessions)
     exposure = collections.Counter(k for s in sessions for k in set(s.keys))
     concept = sum(1 for s in sessions for k in s.keys if FAMILIES[k.split(":")[0]].kind == "concept")
+
+    def _idx(grade: str | None) -> int | None:
+        return GRADE_ORDER.index(grade) if grade in GRADE_ORDER else None
+
+    exact = within = over = 0
+    for s in sessions:
+        truth_g = true_grade(s.theta)
+        ti, ei = _idx(truth_g), _idx(s.earned)
+        exact += s.earned == truth_g
+        if ti is None and ei is None or (ti is not None and ei is not None and abs(ti - ei) <= 1):
+            within += 1
+        if ei is not None and (ti is None or ei > ti):
+            over += 1
     return CohortReport(
         n=n, accuracy=right / n,
         accuracy_clear=sum(s.passed == (s.theta >= CUTS[s.target]) for s in clear) / max(1, len(clear)),
@@ -191,6 +214,7 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
         stopped_early=sum(s.n < MAX_ITEMS for s in sessions) / n,
         max_exposure=max(exposure.values()) / n,
         concept_share=concept / sum(lengths),
+        exact_grade=exact / n, within_one=within / n, overgrade=over / n,
     ), sessions
 
 
@@ -266,6 +290,7 @@ class Retest:
     agreement_clear: float     # pairs more than 0.5 from the cut
     same_grade: float          # same confirmed grade (a test confirms only its target, or nothing)
     theta_r: float             # correlation of the two ability estimates
+    weighted_kappa: float      # quadratic weighted kappa of the two earned grades
 
 
 def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float]) -> Retest:
@@ -281,7 +306,30 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
         agreement_clear=statistics.mean(clear) if clear else 1.0,
         same_grade=statistics.mean(a.earned == b.earned for _, _, a, b in pairs),
         theta_r=_pearson([a.theta_hat for _, _, a, _ in pairs], [b.theta_hat for _, _, _, b in pairs]),
+        weighted_kappa=_quadratic_kappa([a.earned for _, _, a, _ in pairs],
+                                        [b.earned for _, _, _, b in pairs]),
     )
+
+
+def _quadratic_kappa(xs: list[str | None], ys: list[str | None]) -> float:
+    """Quadratic weighted kappa. A miss by two grades costs more than a miss by one."""
+    labels: list[str | None] = [*GRADE_ORDER, None]
+    index = {g: i for i, g in enumerate(labels)}
+    k = len(labels)
+    n = len(xs)
+    if n == 0:
+        return 1.0
+    obs = [[0] * k for _ in range(k)]
+    for a, b in zip(xs, ys, strict=True):
+        obs[index[a]][index[b]] += 1
+    row = [sum(obs[i]) for i in range(k)]
+    col = [sum(obs[i][j] for i in range(k)) for j in range(k)]
+    weight = [[((i - j) / (k - 1)) ** 2 for j in range(k)] for i in range(k)]
+    po = sum(weight[i][j] * obs[i][j] for i in range(k) for j in range(k)) / n
+    pe = sum(weight[i][j] * row[i] * col[j] for i in range(k) for j in range(k)) / (n * n)
+    if pe == 0:
+        return 1.0
+    return 1.0 - po / pe
 
 
 @dataclass
@@ -302,6 +350,85 @@ class Report:
     guesser_pass: float
     guesser_pass_choices: float
     blocked: list[str]
+    transfer_pass: float
+    fixed_pass: float
+    cusum_leaked: int
+    cusum_false_clean: int
+    mae_a_before: float
+    mae_a_after: float
+    topic_false_pass: float
+    topic_accuracy: float
+
+
+def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
+    """How often two fresh items of one family share an answer. A transferred key is right only then."""
+    rates: dict[str, float] = {}
+    for fam in FAMILIES.values():
+        if fam.kind != "code":
+            continue
+        spec = next(iter(fam.specs))
+        same = total = 0
+        for level in fam.levels:
+            if not fam.available(spec, level):
+                continue
+            for _ in range(pairs):
+                left = fam.generate(random.Random(rng.randrange(1, 2**30)), level, spec)
+                right = fam.generate(random.Random(rng.randrange(1, 2**30)), level, spec)
+                total += 1
+                same += left.options[left.correct] == right.options[right.correct]
+        if total:
+            rates[fam.id] = same / total
+    return rates
+
+
+def _attack_pass(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float],
+                 rates: dict[str, float], fixed: bool) -> float:
+    attack = "fixed" if fixed else "transfer"
+    sessions = [run_session(theta, spec, target, truth, rng, offsets=offsets, attack=attack, collision=rates)
+                for theta, spec, target in people]
+    return sum(s.passed for s in sessions) / max(1, len(sessions))
+
+
+def _discrimination_mae(sessions: list[Session], truth: Truth) -> tuple[float, float]:
+    from app.services.item_monitor import calibrate_discrimination
+
+    before, after = [], []
+    for key, rows in _rest_rows(sessions).items():
+        if len(rows) < 30 or key not in truth.a_mult:
+            continue
+        fam = FAMILIES[key.split(":")[0]]
+        true_a = fam.a * truth.a_mult[key]
+        before.append(abs(fam.a - true_a))
+        # b in the row is already the difficulty the selector served (nominal plus pretest shift).
+        est = calibrate_discrimination([(t, b, c, ok) for t, _a, b, c, ok in rows], a0=fam.a)
+        after.append(abs(est - true_a))
+    if not before:
+        return 0.0, 0.0
+    return statistics.mean(before), statistics.mean(after)
+
+
+def _topic_shares(session: Session) -> dict[str, tuple[int, int]]:
+    topics: dict[str, tuple[int, int]] = {}
+    for _key, fam, *_rest, ok in session.answers:
+        topic = FAMILIES[fam].topic
+        n, right = topics.get(topic, (0, 0))
+        topics[topic] = (n + 1, right + int(ok))
+    return topics
+
+
+def _topic_floor_effect(sessions: list[Session]) -> tuple[float, float]:
+    """Accuracy and false-pass if a weak topic blocked an otherwise accepted grade. Not applied in the product yet."""
+    from app.services.cat import topic_fails
+
+    right = below_pass = below_n = 0
+    for s in sessions:
+        passed = s.passed and not topic_fails(_topic_shares(s))
+        right += passed == (s.theta >= CUTS[s.target])
+        if s.theta < CUTS[s.target]:
+            below_n += 1
+            below_pass += int(passed)
+    n = max(1, len(sessions))
+    return right / n, below_pass / max(1, below_n)
 
 
 def _guessers(truth: Truth, rng: random.Random) -> float:
@@ -326,13 +453,22 @@ def run(n: int = 3000, seed: int = 7) -> Report:
     clean_alarms = monitor(clean_sessions)
     leak, leak_sessions = cohort(population(n, rng), truth, rng, leak_share=0.3, offsets=offsets)
     stats = monitor(leak_sessions)
-    flagged = {k for k, st in stats.items() if st.alarm}
+    flagged = {k for k, st in stats.items() if st.alarm or st.cusum_alarm}
     leaked_keys = {k for k in stats if k.split(":")[0] in set(MAIN_FAMILY.values()) and stats[k].n >= 30}
     monitored, _ = cohort(population(n, rng), truth, rng, leak_share=0.3, blocked=flagged, offsets=offsets)
     served = [c for s in clean_sessions for *_, c, _ in s.answers]
+    side = random.Random(seed + 99)
+    rates = _collision_rates(side)
+    transfer_people = population(min(80, n), random.Random(seed + 98))
+    transfer_pass = _attack_pass(transfer_people, truth, side, offsets, rates, fixed=False)
+    fixed_pass = _attack_pass(transfer_people, truth, side, offsets, rates, fixed=True)
+    mae_before, mae_after = _discrimination_mae(clean_sessions, truth)
+    topic_acc, topic_fp = _topic_floor_effect(clean_sessions)
+    cusum_leaked = len({k for k, st in stats.items() if st.cusum_alarm} & leaked_keys)
+    cusum_false = sum(1 for st in clean_alarms.values() if st.cusum_alarm)
     return Report(
         clean=clean, choices=choices, leak=leak, monitored=monitored,
-        false_alarms_clean=sum(1 for st in clean_alarms.values() if st.alarm),
+        false_alarms_clean=sum(1 for st in clean_alarms.values() if st.alarm or st.cusum_alarm),
         keys_clean=sum(1 for st in clean_alarms.values() if st.n >= 30),
         leaked_keys=len(leaked_keys), leaked_flagged=len(flagged & leaked_keys),
         other_flagged=len(flagged - leaked_keys),
@@ -341,6 +477,10 @@ def run(n: int = 3000, seed: int = 7) -> Report:
         typed_share=sum(c < CHOICE_C for c in served) / len(served),
         guesser_pass=_guessers(truth, rng), guesser_pass_choices=guesser_choices,
         blocked=sorted(flagged),
+        transfer_pass=transfer_pass, fixed_pass=fixed_pass,
+        cusum_leaked=cusum_leaked, cusum_false_clean=cusum_false,
+        mae_a_before=mae_before, mae_a_after=mae_after,
+        topic_false_pass=topic_fp, topic_accuracy=topic_acc,
     )
 
 
@@ -354,6 +494,8 @@ CHECKS = {
     # Guessing flattens an item with options, so its floor is lower.
     "typed median r ≥ 0.20": lambda r: r.discrimination["typed"].median_r >= 0.20,
     "choice median r ≥ 0.15": lambda r: r.discrimination["choice"].median_r >= 0.15,
+    # A key from another draw of the same family must not pass the test.
+    "transfer_pass ≤ 0.02": lambda r: r.transfer_pass <= 0.02,
 }
 
 
@@ -410,6 +552,19 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"из {r.keys_clean} ключей.",
         f"- Случайное угадывание проходит тест в {r.guesser_pass:.1%} случаев "
         f"(все задания с вариантами — {r.guesser_pass_choices:.1%}).",
+        f"- Точный грейд в сценарии «без утечки»: {r.clean.exact_grade:.1%}, в пределах одной ступени: "
+        f"{r.clean.within_one:.1%}, завышение: {r.clean.overgrade:.1%}.",
+        f"- Взвешенная каппа повторного теста (квадратичные веса по грейду): {r.retest.weighted_kappa:.2f}.",
+        f"- Ключ от другого экземпляра того же семейства: сдают {r.transfer_pass:.1%}. "
+        f"Ключ от того же экземпляра (фиксированный банк): сдают {r.fixed_pass:.1%}.",
+        f"- Второй сигнал утечки (CUSUM): поймано {r.cusum_leaked} утёкших ключей, "
+        f"ложных тревог на чистых данных — {r.cusum_false_clean}. "
+        f"Карантин ставится, если сработал z или CUSUM.",
+        f"- Калибровка различимости, средняя ошибка a: до {r.mae_a_before:.3f}, после {r.mae_a_after:.3f}."
+        + (" Банк заданий её не принимает: ошибка на симуляции не снижается."
+           if r.mae_a_after > r.mae_a_before else ""),
+        f"- Если слабая тема блокирует сдачу: точность {r.topic_accuracy:.1%}, ложные сдачи {r.topic_false_pass:.1%} "
+        f"(в продукте порог по теме не включён, пока сравнение не подтвердит его).",
         "",
     ])
 

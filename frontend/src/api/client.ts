@@ -95,8 +95,8 @@ export const readAllNotifications = () => api.post('/notifications/read-all')
 export const deleteMyAccount = (confirm: string) => api.delete('/candidates/me', { data: { confirm } })
 export const getMyResults = () => api.get('/candidates/me/results')
 export const getMyOffers = () => api.get('/candidates/me/offers')
-export const respondToOffer = (offerId: string, action: 'accept' | 'reject') =>
-  api.post(`/candidates/me/offers/${offerId}/respond`, { action })
+export const respondToOffer = (offerId: string, action: 'accept' | 'reject', reason?: string) =>
+  api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null })
 export const updateVisibility = (is_visible: boolean) =>
   api.patch('/candidates/me/visibility', { is_visible })
 
@@ -104,7 +104,11 @@ export const searchCandidates = (params: object) => api.get('/search/candidates'
 export const parseQuery = (q: string) => api.post('/ai/parse-query', { q })
 export const parseResume = (text: string) => api.post('/ai/parse-resume', { text })
 
-export const createOffer = (data: object) => api.post('/offers/', data)
+export const createOffer = (data: object, idempotencyKey?: string) =>
+  api.post('/offers/', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined)
+export const previewOffer = (candidate_id: string, salary_to_gross: number) =>
+  api.post('/offers/preview', { candidate_id, salary_to_gross })
+export const offerMarket = () => api.get('/offers/market')
 export const getMyEmployerOffers = () => api.get('/offers/')
 export const getOfferContacts = (id: string) => api.get(`/offers/${id}/contacts`)
 export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
@@ -131,7 +135,7 @@ export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
 export const assessmentBlueprint = () => api.get('/assessment/blueprint')
-export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null }) =>
+export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null; mode?: 'grade' | 'express' }) =>
   api.post('/assessment/start', data)
 export const activeAssessment = () => api.get('/assessment/active')
 export const answerAssessment = (sessionId: string, item_token: string,
@@ -155,6 +159,7 @@ export const itemHealth = () => api.get('/public/assessment/items')
 export const surveyOptions = () => api.get('/candidates/survey-options')
 export const saveSurvey = (data: {
   specialization: string; industry: string; work_goal: string; declared_grade?: string | null; experience_years?: number | null
+  salary_from_gross?: number | null; salary_to_gross?: number | null
 }) => api.put('/candidates/me/survey', data)
 
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
@@ -166,6 +171,8 @@ export const verifyCredential = (credential: object) => api.post('/public/creden
 export const listNeeds = () => api.get('/needs')
 export const createNeed = (data: object) => api.post('/needs', data)
 export const updateNeed = (id: string, data: object) => api.put(`/needs/${id}`, data)
+export const getNeed = (id: string) => api.get(`/needs/${id}`)
+export const restoreNeed = (id: string, version: number) => api.post(`/needs/${id}/versions/${version}/restore`)
 export const archiveNeed = (id: string) => api.delete(`/needs/${id}`)
 export const needMatches = (id: string) => api.get(`/needs/${id}/matches`, { params: { limit: 20 } })
 export const needShortlist = (id: string) => api.get(`/needs/${id}/shortlist`)
