@@ -48,6 +48,49 @@ DEMOS = {
 }
 
 
+# Vacancies of the fictional companies. The text matters: the test for a vacancy takes its topics from the
+# skills named here and quotes the sentence it found them in (app/services/vacancy_exam.py).
+DEMO_VACANCIES = [
+    ("hr@sibcode.demo", "Backend-разработчик", "backend", "middle", "algorithmic", "I",
+     ["Python", "FastAPI", "PostgreSQL"], 180000, 260000, "remote",
+     "Платёжный сервис для малого бизнеса. Пишем API на Python и FastAPI, данные храним в PostgreSQL, "
+     "очереди на Redis. Нужен человек, который сам доведёт задачу от схемы БД до релиза и разберётся "
+     "в медленном SQL-запросе."),
+    ("hr@sibcode.demo", "Стажёр backend", "backend", "intern", None, None,
+     ["Python", "SQL", "Algorithms"], 60000, 90000, "hybrid",
+     "Стажировка на три месяца с наставником. Нужны уверенный Python, основы SQL и алгоритмы на уровне "
+     "школьной олимпиады. Подойдёт студентам и участникам соревнований ФСП."),
+    ("hr@perimeter.demo", "Специалист по ИБ", "security", "middle", "security", "II",
+     ["Python", "Linux", "Web Security"], 160000, 240000, "remote",
+     "Центр мониторинга безопасности. Проводим пентест веб-приложений клиентов, пишем отчёты и "
+     "автоматизацию на Python. Нужны Linux, Web Security и опыт CTF."),
+    ("hr@perimeter.demo", "Аналитик SOC", "security", "junior", "security", None,
+     ["Linux", "Networking", "Forensics"], 110000, 150000, "office",
+     "Первая линия SOC: разбор инцидентов, корреляция событий, сетевой трафик. Нужны Linux, понимание "
+     "сетей (Networking) и интерес к Forensics. Обучаем внутри команды."),
+    ("hr@quantumlab.demo", "ML-инженер (NLP)", "ml", "middle", "algorithmic", None,
+     ["Python", "PyTorch", "NLP", "SQL"], 230000, 320000, "remote",
+     "Рекомендательные системы для ритейла. Обучаем модели на PyTorch, работаем с NLP и LLM, данные "
+     "готовим на SQL и Pandas. Нужен опыт доведения модели до продакшна."),
+    ("hr@quantumlab.demo", "Frontend-разработчик", "frontend", "junior", "product", None,
+     ["TypeScript", "React", "HTML/CSS"], 120000, 170000, "hybrid",
+     "Интерфейсы для аналитиков: дашборды и редакторы правил. Стек: TypeScript, React, HTML/CSS. "
+     "Ценим аккуратную вёрстку и понимание того, как работает браузер."),
+    ("hr@cloudwhale.demo", "DevOps-инженер", "devops", "middle", None, None,
+     ["Docker", "Kubernetes", "Linux", "Nginx"], 200000, 280000, "remote",
+     "Облачная платформа в трёх дата-центрах. Поддерживаем Kubernetes, собираем Docker-образы, "
+     "настраиваем Nginx и сети на Linux. Дежурства раз в шесть недель."),
+    ("hr@cloudwhale.demo", "Go-разработчик", "backend", "senior", "algorithmic", None,
+     ["Go", "PostgreSQL", "Kubernetes", "Algorithms"], 300000, 400000, "remote",
+     "Пишем на Go контроллеры объектного хранилища. Нужны сильные алгоритмы, PostgreSQL и опыт "
+     "работы с Kubernetes. Решения о дизайне принимает команда, без согласований сверху."),
+    ("hr@robotech.demo", "Инженер встраиваемых систем", "embedded", "junior", "robotics", None,
+     ["C++", "STM32", "RTOS", "ROS"], 120000, 170000, "office",
+     "Прошивки для промышленных роботов и беспилотников. Пишем на C++ под STM32 с RTOS, верхний уровень "
+     "на ROS. Подойдёт участникам соревнований ФСП по робототехнике и БАС."),
+]
+
+
 async def main() -> None:
     adapter = MockFSPAdapter()
     async with AsyncSessionLocal() as db:
@@ -132,24 +175,19 @@ async def main() -> None:
             _consents(db, "participant", participant.id, now)
             await rebuild_profile(db, participant)
             created += 1
-        demo_jobs = [
-            ("hr@sibcode.demo", "Backend-разработчик", "backend", "middle", "algorithmic", "I",
-             ["Python", "FastAPI", "PostgreSQL"], 180000, 260000),
-            ("hr@perimeter.demo", "Специалист по ИБ", "security", "middle", "security", "II",
-             ["Python", "Linux", "Web Security"], 160000, 240000),
-        ]
         jobs = 0
-        for email, title, role, grade, disc, rank, skills, lo, hi in demo_jobs:
+        for email, title, role, grade, disc, rank, skills, lo, hi, fmt, text in DEMO_VACANCIES:
             employer = await db.scalar(select(Employer).where(Employer.email == email))
             if employer is None:
                 continue
-            exists = await db.scalar(
-                select(Vacancy.id).where(Vacancy.employer_id == employer.id, Vacancy.title == title))
-            if exists:
+            existing = await db.scalar(
+                select(Vacancy).where(Vacancy.employer_id == employer.id, Vacancy.title == title))
+            if existing is not None:
+                existing.description = existing.description or text
                 continue
-            db.add(Vacancy(employer_id=employer.id, title=title, role=role, grade=grade, discipline=disc,
-                           min_rank=rank, skills=skills, salary_from_gross=lo, salary_to_gross=hi,
-                           work_format="remote"))
+            db.add(Vacancy(employer_id=employer.id, title=title, description=text, role=role, grade=grade,
+                           discipline=disc, min_rank=rank, skills=skills, salary_from_gross=lo,
+                           salary_to_gross=hi, work_format=fmt))
             jobs += 1
         await db.commit()
         print(f"seeded employers={employers} participants={created} vacancies={jobs}")
