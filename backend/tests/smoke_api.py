@@ -184,6 +184,17 @@ def main():
     participant_token = participant["access_token"]
     status, me = call("GET", "/candidates/me", token=participant_token)
     assert status == 200 and me["fsp_id"] == "FSP001" and me["grade"] == "middle", me
+    # TZ 2.1, regular tasks: an employer's vacancy offers this week's short task; solving it refreshes the card.
+    status, weekly = call("GET", "/assessment/practice/weekly", token=participant_token)
+    assert status == 200 and weekly and weekly["vacancy_id"] and weekly["company"], weekly
+    status, task = call("POST", "/assessment/practice/start", {"vacancy_id": weekly["vacancy_id"]},
+                        token=participant_token)
+    assert status == 200 and task["stem"], task
+    answer = {"answer_text": "0"} if task["answer_mode"] == "number" else {"answer_index": 0}
+    status, done = call("POST", f"/assessment/practice/{task['id']}/answer", answer, token=participant_token)
+    assert status == 200 and done["answered"], done
+    status, weekly = call("GET", "/assessment/practice/weekly", token=participant_token)
+    assert weekly["done"] is True, weekly
     status, legacy = call("POST", "/auth/participant/token", form={"username": "FSP001", "password": "test"})
     assert status == 401 and legacy["error"]["code"] == "invalid_credentials", legacy
     check_registration()

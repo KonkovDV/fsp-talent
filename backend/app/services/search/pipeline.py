@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, literal, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,8 +27,19 @@ from app.services.profile import adult_cutoff
 from app.services.scoring.engine import RANK_ORDER, STATUS_LABELS, percentile
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
+from app.services.vacancy_exam import TOPIC_LABELS
 
 logger = logging.getLogger(__name__)
+
+
+def days_ago(moment: datetime, now: datetime | None = None) -> str:
+    """How fresh a signal is, in words an HR reads at a glance."""
+    days = ((now or datetime.now(UTC)) - moment).days
+    if days <= 0:
+        return "сегодня"
+    if days == 1:
+        return "вчера"
+    return f"{days} дн. назад"
 
 RRF_K = 60
 POOL_LIMIT = 1000
@@ -365,7 +377,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
             why.append("Смысловое совпадение с запросом")
         if p.practice_at is not None and p.practice_topic:
             mark = "верно" if p.practice_ok else "с ошибкой"
-            why.append(f"Короткая практика ({p.practice_topic}): {mark}")
+            topic = TOPIC_LABELS.get(p.practice_topic, p.practice_topic)
+            why.append(f"Короткая практика ({topic}): {mark}, {days_ago(p.practice_at)}")
         line = percentiles.get(pid)
         if line:
             why.append(line)

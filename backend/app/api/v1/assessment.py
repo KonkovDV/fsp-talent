@@ -46,7 +46,13 @@ from app.services.assessment import (
     session_items,
     start_session,
 )
-from app.services.practice import answer_practice, public_attempt, same_practice_request, start_practice
+from app.services.practice import (
+    answer_practice,
+    public_attempt,
+    same_practice_request,
+    start_practice,
+    weekly_task,
+)
 from app.services.profile import rebuild_profile
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
@@ -306,6 +312,15 @@ class PracticeStartIn(BaseModel):
 class PracticeAnswerIn(BaseModel):
     answer_index: int | None = Field(None, ge=0, le=9)
     answer_text: str | None = Field(None, max_length=32)
+
+
+@router.get("/practice/weekly")
+async def practice_weekly(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """Task of the week from an employer's open vacancy (TZ 2.1, regular short tasks). null if none is open."""
+    participant = await db.get(Participant, uuid.UUID(current["sub"]))
+    if participant is None:
+        raise ApiError(404, "not_found", "Профиль не найден")
+    return await weekly_task(db, participant)
 
 
 @router.post("/practice/start")

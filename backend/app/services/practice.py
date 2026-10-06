@@ -6,18 +6,23 @@ The right answer stays on the server until the candidate submits.
 """
 from __future__ import annotations
 
+import hashlib
 import random
 import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.items import same_number, whole_number
 from app.items.registry import BLUEPRINTS, families_for
-from app.models import Participant, PracticeAttempt, Vacancy
+from app.models import Employer, Notification, Participant, PracticeAttempt, Vacancy
+from app.services.notify import Outbox, notify
 from app.services.vacancy_exam import GRADE_LEVEL, TOPIC_LABELS, form_exam
+
+# A candidate who solved a task this recently gets no reminder this week.
+WEEKLY_QUIET_DAYS = 7
 
 
 def _typed(row: PracticeAttempt) -> bool:
@@ -149,3 +154,81 @@ async def answer_practice(db: AsyncSession, participant: Participant, attempt_id
         "is_correct": row.is_correct,
         "explanation": row.explanation,
     }
+
+
+# --- Task of the week (TZ 2.1: the platform periodically offers a short task from an employer) ------------
+
+def week_start(now: datetime) -> datetime:
+    monday = (now - timedelta(days=now.weekday())).date()
+    return datetime(monday.year, monday.month, monday.day, tzinfo=UTC)
+
+
+def pick_weekly(candidates: list[uuid.UUID], participant_id: uuid.UUID, now: datetime) -> uuid.UUID | None:
+    """The same vacancy all week for one candidate, a different one next week, no state to store."""
+    if not candidates:
+        return None
+    year, week, _ = now.isocalendar()
+    digest = hashlib.sha256(f"{participant_id}:{year}-{week}".encode()).digest()
+    return sorted(candidates)[int.from_bytes(digest[:8], "big") % len(candidates)]
+
+
+async def weekly_task(db: AsyncSession, participant: Participant, now: datetime | None = None) -> dict | None:
+    """This week's short task: an open vacancy of the candidate's specialization, any open one otherwise.
+
+    The task is formed from the vacancy text the same way as the practice button on the vacancy card.
+    Solving it refreshes the profile: the employer sees the topic, the result and its date on the card.
+    """
+    now = now or datetime.now(UTC)
+    rows = list((await db.execute(
+        select(Vacancy.id, Vacancy.role).where(Vacancy.is_open.is_(True)))).all())
+    own = [vid for vid, role in rows if role and role == participant.specialization]
+    chosen = pick_weekly(own or [vid for vid, _ in rows], participant.id, now)
+    if chosen is None:
+        return None
+    vacancy = await db.get(Vacancy, chosen)
+    employer = await db.get(Employer, vacancy.employer_id)
+    exam = form_exam(vacancy.title, vacancy.description or "", list(vacancy.skills or []),
+                     vacancy.role, vacancy.grade)
+    topic = exam["topics"][0]["topic"] if exam["topics"] else None
+    solved = await db.scalar(select(PracticeAttempt).where(
+        PracticeAttempt.participant_id == participant.id, PracticeAttempt.vacancy_id == vacancy.id,
+        PracticeAttempt.answered_at >= week_start(now)).order_by(PracticeAttempt.answered_at.desc()).limit(1))
+    return {
+        "week_from": week_start(now).date().isoformat(),
+        "vacancy_id": str(vacancy.id),
+        "title": vacancy.title,
+        "company": employer.company_name if employer else None,
+        "topic_label": TOPIC_LABELS.get(topic, topic) if topic else None,
+        "done": solved is not None,
+        "is_correct": solved.is_correct if solved else None,
+        "last_practice_at": participant.practice_at.isoformat() if participant.practice_at else None,
+    }
+
+
+async def offer_weekly_tasks(db: AsyncSession, now: datetime | None = None) -> tuple[int, Outbox]:
+    """Run weekly by the scheduler: a bell row and a letter for candidates who have not practised lately."""
+    now = now or datetime.now(UTC)
+    quiet = now - timedelta(days=WEEKLY_QUIET_DAYS)
+    already = set(await db.scalars(select(Notification.recipient_id).where(
+        Notification.kind == "practice_weekly", Notification.created_at >= week_start(now))))
+    people = list(await db.scalars(select(Participant).where(
+        Participant.deleted_at.is_(None), Participant.email_verified_at.is_not(None),
+        Participant.survey_at.is_not(None),
+        (Participant.practice_at.is_(None)) | (Participant.practice_at < quiet))))
+    outbox = Outbox()
+    sent = 0
+    for person in people:
+        if person.id in already:
+            continue
+        task = await weekly_task(db, person, now)
+        if task is None:
+            continue
+        company = f"«{task['company']}»" if task["company"] else "работодателя"
+        topic = f" по теме «{task['topic_label']}»" if task["topic_label"] else ""
+        await notify(db, outbox, "participant", person.id, "practice_weekly",
+                     f"Задача недели от {company}",
+                     f"Одно задание{topic} из вакансии «{task['title']}». Грейд оно не меняет, а работодатели "
+                     "увидят в карточке свежий результат.",
+                     f"/candidate/vacancies?vacancy={task['vacancy_id']}")
+        sent += 1
+    return sent, outbox

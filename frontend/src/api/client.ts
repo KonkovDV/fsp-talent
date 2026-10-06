@@ -143,6 +143,7 @@ export const startPractice = (opts?: { vacancy_id?: string | null; topic?: strin
   api.post('/assessment/practice/start', { vacancy_id: opts?.vacancy_id || null, topic: opts?.topic || null })
 export const compareNeed = (needId: string, ids: string[]) =>
   api.get(`/needs/${needId}/compare`, { params: { ids: ids.join(',') } })
+export const weeklyTask = () => api.get('/assessment/practice/weekly')
 export const answerPractice = (id: string, body: { answer_index?: number; answer_text?: string }) =>
   api.post(`/assessment/practice/${id}/answer`, body)
 export const myApplications = () => api.get('/vacancies/my-applications')
