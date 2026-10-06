@@ -95,6 +95,25 @@ jobs:
       - run: cd frontend && npm run type-check
       - run: cd frontend && npm run build
 
+  # The jury's path, word for word: docs/INSTALL.md on a clean machine, then the API check with codes from Mailpit.
+  compose-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make demo (build, start, wait for health checks, load demo data)
+        run: make demo
+      - name: The site, Swagger and health answer through nginx
+        run: |
+          curl -fsS http://localhost/health
+          curl -fsS http://localhost/ | grep -q 'id="root"'
+          curl -fsS http://localhost/docs | grep -qi swagger
+          curl -fsS http://localhost/openapi.json | python3 -c "import json,sys; print(len(json.load(sys.stdin)['paths']), 'paths')"
+      - name: make check (registration, FSP ID, test, search, invitation, contacts)
+        run: make check
+      - name: Logs on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color --tail 200
+
   docker-build:
     needs: [lint, test-backend, test-frontend]
     if: github.ref == 'refs/heads/main'
