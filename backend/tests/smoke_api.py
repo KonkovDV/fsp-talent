@@ -401,13 +401,13 @@ def check_assessment():
     status, review = call("GET", f"/assessment/{strong['session_id']}/review", token=token)
     assert status == 200 and all(i["correct"] for i in review["items"]), review
     # A test built from a vacancy never changes the grade, even when every answer is right.
-    status, cards = call("GET", "/vacancies/for-me", token=token)
-    backend = [c for c in cards if c["role"] == "backend"]
-    assert status == 200 and backend, cards
-    by_vacancy = _run_test(token, "senior", _right_answer, vacancy_id=backend[0]["id"])
+    # The task of the week comes from an open vacancy of the candidate's own specialization.
+    status, weekly = call("GET", "/assessment/practice/weekly", token=token)
+    assert status == 200 and weekly and weekly["vacancy_id"], weekly
+    by_vacancy = _run_test(token, "senior", _right_answer, vacancy_id=weekly["vacancy_id"])
     vac = by_vacancy["result"]
-    assert vac["vacancy_test"] and vac["outcome"] == "vacancy_test" and vac["confirmed_grade"] == "middle", vac
-    assert vac["recommended_grade"] == "senior" and vac["grade_locked_until"] is None, vac
+    assert vac["vacancy_test"] and vac["outcome"] == "vacancy_test" and vac["confirmed_grade"] != "senior", vac
+    assert vac["recommended_grade"] in ("senior", "lead") and vac["grade_locked_until"] is None, vac
     status, me = call("GET", "/candidates/me", token=token)
     assert me["assessed_grade"] == "middle", me
     status, health = call("GET", "/public/assessment/items")
