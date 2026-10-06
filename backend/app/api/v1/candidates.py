@@ -20,7 +20,9 @@ from app.models.profile import DisciplineScore
 from app.services.ai.assistant import parse_resume
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
+from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import get_fsp_adapter
+from app.services.fsp.registry import FSPRegistryError
 from app.services.identity import active_consent
 from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
@@ -342,32 +344,44 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
     return {"status": offer.status}
 
 
-class FspLinkIn(BaseModel):
-    fsp_id: str = Field(min_length=3, max_length=64)
-    fsp_secret: str = Field(min_length=1, max_length=200)
+class FspCallbackIn(BaseModel):
+    code: str = Field(min_length=8, max_length=2048)
+    state: str = Field(min_length=8, max_length=200)
 
 
-@router.post("/me/fsp")
-async def link_fsp(body: FspLinkIn, current: dict = Depends(get_current_participant),
-                   db: AsyncSession = Depends(get_db)):
-    """Attach FSP protocols to an account registered by email.
+@router.post("/me/fsp/authorize")
+async def fsp_authorize(current: dict = Depends(get_current_participant)):
+    """Start linking an FSP ID: the address of the provider's login page (OIDC code flow with PKCE).
 
-    The demo checks a mock secret (FSP2000–FSP2099, password test). A real FSP ID login is not connected.
+    The FSP password is typed only on the provider's page, never on this site. In the demo the provider
+    is a marked page of this site (FSP2000–FSP2099, password test); in production a Keycloak realm.
     """
-    if await too_many(f"fsp-link:{current['sub']}", limit=5):
+    pid = _pid(current)
+    if await too_many(f"fsp-link:{pid}", limit=10):
         raise ApiError(429, "rate_limited")
+    started = await fsp_identity.start(pid)
+    return {"authorize_url": started.authorize_url, "provider": fsp_identity.get_fsp_id_provider().name}
+
+
+@router.post("/me/fsp/callback")
+async def fsp_callback(body: FspCallbackIn, current: dict = Depends(get_current_participant),
+                       db: AsyncSession = Depends(get_db)):
+    """Finish linking: exchange the code, read the FSP ID from the verified ID token, load the protocols."""
+    try:
+        fsp_id = await fsp_identity.finish(_pid(current), body.code, body.state)
+    except fsp_identity.FspIdError as e:
+        raise ApiError(400, "fsp_invalid", "Вход через ФСП ID не подтверждён, начните привязку заново") from e
     p = await db.get(Participant, _pid(current), with_for_update=True)
     if not p:
         raise HTTPException(404, "Профиль не найден")
     if p.fsp_id is not None:
         raise ApiError(409, "fsp_already_linked")
-    adapter = get_fsp_adapter()
-    fsp_id = body.fsp_id.strip()
-    if not await adapter.verify_secret(fsp_id, body.fsp_secret):
-        raise ApiError(400, "fsp_invalid")
     if await db.scalar(select(Participant.id).where(Participant.fsp_id == fsp_id)):
         raise ApiError(409, "fsp_taken")
-    data = await adapter.fetch_participant(fsp_id)
+    try:
+        data = await get_fsp_adapter().fetch_participant(fsp_id)
+    except FSPRegistryError as e:
+        raise ApiError(503, "unavailable", "Реестр ФСП сейчас не отвечает, попробуйте позже") from e
     if data is None:
         raise ApiError(404, "fsp_not_found")
     await ingest_from_fsp(db, data, participant=p)

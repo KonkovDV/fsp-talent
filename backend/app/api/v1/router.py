@@ -9,6 +9,7 @@ from app.api.v1 import (
     auth,
     candidates,
     employer,
+    fsp_id_demo,
     legal,
     needs,
     notifications,
@@ -53,3 +54,4 @@ api_router.include_router(employer.router)
 api_router.include_router(legal.router)
 api_router.include_router(needs.router)
 api_router.include_router(notifications.router)
+api_router.include_router(fsp_id_demo.router)

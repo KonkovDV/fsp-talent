@@ -22,6 +22,8 @@ import LeaderboardPage from './pages/LeaderboardPage'
 import PublicProfile from './pages/PublicProfile'
 import NotFoundPage from './pages/NotFoundPage'
 import LegalPage from './pages/LegalPage'
+import FspIdDemoPage from './pages/FspIdDemoPage'
+import FspCallback from './pages/candidate/FspCallback'
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'participant' | 'employer' }) {
   const { token, userRole } = useAuthStore()
@@ -42,6 +44,7 @@ export default function App() {
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
+        <Route path="/fsp-id/authorize" element={<FspIdDemoPage />} />
 
         {/* Candidate area */}
         <Route path="/candidate" element={<ProtectedRoute role="participant"><Layout /></ProtectedRoute>}>
@@ -51,6 +54,7 @@ export default function App() {
           <Route path="offers" element={<CandidateOffers />} />
           <Route path="vacancies" element={<CandidateVacancies />} />
           <Route path="assessment" element={<CandidateAssessment />} />
+          <Route path="fsp-callback" element={<FspCallback />} />
         </Route>
 
         {/* Employer area */}
