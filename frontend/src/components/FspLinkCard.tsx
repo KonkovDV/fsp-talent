@@ -49,7 +49,7 @@ export default function FspLinkCard({ profile }: Props) {
           aria-label="Пароль ФСП" className="input" />
         <button disabled={!fspId || !secret || link.isPending} className="btn-primary text-sm">Привязать</button>
       </form>
-      <p className="text-xs text-ink-3">Демо-мок: FSP2000–FSP2099, пароль test. Вход через ФСП ID пока не подключён.</p>
+      <p className="text-xs text-ink-3">Демо-реестр: FSP2000–FSP2099, пароль test.</p>
       {message && <p className="text-sm" role="status">{message}</p>}
     </div>
   )
