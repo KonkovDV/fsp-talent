@@ -55,7 +55,6 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
   const [open, setOpen] = useState(false)
   const disc = card.disciplines[0]
   const score = card.match ? Math.round(card.match.score * 100) : null
-  const testFactor = card.match?.factors.find(f => f.key === 'test')
   const active = card.match?.factors.filter(f => f.value != null) ?? []
   const idle = card.match?.factors.filter(f => f.value == null) ?? []
 
@@ -72,7 +71,7 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {card.grade_source === 'assessed'
-              ? <span className="badge-ok">Грейд подтверждён тестом{testFactor?.value != null && testFactor.value !== 0.5 ? `, ${Math.round(testFactor.value * 100)} %` : ''}</span>
+              ? <span className="badge-ok">Грейд подтверждён тестом</span>
               : <span className="badge-vc">Грейд заявлен</span>}
             {disc ? <><RankBadge rank={disc.best_rank} /><span className="text-ink-2">{disc.label}</span></>
               : <span className="text-ink-3">Без истории ФСП</span>}
@@ -133,7 +132,7 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
               {card.shortlisted ? 'В шорт-листе' : 'В шорт-лист'}
             </button>
           )}
-          <button onClick={() => onOffer(card.candidate_id)} className="btn-invite btn-sm">Пригласить</button>
+          <button onClick={() => onOffer(card.candidate_id)} className="btn-invite-quiet btn-sm">Пригласить</button>
         </div>
       </div>
 

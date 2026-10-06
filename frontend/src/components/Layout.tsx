@@ -65,7 +65,7 @@ export default function Layout() {
             </button>
           </div>
         </div>
-        <nav aria-label="Разделы" className="mx-auto max-w-page overflow-x-auto px-2 sm:px-4">
+        <nav aria-label="Разделы" className="mx-auto max-w-page overflow-x-auto px-2 [mask-image:linear-gradient(90deg,#000_82%,transparent)] sm:px-4 md:[mask-image:none]">
           <ul className="flex min-w-max gap-1">
             {links.map(({ to, label, end }) => (
               <li key={to}>

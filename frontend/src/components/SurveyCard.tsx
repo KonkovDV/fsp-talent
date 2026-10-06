@@ -53,7 +53,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         <ListChecks className="text-accent shrink-0 mt-0.5" size={20} />
         <div>
           <p className="section-title">{profile.survey_done ? 'Опрос' : 'Шаг 1. Короткий опрос'}</p>
-          {!compact && <p className="text-sm text-text-secondary">Специализация задаёт категорию и состав теста:
+          {!compact && <p className="text-sm text-ink-2">Специализация задаёт категорию и состав теста:
             задания из других направлений в ваш тест не попадут. Грейд подтверждается отдельно для каждой специализации.</p>}
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         <button onClick={() => save.mutate()} disabled={!spec || !industry || save.isPending} className="btn-primary text-sm">
           {save.isPending ? 'Сохраняем…' : 'Сохранить опрос'}
         </button>
-        {note && <span className="text-sm text-text-secondary" role="status">{note}</span>}
+        {note && <span className="text-sm text-ink-2" role="status">{note}</span>}
       </div>
     </div>
   )

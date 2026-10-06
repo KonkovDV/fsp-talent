@@ -7,7 +7,7 @@ import {
   getMyProfile, reviewAssessment, startAssessment,
 } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
-import { PageHeader } from '../../components/ui'
+import { Meter, PageHeader, plural } from '../../components/ui'
 
 const GRADES = ['junior', 'middle', 'senior', 'lead']
 
@@ -82,7 +82,14 @@ export default function CandidateAssessment() {
     queryKey: ['assessmentActive'], queryFn: () => activeAssessment().then(r => r.data).catch(() => null), retry: false,
   })
   useEffect(() => { if (active && !state) setState(active) }, [active, state])
-  useEffect(() => { if (profile?.declared_grade && !target) setTarget(profile.declared_grade) }, [profile, target])
+  // Preselect a sensible level so «Начать тест» is never a dead button: the declared grade, else the category grade.
+  useEffect(() => {
+    if (!profile || target) return
+    const order = ['junior', 'middle', 'senior', 'lead']
+    const base = profile.declared_grade ?? profile.grade ?? 'junior'
+    const next = profile.grade_source === 'assessed' ? order[Math.min(order.indexOf(profile.grade) + 1, 3)] : base
+    setTarget(order.includes(next) ? next : 'junior')
+  }, [profile, target])
 
   const spec: string | null = profile?.specialization ?? null
   const plan = spec && blueprint ? blueprint.specializations[spec] : null
@@ -115,7 +122,7 @@ export default function CandidateAssessment() {
     queryFn: () => reviewAssessment(state!.session_id).then(r => r.data),
   })
 
-  if (!profile) return <div className="animate-pulse h-64 bg-surface-2 rounded-2xl" />
+  if (!profile) return <div className="animate-pulse h-64 bg-sunken rounded-2xl" />
   const item = state?.item
   const result = state?.result
   const ready = item?.answer_mode === 'number' ? WHOLE.test(typed.replace(/\s/g, '')) : picked !== null
@@ -192,13 +199,13 @@ export default function CandidateAssessment() {
 
       {item && state && (
         <div className="card mx-auto max-w-3xl space-y-5" data-testid="assessment-item">
-          <div className="flex items-center justify-between text-xs text-text-muted">
-            <span>Задание {item.seq} · {item.topic_label} · {item.family_title}</span>
+          <div className="flex items-center justify-between text-xs text-ink-3">
+            <span>Задание {item.seq}. {item.family_title.toLowerCase().startsWith(item.topic_label.toLowerCase()) ? item.family_title : `${item.topic_label}: ${item.family_title}`}</span>
             <span className={`flex items-center gap-1 font-mono ${left < 20 ? 'text-invite' : ''}`}>
               <Clock size={12} />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
             </span>
           </div>
-          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden" aria-hidden>
+          <div className="h-1.5 bg-sunken rounded-full overflow-hidden" aria-hidden>
             <div className="h-full bg-accent" style={{ width: `${Math.min(100, (state.progress.answered / state.progress.max_items) * 100)}%` }} />
           </div>
           <p className={`whitespace-pre-wrap text-sm leading-relaxed ${item.stem.includes(" | ") ? "font-mono" : ""}`}>{item.stem}</p>
@@ -225,34 +232,47 @@ export default function CandidateAssessment() {
           )}
           <div className="flex items-center justify-between">
             <button onClick={() => { if (window.confirm('Прервать тест? Попытка засчитается, пересдача — через 7 дней.')) stop.mutate() }}
-              className="text-sm text-text-muted hover:text-invite">Прервать</button>
+              className="text-sm text-ink-3 hover:text-invite">Прервать</button>
             <button onClick={() => answer.mutate()} disabled={!ready || answer.isPending} className="btn-primary">
               {answer.isPending ? 'Проверяем…' : 'Ответить'}
             </button>
           </div>
-          <p className="text-xs text-text-muted">Ответ нельзя изменить. Отвечено: {state.progress.answered}, тест закончится не раньше {state.progress.min_items}-го и не позже {state.progress.max_items}-го задания.</p>
+          <p className="text-xs text-ink-3">Ответ нельзя изменить. Отвечено: {state.progress.answered}, тест закончится не раньше {state.progress.min_items}-го и не позже {state.progress.max_items}-го задания.</p>
         </div>
       )}
 
       {result && state && (
         <div className="card mx-auto max-w-3xl space-y-5" data-testid="assessment-result">
-          <div className="flex items-start gap-3">
-            {result.passed ? <CheckCircle2 className="text-ok shrink-0" /> : <XCircle className="text-invite shrink-0" />}
-            <div>
-              <p className="section-title">{result.passed
-                ? `Уровень ${result.earned_grade} подтверждён${result.upgraded ? ' — с повышением на ступень' : ''}`
-                : `Уровень ${state.target_grade} не подтверждён`}</p>
-              <p className="text-sm text-text-secondary">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
-            </div>
+          <div className={result.passed ? 'hero-ink -m-5 mb-0 p-6 sm:-m-6 sm:mb-0 sm:p-8' : 'flex items-start gap-3'}>
+            {result.passed ? (
+              <>
+                <p className="flex items-center gap-2 text-sm on-hero-muted"><CheckCircle2 size={18} aria-hidden /> Уровень подтверждён{result.upgraded ? ' с повышением на ступень' : ''}</p>
+                <p className="mt-3 font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3rem,7vw,4.5rem)]">{result.earned_grade}</p>
+                <p className="mt-3 max-w-[56ch] text-sm on-hero-muted">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
+              </>
+            ) : (
+              <>
+                <XCircle className="shrink-0 text-invite" aria-hidden />
+                <div>
+                  <p className="section-title">Уровень {state.target_grade} не подтверждён</p>
+                  <p className="text-sm text-ink-2">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
+                </div>
+              </>
+            )}
           </div>
-          <div className="grid sm:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-xl bg-surface-2 p-3"><p className="text-text-muted text-xs">Вероятность уровня {state.target_grade}</p><p className="text-lg font-bold">{pct(result.p_pass)}</p></div>
-            <div className="rounded-xl bg-surface-2 p-3"><p className="text-text-muted text-xs">Заданий / верно</p><p className="text-lg font-bold">{result.items_count} / {pct(result.score)}</p></div>
-            <div className="rounded-xl bg-surface-2 p-3"><p className="text-text-muted text-xs">Оценка способности θ</p><p className="text-lg font-bold font-mono">{result.theta.toFixed(2)} ± {result.se.toFixed(2)}</p></div>
-          </div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+            <div className="stat-card"><dt className="stat-card-label">Вероятность уровня {state.target_grade}</dt><dd className="stat-card-value">{pct(result.p_pass)}</dd></div>
+            <div className="stat-card"><dt className="stat-card-label">Заданий, из них верно</dt><dd className="stat-card-value">{result.items_count}<span className="text-base text-ink-3">, {pct(result.score)}</span></dd></div>
+            <div className="stat-card"><dt className="stat-card-label">Оценка способности θ</dt><dd className="stat-card-value">{result.theta.toFixed(2)}<span className="text-base text-ink-3"> ± {result.se.toFixed(2)}</span></dd></div>
+          </dl>
           {result.topics.length > 0 && (
-            <ul className="text-sm space-y-1">
-              {result.topics.map(t => <li key={t.topic}>{t.label}: {t.correct} из {t.answered}</li>)}
+            <ul className="grid gap-3 sm:grid-cols-2" aria-label="Результат по темам">
+              {result.topics.map(t => (
+                <li key={t.topic}>
+                  <div className="flex justify-between text-sm"><span className="text-ink">{t.label}</span><span className="num text-ink-2">{t.correct} из {t.answered}</span></div>
+                  <div className="mt-1.5"><Meter value={t.answered ? t.correct / t.answered : 0} ariaLabel={`${t.label}: ${t.correct} из ${t.answered}`} /></div>
+                </li>
+              ))}
             </ul>
           )}
           {(() => {
@@ -262,9 +282,9 @@ export default function CandidateAssessment() {
           })()}
           {result.confirmed_skills.length > 0 && (
             <p className="text-sm">Навыки, подтверждённые тестом: {result.confirmed_skills.map(s => `${s.name} (${pct(s.share)})`).join(', ')}.
-              <span className="text-text-muted"> В поиске они весят больше заявленных.</span></p>
+              <span className="text-ink-3"> В поиске они весят больше заявленных.</span></p>
           )}
-          {result.excluded_items > 0 && <p className="text-xs text-text-muted">{result.excluded_items} заданий исключены из оценки: по ним замечены признаки утечки.</p>}
+          {result.excluded_items > 0 && <p className="text-xs text-ink-3">{result.excluded_items} {plural(result.excluded_items, ['задание исключено', 'задания исключены', 'заданий исключены'])} из оценки: по ним замечены признаки утечки.</p>}
           <div className="flex gap-3">
             <button onClick={() => setShowReview(v => !v)} className="btn-secondary text-sm">{showReview ? 'Скрыть разбор' : 'Разбор заданий'}</button>
             <button onClick={() => { setState(null); setShowReview(false) }} className="btn-secondary text-sm">К тестам</button>
@@ -273,14 +293,14 @@ export default function CandidateAssessment() {
             <ol className="space-y-3 text-sm">
               {(review.data.items as ReviewItem[]).map(r => (
                 <li key={r.seq} className="border border-border rounded-xl p-3 space-y-1">
-                  <p className="text-xs text-text-muted">{r.seq}. {r.topic_label} · {r.correct ? 'верно' : 'неверно'}</p>
+                  <p className="text-xs text-ink-3">{r.seq}. {r.topic_label}, {r.correct ? 'верно' : 'неверно'}</p>
                   <p className={`whitespace-pre-wrap ${r.stem.includes(" | ") ? "font-mono text-xs" : ""}`}>{r.stem}</p>
-                  {r.code && <pre className="bg-surface-2 rounded p-2 text-xs overflow-x-auto">{r.code}</pre>}
+                  {r.code && <pre className="bg-sunken rounded p-2 text-xs overflow-x-auto">{r.code}</pre>}
                   {r.answer_mode === 'number'
-                    ? <p className="text-xs">Ваш ответ: <span className="font-mono">{r.your_text ?? '—'}</span> · правильный: <b className="font-mono">{r.right_text}</b></p>
+                    ? <p className="text-xs">Ваш ответ: <span className="font-mono">{r.your_text ?? '—'}</span>, правильный: <b className="font-mono">{r.right_text}</b></p>
                     : <p className="text-xs">Ваш ответ: {r.your_answer == null ? '—' : r.options[r.your_answer]}
-                        {r.right_answer != null && <> · правильный: <b>{r.options[r.right_answer]}</b></>}</p>}
-                  {r.explanation && <p className="text-xs text-text-secondary">{r.explanation}</p>}
+                        {r.right_answer != null && <>, правильный: <b>{r.options[r.right_answer]}</b></>}</p>}
+                  {r.explanation && <p className="text-xs text-ink-2">{r.explanation}</p>}
                 </li>
               ))}
             </ol>
@@ -288,7 +308,7 @@ export default function CandidateAssessment() {
         </div>
       )}
 
-      {error && <p className="text-invite text-sm bg-fsp-red/10 rounded-lg px-4 py-2 flex items-center gap-2" role="alert"><Lock size={14} />{error}</p>}
+      {error && <p className="notice-error" role="alert"><Lock size={14} className="mt-0.5 shrink-0" aria-hidden />{error}</p>}
 
       {(history?.items ?? []).length > 0 && (
         <div className="card">
@@ -296,9 +316,9 @@ export default function CandidateAssessment() {
           <ul className="text-sm divide-y divide-border">
             {(history.items as HistoryItem[]).map(h => (
               <li key={h.session_id} className="py-2 flex justify-between gap-2">
-                <span>{new Date(h.started_at).toLocaleDateString('ru-RU')} · {h.specialization ?? '—'} · {h.target_grade}</span>
-                <span className="text-text-muted">{h.status === 'completed' ? (h.grade_assigned ?? 'не подтверждён') : h.status}
-                  {h.p_pass != null && ` · ${pct(h.p_pass)}`}</span>
+                <span>{new Date(h.started_at).toLocaleDateString('ru-RU')}, {h.specialization ?? '—'}, {h.target_grade}</span>
+                <span className="text-ink-3">{h.status === 'completed' ? (h.grade_assigned ?? 'не подтверждён') : h.status}
+                  {h.p_pass != null && `, ${pct(h.p_pass)}`}</span>
               </li>
             ))}
           </ul>

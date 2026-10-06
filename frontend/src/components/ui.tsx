@@ -13,12 +13,12 @@ export function PageHeader({ title, lead, actions }: { title: string; lead?: Rea
   )
 }
 
-export function Meter({ value, label, muted }: { value: number | null; label?: string; muted?: boolean }) {
+export function Meter({ value, label, muted, ariaLabel }: { value: number | null; label?: string; muted?: boolean; ariaLabel?: string }) {
   const pct = value === null ? 0 : Math.max(0, Math.min(100, Math.round(value * 100)))
   return (
     <div>
       <div className="meter" role={value === null ? undefined : 'meter'} aria-valuenow={value === null ? undefined : pct}
-        aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+        aria-valuemin={0} aria-valuemax={100} aria-label={label ?? ariaLabel}>
         {value !== null && <span style={{ width: `${pct}%` }} className={muted ? '!bg-ink-3' : ''} />}
       </div>
       {label && <p className={`mt-1 truncate text-[11px] ${value === null ? 'text-ink-3 line-through' : 'text-ink-3'}`}>{label}</p>}
@@ -74,3 +74,12 @@ export const rub = (n: number | null | undefined) =>
   n == null ? '—' : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n) + ' ₽'
 
 export const date = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : '—')
+
+/** Russian plural: plural(3, ['потребность', 'потребности', 'потребностей']) → «потребности». */
+export function plural(n: number, [one, few, many]: [string, string, string]): string {
+  const a = Math.abs(n) % 100, b = a % 10
+  if (a > 10 && a < 20) return many
+  if (b === 1) return one
+  if (b >= 2 && b <= 4) return few
+  return many
+}

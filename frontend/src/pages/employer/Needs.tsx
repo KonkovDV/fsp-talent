@@ -128,10 +128,10 @@ export default function EmployerNeeds() {
       {needs.length > 0 && (
         <div className="grid items-start gap-8 lg:grid-cols-[260px_1fr]">
           <nav aria-label="Потребности" className="lg:sticky lg:top-36">
-            <ul className="space-y-1" role="tablist">
+            <ul className="space-y-1">
               {needs.map(n => (
                 <li key={n.id}>
-                  <button role="tab" aria-selected={n.id === selected} onClick={() => { setSelected(n.id); setTab('matches') }}
+                  <button type="button" aria-current={n.id === selected ? 'true' : undefined} onClick={() => { setSelected(n.id); setTab('matches') }}
                     className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${n.id === selected ? 'bg-panel ring-1 ring-line-strong' : 'hover:bg-panel'}`}>
                     <span className="block text-sm font-medium text-ink">{n.title}</span>
                     <span className="mt-0.5 block text-xs text-ink-3">версия {n.version}, в шорт-листе {n.shortlist_count}</span>
@@ -246,7 +246,7 @@ export default function EmployerNeeds() {
                               <td className="num text-right font-semibold text-ink">{Math.round((r.score ?? 0) * 100)}</td>
                               <td className="text-ink-2">v{r.picked_on_version}{r.picked_on_version !== current.version && ' (до изменения)'}</td>
                               <td className="num text-ink-2">{date(r.added_at)}</td>
-                              <td className="text-right"><button onClick={() => setOfferFor(r.candidate_id)} className="btn-invite btn-sm">Пригласить</button></td>
+                              <td className="text-right"><button onClick={() => setOfferFor(r.candidate_id)} className="btn-invite-quiet btn-sm">Пригласить</button></td>
                             </tr>
                           ))}
                         </tbody>

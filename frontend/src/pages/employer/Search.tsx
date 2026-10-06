@@ -5,7 +5,7 @@ import { parseQuery, searchCandidates } from '../../api/client'
 import { DISC_RU, ROLE_RU } from '../../labels'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
-import { Empty, PageHeader, Skeleton } from '../../components/ui'
+import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
 
 const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile']
 const GRADES = ['junior', 'middle', 'senior', 'lead']
@@ -118,7 +118,7 @@ export default function EmployerSearch() {
           {sent && <p className="notice-ok mb-4" role="status">Приглашение отправлено. Ответ кандидата появится в разделе «Приглашения».</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> кандидатов{draftChanged && ' — фильтры изменены, список ещё прежний'}</p>
+              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{draftChanged && ' — фильтры изменены, список ещё прежний'}</p>
               {data.recommended_categories?.length > 0 && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Сильнее всего:
                   {data.recommended_categories.map((c: { role: string; grade: string; candidates: number }) => (

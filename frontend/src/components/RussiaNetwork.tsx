@@ -9,15 +9,15 @@ import data from '../assets/russia-network.json'
 const dots = data.dots.map(([x, y]) => `M${x} ${y}h0`).join('')
 const lines = data.edges.map(([a, b]) => `M${data.nodes[a].x} ${data.nodes[a].y}L${data.nodes[b].x} ${data.nodes[b].y}`).join('')
 
-export default function RussiaNetwork({ className = '' }: { className?: string }) {
+export default function RussiaNetwork({ className = '', onBrand = false }: { className?: string; onBrand?: boolean }) {
   return (
     <svg viewBox={`0 0 ${data.W} ${data.H}`} className={className} role="img"
       aria-label="Карта России: региональные отделения ФСП соединены в одну сеть">
-      <path d={dots} className="stroke-line-strong" strokeWidth={3.3} strokeLinecap="round" />
-      <path d={lines} className="network-line stroke-accent" strokeWidth={1.1} fill="none" pathLength={1} />
+      <path d={dots} className={onBrand ? 'stroke-white/30' : 'stroke-line-strong'} strokeWidth={3.3} strokeLinecap="round" />
+      <path d={lines} className={`network-line ${onBrand ? 'stroke-white' : 'stroke-accent'}`} strokeWidth={onBrand ? 1.4 : 1.1} fill="none" pathLength={1} />
       {data.nodes.map((n, i) => (
-        <circle key={n.n} cx={n.x} cy={n.y} r={n.n === 'Москва' ? 4.2 : 2.6}
-          className={`network-node ${n.n === 'Москва' ? 'fill-brand-red' : 'fill-accent'}`}
+        <circle key={n.n} cx={n.x} cy={n.y} r={n.n === 'Москва' ? 5 : 2.8}
+          className={`network-node ${n.n === 'Москва' ? (onBrand ? 'fill-[#EC1D35]' : 'fill-brand-red') : (onBrand ? 'fill-white' : 'fill-accent')}`}
           style={{ animationDelay: `${400 + i * 25}ms` }}>
           <title>{n.n}</title>
         </circle>

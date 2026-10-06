@@ -31,7 +31,7 @@
     --ok-soft: 227 245 236;
     --warn: 161 92 0;
     --warn-soft: 253 242 222;
-    --medal: 154 101 0;         /* gold: sport ranks only */
+    --medal: 138 90 0;          /* gold: sport ranks only; AA on its soft background */
     --medal-soft: 252 243 220;
     --brand-red: 236 29 53;     /* #EC1D35 exact, for the stripe and the mark */
     color-scheme: light;
@@ -70,6 +70,8 @@
   }
   body { @apply bg-paper text-ink; min-height: 100dvh; }
   h1, h2, h3 { text-wrap: balance; }
+  /* Grid children may shrink below their content: long titles truncate instead of widening the page on phones. */
+  .grid > * { min-width: 0; }
   :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; border-radius: 4px; }
   ::selection { background: rgb(var(--accent) / 0.18); }
 
@@ -140,9 +142,10 @@
 
   /* Protocol table: places, tabular numbers, hairline rows. */
   .protocol { @apply w-full border-collapse text-sm; }
-  .protocol th { @apply border-b border-line-strong px-3 py-2 text-left text-xs font-medium text-ink-3; }
-  .protocol td { @apply border-b border-line px-3 py-3 align-middle; }
-  .protocol tr:last-child td { @apply border-b-0; }
+  /* :where keeps these at zero specificity, so a utility like text-right on a cell still wins. */
+  :where(.protocol) th { @apply border-b border-line-strong px-3 py-2 text-left text-xs font-medium text-ink-3; }
+  :where(.protocol) td { @apply border-b border-line px-3 py-3 align-middle; }
+  :where(.protocol) tr:last-child td { @apply border-b-0; }
   .place { @apply font-display text-lg font-bold tabular-nums text-ink; font-feature-settings: 'tnum' 1; }
   .num { font-variant-numeric: tabular-nums; }
 
@@ -169,6 +172,26 @@
 
   /* The brand stripe: Federation blue and red, used once at the top of every page. */
   .brand-stripe { height: 3px; background: linear-gradient(90deg, #402FFF 0 72%, #EC1D35 72% 100%); }
+
+  /* Brand surface: the Federation indigo with the dot texture of the brandbook map. The same in both themes. */
+  .hero-ink {
+    @apply relative isolate overflow-hidden rounded-xl text-white;
+    background-color: #402FFF;
+  }
+  .hero-ink::before {
+    content: ''; @apply pointer-events-none absolute inset-0 -z-10;
+    background-image: radial-gradient(rgb(255 255 255 / 0.22) 1.3px, transparent 1.6px);
+    background-size: 14px 14px;
+    -webkit-mask-image: linear-gradient(105deg, transparent 35%, #000 85%);
+            mask-image: linear-gradient(105deg, transparent 35%, #000 85%);
+  }
+  .hero-ink :focus-visible { outline-color: #fff; }
+  .on-hero-muted { color: rgb(255 255 255 / 0.78); }
+  .btn-on-hero { @apply btn bg-white text-[#2A1DD6] hover:bg-white/90; }
+  .btn-on-hero-ghost { @apply btn border border-white/50 text-white hover:bg-white/10; }
+  .chip-on-hero { @apply chip border-white/25 bg-white/10 text-white; }
+  /* Invitation in a long list: red outline, so twenty cards do not shout; the dialog has the solid red button. */
+  .btn-invite-quiet { @apply btn border border-invite/60 bg-panel text-invite hover:bg-invite hover:text-invite-ink; }
 
   .code-block { @apply overflow-x-auto rounded-lg border border-line bg-sunken p-4 font-mono text-[13px] leading-relaxed text-ink; font-variant-ligatures: none; tab-size: 4; }
 
