@@ -19,6 +19,7 @@ from app.models import (
     ConsentLog,
     DisciplineScore,
     Employer,
+    Offer,
     Participant,
     Skill,
     Vacancy,
@@ -357,6 +358,13 @@ async def application_contacts(application_id: uuid.UUID, current: dict = Depend
         raise HTTPException(404, "Кандидат не найден")
     if not await contacts_allowed(db, candidate):
         raise ApiError(403, "consent_withdrawn")
+    # The candidate closed the contacts for this company on an accepted invitation: applications follow,
+    # until a later invitation of the same company is accepted again.
+    latest = await db.scalar(select(Offer).where(
+        Offer.employer_id == vacancy.employer_id, Offer.candidate_id == candidate.id, Offer.status == "accepted")
+        .order_by(Offer.created_at.desc()).limit(1))
+    if latest is not None and latest.contacts_revoked_at is not None:
+        raise ApiError(403, "contacts_revoked")
     db.add(AccessLog(employer_id=vacancy.employer_id, participant_id=candidate.id, access_type="application_contacts"))
     if getattr(application, "viewed_at", None) is None:
         try:

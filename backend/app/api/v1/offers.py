@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
 from app.api.errors import ApiError
+from app.api.v1.messages import unread_counts
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
@@ -53,7 +54,8 @@ def _offer_out(o: Offer) -> dict:
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contact_method": o.contact_method,
         "candidate_viewed_at": o.candidate_viewed_at.isoformat() if o.candidate_viewed_at else None,
-        "contacts_available": o.status == "accepted",
+        "contacts_available": o.status == "accepted" and o.contacts_revoked_at is None,
+        "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "contacts_revealed_at": o.contacts_revealed_at.isoformat() if o.contacts_revealed_at else None,
     }
 
@@ -112,9 +114,11 @@ async def list_my_offers(current: dict = Depends(get_current_employer), db: Asyn
     # The list shows whom each invitation went to: the anonymous category, not a name.
     cats = {c.participant_id: c for c in await db.scalars(select(CategoryAssignment).where(
         CategoryAssignment.participant_id.in_([o.candidate_id for o in rows])))} if rows else {}
+    unread = await unread_counts(db, [o.id for o in rows if o.status == "accepted"], "employer")
     out = []
     for o in rows:
         card = _offer_out(o)
+        card["unread_messages"] = unread.get(o.id, 0)
         cat = cats.get(o.candidate_id)
         card["candidate"] = (
             {"role": cat.primary_role, "grade": cat.grade, "grade_source": cat.grade_source} if cat else None)
@@ -150,6 +154,11 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
         raise HTTPException(404, "Оффер не найден")
     if offer.status != "accepted":
         raise HTTPException(403, "Контакты открываются только после согласия кандидата")
+    if offer.contacts_revoked_at is not None:
+        db.add(AccessLog(employer_id=offer.employer_id, participant_id=offer.candidate_id,
+                         access_type="contacts_denied_revoked"))
+        await db.commit()
+        raise ApiError(403, "contacts_revoked")
     candidate = await db.get(Participant, offer.candidate_id)
     if not candidate:
         raise HTTPException(404, "Кандидат не найден")

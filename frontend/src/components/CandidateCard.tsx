@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import { ChevronDown, Columns3, Star } from 'lucide-react'
+import { ChevronDown, ClipboardList, Columns3, Star } from 'lucide-react'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 
 export interface CandidateCardData {
@@ -41,6 +41,8 @@ interface Props {
   card: CandidateCardData
   place?: number
   onOffer: (id: string) => void
+  /** «Дать задание»: a task addressed to this candidate only. */
+  onTask?: (id: string) => void
   onShortlist?: (id: string, on: boolean) => void
   /** Side-by-side comparison of up to three cards from the same list. */
   compare?: { on: boolean; full: boolean; toggle: () => void }
@@ -59,8 +61,13 @@ function skillChip(name: string, evidence?: Record<string, string>): string {
  * One line of the selection protocol: place, category, match score and the factors behind it.
  * The card is anonymous: no name, no FSP id, no event names — those open after the candidate's consent.
  */
-export default function CandidateCard({ card, place, onOffer, onShortlist, compare }: Props) {
+// Fresh signals: what the candidate did recently. Shown even when the match lines replace «why».
+const FRESH = ['Задание работодателя', 'Короткая практика']
+
+export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, compare }: Props) {
   const [open, setOpen] = useState(false)
+  const fresh = card.why.filter(l => FRESH.some(p => l.startsWith(p)))
+  const employerTask = fresh.find(l => l.startsWith(FRESH[0]))
   const disc = card.disciplines[0]
   const score = card.match ? Math.round(card.match.score * 100) : null
   const active = card.match?.factors.filter(f => f.value != null) ?? []
@@ -90,6 +97,11 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
               {card.missing_skills.map(s => <span key={s} className="chip-missing">нет {s}</span>)}
               {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default">{skillChip(s, card.skill_evidence)}</span>)}
             </div>
+          )}
+          {employerTask && (
+            <p className="flex items-start gap-1.5 text-xs text-ink-2" data-testid="task-signal">
+              <ClipboardList size={14} className="mt-px shrink-0 text-accent" aria-hidden />{employerTask}
+            </p>
           )}
         </div>
         {score !== null && (
@@ -140,6 +152,7 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
               {card.shortlisted ? 'В шорт-листе' : 'В шорт-лист'}
             </button>
           )}
+          {onTask && <button onClick={() => onTask(card.candidate_id)} className="btn-secondary btn-sm">Дать задание</button>}
           <button onClick={() => onOffer(card.candidate_id)} className="btn-invite-quiet btn-sm">Пригласить</button>
         </div>
       </div>
@@ -151,6 +164,7 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
               {card.match.plus.map(l => <li key={l} className="text-ok">+ {l}</li>)}
               {card.match.minus.map(l => <li key={l} className="text-invite">− {l}</li>)}
               {card.match.info.map(l => <li key={l} className="text-ink-2">{l}</li>)}
+              {fresh.map(l => <li key={l} className="text-ink-2">{l}</li>)}
             </ul>
           ) : <ul className="space-y-1 text-ink-2">{card.why.map(l => <li key={l}>{l}</li>)}</ul>}
           {disc && disc.evidence.length > 0 && (

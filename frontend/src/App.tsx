@@ -24,6 +24,9 @@ import NotFoundPage from './pages/NotFoundPage'
 import LegalPage from './pages/LegalPage'
 import FspIdDemoPage from './pages/FspIdDemoPage'
 import FspCallback from './pages/candidate/FspCallback'
+import CandidateTasks from './pages/candidate/Tasks'
+import EmployerTasks from './pages/employer/Tasks'
+import FspSignInCallback from './pages/FspSignInCallback'
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'participant' | 'employer' }) {
   const { token, userRole } = useAuthStore()
@@ -45,6 +48,7 @@ export default function App() {
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
         <Route path="/fsp-id/authorize" element={<FspIdDemoPage />} />
+        <Route path="/auth/fsp-callback" element={<FspSignInCallback />} />
 
         {/* Candidate area */}
         <Route path="/candidate" element={<ProtectedRoute role="participant"><Layout /></ProtectedRoute>}>
@@ -54,6 +58,7 @@ export default function App() {
           <Route path="offers" element={<CandidateOffers />} />
           <Route path="vacancies" element={<CandidateVacancies />} />
           <Route path="assessment" element={<CandidateAssessment />} />
+          <Route path="tasks" element={<CandidateTasks />} />
           <Route path="fsp-callback" element={<FspCallback />} />
         </Route>
 
@@ -64,6 +69,7 @@ export default function App() {
           <Route path="search" element={<EmployerSearch />} />
           <Route path="offers" element={<EmployerOffers />} />
           <Route path="vacancies" element={<EmployerVacancies />} />
+          <Route path="tasks" element={<EmployerTasks />} />
           <Route path="company" element={<EmployerCompany />} />
         </Route>
 

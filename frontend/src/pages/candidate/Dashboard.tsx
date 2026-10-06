@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { CalendarClock, Check, Circle } from 'lucide-react'
-import { getMyOffers, getMyProfile, weeklyTask } from '../../api/client'
+import { CalendarClock, Check, Circle, ClipboardList } from 'lucide-react'
+import { getMyOffers, getMyProfile, tasksForMe, weeklyTask } from '../../api/client'
+import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, rub } from '../../components/ui'
 import { ROLE_RU } from '../../labels'
@@ -15,13 +16,14 @@ export default function CandidateDashboard() {
   const { data: p, isLoading } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
   const { data: offers = [] } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const { data: weekly } = useQuery<Weekly | null>({ queryKey: ['weeklyTask'], queryFn: () => weeklyTask().then(r => r.data) })
+  const { data: tasks = [] } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
 
   if (isLoading || !p) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48" /><Skeleton className="h-64" /></div>
 
   const pending = offers.filter(o => o.status === 'pending')
   const steps = [
     { done: p.email_verified, text: 'Email подтверждён', to: null },
-    { done: p.survey_done, text: 'Опрос: специализация и отрасль', to: '/candidate/profile' },
+    { done: p.survey_done, text: 'Опрос: направление и специализация', to: '/candidate/profile' },
     { done: p.grade_source === 'assessed', text: 'Грейд подтверждён тестом', to: '/candidate/assessment' },
     { done: p.has_fsp, text: 'ФСП ID привязан (необязательно)', to: '/candidate/profile' },
     { done: p.discoverable, text: 'Карточка видна работодателям', to: '/candidate/profile' },
@@ -90,14 +92,40 @@ export default function CandidateDashboard() {
         </div>
       </section>
 
+      <section className="card border-l-4 border-l-accent" aria-labelledby="tasks-title">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="tasks-title" className="section-title flex items-center gap-2">
+            <ClipboardList size={18} className="text-accent" aria-hidden />Задания от работодателей
+            {tasks.filter(t => t.accepts_answers).length > 0 && <span className="rounded-full bg-accent px-2 py-0.5 font-sans text-xs text-accent-ink num">{tasks.filter(t => t.accepts_answers).length}</span>}
+          </h2>
+          <Link to="/candidate/tasks" className="text-sm text-accent hover:underline">Все задания</Link>
+        </div>
+        {tasks.length === 0
+          ? <p className="mt-3 text-sm text-ink-2">Компании пишут задания сами: для всех кандидатов специализации или лично вам. Новых заданий пока нет.</p>
+          : <ul className="mt-3 divide-y divide-line">
+              {tasks.slice(0, 3).map(t => (
+                <li key={t.id}>
+                  <Link to={`/candidate/tasks?task=${t.id}`} className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-3 hover:bg-sunken">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-ink">{t.title}</span>
+                      <span className="block truncate text-sm text-ink-2">{t.company ? `«${t.company}»` : 'Работодатель'}{t.addressed ? ', лично вам' : ''}</span>
+                    </span>
+                    {t.submission ? <TaskResult task={t} /> : <span className="badge-brand">ждёт ответа</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>}
+      </section>
+
       {weekly && (
-        <section className="card flex flex-col gap-4 border-l-4 border-l-accent sm:flex-row sm:items-center" aria-labelledby="weekly-title">
-          <CalendarClock className="hidden shrink-0 text-accent sm:block" size={28} aria-hidden />
+        <section className="card flex flex-col gap-4 sm:flex-row sm:items-center" aria-labelledby="weekly-title">
+          <CalendarClock className="hidden shrink-0 text-ink-3 sm:block" size={28} aria-hidden />
           <div className="min-w-0 flex-1">
-            <h2 id="weekly-title" className="section-title">Задача недели{weekly.company ? ` от компании «${weekly.company}»` : ''}</h2>
+            <p className="text-xs text-ink-3">Сгенерировано платформой</p>
+            <h2 id="weekly-title" className="section-title">Задача недели по вакансии{weekly.company ? ` компании «${weekly.company}»` : ''}</h2>
             <p className="mt-1 text-sm text-ink-2">
-              Одно задание{weekly.topic_label ? ` по теме «${weekly.topic_label}»` : ''} из вакансии «{weekly.title}».
-              Грейд оно не меняет, а работодатели увидят в карточке свежий результат и его дату.
+              Платформа собрала одно задание{weekly.topic_label ? ` по теме «${weekly.topic_label}»` : ''} по тексту вакансии «{weekly.title}»;
+              сама компания его не писала. Грейд оно не меняет, а работодатели увидят в карточке свежий результат и его дату.
             </p>
           </div>
           {weekly.done

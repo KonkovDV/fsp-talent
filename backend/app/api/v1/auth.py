@@ -1,7 +1,9 @@
 """Accounts for both roles: email + password, confirmed by a code or link from the letter (TZ 2.2 п.4).
 
-A candidate does not need FSP history to register. An FSP account is linked later in the profile
-(POST /candidates/me/fsp). The demo checks a mock secret; a real FSP ID login is not connected.
+A candidate does not need FSP history to register. FSP ID is the Federation's single entry point, so a
+candidate can also sign in with it (OIDC code flow + PKCE, /auth/fsp/*): an existing linked account gets its
+tokens; a new person gets an account built from the FSP registry only after accepting the required consents.
+An account linked to FSP ID in the profile (/candidates/me/fsp/*) signs in the same way.
 """
 from datetime import UTC, datetime
 from typing import Literal
@@ -26,6 +28,9 @@ from app.core.security import (
     verify_password,
 )
 from app.models import Employer, Participant
+from app.services.fsp import identity as fsp_identity
+from app.services.fsp.mock import get_fsp_adapter
+from app.services.fsp.registry import FSPRegistryError
 from app.services.identity import (
     check_required_consents,
     check_resend_allowed,
@@ -36,7 +41,7 @@ from app.services.identity import (
     normalize_email,
     send_code,
 )
-from app.services.profile import rebuild_profile
+from app.services.profile import ingest_from_fsp, rebuild_profile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -229,7 +234,7 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
     await _limit(role, email)
     if "@" not in email:
         raise ApiError(401, "invalid_credentials",
-                       "Вход по email. ФСП ID привязывается в профиле после регистрации.")
+                       "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
     account = await _account(db, role, email)
     if account is None or not account.password_hash or not verify_password(form.password, account.password_hash):
         raise ApiError(401, "invalid_credentials")
@@ -307,3 +312,87 @@ async def refresh(body: RefreshIn):
 async def whoami(current: dict = Depends(get_any_auth)):
     """Токен-интроспекция: возвращает sub и role."""
     return {"sub": current["sub"], "role": current.get("role")}
+
+
+# ── sign-in by FSP ID ───────────────────────────────────────────────────────
+
+class FspSignInCallback(BaseModel):
+    code: str = Field(min_length=8, max_length=2048)
+    state: str = Field(min_length=8, max_length=200)
+
+
+class FspSignUpIn(BaseModel):
+    ticket: str = Field(min_length=20, max_length=200)
+    consents: list[str] = Field(default_factory=list, max_length=10)
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+async def _registry(fsp_id: str):
+    try:
+        data = await get_fsp_adapter().fetch_participant(fsp_id)
+    except FSPRegistryError as e:
+        raise ApiError(503, "unavailable", "Реестр ФСП сейчас не отвечает, попробуйте позже") from e
+    if data is None:
+        raise ApiError(404, "fsp_not_found")
+    return data
+
+
+async def _linked(db: AsyncSession, fsp_id: str) -> Participant | None:
+    return await db.scalar(select(Participant).where(Participant.fsp_id == fsp_id, Participant.deleted_at.is_(None)))
+
+
+@router.post("/fsp/authorize")
+async def fsp_signin_authorize(request: Request):
+    """Start signing in by FSP ID: the address of the provider's login page. No platform session needed."""
+    await _limit("fsp-signin", _client_ip(request), limit=20)
+    started = await fsp_identity.start_signin()
+    return {"authorize_url": started.authorize_url, "provider": fsp_identity.get_fsp_id_provider().name}
+
+
+@router.post("/fsp/callback")
+async def fsp_signin_callback(body: FspSignInCallback, db: AsyncSession = Depends(get_db)):
+    """Exchange the code. A linked account signs in; a new person must accept the consents first."""
+    try:
+        fsp_id = await fsp_identity.finish_signin(body.code, body.state)
+    except fsp_identity.FspIdError as e:
+        raise ApiError(400, "fsp_invalid", "Вход через ФСП ID не подтверждён, начните вход заново") from e
+    account = await _linked(db, fsp_id)
+    if account is not None:
+        return {"status": "signed_in", **_tokens(str(account.id), "participant").model_dump()}
+    data = await _registry(fsp_id)
+    # The registry data is shown so the person sees whose account is about to be created; nothing is stored yet.
+    return {"status": "needs_consent", "ticket": await fsp_identity.issue_ticket(fsp_id),
+            "fsp_id": fsp_id, "display_name": data.display_name, "region": data.region,
+            "results": len(data.results)}
+
+
+@router.post("/fsp/signup", response_model=TokenOut)
+async def fsp_signin_signup(body: FspSignUpIn, request: Request, db: AsyncSession = Depends(get_db)):
+    """Create the account from the FSP registry after the required consents (152-FZ art. 9).
+
+    FSP ID is the identity provider: the account works without an email and a password. The person can add
+    Telegram or a phone in the profile; the employer receives them only after an accepted invitation.
+    """
+    check_required_consents("participant", body.consents)   # before the ticket is spent
+    try:
+        fsp_id = await fsp_identity.take_ticket(body.ticket)
+    except fsp_identity.FspIdError as e:
+        raise ApiError(400, "fsp_ticket_invalid") from e
+    account = await _linked(db, fsp_id)
+    if account is None:
+        data = await _registry(fsp_id)
+        account = await ingest_from_fsp(db, data)
+        account.is_visible, account.public_profile = True, False
+        try:
+            await db.flush()
+        except IntegrityError as e:   # a parallel sign-up with the same FSP ID won the race
+            await db.rollback()
+            raise ApiError(409, "fsp_taken") from e
+        for kind in body.consents:
+            await give_consent(db, "participant", account.id, kind, request)
+        await rebuild_profile(db, account)
+        await db.commit()
+    return _tokens(str(account.id), "participant")

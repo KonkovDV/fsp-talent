@@ -1,11 +1,16 @@
+import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMyOffers, respondToOffer } from '../../api/client'
+import { MessageSquare } from 'lucide-react'
+import { apiError, getMyOffers, respondToOffer, revokeContacts } from '../../api/client'
+import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 
 interface Offer {
   id: string; company: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean }
+  contacts_revoked_at?: string | null; unread_messages?: number
 }
 const STATUS: Record<string, [string, string]> = {
   pending: ['ждёт ответа', 'badge-warn'], accepted: ['принято', 'badge-ok'], rejected: ['отклонено', 'badge-vc'],
@@ -19,6 +24,15 @@ export default function CandidateOffers() {
   const respond = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) => respondToOffer(id, action),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
+  })
+  const [params] = useSearchParams()
+  const [thread, setThread] = useState<string | null>(params.get('thread'))
+  const [confirm, setConfirm] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const revoke = useMutation({
+    mutationFn: (id: string) => revokeContacts(id),
+    onSuccess: () => { setConfirm(null); setError(''); qc.invalidateQueries({ queryKey: ['myOffers'] }) },
+    onError: e => setError(apiError(e, 'Не удалось закрыть контакты')),
   })
   return (
     <div>
@@ -56,6 +70,34 @@ export default function CandidateOffers() {
                 </details>
               )}
               {o.contact_method && <p className="mt-2 text-sm text-ink-2">Связь с компанией: <span className="text-ink">{o.contact_method}</span></p>}
+              {o.status === 'accepted' && (
+                <div className="mt-5 border-t border-line pt-4">
+                  {o.contacts_revoked_at
+                    ? <p className="text-sm text-ink-2">Контакты для этой компании закрыты {date(o.contacts_revoked_at)}. Другие компании это не затрагивает.</p>
+                    : <p className="text-sm text-ink-2">Компании открыты ваши контакты.</p>}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
+                      <MessageSquare size={14} aria-hidden /> Переписка
+                      {(o.unread_messages ?? 0) > 0 && <span className="ml-1 rounded-full bg-invite px-1.5 text-2xs text-invite-ink num" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
+                    </button>
+                    {!o.contacts_revoked_at && confirm !== o.id && (
+                      <button onClick={() => setConfirm(o.id)} className="btn-ghost btn-sm">Закрыть контакты для этой компании</button>
+                    )}
+                  </div>
+                  {confirm === o.id && (
+                    <div className="notice-info mt-3 flex-col" role="alertdialog" aria-labelledby={`rv-${o.id}`}>
+                      <p id={`rv-${o.id}`}>«{o.company}» больше не сможет открыть ваши имя, email, Telegram и телефон, а переписка станет только для чтения.
+                        Согласие на обработку данных для других компаний остаётся.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => revoke.mutate(o.id)} disabled={revoke.isPending} className="btn-primary btn-sm">Закрыть контакты</button>
+                        <button onClick={() => setConfirm(null)} className="btn-secondary btn-sm">Отмена</button>
+                      </div>
+                    </div>
+                  )}
+                  {error && confirm === o.id && <p className="notice-error mt-3" role="alert">{error}</p>}
+                  {thread === o.id && <MessageThread offerId={o.id} listKey="myOffers" other={o.company} />}
+                </div>
+              )}
               {o.status === 'pending' && (
                 <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-4">
                   <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>

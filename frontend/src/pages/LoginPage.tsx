@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { useAuthStore } from '../store/authStore'
 import { apiError, apiErrorCode, loginEmployer, loginParticipant } from '../api/client'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
+import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
 
 const schema = z.object({
   username: z.string().email('Введите email'),
@@ -45,6 +46,7 @@ export default function LoginPage() {
     <AuthShell title="Вход" lead={role === 'participant' ? 'Кабинет кандидата: категория, тест, приглашения.' : 'Кабинет работодателя: потребности, подборка, приглашения.'}
       aside={<>Нет аккаунта? <Link to={`/register?role=${role}`} className="font-medium text-accent hover:underline">Зарегистрироваться</Link></>}>
       <RoleSwitch role={role} base="/login" />
+      {role === 'participant' && <><FspSignInButton /><OrDivider /></>}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <div>
           <label className="field-label" htmlFor="username">Email</label>

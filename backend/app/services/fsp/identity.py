@@ -34,6 +34,10 @@ from app.core.redis_client import get_redis
 STATE_TTL_S = 600
 CODE_TTL_S = 120
 CALLBACK_PATH = "/candidate/fsp-callback"
+# Sign-in by FSP ID (no platform session yet) returns to its own page, registered with the provider apart
+# from the linking address: a code issued for one flow is refused by the other.
+SIGNIN_CALLBACK_PATH = "/auth/fsp-callback"
+TICKET_TTL_S = 900
 DEMO_AUTHORIZE_PATH = "/fsp-id/authorize"
 
 
@@ -55,9 +59,9 @@ class Started:
 class FspIdProvider(Protocol):
     name: str
 
-    def redirect_uri(self) -> str: ...
-    def authorize_url(self, state: str, challenge: str) -> str: ...
-    async def exchange(self, code: str, verifier: str) -> str: ...
+    def redirect_uri(self, path: str = CALLBACK_PATH) -> str: ...
+    def authorize_url(self, state: str, challenge: str, path: str = CALLBACK_PATH) -> str: ...
+    async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str: ...
 
 
 async def _put(key: str, value: dict, ttl: int) -> None:
@@ -75,30 +79,32 @@ class MockFspIdProvider:
     """Demo provider: same protocol as Keycloak, the login page is ours and says so."""
 
     name = "mock"
+    # The addresses registered for this client, as in the client settings of a Keycloak realm.
+    ALLOWED_REDIRECTS = (CALLBACK_PATH, SIGNIN_CALLBACK_PATH)
 
-    def redirect_uri(self) -> str:
-        return CALLBACK_PATH
+    def redirect_uri(self, path: str = CALLBACK_PATH) -> str:
+        return path
 
-    def authorize_url(self, state: str, challenge: str) -> str:
+    def authorize_url(self, state: str, challenge: str, path: str = CALLBACK_PATH) -> str:
         query = urlencode({
             "response_type": "code", "client_id": settings.FSP_ID_CLIENT_ID, "scope": "openid",
-            "redirect_uri": self.redirect_uri(), "state": state,
+            "redirect_uri": self.redirect_uri(path), "state": state,
             "code_challenge": challenge, "code_challenge_method": "S256",
         })
         return f"{DEMO_AUTHORIZE_PATH}?{query}"
 
     async def issue_code(self, fsp_id: str, client_id: str, redirect_uri: str, challenge: str) -> str:
         """What the provider does after a successful login: a one-time code bound to the PKCE challenge."""
-        if client_id != settings.FSP_ID_CLIENT_ID or redirect_uri != self.redirect_uri():
+        if client_id != settings.FSP_ID_CLIENT_ID or redirect_uri not in self.ALLOWED_REDIRECTS:
             raise FspIdError("client")
         code = secrets.token_urlsafe(24)
         await _put(f"fspid:code:{code}", {"fsp_id": fsp_id, "challenge": challenge,
                                           "redirect_uri": redirect_uri}, CODE_TTL_S)
         return code
 
-    async def exchange(self, code: str, verifier: str) -> str:
+    async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str:
         grant = await _take(f"fspid:code:{code}")
-        if grant is None or grant["redirect_uri"] != self.redirect_uri():
+        if grant is None or grant["redirect_uri"] != self.redirect_uri(path):
             raise FspIdError("code")
         if not secrets.compare_digest(grant["challenge"], pkce_challenge(verifier)):
             raise FspIdError("pkce")
@@ -114,13 +120,13 @@ class KeycloakFspIdProvider:
         self._http = http
         self.issuer = settings.FSP_ID_ISSUER.rstrip("/")
 
-    def redirect_uri(self) -> str:
-        return settings.PUBLIC_BASE_URL.rstrip("/") + CALLBACK_PATH
+    def redirect_uri(self, path: str = CALLBACK_PATH) -> str:
+        return settings.PUBLIC_BASE_URL.rstrip("/") + path
 
-    def authorize_url(self, state: str, challenge: str) -> str:
+    def authorize_url(self, state: str, challenge: str, path: str = CALLBACK_PATH) -> str:
         query = urlencode({
             "response_type": "code", "client_id": settings.FSP_ID_CLIENT_ID, "scope": "openid",
-            "redirect_uri": self.redirect_uri(), "state": state,
+            "redirect_uri": self.redirect_uri(path), "state": state,
             "code_challenge": challenge, "code_challenge_method": "S256",
         })
         return f"{self.issuer}/protocol/openid-connect/auth?{query}"
@@ -128,11 +134,11 @@ class KeycloakFspIdProvider:
     async def _client(self) -> httpx.AsyncClient:
         return self._http or httpx.AsyncClient(timeout=10)
 
-    async def exchange(self, code: str, verifier: str) -> str:
+    async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str:
         client = await self._client()
         try:
             token = await client.post(f"{self.issuer}/protocol/openid-connect/token", data={
-                "grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri(),
+                "grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri(path),
                 "client_id": settings.FSP_ID_CLIENT_ID, "client_secret": settings.FSP_ID_CLIENT_SECRET,
                 "code_verifier": verifier,
             })
@@ -175,6 +181,41 @@ async def finish(participant_id: uuid.UUID, code: str, state: str, provider: Fsp
     """Return the FSP ID confirmed by the provider. A state is single-use and belongs to one candidate."""
     provider = provider or get_fsp_id_provider()
     saved = await _take(f"fspid:state:{state}")
-    if saved is None or saved["participant_id"] != str(participant_id):
+    if saved is None or saved.get("participant_id") != str(participant_id):
         raise FspIdError("state")
     return await provider.exchange(code, saved["verifier"])
+
+
+# --- sign-in by FSP ID (the single entry point of the Federation) ---------------------------------------
+
+async def start_signin(provider: FspIdProvider | None = None) -> Started:
+    """Same code flow with PKCE, but the state belongs to no account: the person is not signed in yet."""
+    provider = provider or get_fsp_id_provider()
+    state = secrets.token_urlsafe(24)
+    verifier = secrets.token_urlsafe(48)
+    await _put(f"fspid:state:{state}", {"purpose": "signin", "verifier": verifier}, STATE_TTL_S)
+    return Started(provider.authorize_url(state, pkce_challenge(verifier), SIGNIN_CALLBACK_PATH), state)
+
+
+async def finish_signin(code: str, state: str, provider: FspIdProvider | None = None) -> str:
+    """The FSP ID confirmed by the provider. A linking state is refused here, and a sign-in state by finish()."""
+    provider = provider or get_fsp_id_provider()
+    saved = await _take(f"fspid:state:{state}")
+    if saved is None or saved.get("purpose") != "signin":
+        raise FspIdError("state")
+    return await provider.exchange(code, saved["verifier"], SIGNIN_CALLBACK_PATH)
+
+
+async def issue_ticket(fsp_id: str) -> str:
+    """A new person confirmed by FSP ID has no account yet. The account is created only after the consents
+    (152-FZ), so the confirmed FSP ID waits for them under a one-time ticket that only the server can read."""
+    ticket = secrets.token_urlsafe(32)
+    await _put(f"fspid:ticket:{ticket}", {"fsp_id": fsp_id}, TICKET_TTL_S)
+    return ticket
+
+
+async def take_ticket(ticket: str) -> str:
+    saved = await _take(f"fspid:ticket:{ticket}")
+    if saved is None:
+        raise FspIdError("ticket")
+    return saved["fsp_id"]

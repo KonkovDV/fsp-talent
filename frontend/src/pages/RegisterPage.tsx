@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiError, apiErrorCode, legalDocuments, registerEmployer, registerParticipant, type Role } from '../api/client'
 import { ConsentChecklist, requiredKinds } from '../components/LegalConsents'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
+import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
 
 const participantSchema = z.object({
   display_name: z.string().min(2, 'Как к вам обращаться'),
@@ -64,6 +65,7 @@ export default function RegisterPage() {
         : 'Опишете, кого ищете, — подборка с объяснением появится сразу.'}
       aside={<>Есть аккаунт? <Link to={`/login?role=${role}`} className="font-medium text-accent hover:underline">Войти</Link></>}>
       <RoleSwitch role={role} base="/register" />
+      {role === 'participant' && <><FspSignInButton label="Продолжить через ФСП ID" /><OrDivider /></>}
       {role === 'participant' ? (
         <form onSubmit={pf.handleSubmit(onParticipant)} className="space-y-4" noValidate>
           <div><label className="field-label" htmlFor="display_name">Имя</label>

@@ -12,9 +12,10 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_participant
 from app.api.errors import ApiError
+from app.api.v1.messages import unread_counts
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import CategoryAssignment, ConsentLog, GradeConfirmation, Offer, Participant
+from app.models import AccessLog, CategoryAssignment, ConsentLog, GradeConfirmation, Offer, Participant
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
 from app.services.ai.assistant import parse_resume
@@ -289,6 +290,7 @@ async def get_my_offers(
             changed = True
     if changed:
         await db.commit()
+    unread = await unread_counts(db, [o.id for o in rows if o.status == "accepted"], "participant")
     return [{
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
@@ -299,6 +301,8 @@ async def get_my_offers(
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
         "status": o.status, "created_at": o.created_at.isoformat(),
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
+        "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
+        "unread_messages": unread.get(o.id, 0),
     } for o in rows]
 
 
@@ -342,6 +346,44 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
     await db.commit()
     await outbox.deliver()
     return {"status": offer.status}
+
+
+@router.post("/me/offers/{offer_id}/revoke-contacts")
+async def revoke_contacts(offer_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                          db: AsyncSession = Depends(get_db)):
+    """Close the contacts for one company after accepting its invitation. Other companies keep access.
+
+    It closes every accepted invitation of that company and its access through vacancy applications.
+    The global consent withdrawal (DELETE /me/consents/pd_candidate) stays for closing everything at once.
+    """
+    pid = _pid(current)
+    offer = await db.get(Offer, offer_id, with_for_update=True)
+    if not offer or offer.candidate_id != pid:
+        raise HTTPException(404, "Оффер не найден")
+    if offer.status != "accepted":
+        raise ApiError(409, "conflict", "Закрыть контакты можно только по принятому приглашению")
+    if offer.contacts_revoked_at is not None:
+        return {"status": offer.status, "contacts_revoked_at": offer.contacts_revoked_at.isoformat()}
+    now = datetime.now(UTC)
+    same_company = list(await db.scalars(select(Offer).where(
+        Offer.employer_id == offer.employer_id, Offer.candidate_id == pid, Offer.status == "accepted",
+        Offer.contacts_revoked_at.is_(None))))
+    for row in same_company:
+        row.contacts_revoked_at = now
+    db.add(ConsentLog(participant_id=pid, event_type="contacts_revoked", actor_id=pid,
+                      meta={"offer_id": str(offer.id), "employer_id": str(offer.employer_id),
+                            "offers": [str(o.id) for o in same_company]}))
+    db.add(AccessLog(employer_id=offer.employer_id, participant_id=pid, access_type="contacts_revoked"))
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == pid))
+    who = category_label(cat.primary_role if cat else None, cat.grade if cat else None)
+    outbox = Outbox()
+    await notify(db, outbox, "employer", offer.employer_id, "offer_contacts_revoked",
+                 f"Кандидат закрыл контакты по приглашению «{offer.role}»",
+                 f"Кандидат ({who}) закрыл для вашей компании свои контакты. Если вы их сохранили, "
+                 "не используйте их для связи без нового согласия.", "/employer/offers")
+    await db.commit()
+    await outbox.deliver()
+    return {"status": offer.status, "contacts_revoked_at": now.isoformat()}
 
 
 class FspCallbackIn(BaseModel):
@@ -445,7 +487,8 @@ async def survey_options():
 
 class SurveyIn(BaseModel):
     specialization: str
-    industry: str
+    # The subject area (fintech, retail…) is optional: the IT direction is the specialization itself.
+    industry: str = "any"
     work_goal: str = "job"
     declared_grade: Literal["intern", "junior", "middle", "senior", "lead"] | None = None
     experience_years: int | None = Field(None, ge=0, le=50)
