@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.items import TYPED_C, same_number, typed_answer
+from app.items.families.concept_pools import idea_id
 from app.items.registry import FAMILIES
 from app.models.assessment import (
     GRADE_COOLDOWN_DAYS,
@@ -197,21 +198,62 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
     return session, item
 
 
+async def _seen_concepts(db: AsyncSession, session: TestSession) -> set[str]:
+    """Wordings this candidate has already been shown, including other specializations.
+
+    HTTP questions are shared, so a backend attempt counts for a later frontend attempt too.
+    The current session is excluded: its items are already in the selector state.
+    """
+    flags = dict(session.flags or {})
+    if "seen_concepts" not in flags:
+        rows = await db.scalars(
+            select(TestSessionItem.item_key)
+            .join(TestSession, TestSession.id == TestSessionItem.session_id)
+            .where(TestSession.participant_id == session.participant_id,
+                   TestSession.id != session.id,
+                   TestSessionItem.kind == "concept"))
+        flags["seen_concepts"] = sorted(set(rows))
+        session.flags = flags
+    return set(flags["seen_concepts"])
+
+
 async def serve_next(db: AsyncSession, session: TestSession, state: cat.State, bank: BankState,
                      seq: int) -> TestSessionItem:
     rng = random.Random(f"{session.seed}:{seq}")
-    try:
-        choice = cat.choose(state, rng, bank.offsets, bank.exposure, bank.blocked)
-    except LookupError as e:
-        raise QuestionBankError(str(e)) from e
-    fam = choice.family
-    lang = (session.flags or {}).get("code_language", "python")
-    extra = {"lang": lang} if lang in fam.languages and len(fam.languages) > 1 else {}
+    seen = await _seen_concepts(db, session)
+    used_ideas = {found for key in state.keys_used if (found := idea_id(key))}
+    forbidden = seen | state.keys_used | bank.blocked
+    local_blocked = set(bank.blocked)
+    item = None
+    key = ""
+    choice = None
     for _ in range(8):
-        item = fam.generate(rng, choice.level, session.specialization, **extra)
+        try:
+            choice = cat.choose(state, rng, bank.offsets, bank.exposure, local_blocked)
+        except LookupError as e:
+            raise QuestionBankError(str(e)) from e
+        fam = choice.family
+        lang = (session.flags or {}).get("code_language", "python")
+        try:
+            if fam.kind == "concept":
+                item = fam.generate(rng, choice.level, session.specialization,
+                                    avoid=forbidden, used_ideas=used_ideas)
+            else:
+                extra = {"lang": lang} if lang in fam.languages and len(fam.languages) > 1 else {}
+                item = fam.generate(rng, choice.level, session.specialization, **extra)
+        except LookupError:
+            local_blocked.add(cat.item_key(fam, choice.level))
+            item = None
+            continue
         key = item.static_key or cat.item_key(fam, choice.level)
-        if key not in bank.blocked and key not in state.keys_used:
-            break
+        if item.static_key and key in forbidden:
+            local_blocked.add(cat.item_key(fam, choice.level))
+            item = None
+            continue
+        break
+    if item is None or choice is None:
+        raise QuestionBankError(f"no fresh item for {session.specialization}")
+    fam = choice.family
     b = choice.b + (bank.offsets.get(key, 0.0) if item.static_key else 0.0)
     typed = typed_answer(fam.kind, item) is not None
     row = TestSessionItem(

@@ -1,4 +1,7 @@
 """
+Rows for the legacy test_questions table. The adaptive test does not read them:
+live concept items come from app.items.families.concept_pools.
+
 Seed the test question bank with IRT-calibrated MCQ questions.
 
 Run once: python -m app.seed.questions
