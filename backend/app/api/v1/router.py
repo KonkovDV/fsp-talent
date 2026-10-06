@@ -11,11 +11,13 @@ from app.api.v1 import (
     employer,
     fsp_id_demo,
     legal,
+    messages,
     needs,
     notifications,
     offers,
     public,
     search,
+    tasks,
     vacancies,
 )
 
@@ -55,3 +57,5 @@ api_router.include_router(legal.router)
 api_router.include_router(needs.router)
 api_router.include_router(notifications.router)
 api_router.include_router(fsp_id_demo.router)
+api_router.include_router(tasks.router)
+api_router.include_router(messages.router)

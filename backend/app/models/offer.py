@@ -24,6 +24,8 @@ class Offer(Base):
     contact_method = Column(String(300))
     status = Column(String(20), nullable=False, default="pending")
     contacts_revealed_at = Column(DateTime(timezone=True))
+    # The candidate closed the contacts for this company after accepting. Other companies are not affected.
+    contacts_revoked_at = Column(DateTime(timezone=True))
     employer_viewed_at = Column(DateTime(timezone=True))
     # TZ 2.2 п.3: "просмотрено" — first time the candidate opened the list with this pending offer.
     candidate_viewed_at = Column(DateTime(timezone=True))
@@ -32,3 +34,14 @@ class Offer(Base):
                         default=lambda: datetime.now(UTC) + timedelta(days=14))
     employer = relationship("Employer", back_populates="offers")
     candidate = relationship("Participant", back_populates="offers", foreign_keys=[candidate_id])
+
+
+class OfferMessage(Base):
+    """A message in the thread of an accepted invitation. Either side writes; the other reads."""
+    __tablename__ = "offer_messages"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offer_id = Column(UUID(as_uuid=True), ForeignKey("offers.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_role = Column(String(20), nullable=False)   # participant | employer
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    read_at = Column(DateTime(timezone=True))

@@ -21,10 +21,12 @@ from app.models import (
     ConsentLog,
     NeedShortlist,
     Offer,
+    OfferMessage,
     Participant,
     ProfileEmbedding,
     ProfileSearchIndex,
     Skill,
+    TaskSubmission,
 )
 from app.services.identity import active_consent
 
@@ -61,6 +63,15 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
                      .values(status="closed"))
     await db.execute(update(Consent).where(Consent.subject_type == "participant", Consent.subject_id == pid,
                                            Consent.withdrawn_at.is_(None)).values(withdrawn_at=now))
+    # Free text the person wrote can identify them: task answers and messages go, verdicts stay anonymous.
+    await db.execute(update(TaskSubmission).where(TaskSubmission.participant_id == pid)
+                     .values(answer_text=None, comment=None))
+    await db.execute(delete(OfferMessage).where(
+        OfferMessage.author_role == "participant",
+        OfferMessage.offer_id.in_(select(Offer.id).where(Offer.candidate_id == pid))))
+    participant.employer_task_title = None
+    participant.employer_task_passed = None
+    participant.employer_task_at = None
     db.add(ConsentLog(participant_id=pid, event_type="erased", actor_id=pid, meta={"reason": reason}))
     await db.flush()
 

@@ -10,9 +10,10 @@ from app.models.employer import Employer
 from app.models.identity import Consent, EmailVerification
 from app.models.need import Need, NeedShortlist, NeedVersion
 from app.models.notification import Notification
-from app.models.offer import Offer
+from app.models.offer import Offer, OfferMessage
 from app.models.participant import Participant, Qualification, Result, Skill
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
+from app.models.task import EmployerTask, TaskSubmission
 from app.models.vacancy import Application, Vacancy
 from app.models.vc import VerifiableCredential
 
@@ -25,6 +26,7 @@ __all__ = [
     "DisciplineScore",
     "EmailVerification",
     "Employer",
+    "EmployerTask",
     "GradeConfirmation",
     "ItemStat",
     "Need",
@@ -32,6 +34,7 @@ __all__ = [
     "NeedVersion",
     "Notification",
     "Offer",
+    "OfferMessage",
     "Participant",
     "PracticeAttempt",
     "ProfileEmbedding",
@@ -39,6 +42,7 @@ __all__ = [
     "Qualification",
     "Result",
     "Skill",
+    "TaskSubmission",
     "TestSession",
     "TestSessionItem",
     "Vacancy",

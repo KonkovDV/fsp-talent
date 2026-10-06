@@ -172,3 +172,44 @@ export const needShortlist = (id: string) => api.get(`/needs/${id}/shortlist`)
 export const setShortlist = (id: string, candidateId: string, status = 'shortlisted') =>
   api.put(`/needs/${id}/shortlist/${candidateId}`, { status })
 export const removeShortlist = (id: string, candidateId: string) => api.delete(`/needs/${id}/shortlist/${candidateId}`)
+
+// Sign-in by FSP ID: the Federation's single entry point. A new person accepts the consents before the account exists.
+export const fspSignInAuthorize = () => api.post('/auth/fsp/authorize')
+export const fspSignInCallback = (code: string, state: string) => api.post('/auth/fsp/callback', { code, state })
+export const fspSignUp = (ticket: string, consents: string[]) => api.post('/auth/fsp/signup', { ticket, consents })
+
+// Tasks written by employers: a reference answer is checked by the system, an open one by the employer.
+export type TaskAnswerType = 'number' | 'choice' | 'open'
+export interface TaskSubmission {
+  id: string; status: 'checked' | 'review' | 'reviewed'; status_label: string; passed: boolean | null
+  comment: string | null; answer_text: string | null; answer_index: number | null
+  submitted_at: string | null; reviewed_at: string | null
+}
+export interface CandidateTask {
+  id: string; title: string; statement: string; answer_type: TaskAnswerType; options: { index: number; text: string }[]
+  company: string | null; addressed: boolean; vacancy_id: string | null; deadline: string | null; created_at: string | null
+  accepts_answers: boolean; submission: TaskSubmission | null; reference?: string | null
+}
+export interface EmployerTask {
+  id: string; title: string; statement: string; answer_type: TaskAnswerType; options: string[]; correct_index: number | null
+  reference_number: string | null; visibility: 'public' | 'addressed'; specialization: string | null
+  candidate_id: string | null; vacancy_id: string | null; deadline: string | null; is_open: boolean
+  accepts_answers: boolean; created_at: string | null; submissions: number; passed: number; awaiting_review: number
+}
+export type ReviewedSubmission = TaskSubmission & { candidate_id: string; candidate: string }
+export const createTask = (data: object) => api.post<EmployerTask>('/tasks/', data)
+export const myTasks = () => api.get<EmployerTask[]>('/tasks/mine')
+export const taskSubmissions = (id: string) =>
+  api.get<{ task: EmployerTask; submissions: ReviewedSubmission[] }>(`/tasks/${id}/submissions`)
+export const closeTask = (id: string) => api.post(`/tasks/${id}/close`)
+export const reviewSubmission = (id: string, passed: boolean, comment: string) =>
+  api.post(`/tasks/submissions/${id}/review`, { passed, comment: comment || null })
+export const tasksForMe = () => api.get<CandidateTask[]>('/tasks/for-me')
+export const answerTask = (id: string, body: { answer_text?: string; answer_index?: number }) =>
+  api.post<CandidateTask>(`/tasks/${id}/answer`, body)
+
+// Contacts closed for one company, and messages after an accepted invitation.
+export const revokeContacts = (offerId: string) => api.post(`/candidates/me/offers/${offerId}/revoke-contacts`)
+export interface ThreadMessage { id: string; mine: boolean; author: 'participant' | 'employer'; body: string; created_at: string; read: boolean }
+export const listMessages = (offerId: string) => api.get<{ can_post: boolean; messages: ThreadMessage[] }>(`/offers/${offerId}/messages`)
+export const postMessage = (offerId: string, body: string) => api.post<ThreadMessage>(`/offers/${offerId}/messages`, { body })

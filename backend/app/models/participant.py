@@ -45,6 +45,10 @@ class Participant(Base):
     practice_topic = Column(String(40))
     practice_ok = Column(Boolean)
     practice_at = Column(DateTime(timezone=True))
+    # Latest verdict on a task an employer wrote (checked by the system or by that employer). Shown on the card.
+    employer_task_title = Column(String(200))
+    employer_task_passed = Column(Boolean)
+    employer_task_at = Column(DateTime(timezone=True))
     # Set when identifying fields were erased: on account deletion or 30 days after consent withdrawal.
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

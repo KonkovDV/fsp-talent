@@ -18,18 +18,19 @@ interface Props {
   hint?: SurveyHint | null
 }
 
-/** TZ 2.1: specialization and industry from the survey + declared grade + test make the category. */
+/** TZ 2.1: direction and specialization from the survey + declared grade + test make the category.
+ * The TZ word «отрасль» is the IT direction; the subject area (fintech, retail…) is optional. */
 export default function SurveyCard({ profile, compact, hint }: Props) {
   const qc = useQueryClient()
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const [spec, setSpec] = useState(profile.specialization ?? '')
-  const [industry, setIndustry] = useState(profile.industry ?? '')
+  const [industry, setIndustry] = useState(profile.industry === 'any' ? '' : profile.industry ?? '')
   const [goal, setGoal] = useState(profile.work_goal ?? 'job')
   const [grade, setGrade] = useState(profile.declared_grade ?? '')
   const [years, setYears] = useState(profile.experience_years == null ? '' : String(profile.experience_years))
   const [note, setNote] = useState('')
   useEffect(() => {
-    setSpec(profile.specialization ?? ''); setIndustry(profile.industry ?? '')
+    setSpec(profile.specialization ?? ''); setIndustry(profile.industry === 'any' ? '' : profile.industry ?? '')
     setGoal(profile.work_goal ?? 'job'); setGrade(profile.declared_grade ?? '')
   }, [profile.specialization, profile.industry, profile.work_goal, profile.declared_grade])
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
   }, [hint])
 
   const save = useMutation({
-    mutationFn: () => saveSurvey({ specialization: spec, industry, work_goal: goal, declared_grade: grade || null,
+    mutationFn: () => saveSurvey({ specialization: spec, industry: industry || 'any', work_goal: goal, declared_grade: grade || null,
       experience_years: years === '' ? null : Number(years) }),
     onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: (e: unknown) => setNote(apiError(e)),
@@ -53,7 +54,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
       <div className="flex items-start gap-3">
         <ListChecks className="text-accent shrink-0 mt-0.5" size={20} />
         <div>
-          <p className="section-title">{profile.survey_done ? 'Опрос' : 'Шаг 1. Короткий опрос'}</p>
+          <p className="section-title">{profile.survey_done ? 'Направление и специализация' : 'Шаг 1. Направление и специализация'}</p>
           {!compact && <p className="text-sm text-ink-2">Специализация задаёт категорию и состав теста:
             задания из других направлений в ваш тест не попадут. Грейд подтверждается отдельно для каждой специализации.</p>}
         </div>
@@ -65,10 +66,10 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
             {entries(opts?.specializations).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>
-        <label>Отрасль
-          <select value={industry} onChange={e => setIndustry(e.target.value)} className={select} aria-label="Отрасль">
-            <option value="">выберите</option>
-            {entries(opts?.industries).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        <label>Предметная область (необязательно)
+          <select value={industry} onChange={e => setIndustry(e.target.value)} className={select}>
+            <option value="">не важно</option>
+            {entries(opts?.industries).filter(([k]) => k !== 'any').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>
         <label>Что ищете
@@ -91,7 +92,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button onClick={() => save.mutate()} disabled={!spec || !industry || save.isPending} className="btn-primary text-sm">
+        <button onClick={() => save.mutate()} disabled={!spec || save.isPending} className="btn-primary text-sm">
           {save.isPending ? 'Сохраняем…' : 'Сохранить опрос'}
         </button>
         {note && <span className="text-sm text-ink-2" role="status">{note}</span>}

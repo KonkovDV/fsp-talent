@@ -24,9 +24,16 @@ from app.services.categorization import DISCIPLINE_LABELS
 from app.services.matching import RELATED, CandidateFacts, NeedSpec, category_percentile, recommended_categories
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
-from app.services.scoring.engine import RANK_ORDER, STATUS_LABELS, percentile
+from app.services.scoring.engine import (
+    RANK_ORDER,
+    RESULT_CLASS_LABELS,
+    STATUS_LABELS,
+    percentile,
+    result_class,
+)
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
+from app.services.tasks import card_signal
 from app.services.vacancy_exam import TOPIC_LABELS
 
 logger = logging.getLogger(__name__)
@@ -196,12 +203,13 @@ async def search_candidates(
                     best.setdefault(pid, 0.0)
 
     # TZ: inside a category, better test results rank higher. theta is on one IRT scale for every
-    # session, so the best completed result is comparable across candidates.
+    # session, so the best completed result is comparable across candidates. Only the primary test of the
+    # specialization counts: a test built from a vacancy is practice and does not move the candidate.
     test_theta: dict[uuid.UUID, float] = {
         pid: theta for pid, theta in await db.execute(
             select(TestSession.participant_id, func.max(TestSession.irt_theta))
             .where(TestSession.participant_id.in_(list(ids_set)), TestSession.status == "completed",
-                   TestSession.irt_theta.is_not(None))
+                   TestSession.irt_theta.is_not(None), ~TestSession.flags.has_key("vacancy_id"))
             .group_by(TestSession.participant_id))
     }
     if test_theta:
@@ -356,6 +364,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
             evidence = [
                 {"status": STATUS_LABELS.get(r.competition_status, r.competition_status),
                  "year": r.event_date.year, "bucket": _bucket(r.place, r.total_participants),
+                 "result": RESULT_CLASS_LABELS[result_class(r.place, r.total_participants)],
                  "team": r.team_size > 1}
                 for e in ds.top_event_ids
                 if (uid := _safe_uuid(e)) and (r := results.get(uid))
@@ -379,6 +388,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
             mark = "верно" if p.practice_ok else "с ошибкой"
             topic = TOPIC_LABELS.get(p.practice_topic, p.practice_topic)
             why.append(f"Короткая практика ({topic}): {mark}, {days_ago(p.practice_at)}")
+        if task_line := card_signal(p, days_ago):
+            why.append(task_line)
         line = percentiles.get(pid)
         if line:
             why.append(line)

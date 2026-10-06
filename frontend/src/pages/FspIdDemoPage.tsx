@@ -44,7 +44,7 @@ export default function FspIdDemoPage() {
             <h1 className="font-display text-lg font-bold">ФСП ID</h1>
           </div>
           {!valid
-            ? <p className="mt-4 text-sm text-ink-2">Запрос на вход неполный. Начните привязку из профиля на платформе.</p>
+            ? <p className="mt-4 text-sm text-ink-2">Запрос на вход неполный. Начните вход или привязку ФСП ID заново на платформе.</p>
             : <>
                 <p className="mt-2 text-sm text-ink-2">
                   Приложение <b className="text-ink">«ФСП Талант»</b> просит подтвердить ваш ФСП ID и получить

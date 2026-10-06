@@ -10,6 +10,7 @@ from app.services.scoring.engine import (
     percentile,
     rank_at_least,
     rank_equivalent,
+    result_class,
 )
 
 
@@ -42,7 +43,7 @@ def test_team_widens_uncertainty_instead_of_changing_the_result():
 
 
 def test_shrinkage_keeps_one_event_away_from_the_extremes():
-    strong = compute_discipline_score([ev(1, 200, "world")])
+    strong = compute_discipline_score([ev(1, 200, "regional")])
     weak = compute_discipline_score([ev(80, 80, "other")])
     assert 0.30 < strong["score"] < 0.95
     assert 0 < weak["score"] < 0.30
@@ -59,7 +60,51 @@ def test_rank_ladder_and_small_field_downgrade():
     assert rank_equivalent("russia_championship", 1, 100) == "МС"
     assert rank_equivalent("russia_championship", 1, 4) == "I"
     assert rank_equivalent("regional", 1, 40) == "II"
-    assert event_quality(1, 100, "russia_championship") > event_quality(1, 100, "regional")
+
+
+# ---------------------------------------------------------------------------
+# v3.0.0: result class instead of competition status (Q&A with ФСП)
+# ---------------------------------------------------------------------------
+
+STATUSES = ["world", "russia_championship", "russia_cup", "russia_youth", "all_russian",
+            "federal_district", "regional", "other"]
+
+
+def test_competition_status_does_not_change_the_quality():
+    for place, total in [(1, 100), (2, 100), (3, 40), (7, 100), (30, 100), (90, 100), (1, 3)]:
+        values = {event_quality(place, total, status) for status in STATUSES}
+        assert len(values) == 1, (place, total, values)
+    ref = date(2026, 10, 1)
+    scores = {status: compute_discipline_score([ev(2, 50, status, when=ref)], reference_date=ref)["lcb"]
+              for status in STATUSES}
+    assert len(set(scores.values())) == 1, scores
+
+
+def test_winner_beats_prize_beats_top_beats_participant():
+    classes = [result_class(p, 100) for p in (1, 2, 3, 10, 50, 51, 100)]
+    assert classes == ["winner", "prize", "prize", "top10", "top50", "participant", "participant"]
+    qualities = [event_quality(p, 100) for p in (1, 2, 10, 50, 100)]
+    assert qualities == sorted(qualities, reverse=True) and len(set(qualities)) == 5
+
+
+def test_small_field_gives_no_prize_class():
+    assert result_class(1, 3) == "top50"      # a win among three is not a real win
+    assert result_class(1, 1) == "participant"
+    assert result_class(2, 6) == "prize" and result_class(1, 6) == "winner"
+
+
+def test_many_participations_do_not_beat_a_few_wins():
+    ref = date(2026, 10, 1)
+    padded = [{**ev(80, 100, "other", when=ref), "id": f"p{i}"} for i in range(20)]
+    wins = [{**ev(1, 100, "other", when=ref), "id": f"w{i}"} for i in range(2)]
+    many = compute_discipline_score(padded, reference_date=ref)
+    few = compute_discipline_score(wins, reference_date=ref)
+    assert few["lcb"] > many["lcb"] and few["score"] > many["score"]
+    # Participation alone stays under the prior: it cannot lift the lower bound above an empty history's mean.
+    assert many["score"] < compute_discipline_score([], reference_date=ref)["score"]
+    # A participation added to a win lowers the mean instead of padding it.
+    mixed = compute_discipline_score(wins + padded[:1], reference_date=ref)
+    assert mixed["score"] < few["score"]
 
 
 def test_more_equal_evidence_raises_the_lower_bound():

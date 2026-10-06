@@ -106,8 +106,10 @@ export default function CandidateProfile() {
   return (
     <div>
       <PageHeader title={profile.display_name ?? 'Профиль'}
-        lead={<span className="inline-flex items-center gap-1.5"><MailCheck size={14} className="text-ok" aria-hidden />
-          {profile.email} — подтверждён. Его получит работодатель, когда вы примете приглашение.</span>}
+        lead={profile.email
+          ? <span className="inline-flex items-center gap-1.5"><MailCheck size={14} className="text-ok" aria-hidden />
+            {profile.email} — подтверждён. Его получит работодатель, когда вы примете приглашение.</span>
+          : <span>Вы входите через ФСП ID, email не указан. Добавьте Telegram или телефон: их получит работодатель, когда вы примете приглашение.</span>}
         actions={
           <button onClick={() => visibility.mutate(!profile.is_visible)} aria-pressed={profile.is_visible}
             className={profile.discoverable ? 'btn-secondary border-ok/50 text-ok' : 'btn-secondary'}>
