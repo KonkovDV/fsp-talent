@@ -97,7 +97,7 @@ make check
 |---|---|---|
 | Юнит-тесты | `make test` | `docker compose exec -T backend python -m pytest tests/unit -q` |
 | Стиль кода | `make lint` | `docker compose exec -T backend sh -c "pip install -q ruff==0.16.10 && ruff check app seed tests"` |
-| Проверка теста и подбора на синтетике | `make validate` | `docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check` |
+| Проверка теста и подбора на синтетике | `make validate` | `docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check`, затем `docker compose exec -T backend python -m app.validation.matching` |
 | Сквозная проверка API | `make check` | `docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py` |
 | Нагрузка: 40 пользователей в течение минуты | `make load` | `docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/load_api.py` |
 
