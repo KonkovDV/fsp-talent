@@ -1,9 +1,9 @@
 """Classification CAT: 3PL IRT, EAP posterior on a grid, item choice at the decision cut, sequential stop.
 
 The test answers one question: is the candidate at or above the declared grade (and, if so, clearly at the
-next one)? That is a classification problem, so items are chosen where they inform the decision best, the
-Fisher information at the grade cut, not at the current ability estimate, and the test stops as soon as the
-posterior probability is decided either way.
+next one, which only earns a recommendation to take the next test)? That is a classification problem, so
+items are chosen where they inform the decision best, the Fisher information at the grade cut, not at the
+current ability estimate, and the test stops as soon as the posterior probability is decided either way.
 
     P(correct | θ) = c + (1 − c) · σ(a · (θ − b))        3PL; c = 1/4 with options, 0.02 for a typed number
     posterior(θ) ∝ N(θ; μ0, 1) · Π P^x (1 − P)^(1−x)      on a grid −4..4, step 0.05 (EAP)
@@ -11,7 +11,8 @@ posterior probability is decided either way.
     p_upgrade = P(θ ≥ cut(target + 1) | answers)
 
 Stop: at least MIN_ITEMS and both probabilities outside [DECIDED_LOW, DECIDED_HIGH], or MAX_ITEMS.
-Decision: pass when p_pass ≥ PASS_P; upgrade by one level when p_upgrade ≥ UPGRADE_P.
+Decision: pass when p_pass ≥ PASS_P. A test at grade G confirms only G: when also p_upgrade ≥ RECOMMEND_NEXT_P,
+the outcome recommends a separate test at G + 1 and does not assign it (Q&A with ФСП: no automatic jump).
 Item choice: information at the active cut × blueprint deficit × exposure penalty, then a random pick among
 the best RANDOMESQUE (randomesque exposure control). Topic and concept shares are capped.
 """
@@ -32,10 +33,10 @@ GRID = [-4.0 + 0.05 * i for i in range(161)]
 MIN_ITEMS = 8
 MAX_ITEMS = 20
 DECIDED_LOW, DECIDED_HIGH = 0.10, 0.90
-# The upgrade is a bonus: once the target is passed we keep testing only while an upgrade is plausible.
+# The next-level recommendation is a bonus: once the target is passed we keep testing only while it is plausible.
 UPGRADE_GIVE_UP = 0.30
 PASS_P = 0.75
-UPGRADE_P = 0.90
+RECOMMEND_NEXT_P = 0.90
 RANDOMESQUE = 3
 MAX_PER_FAMILY = 5
 TOPIC_SLACK = 0.15
@@ -227,9 +228,9 @@ def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = 
 
 @dataclass(frozen=True)
 class Outcome:
-    earned: str | None        # grade this session vouches for (None: below target-1 or undecided)
+    earned: str | None        # the target when passed; target-1 is informational only; None: undecided or lower
     passed: bool
-    upgraded: bool
+    recommend_next: str | None  # next grade to take a separate test at (P(θ ≥ its cut) ≥ RECOMMEND_NEXT_P)
     p_pass: float
     p_upgrade: float | None
     theta: float
@@ -243,13 +244,12 @@ def decide(state: State) -> Outcome:
     up = next_grade(target)
     p_up = post.prob_at_least(CUTS[up]) if up else None
     if p_pass >= PASS_P:
-        if up and p_up is not None and p_up >= UPGRADE_P:
-            return Outcome(up, True, True, p_pass, p_up, post.theta, post.se)
-        return Outcome(target, True, False, p_pass, p_up, post.theta, post.se)
+        recommend = up if up and p_up is not None and p_up >= RECOMMEND_NEXT_P else None
+        return Outcome(target, True, recommend, p_pass, p_up, post.theta, post.se)
     lower = prev_grade(target)
     if lower and post.prob_at_least(CUTS[lower]) >= PASS_P:
-        return Outcome(lower, False, False, p_pass, p_up, post.theta, post.se)
-    return Outcome(None, False, False, p_pass, p_up, post.theta, post.se)
+        return Outcome(lower, False, None, p_pass, p_up, post.theta, post.se)
+    return Outcome(None, False, None, p_pass, p_up, post.theta, post.se)
 
 
 def skill_scores(rows: list[tuple[tuple[str, ...], bool]], min_items: int = 3) -> dict[str, float]:

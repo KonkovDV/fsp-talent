@@ -316,8 +316,8 @@ def _login(email):
     return login["access_token"]
 
 
-def _run_test(token, target, choose):
-    status, state = call("POST", "/assessment/start", {"target_grade": target}, token=token)
+def _run_test(token, target, choose, **extra):
+    status, state = call("POST", "/assessment/start", {"target_grade": target, **extra}, token=token)
     assert status == 201 and state["item"], state
     first = state["item"]
     assert "correct_index" not in json.dumps(state) and "explanation" not in first, "answer leaked to the client"
@@ -380,19 +380,36 @@ def check_assessment():
     assert not result["passed"] and result["confirmed_grade"] is None, result
     status, again = call("POST", "/assessment/start", {"target_grade": "junior"}, token=token)
     assert status == 429 and again["error"]["code"] == "retake_cooldown", again
+    # Stepping down after a failure does not wait for the retake interval.
+    status, lower = call("POST", "/assessment/start", {"target_grade": "intern"}, token=token)
+    assert status == 201 and lower["target_grade"] == "intern", lower
+    status, dropped = call("POST", f"/assessment/{lower['session_id']}/abandon", token=token)
+    assert status == 200 and dropped["status"] == "abandoned", dropped
     status, after = call("GET", "/candidates/me", token=token)
     assert after["grade"] == before["grade"] and after["assessed_grade"] is None, after
 
     token = _login("fsp001@demo.talent")
     strong = _run_test(token, "middle", _right_answer)
     result = strong["result"]
-    assert result["passed"] and result["confirmed_grade"] in ("middle", "senior"), result
+    # A test at middle confirms middle only; a confident result suggests a separate test at senior.
+    assert result["passed"] and result["confirmed_grade"] == "middle" and not result["upgraded"], result
+    assert result["recommended_grade"] == "senior", result
     assert result["p_pass"] >= 0.75 and result["confirmed_skills"], result
     status, me = call("GET", "/candidates/me", token=token)
     assert me["grade_source"] == "assessed" and me["assessed_grade"] == result["confirmed_grade"], me
     assert any(s["trust_level"] == "test_confirmed" for s in me["skills"]), me["skills"]
     status, review = call("GET", f"/assessment/{strong['session_id']}/review", token=token)
     assert status == 200 and all(i["correct"] for i in review["items"]), review
+    # A test built from a vacancy never changes the grade, even when every answer is right.
+    # The task of the week comes from an open vacancy of the candidate's own specialization.
+    status, weekly = call("GET", "/assessment/practice/weekly", token=token)
+    assert status == 200 and weekly and weekly["vacancy_id"], weekly
+    by_vacancy = _run_test(token, "senior", _right_answer, vacancy_id=weekly["vacancy_id"])
+    vac = by_vacancy["result"]
+    assert vac["vacancy_test"] and vac["outcome"] == "vacancy_test" and vac["confirmed_grade"] != "senior", vac
+    assert vac["recommended_grade"] in ("senior", "lead") and vac["grade_locked_until"] is None, vac
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["assessed_grade"] == "middle", me
     status, health = call("GET", "/public/assessment/items")
     assert status == 200 and health and all("z" in row for row in health), health
     print("ASSESSMENT OK", result["confirmed_grade"], f"p_pass={result['p_pass']}", f"items={result['items_count']}")

@@ -64,7 +64,7 @@ export default function PublicProfile() {
           )}
           <section className="card">
             <h2 className="section-title">Уровень по дисциплинам ФСП</h2>
-            <p className="mt-1 text-sm text-ink-2">Нижняя граница уровня с учётом места, размера поля, разряда и давности результата.</p>
+            <p className="mt-1 text-sm text-ink-2">Нижняя граница уровня: победы, призовые места и участие, их число и давность. Разряд показан для справки и в оценку не входит.</p>
             <ul className="mt-5 space-y-4">
               {scores.map(ds => (
                 <li key={ds.discipline}>
