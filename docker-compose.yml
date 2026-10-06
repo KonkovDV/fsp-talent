@@ -43,8 +43,14 @@ services:
     volumes: [vc_keys:/secrets]
     depends_on:
       backend: {condition: service_healthy}
+    # Its own check instead of the image's HTTP one: `docker compose up --wait` rejects a service
+    # whose check is disabled. The ping goes through Redis and does not import the app.
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "celery --broker \"$$REDIS_URL\" inspect ping -d \"celery@$$HOSTNAME\" --timeout 5"]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   beat:
@@ -57,8 +63,13 @@ services:
     volumes: [vc_keys:/secrets]
     depends_on:
       backend: {condition: service_healthy}
+    # Beat creates its schedule file on start; without the file it has not come up.
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "ls /tmp/celerybeat-schedule* >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     restart: unless-stopped
 
   frontend:
