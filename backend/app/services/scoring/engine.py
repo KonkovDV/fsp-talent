@@ -1,10 +1,18 @@
 """
-FSP Talent Scoring Engine v2 (deterministic, versioned).
+FSP Talent Scoring Engine v3 (deterministic, versioned).
 
-Per event e:
-  p_e = 1 - (place - 0.5) / N                      Hazen percentile: defined for N=1, never 0
-  rank_e = ЕВСК rank equivalent of (status, place, N)
-  q_e = W[rank_e] * p_e                            result quality in (0, 1]
+ФСП (Q&A): every competition counts the same; ranking "чемпионат России выше хакатона" is not advised.
+What matters is how many competitions a candidate took part in and how well: winner and prize-winner
+versus a plain participant, so that a profile cannot be padded with online participations.
+
+Per event e (competition_status is NOT used):
+  class_e = result class from place and field size N        (RESULT_CLASSES, monotone)
+            winner (place 1)            1.00   needs N ≥ MIN_FIELD_FOR_PRIZE
+            prize-winner (places 2–3)   0.85   needs N ≥ MIN_FIELD_FOR_PRIZE
+            top 10 % (place ≤ 0.1·N)    0.65
+            top half (place ≤ 0.5·N)    0.45
+            other participation         0.25
+  q_e = class_e                                    result quality in (0, 1]
   d_e = 2^(-months / HALF_LIFE_MONTHS)             recency
   w_e = d_e / sqrt(team_size)                      evidence weight: a team result says less about the individual
 
@@ -14,8 +22,11 @@ Per discipline (empirical-Bayes shrinkage to the population prior):
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
   lcb   = mu - sigma                               ranking key (conservative)
 
-Team results reduce evidence weight (wider sigma) instead of lowering the level.
-All constants are expert priors; any change must bump VERSION.
+Padding does not pay: a participation-only result (0.25) sits below the prior mean (0.30), so many of them
+pull mu down while they narrow sigma; a few wins keep a higher lower bound. Team results reduce evidence
+weight (wider sigma) instead of lowering the level; the team contribution is not separated (Q&A).
+The ЕВСК rank equivalent (МС, КМС, …) is display information only (profile, credential, employer filter)
+and does not enter the score. All constants are expert priors; any change must bump VERSION.
 """
 from __future__ import annotations
 
@@ -23,16 +34,25 @@ import math
 from datetime import date
 from typing import TypedDict
 
-VERSION = "v2.0.0"
+VERSION = "v3.0.0"
 HALF_LIFE_MONTHS = 18.0
 PRIOR_STRENGTH = 2.0      # K: prior counts as two full-weight events
 PRIOR_MEAN = 0.30
 PRIOR_VAR = 0.04
 
-RANK_ORDER = ["МС", "КМС", "I", "II", "III", "юн"]
-RANK_WEIGHTS: dict[str | None, float] = {
-    "МС": 1.00, "КМС": 0.85, "I": 0.70, "II": 0.55, "III": 0.40, "юн": 0.30, None: 0.20,
+# Result class -> quality. Monotone in the result; the same for every competition status.
+RESULT_CLASSES: dict[str, float] = {
+    "winner": 1.00, "prize": 0.85, "top10": 0.65, "top50": 0.45, "participant": 0.25,
 }
+RESULT_CLASS_LABELS = {
+    "winner": "победитель", "prize": "призёр", "top10": "в топ-10 %", "top50": "в верхней половине",
+    "participant": "участник",
+}
+# Winning a field of two is not a win: prize classes need a real field, otherwise the share of the field decides.
+MIN_FIELD_FOR_PRIZE = 6
+
+# Display only: the ЕВСК rank equivalent is shown and can be filtered on, it is not part of the score.
+RANK_ORDER = ["МС", "КМС", "I", "II", "III", "юн"]
 
 # Simplified ЕВСК ladder: status -> [(max_place, rank)]. Approximation of the norms for
 # "спортивное программирование"; must be reconciled with the current order (Минспорт № 299 от 09.04.2026).
@@ -103,8 +123,25 @@ def months_between(event_date: date, ref: date) -> float:
     return max(0.0, (ref - event_date).days / 30.4375)
 
 
-def event_quality(place: int, total: int, status: str) -> float:
-    return RANK_WEIGHTS[rank_equivalent(status, place, total)] * percentile(place, total)
+def result_class(place: int, total: int) -> str:
+    """Winner / prize-winner / top 10 % / top half / participant, from the place in the event only."""
+    total = max(total, 1)
+    place = min(max(place, 1), total)
+    if total >= MIN_FIELD_FOR_PRIZE and place == 1:
+        return "winner"
+    if total >= MIN_FIELD_FOR_PRIZE and place <= 3:
+        return "prize"
+    share = place / total
+    if share <= 0.10:
+        return "top10"
+    if share <= 0.50:
+        return "top50"
+    return "participant"
+
+
+def event_quality(place: int, total: int, status: str | None = None) -> float:
+    """Result quality. `status` is accepted for old callers and ignored: all competitions weigh the same."""
+    return RESULT_CLASSES[result_class(place, total)]
 
 
 def event_weight(event_date: date, team_size: int, ref: date) -> float:
