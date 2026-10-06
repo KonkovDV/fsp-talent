@@ -80,12 +80,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes: [redis_data:/data]
     ports: ['127.0.0.1:6379:6379']
+    restart: unless-stopped
 
   mailpit:
     image: axllent/mailpit:latest

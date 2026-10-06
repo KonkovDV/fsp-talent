@@ -56,7 +56,11 @@ async def main() -> None:
         now = datetime.now(UTC)
         employers = 0
         for name, email in EMPLOYERS:
-            if await db.scalar(select(Employer.id).where(Employer.email == email)):
+            existing = await db.scalar(select(Employer).where(Employer.email == email))
+            if existing is not None:
+                if not existing.password_hash:
+                    existing.password_hash = password_hash
+                    existing.email_verified_at = existing.email_verified_at or now
                 continue
             employer = Employer(company_name=name, email=email, password_hash=password_hash, email_verified_at=now)
             db.add(employer)
@@ -65,7 +69,11 @@ async def main() -> None:
             employers += 1
         created = 0
         for fsp_id in ["FSP001", "FSP002", *[f"FSP{n}" for n in range(1000, 1150)]]:
-            if await db.scalar(select(Participant.id).where(Participant.fsp_id == fsp_id)):
+            existing = await db.scalar(select(Participant).where(Participant.fsp_id == fsp_id))
+            if existing is not None:
+                if fsp_id in DEMOS and not existing.password_hash:
+                    existing.password_hash = password_hash
+                    existing.email_verified_at = existing.email_verified_at or now
                 continue
             data = await adapter.fetch_participant(fsp_id)
             if data is None:
@@ -106,7 +114,12 @@ async def main() -> None:
             if created % 25 == 0:
                 await db.commit()
         email, name, region, years, grade, skill_names = NO_FSP_DEMO
-        if not await db.scalar(select(Participant.id).where(Participant.email == email)):
+        existing_plain = await db.scalar(select(Participant).where(Participant.email == email))
+        if existing_plain is not None:
+            if not existing_plain.password_hash:
+                existing_plain.password_hash = password_hash
+                existing_plain.email_verified_at = existing_plain.email_verified_at or now
+        else:
             # TZ 2.1: a candidate without FSP history is a normal case, not an error.
             participant = Participant(email=email, display_name=name, region=region, experience_years=years,
                                       declared_grade=grade, password_hash=password_hash, email_verified_at=now,

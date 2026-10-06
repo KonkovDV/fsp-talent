@@ -12,10 +12,12 @@ interface Card {
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
 interface PracticeItem {
-  id: string; stem: string; code: string | null; options: { index: number; text: string }[]
+  id: string; stem: string; code: string | null; answer_mode?: 'choice' | 'number'
+  options: { index: number; text: string }[]
   topic_label: string; is_correct?: boolean; explanation?: string; answered?: boolean
 }
 interface Mine { id: string; title: string; status: string }
+const WHOLE = /^[+\-\u2212]?\d{1,12}$/
 const APP_STATUS: Record<string, string> = { applied: 'отправлен', reviewing: 'смотрят', invited: 'зовут на интервью', rejected: 'отказ', closed: 'вакансия закрыта' }
 const APP_BADGE: Record<string, string> = { applied: 'badge-vc', reviewing: 'badge-brand', invited: 'badge-ok', rejected: 'badge-warn', closed: 'badge-vc' }
 
@@ -23,6 +25,7 @@ export default function CandidateVacancies() {
   const qc = useQueryClient()
   const [task, setTask] = useState<PracticeItem | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
+  const [typed, setTyped] = useState('')
   const [taskError, setTaskError] = useState('')
   const [params] = useSearchParams()
   const topic = params.get('topic')
@@ -30,12 +33,17 @@ export default function CandidateVacancies() {
   const { data: mine = [] } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
   const practice = useMutation({
     mutationFn: (opts: { vacancy_id?: string; topic?: string }) => startPractice(opts).then(r => r.data as PracticeItem),
-    onSuccess: item => { setTaskError(''); setPicked(null); setTask(item) },
+    onSuccess: item => { setTaskError(''); setPicked(null); setTyped(''); setTask(item) },
     onError: (e: unknown) => setTaskError(apiError(e, 'Задание не собрано')),
   })
   useEffect(() => { if (topic) practice.mutate({ topic }) }, [topic])
   const submitPractice = useMutation({
-    mutationFn: () => answerPractice(task!.id, picked!).then(r => r.data as PracticeItem),
+    mutationFn: () => {
+      const body = task!.answer_mode === 'number'
+        ? { answer_text: typed.replace(/\s/g, '') }
+        : { answer_index: picked! }
+      return answerPractice(task!.id, body).then(r => r.data as PracticeItem)
+    },
     onSuccess: item => setTask(item),
     onError: (e: unknown) => setTaskError(apiError(e, 'Ответ не принят')),
   })
@@ -56,20 +64,30 @@ export default function CandidateVacancies() {
           <p className="text-xs text-ink-3">{task.topic_label}. Одно задание, грейд не меняется.</p>
           <p className="mt-2 text-ink">{task.stem}</p>
           {task.code && <pre className="code-block mt-3"><code>{task.code}</code></pre>}
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Варианты ответа">
-            {task.options.map(o => (
-              <li key={o.index}>
-                <button type="button" role="radio" aria-checked={picked === o.index} disabled={task.answered} onClick={() => setPicked(o.index)}
-                  className={`w-full rounded-md border px-4 py-2.5 text-left text-sm transition-colors ${picked === o.index ? 'border-accent bg-accent-soft font-medium text-accent' : 'border-line-strong bg-panel text-ink hover:border-accent'}`}>
-                  {o.text}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {task.answer_mode === 'number' ? (
+            <form className="mt-4" onSubmit={e => { e.preventDefault(); if (WHOLE.test(typed.replace(/\s/g, '')) && !submitPractice.isPending) submitPractice.mutate() }}>
+              <label htmlFor="practice-answer" className="field-label">Ответ — целое число</label>
+              <input id="practice-answer" value={typed} onChange={e => setTyped(e.target.value)} disabled={task.answered}
+                inputMode="numeric" autoComplete="off" spellCheck={false} maxLength={32} placeholder="например, 42"
+                className="input max-w-xs font-mono text-base" />
+            </form>
+          ) : (
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Варианты ответа">
+              {task.options.map(o => (
+                <li key={o.index}>
+                  <button type="button" role="radio" aria-checked={picked === o.index} disabled={task.answered} onClick={() => setPicked(o.index)}
+                    className={`w-full rounded-md border px-4 py-2.5 text-left text-sm transition-colors ${picked === o.index ? 'border-accent bg-accent-soft font-medium text-accent' : 'border-line-strong bg-panel text-ink hover:border-accent'}`}>
+                    {o.text}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {task.answered ? (
             <p className={`mt-4 ${task.is_correct ? 'notice-ok' : 'notice-error'}`} role="status"><span><b>{task.is_correct ? 'Верно.' : 'Неверно.'}</b> {task.explanation}</span></p>
           ) : (
-            <button type="button" className="btn-primary mt-4" disabled={picked == null || submitPractice.isPending}
+            <button type="button" className="btn-primary mt-4"
+              disabled={submitPractice.isPending || (task.answer_mode === 'number' ? !WHOLE.test(typed.replace(/\s/g, '')) : picked == null)}
               onClick={() => submitPractice.mutate()}>Ответить</button>
           )}
         </section>

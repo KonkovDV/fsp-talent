@@ -9,7 +9,9 @@ COPY alembic ./alembic
 COPY seed ./seed
 COPY tests ./tests
 COPY docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh \
+# A checkout on Windows stores CR. The kernel then cannot run the script.
+RUN sed -i 's/\r$//' /entrypoint.sh \
+    && chmod +x /entrypoint.sh \
     && adduser --disabled-password --gecos "" appuser \
     && mkdir -p /secrets && chown appuser /secrets
 EXPOSE 8000

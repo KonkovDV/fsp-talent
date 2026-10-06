@@ -28,7 +28,7 @@ from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.items.families.langs import LANGUAGE_LABELS
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
-from app.models import Participant, Vacancy
+from app.models import Participant, PracticeAttempt, Vacancy
 from app.models.assessment import GRADE_ORDER, TestSession, TestSessionItem
 from app.services import cat
 from app.services.assessment import (
@@ -46,7 +46,7 @@ from app.services.assessment import (
     session_items,
     start_session,
 )
-from app.services.practice import answer_practice, public_attempt, start_practice
+from app.services.practice import answer_practice, public_attempt, same_practice_request, start_practice
 from app.services.profile import rebuild_profile
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
@@ -304,7 +304,8 @@ class PracticeStartIn(BaseModel):
 
 
 class PracticeAnswerIn(BaseModel):
-    answer_index: int = Field(ge=0, le=9)
+    answer_index: int | None = Field(None, ge=0, le=9)
+    answer_text: str | None = Field(None, max_length=32)
 
 
 @router.post("/practice/start")
@@ -313,7 +314,11 @@ async def practice_start(body: PracticeStartIn, current: dict = Depends(get_curr
     participant = await db.get(Participant, uuid.UUID(current["sub"]))
     if participant is None:
         raise ApiError(404, "not_found", "Профиль не найден")
-    if await too_many(f"practice:{participant.id}", limit=12, window_seconds=3600):
+    open_rows = list(await db.scalars(select(PracticeAttempt).where(
+        PracticeAttempt.participant_id == participant.id, PracticeAttempt.answered_at.is_(None))))
+    reused = any(same_practice_request(row.topic, row.vacancy_id, body.topic, body.vacancy_id)
+                 for row in open_rows)
+    if not reused and await too_many(f"practice:{participant.id}", limit=12, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Не больше двенадцати коротких заданий в час")
     try:
         row = await start_practice(db, participant, body.vacancy_id, body.topic)
@@ -331,10 +336,12 @@ async def practice_answer(attempt_id: uuid.UUID, body: PracticeAnswerIn,
     if participant is None:
         raise ApiError(404, "not_found", "Профиль не найден")
     try:
-        result = await answer_practice(db, participant, attempt_id, body.answer_index)
+        result = await answer_practice(db, participant, attempt_id, body.answer_index, body.answer_text)
         await db.commit()
     except LookupError as e:
         raise ApiError(404, "not_found", "Задание не найдено") from e
+    except ValueError as e:
+        raise ApiError(422, "answer_required", "Нужен ответ") from e
     return result
 
 

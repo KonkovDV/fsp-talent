@@ -105,6 +105,11 @@ def typed_answer(kind: str, item: Item) -> str | None:
     return right if kind == "code" and _WHOLE.fullmatch(right) else None
 
 
+def whole_number(text: str) -> bool:
+    """True when the answer is a plain integer, so the screen must not list it among options."""
+    return bool(_WHOLE.fullmatch(str(text).strip()))
+
+
 def same_number(typed: str, right: str) -> bool:
     text = typed.strip().replace("\u2212", "-").replace(" ", "").replace("\u00a0", "")
     return bool(_WHOLE.fullmatch(text)) and int(text) == int(right)

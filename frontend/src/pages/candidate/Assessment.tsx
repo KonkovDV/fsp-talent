@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Lock, XCircle } from 'lucide-react'
@@ -68,6 +68,7 @@ export default function CandidateAssessment() {
   const [params] = useSearchParams()
   const vacancyId = params.get('vacancy')
   const [target, setTarget] = useState('')
+  const levelTouched = useRef(false)
   const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
@@ -84,14 +85,14 @@ export default function CandidateAssessment() {
   useEffect(() => { if (active && !state) setState(active) }, [active, state])
   // Preselect a sensible level so «Начать тест» is never a dead button: the declared grade, else the category grade.
   useEffect(() => {
-    if (!profile || target) return
+    if (!profile || levelTouched.current) return
     const order = [...GRADES]
     const base = profile.declared_grade ?? profile.grade ?? (profile.work_goal === 'internship' ? 'intern' : 'junior')
     const next = profile.grade_source === 'assessed'
       ? order[Math.min(Math.max(order.indexOf(profile.grade), 0) + 1, order.length - 1)]
       : base
     setTarget(order.includes(next) ? next : 'junior')
-  }, [profile, target])
+  }, [profile])
 
   const spec: string | null = profile?.specialization ?? null
   const plan = spec && blueprint ? blueprint.specializations[spec] : null
@@ -148,7 +149,7 @@ export default function CandidateAssessment() {
               <legend className="field-label">Какой уровень подтвердить</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="radiogroup" aria-label="Уровень">
                 {GRADES.map(g => (
-                  <button key={g} type="button" role="radio" aria-checked={target === g} onClick={() => setTarget(g)}
+                  <button key={g} type="button" role="radio" aria-checked={target === g} onClick={() => { levelTouched.current = true; setTarget(g) }}
                     className={`rounded-lg border px-3 py-3 text-center transition-colors ${target === g ? 'border-accent bg-accent-soft' : 'border-line-strong bg-panel hover:border-accent/60'}`}>
                     <span className="block font-display text-sm font-bold text-ink">{gradeRu(g)}</span>
                     {confirmation?.grade === g && <span className="text-2xs text-ok">подтверждён</span>}
