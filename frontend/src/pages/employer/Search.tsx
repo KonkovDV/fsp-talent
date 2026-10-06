@@ -5,6 +5,7 @@ import { parseQuery, searchCandidates } from '../../api/client'
 import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
+import TaskDialog from '../../components/TaskDialog'
 import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
 
 const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile']
@@ -26,6 +27,7 @@ export default function EmployerSearch() {
   const [hasFsp, setHasFsp] = useState('')
   const [internship, setInternship] = useState(false)
   const [inviteFor, setInviteFor] = useState<string | null>(null)
+  const [taskFor, setTaskFor] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
@@ -133,10 +135,11 @@ export default function EmployerSearch() {
           {isLoading && <div className="space-y-4"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>}
           {data && cards.length === 0 && <Empty title="Никого не нашли">Ослабьте фильтры: например, уберите разряд или грейд. Кандидаты без истории ФСП тоже есть в базе.</Empty>}
           <div className={`space-y-4 transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
-            {cards.map((card, i) => <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setInviteFor} />)}
+            {cards.map((card, i) => <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setInviteFor} onTask={setTaskFor} />)}
           </div>
         </section>
       </div>
+      {taskFor && <TaskDialog candidateId={taskFor} onClose={() => setTaskFor(null)} />}
       {inviteFor && <InviteDialog candidateId={inviteFor} defaultRole={role ? `${ROLE_RU[role]}-разработчик` : ''}
         onClose={() => setInviteFor(null)} onSent={() => setSent(true)} />}
     </div>

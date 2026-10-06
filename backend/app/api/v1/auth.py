@@ -234,7 +234,7 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
     await _limit(role, email)
     if "@" not in email:
         raise ApiError(401, "invalid_credentials",
-                       "Вход по email. ФСП ID привязывается в профиле после регистрации.")
+                       "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
     account = await _account(db, role, email)
     if account is None or not account.password_hash or not verify_password(form.password, account.password_hash):
         raise ApiError(401, "invalid_credentials")

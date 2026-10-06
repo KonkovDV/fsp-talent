@@ -6,6 +6,7 @@ import {
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
+import TaskDialog from '../../components/TaskDialog'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -27,6 +28,7 @@ export default function EmployerNeeds() {
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [error, setError] = useState('')
   const [offerFor, setOfferFor] = useState<string | null>(null)
+  const [taskFor, setTaskFor] = useState<string | null>(null)
   const [tab, setTab] = useState<'matches' | 'shortlist' | 'exam'>('matches')
   const [picked, setPicked] = useState<string[]>([])
   const [sent, setSent] = useState(false)
@@ -97,8 +99,8 @@ export default function EmployerNeeds() {
                 <option value="">Любой</option>
                 {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{gradeRu(g)}</option>)}
               </select></div>
-            <div><label className={field} htmlFor="n-ind">Отрасль</label>
-              <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select" aria-label="Отрасль">
+            <div><label className={field} htmlFor="n-ind">Предметная область (необязательно)</label>
+              <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select">
                 <option value="">Не важна</option>
                 {Object.entries(opts?.industries ?? {}).filter(([k]) => k !== 'any').map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
               </select></div>
@@ -213,7 +215,7 @@ export default function EmployerNeeds() {
                   {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
                   {matches.data && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
-                    <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor}
+                    <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}
                       compare={{
                         on: picked.includes(card.candidate_id), full: picked.length >= 3,
@@ -259,6 +261,7 @@ export default function EmployerNeeds() {
           )}
         </div>
       )}
+      {taskFor && <TaskDialog candidateId={taskFor} onClose={() => setTaskFor(null)} />}
       {offerFor && <InviteDialog candidateId={offerFor} defaultRole={current?.title ?? ''} onClose={() => setOfferFor(null)} onSent={() => setSent(true)} />}
     </div>
   )

@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMyEmployerOffers, getOfferContacts, withdrawOffer } from '../../api/client'
+import { MessageSquare } from 'lucide-react'
+import { apiError, apiErrorCode, getMyEmployerOffers, getOfferContacts, withdrawOffer } from '../../api/client'
+import MessageThread from '../../components/MessageThread'
 import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 
 interface Offer {
@@ -8,6 +11,7 @@ interface Offer {
   contacts_available: boolean; contact_method: string | null; candidate_viewed_at: string | null
   contacts_revealed_at: string | null; created_at: string
   expires_at: string | null; candidate: { role: string; grade: string; grade_source: string } | null
+  contacts_revoked_at?: string | null; unread_messages?: number
 }
 interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; region: string | null }
 
@@ -25,8 +29,11 @@ export default function EmployerOffers() {
   const reveal = useMutation({
     mutationFn: (id: string) => getOfferContacts(id).then(r => ({ id, data: r.data as Contacts })),
     onSuccess: ({ id, data }) => { setError(''); setContacts(c => ({ ...c, [id]: data })) },
-    onError: () => setError('Контакты откроются, когда кандидат примет приглашение.'),
+    onError: e => setError(apiErrorCode(e) === 'contacts_hidden' || !apiErrorCode(e)
+      ? 'Контакты откроются, когда кандидат примет приглашение.' : apiError(e)),
   })
+  const [params] = useSearchParams()
+  const [thread, setThread] = useState<string | null>(params.get('thread'))
   const withdraw = useMutation({ mutationFn: withdrawOffer, onSuccess: () => qc.invalidateQueries({ queryKey: ['employerOffers'] }) })
 
   const stage = (o: Offer) => (o.status === 'pending' && o.candidate_viewed_at ? 'viewed' : o.status)
@@ -59,18 +66,30 @@ export default function EmployerOffers() {
                 const [label, cls] = STATUS[stage(o)] ?? [o.status, 'badge-vc']
                 const c = contacts[o.id]
                 return (
-                  <tr key={o.id}>
+                  <Fragment key={o.id}>
+                  <tr>
                     <td>{o.candidate ? <CategoryPlate role={o.candidate.role} grade={o.candidate.grade} source={o.candidate.grade_source} /> : '—'}
                       {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</div>}</td>
                     <td className="text-ink">{o.role}</td>
                     <td className="num whitespace-nowrap text-right text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</td>
                     <td className="num text-ink-2">{date(o.created_at)}</td>
-                    <td><span className={cls}>{label}</span></td>
+                    <td><span className={cls}>{label}</span>
+                      {o.contacts_revoked_at && <span className="badge-vc mt-1 block w-max">контакты закрыты кандидатом</span>}</td>
                     <td className="whitespace-nowrap text-right">
                       {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
+                      {o.status === 'accepted' && (
+                        <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
+                          <MessageSquare size={14} aria-hidden /> Переписка
+                          {(o.unread_messages ?? 0) > 0 && <span className="ml-1 rounded-full bg-invite px-1.5 text-2xs text-invite-ink num" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
+                        </button>
+                      )}
                       {o.status === 'pending' && <button onClick={() => withdraw.mutate(o.id)} className="btn-ghost btn-sm">Отозвать</button>}
                     </td>
                   </tr>
+                  {thread === o.id && (
+                    <tr><td colSpan={6} className="!whitespace-normal"><MessageThread offerId={o.id} listKey="employerOffers" other="Кандидат" /></td></tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>

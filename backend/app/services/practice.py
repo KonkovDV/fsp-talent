@@ -226,9 +226,9 @@ async def offer_weekly_tasks(db: AsyncSession, now: datetime | None = None) -> t
         company = f"компании «{task['company']}»" if task["company"] else "работодателя"
         topic = f" по теме «{task['topic_label']}»" if task["topic_label"] else ""
         await notify(db, outbox, "participant", person.id, "practice_weekly",
-                     f"Задача недели от {company}",
-                     f"Одно задание{topic} из вакансии «{task['title']}». Грейд оно не меняет, а работодатели "
-                     "увидят в карточке свежий результат.",
+                     f"Задача недели по вакансии {company}",
+                     f"Платформа собрала одно задание{topic} по тексту вакансии «{task['title']}». Грейд оно "
+                     "не меняет, а работодатели увидят в карточке свежий результат.",
                      f"/candidate/vacancies?vacancy={task['vacancy_id']}")
         sent += 1
     return sent, outbox
