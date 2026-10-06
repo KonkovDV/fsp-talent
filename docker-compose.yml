@@ -1,4 +1,5 @@
-# Local run and demo. Host ports are bound to 127.0.0.1: only nginx (:80) is reachable from the network.
+# Local run and demo. Only nginx (:80) is reachable from the network; API (8010), frontend (3010) and
+# Mailpit (8025) listen on 127.0.0.1, the database and Redis have no host port at all.
 # The volume vc_keys holds the credential signing key and, unless SECRET_KEY is set in .env, the JWT key.
 services:
   backend:
@@ -7,7 +8,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
-      PUBLIC_BASE_URL: http://localhost
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       # Letters with confirmation codes land in Mailpit: http://localhost:8025. Override in .env for real SMTP.
       MAIL_MODE: ${MAIL_MODE:-smtp}
@@ -78,7 +79,7 @@ services:
       POSTGRES_PASSWORD: fsp
       POSTGRES_DB: fsp_talent
     volumes: [postgres_data:/var/lib/postgresql/data]
-    ports: ['127.0.0.1:5432:5432']
+    # No host port: a local PostgreSQL on 5432 would block the start. Console: docker compose exec postgres psql -U fsp fsp_talent
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fsp -d fsp_talent"]
       interval: 5s
@@ -90,7 +91,6 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes: [redis_data:/data]
-    ports: ['127.0.0.1:6379:6379']
     restart: unless-stopped
 
   mailpit:
@@ -100,7 +100,8 @@ services:
 
   nginx:
     image: nginx:alpine
-    ports: ['80:80']
+    # Port 80 busy? Set HTTP_PORT=8080 and PUBLIC_BASE_URL=http://localhost:8080 in .env.
+    ports: ['${HTTP_PORT:-80}:80']
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on: [backend, frontend]
