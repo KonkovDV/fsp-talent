@@ -1,43 +1,51 @@
-.PHONY: up down build migrate seed test lint shell logs
+# Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
+.PHONY: help demo up down reset seed logs test lint check validate
+
+help:
+	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск)"
+	@echo "make up        — запустить уже собранные контейнеры"
+	@echo "make down      — остановить, данные сохраняются"
+	@echo "make reset     — остановить и удалить данные (база, ключи)"
+	@echo "make seed      — загрузить демо-данные ещё раз (повтор безопасен)"
+	@echo "make logs      — журнал API"
+	@echo "make test      — юнит-тесты внутри контейнера"
+	@echo "make lint      — проверка стиля Python"
+	@echo "make validate  — проверка адаптивного теста и подбора на синтетике"
+	@echo "make check     — сквозная проверка API на запущенном стенде"
+
+demo:
+	@test -f .env || cp .env.example .env
+	docker compose up -d --build --wait
+	docker compose exec -T -u appuser backend python -m seed.generate_seed
+	@echo ""
+	@echo "Готово. Сайт: http://localhost  API: http://localhost/docs  Почта: http://localhost:8025"
+	@echo "Демо-входы, пароль demo12345: fsp001@demo.talent (кандидат), hr@sibcode.demo (работодатель)"
 
 up:
-	docker compose up -d
+	@test -f .env || cp .env.example .env
+	docker compose up -d --wait
 
 down:
 	docker compose down
 
-build:
-	docker compose build --no-cache
-
-migrate:
-	docker compose exec backend alembic upgrade head
+reset:
+	docker compose down -v
 
 seed:
-	docker compose exec -u appuser backend python -m seed.generate_seed
-
-test:
-	docker compose exec backend pytest tests/unit/ -v --cov=app/services --cov-report=term-missing
-
-test-all:
-	docker compose exec backend pytest tests/ -v --cov=app
-
-lint:
-	docker compose exec backend ruff check app/
-
-typecheck:
-	docker compose exec backend mypy app/ --ignore-missing-imports
-
-shell:
-	docker compose exec backend bash
+	docker compose exec -T -u appuser backend python -m seed.generate_seed
 
 logs:
 	docker compose logs -f backend
 
-worker-logs:
-	docker compose logs -f worker
+test:
+	docker compose exec -T backend python -m pytest tests/unit -q
 
-dev:
-	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+lint:
+	docker compose exec -T backend sh -c "pip install -q ruff && ruff check app seed tests"
 
-frontend-dev:
-	cd frontend && npm run dev
+validate:
+	docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check
+	docker compose exec -T backend python -m app.validation.matching
+
+check:
+	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py

@@ -1,15 +1,22 @@
-"""One-shot API smoke test against a running server. Not part of the unit suite."""
+"""One-shot API smoke test against a running server. Not part of the unit suite.
+
+Letters with codes are read from MAIL_FILE_DIR (MAIL_MODE=file, as in CI) or, when MAILPIT_URL is set,
+from Mailpit (the docker compose stand: `make check`).
+"""
 import glob
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
-# The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR: codes are read from the letters.
+# The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
 MAIL_DIR = os.environ.get("MAIL_FILE_DIR", "/tmp/fsp-talent-mail")
+MAILPIT = os.environ.get("MAILPIT_URL", "").rstrip("/")
+SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset"}
 EMPLOYER = {"username": "hr@sibcode.demo", "password": "demo12345"}
 CANDIDATE = {"username": "fsp001@demo.talent", "password": "demo12345"}
 REQUIRED_CANDIDATE_CONSENTS = ["terms", "pd_candidate"]
@@ -40,9 +47,31 @@ def call(method, path, body=None, token=None, form=None):
         return error.code, payload
 
 
+def _mailpit_letter(email, purpose):
+    query = urllib.parse.urlencode({"query": f'to:"{email}"'})
+    with urllib.request.urlopen(f"{MAILPIT}/api/v1/search?{query}", timeout=5) as resp:
+        messages = json.load(resp).get("messages") or []
+    for message in messages:   # newest first
+        if not any(message["Subject"].startswith(p) and k == purpose for p, k in SUBJECT_PURPOSE.items()):
+            continue
+        with urllib.request.urlopen(f"{MAILPIT}/api/v1/message/{message['ID']}", timeout=5) as resp:
+            text = json.load(resp)["Text"]
+        code = re.search(r"\b(\d{6})\b", text)
+        token = re.search(r"token=([\w-]+)", text)
+        return {"to": email, "purpose": purpose, "code": code.group(1) if code else None,
+                "token": token.group(1) if token else None}
+    return None
+
+
 def last_letter(email, purpose="verify", timeout=10.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if MAILPIT:
+            letter = _mailpit_letter(email, purpose)
+            if letter:
+                return letter
+            time.sleep(0.3)
+            continue
         for path in sorted(glob.glob(os.path.join(MAIL_DIR, "*.json")), reverse=True):
             with open(path, encoding="utf-8") as fh:
                 letter = json.load(fh)
