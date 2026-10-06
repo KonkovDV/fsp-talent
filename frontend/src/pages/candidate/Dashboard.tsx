@@ -47,7 +47,7 @@ export default function CandidateDashboard() {
             <ul className="mt-6 flex flex-wrap gap-1.5" aria-label="Навыки">
               {(p.skills ?? []).slice(0, 12).map((sk: { name: string; trust_level: string }) => (
                 <li key={sk.name} className={`chip-on-hero ${sk.trust_level === 'test_confirmed' ? '!bg-white !text-[#2A1DD6]' : ''}`}
-                  title={sk.trust_level === 'test_confirmed' ? 'Подтверждён тестом' : 'Заявлен'}>
+                  title={sk.trust_level === 'test_confirmed' ? 'Подтверждён тестом' : sk.trust_level === 'resume_confirmed' ? 'Цитата из резюме' : 'Заявлен'}>
                   {sk.name}{sk.trust_level === 'test_confirmed' && <Check size={12} aria-hidden />}
                 </li>
               ))}

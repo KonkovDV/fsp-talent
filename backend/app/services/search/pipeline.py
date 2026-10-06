@@ -221,6 +221,7 @@ async def search_candidates(
         card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
                                      for f in m.factors]}
+        card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
             "recommended_categories": categories, "items": cards}
 

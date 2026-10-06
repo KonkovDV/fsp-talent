@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Consent, Participant, VerifiableCredential
+from app.models import Consent, Participant, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
+from app.services.skills import skill_line
 from app.services.survey import SPECIALIZATIONS
 from app.services.vc.issuer import issuer_document, verify_credential
 
@@ -38,6 +39,16 @@ def _public_filter():
     consented = Participant.id.in_(select(Consent.subject_id).where(
         Consent.subject_type == "participant", Consent.kind == "pd_distribution", Consent.withdrawn_at.is_(None)))
     return (Participant.public_profile.is_(True), adult, consented)
+
+
+def _public_skill(s: Skill) -> dict:
+    """Source and date, without the resume quote: a quote can contain a phone or an address."""
+    return {
+        "name": s.name,
+        "trust_level": s.trust_level,
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+        "confirmed_at": s.confirmed_at.isoformat() if s.confirmed_at else None,
+    }
 
 
 @router.get("/issuer")
@@ -68,7 +79,7 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
         "grade_source": cat.grade_source if cat else None,
         "stack": cat.stack if cat else [],
         "explanation": cat.explanation if cat else [],
-        "skills": [s.name for s in p.skills if s.confirmed],
+        "skills": [_public_skill(s) for s in p.skills if s.confirmed],
         "profile_pdf": f"/api/v1/public/candidates/{p.id}/profile.pdf",
         "discipline_scores": [
             {
@@ -100,7 +111,7 @@ async def public_profile_pdf(participant_id: uuid.UUID, db: AsyncSession = Depen
         p.display_name,
         SPECIALIZATIONS.get(cat.primary_role, cat.primary_role) if cat else None,
         cat.grade if cat else None,
-        [s.name for s in p.skills if s.confirmed],
+        [skill_line(s.name, s.trust_level) for s in p.skills if s.confirmed],
         [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank}
          for s in p.discipline_scores],
     )

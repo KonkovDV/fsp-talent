@@ -28,13 +28,20 @@ from app.services.pdf_profile import extract_pdf_text, profile_lines, render_pro
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
-from app.services.skills import normalize_skill
+from app.services.skills import SkillDraft, normalize_skill, plan_skill_replacement, skill_line
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 PRIVACY_FIELDS = ("is_visible", "public_profile")
 _PAGE_SIZE_MAX = 50
+
+
+def _skill_view(s: Skill) -> dict:
+    return {"name": s.name, "trust_level": s.trust_level, "source_quote": s.source_quote,
+            "confirmed": s.confirmed,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "confirmed_at": s.confirmed_at.isoformat() if s.confirmed_at else None}
 
 
 def _pid(current: dict) -> uuid.UUID:
@@ -83,8 +90,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "grade_source": cat.grade_source if cat else None,
         "stack": cat.stack if cat else [],
         "explanation": cat.explanation if cat else [],
-        "skills": [{"name": s.name, "trust_level": s.trust_level, "source_quote": s.source_quote,
-                    "confirmed": s.confirmed} for s in p.skills],
+        "skills": [_skill_view(s) for s in p.skills],
         "discipline_scores": [
             {"discipline": ds.discipline, "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
              "score": ds.score, "sigma": ds.sigma, "lcb": ds.lcb, "confidence": ds.confidence,
@@ -155,28 +161,24 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         # With FSP linked, the region comes from the protocols.
         p.region = (data["region"] or "").strip() or None
     if "skills" in data:
-        seen: set[str] = set()
-        rows = []
-        # A skill the test confirmed keeps that status: editing the list must not downgrade evidence.
-        tested = {s.name: s for s in await db.scalars(
-            select(Skill).where(Skill.participant_id == p.id, Skill.trust_level == "test_confirmed"))}
+        existing = list(await db.scalars(select(Skill).where(Skill.participant_id == p.id)))
+        incoming = []
         for item in data["skills"]:
             canonical = normalize_skill(item["name"])
-            if not canonical or canonical in seen:
-                continue
-            seen.add(canonical)
             quote = (item.get("source_quote") or "").strip() or None
-            if canonical in tested:
-                rows.append(Skill(participant_id=p.id, name=canonical, raw_name=tested[canonical].raw_name,
-                                  source_quote=tested[canonical].source_quote, trust_level="test_confirmed",
-                                  confirmed=True))
-                continue
-            rows.append(Skill(participant_id=p.id, name=canonical, raw_name=item["name"][:200],
-                              source_quote=quote,
-                              trust_level="resume_confirmed" if quote else "self_reported", confirmed=True))
+            incoming.append((canonical or "", item["name"][:200], quote))
+        drafts = plan_skill_replacement(
+            [SkillDraft(s.name, s.raw_name, s.source_quote, s.trust_level, s.confirmed,
+                        s.created_at, s.confirmed_at) for s in existing],
+            incoming, datetime.now(UTC))
         await db.execute(delete(Skill).where(Skill.participant_id == p.id))
         await db.flush()
-        db.add_all(rows)
+        db.add_all([
+            Skill(participant_id=p.id, name=d.name, raw_name=d.raw_name, source_quote=d.source_quote,
+                  trust_level=d.trust_level, confirmed=d.confirmed, created_at=d.created_at,
+                  confirmed_at=d.confirmed_at)
+            for d in drafts
+        ])
     try:
         await db.flush()
     except IntegrityError as e:
@@ -383,7 +385,8 @@ async def upload_resume(file: UploadFile = File(...), current: dict = Depends(ge
 
 async def _profile_pdf(db: AsyncSession, participant: Participant, named: bool) -> bytes:
     category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == participant.id))
-    skills = list(await db.scalars(select(Skill.name).where(Skill.participant_id == participant.id)))
+    skills = [skill_line(s.name, s.trust_level) for s in await db.scalars(
+        select(Skill).where(Skill.participant_id == participant.id))]
     scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
     lines = profile_lines(
         participant.display_name if named else None,

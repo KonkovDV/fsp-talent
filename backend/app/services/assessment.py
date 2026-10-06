@@ -399,8 +399,10 @@ async def _confirm_skills(db: AsyncSession, session: TestSession, answered: list
         row = await db.scalar(select(Skill).where(Skill.participant_id == session.participant_id, Skill.name == name))
         if row is None:
             db.add(Skill(participant_id=session.participant_id, name=name, raw_name=raw, source_quote=quote,
-                         trust_level="test_confirmed", confirmed=True))
+                         trust_level="test_confirmed", confirmed=True, confirmed_at=now))
         else:
+            if row.trust_level != "test_confirmed" or row.confirmed_at is None:
+                row.confirmed_at = now
             row.trust_level, row.source_quote, row.confirmed = "test_confirmed", quote, True
     return confirmed
 

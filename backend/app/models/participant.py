@@ -125,5 +125,7 @@ class Skill(Base):
     trust_level = Column(String(20), nullable=False, default="self_reported")
     confirmed = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    # When the skill became evidence (a test or a resume quote). A declaration has no such date.
+    confirmed_at = Column(DateTime(timezone=True))
     participant = relationship("Participant", back_populates="skills")
     __table_args__ = (UniqueConstraint("participant_id", "name", name="uq_participant_skill"),)

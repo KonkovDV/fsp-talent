@@ -5,6 +5,7 @@ import { getPublicProfile, getCredentials, verifyCredential } from '../api/clien
 import { Shield } from 'lucide-react'
 import PublicShell from '../components/PublicShell'
 import { CategoryPlate, Empty, Meter, RankBadge, Skeleton } from '../components/ui'
+import SkillPassport, { type PassportSkill } from '../components/SkillPassport'
 
 interface Achievement {
   eventName?: string
@@ -51,12 +52,16 @@ export default function PublicProfile() {
           <h1 className="mt-4 font-display text-xl font-bold text-ink">{profile.display_name}</h1>
           <p className="mt-1 text-sm text-ink-2">{profile.region}</p>
           <div className="mt-4"><CategoryPlate role={profile.primary_role} grade={profile.grade} source={profile.grade_source} /></div>
-          {(profile.skills ?? []).length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-1.5">{(profile.skills as string[]).map(s => <span key={s} className="chip-default">{s}</span>)}</div>
-          )}
           <p className="mt-6 text-xs text-ink-3">Контакты на публичной странице не показываются никогда.</p>
         </aside>
         <div className="space-y-6">
+          {(profile.skills ?? []).length > 0 && (
+            <section className="card">
+              <h2 className="section-title">Паспорт навыков</h2>
+              <p className="mt-1 text-sm text-ink-2">Откуда взят навык и насколько ему можно доверять в подборке.</p>
+              <SkillPassport skills={profile.skills as PassportSkill[]} />
+            </section>
+          )}
           <section className="card">
             <h2 className="section-title">Уровень по дисциплинам ФСП</h2>
             <p className="mt-1 text-sm text-ink-2">Нижняя граница уровня с учётом места, размера поля, разряда и давности результата.</p>

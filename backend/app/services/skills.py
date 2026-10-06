@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 
 # canonical -> (roles, aliases); aliases are matched case-insensitively on word boundaries
@@ -150,6 +151,62 @@ def extract_skills(text: str) -> list[ExtractedSkill]:
                 taken.append((m.start(), m.end()))
                 break
     return sorted(found.values(), key=lambda s: s.start)
+
+
+TRUST_WEIGHT = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
+
+TRUST_RU = {
+    "test_confirmed": "подтверждён тестом",
+    "resume_confirmed": "цитата из резюме",
+    "self_reported": "заявлен",
+}
+
+
+@dataclass
+class SkillDraft:
+    name: str
+    raw_name: str | None
+    source_quote: str | None
+    trust_level: str
+    confirmed: bool
+    created_at: datetime | None
+    confirmed_at: datetime | None
+
+
+def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str, str, str | None]],
+                           now: datetime) -> list[SkillDraft]:
+    """Rebuild a skill list without throwing away evidence.
+
+    A skill the test confirmed stays confirmed, with the same dates. A resume quote confirms
+    a declaration and remembers the first day that happened. Saving the profile again does not
+    move those dates.
+    """
+    by_name = {row.name: row for row in existing}
+    tested = {name: row for name, row in by_name.items() if row.trust_level == "test_confirmed"}
+    seen: set[str] = set()
+    out: list[SkillDraft] = []
+    for name, raw, quote in incoming:
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        old = by_name.get(name)
+        if name in tested:
+            src = tested[name]
+            out.append(SkillDraft(name, src.raw_name or raw, src.source_quote, "test_confirmed", True,
+                                  src.created_at or now, src.confirmed_at or now))
+            continue
+        if quote:
+            kept = old.confirmed_at if old and old.trust_level == "resume_confirmed" else None
+            out.append(SkillDraft(name, raw, quote, "resume_confirmed", True,
+                                  old.created_at if old and old.created_at else now, kept or now))
+            continue
+        out.append(SkillDraft(name, raw, None, "self_reported", True,
+                              old.created_at if old and old.created_at else now, None))
+    return out
+
+
+def skill_line(name: str, trust_level: str) -> str:
+    return f"{name} ({TRUST_RU.get(trust_level, TRUST_RU['self_reported'])})"
 
 
 def is_grounded(evidence: str, text: str) -> bool:

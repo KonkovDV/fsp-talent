@@ -13,6 +13,7 @@ export interface CandidateCardData {
   stack: string[]
   matched_skills: string[]
   missing_skills: string[]
+  skill_evidence?: Record<string, string>
   why: string[]
   shortlisted?: boolean
   match?: {
@@ -47,6 +48,13 @@ interface Props {
 
 const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет')
 
+function skillChip(name: string, evidence?: Record<string, string>): string {
+  const trust = evidence?.[name]
+  if (trust === 'test_confirmed') return `${name}, тест`
+  if (trust === 'resume_confirmed') return `${name}, резюме`
+  return name
+}
+
 /**
  * One line of the selection protocol: place, category, match score and the factors behind it.
  * The card is anonymous: no name, no FSP id, no event names — those open after the candidate's consent.
@@ -78,9 +86,9 @@ export default function CandidateCard({ card, place, onOffer, onShortlist, compa
           </div>
           {(card.matched_skills.length > 0 || card.missing_skills.length > 0 || card.stack.length > 0) && (
             <div className="flex flex-wrap gap-1.5">
-              {card.matched_skills.map(s => <span key={s} className="chip-active">{s}</span>)}
+              {card.matched_skills.map(s => <span key={s} className="chip-active">{skillChip(s, card.skill_evidence)}</span>)}
               {card.missing_skills.map(s => <span key={s} className="chip-missing">нет {s}</span>)}
-              {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default">{s}</span>)}
+              {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default">{skillChip(s, card.skill_evidence)}</span>)}
             </div>
           )}
         </div>

@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, apiErrorCode, downloadMyProfilePdf, getMyProfile, giveConsent, parseResume, updateMyProfile, updateVisibility, uploadResumePdf } from '../../api/client'
-import { Eye, EyeOff, MailCheck, X } from 'lucide-react'
+import { Eye, EyeOff, MailCheck } from 'lucide-react'
 import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
 import FspLinkCard from '../../components/FspLinkCard'
 import ConsentsPanel from '../../components/ConsentsPanel'
 import DeleteAccountCard from '../../components/DeleteAccountCard'
 import SurveyCard, { type SurveyHint } from '../../components/SurveyCard'
+import SkillPassport from '../../components/SkillPassport'
 import { roleRu } from '../../labels'
 
-interface SkillRow { name: string; source_quote?: string | null; trust_level?: string }
+interface SkillRow { name: string; source_quote?: string | null; trust_level?: string; created_at?: string | null; confirmed_at?: string | null }
 interface Quoted { value: string; quote: string }
 interface ResumeFound {
   skills: SkillRow[]; llm_used?: boolean; note?: string
@@ -113,19 +114,10 @@ export default function CandidateProfile() {
         <div className="space-y-6">
           <section className="card space-y-5" aria-labelledby="skills-h">
             <div>
-              <h2 id="skills-h" className="section-title">Навыки</h2>
-              <p className="mt-1 text-sm text-ink-2">Отмеченные галочкой подтверждены тестом и весят в поиске больше заявленных.</p>
+              <h2 id="skills-h" className="section-title">Паспорт навыков</h2>
+              <p className="mt-1 text-sm text-ink-2">Навык, подтверждённый тестом, весит в подборке больше цитаты из резюме, а цитата — больше простого заявления.</p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {skills.length === 0 && <p className="text-sm text-ink-3">Навыков пока нет: добавьте вручную или разберите резюме.</p>}
-              {skills.map(skill => (
-                <span key={skill.name} className={skill.trust_level === 'test_confirmed' ? 'chip-active' : 'chip-default'}>
-                  {skill.name}{skill.trust_level === 'test_confirmed' && ' ✓'}
-                  <button onClick={() => setSkills(skills.filter(item => item.name !== skill.name))} aria-label={`Убрать ${skill.name}`}
-                    className="-mr-1 rounded-full p-0.5 hover:bg-sunken"><X size={12} /></button>
-                </span>
-              ))}
-            </div>
+            <SkillPassport skills={skills} onRemove={name => setSkills(skills.filter(item => item.name !== name))} />
             <form className="flex gap-2" onSubmit={e => { e.preventDefault(); addSkill() }}>
               <input value={newSkill} onChange={e => setNewSkill(e.target.value)} placeholder="Например, PostgreSQL" className="input" aria-label="Новый навык" />
               <button className="btn-secondary shrink-0" disabled={!newSkill.trim()}>Добавить</button>
