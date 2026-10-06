@@ -2,8 +2,6 @@ from app.models.assessment import (
     GradeConfirmation,
     ItemStat,
     PracticeAttempt,
-    TestAnswer,
-    TestQuestion,
     TestSession,
     TestSessionItem,
 )
@@ -41,8 +39,6 @@ __all__ = [
     "Qualification",
     "Result",
     "Skill",
-    "TestAnswer",
-    "TestQuestion",
     "TestSession",
     "TestSessionItem",
     "Vacancy",

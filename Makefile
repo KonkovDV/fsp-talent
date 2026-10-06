@@ -41,7 +41,7 @@ test:
 	docker compose exec -T backend python -m pytest tests/unit -q
 
 lint:
-	docker compose exec -T backend sh -c "pip install -q ruff && ruff check app seed tests"
+	docker compose exec -T backend sh -c "pip install -q ruff==0.16.10 && ruff check app seed tests"
 
 validate:
 	docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check

@@ -1,7 +1,7 @@
-"""One short task formed the same way as the grade test, without changing the grade.
+"""One short task formed the same way as the grade test, without changing the grade (TZ 2.1, regular tasks).
 
-Taken from the strongest competitor's idea (a task built from the vacancy's requirements,
-or a voluntary drill on the specialization) and implemented on our parametric families.
+The task comes from an employer's vacancy (its skills pick the family) or from the candidate's weakest topic.
+It is built on the same parametric families as the grade test, so it is new for every candidate.
 The right answer stays on the server until the candidate submits.
 """
 from __future__ import annotations

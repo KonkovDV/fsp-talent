@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: pip install "ruff==0.16.10"
-      - run: ruff check backend/app/
+      - run: ruff check backend/app backend/seed backend/tests
 
   test-backend:
     runs-on: ubuntu-latest
@@ -64,7 +64,7 @@ jobs:
           unzip -q kotlin.zip -d "$RUNNER_TEMP/kotlin"
           echo "$RUNNER_TEMP/kotlin/kotlinc/bin" >> "$GITHUB_PATH"
       - name: Install backend deps
-        run: cd backend && pip install -e .[test]
+        run: cd backend && pip install -c requirements.lock -e .[test]
       - name: Run unit tests
         run: cd backend && pytest tests/unit/ -v --cov=app/services --cov-report=xml
       # Fixed seed: a broken threshold is a regression in the item generators or the adaptive test.
@@ -127,9 +127,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ubuntu
           key: ${{ secrets.DEPLOY_KEY }}
+          # The public stand runs the production compose (Caddy, HTTPS, backups); migrations run at backend start.
           script: |
             cd /opt/fsp-talent
             git pull origin main
-            docker compose up -d --build --no-deps backend frontend worker beat
-            docker compose exec -T backend alembic upgrade head
+            docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"

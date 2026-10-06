@@ -8,9 +8,6 @@ from __future__ import annotations
 import ast
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Resolve paths relative to repo root (tests run from backend/)
 _REPO_ROOT = Path(__file__).parent.parent.parent
@@ -21,7 +18,7 @@ _APP = _REPO_ROOT / "app"
 # participant.updated_at is set on insert
 # ---------------------------------------------------------------------------
 
-def test_bug03_updated_at_has_default():
+def test_updated_at_has_default():
     """
     Participant.updated_at column must carry a Python-side default=
     so that SQLAlchemy populates it on INSERT, not just on UPDATE.
@@ -35,7 +32,7 @@ def test_bug03_updated_at_has_default():
     assert col.onupdate is not None, "updated_at must still have onupdate= for UPDATE"
 
 
-def test_bug03_updated_at_default_is_tz_aware():
+def test_updated_at_default_is_tz_aware():
     """
     The default lambda for updated_at must return a timezone-aware datetime.
     """
@@ -50,7 +47,7 @@ def test_bug03_updated_at_default_is_tz_aware():
 # verify_credential uses the cached public key
 # ---------------------------------------------------------------------------
 
-def test_bug04_public_key_obj_is_cached():
+def test_public_key_obj_is_cached():
     """
     _public_key_obj() must be decorated with @lru_cache so repeated calls
     to verify_credential do not reconstruct Ed25519PublicKey every time.
@@ -66,7 +63,7 @@ def test_bug04_public_key_obj_is_cached():
 # _safe_uuid ignores a malformed JSONB entry
 # ---------------------------------------------------------------------------
 
-def test_bug06_safe_uuid_returns_none_on_bad_input():
+def test_safe_uuid_returns_none_on_bad_input():
     """
     _safe_uuid(e) must return None (not raise) when given a non-UUID string
     or any other non-conforming value stored in the JSONB top_event_ids field.
@@ -86,7 +83,7 @@ def test_bug06_safe_uuid_returns_none_on_bad_input():
 # auth rate-limit buckets are role-specific
 # ---------------------------------------------------------------------------
 
-def test_bug05_register_buckets_are_role_specific():
+def test_register_buckets_are_role_specific():
     """
     register_participant must use bucket 'register:participant' and
     register_employer must use bucket 'register:employer' so that
@@ -117,7 +114,7 @@ def test_bug05_register_buckets_are_role_specific():
 # (structural / AST check on pipeline.py)
 # ---------------------------------------------------------------------------
 
-def test_bug02_websearch_tsquery_not_split_joined():
+def test_websearch_tsquery_not_split_joined():
     """
     pipeline.py must pass q directly to websearch_to_tsquery without
     pre-splitting and OR-joining (which destroys 'python OR java' grammar).
@@ -142,7 +139,7 @@ def test_bug02_websearch_tsquery_not_split_joined():
 # (structural check on pipeline.py)
 # ---------------------------------------------------------------------------
 
-def test_bug01_dense_retrieval_not_restricted_to_lexical_pool():
+def test_dense_retrieval_not_restricted_to_lexical_pool():
     """
     The dense vector query must search the full embedding table.
     The old code had .where(ProfileEmbedding.participant_id.in_(ids))

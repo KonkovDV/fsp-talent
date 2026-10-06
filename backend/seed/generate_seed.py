@@ -13,7 +13,6 @@ from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
 from app.legal import documents
 from app.models import Consent, Employer, Participant, Skill, Vacancy
-from app.seed.questions import seed_questions
 from app.services.categorization import DISCIPLINE_ROLE_MAP
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
@@ -154,7 +153,6 @@ async def main() -> None:
             jobs += 1
         await db.commit()
         print(f"seeded employers={employers} participants={created} vacancies={jobs}")
-    await seed_questions()
     # Completed tests, needs, invitations and applications, so the demo shows every step without setup.
     from seed.demo_activity import main as demo_activity
     await demo_activity()

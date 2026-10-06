@@ -1,9 +1,10 @@
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-COPY pyproject.toml .
+COPY pyproject.toml requirements.lock ./
 COPY app ./app
-RUN pip install --no-cache-dir ".[test]"
+# requirements.lock pins the versions the test suite passed on, so a rebuild months later gets the same stack.
+RUN pip install --no-cache-dir -c requirements.lock ".[test]"
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY seed ./seed

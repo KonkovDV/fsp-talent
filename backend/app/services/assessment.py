@@ -33,6 +33,7 @@ from app.items.registry import FAMILIES
 from app.models.assessment import (
     GRADE_COOLDOWN_DAYS,
     GRADE_ORDER,
+    SESSION_TTL_MINUTES,
     GradeConfirmation,
     ItemStat,
     TestSession,
@@ -44,7 +45,6 @@ from app.services.item_monitor import KeyStats, leave_family_out
 from app.services.skills import normalize_skill
 
 RETAKE_INTERVAL_DAYS = 7
-SESSION_TTL_MINUTES = 40
 TIME_LIMIT_S = {"code": 180, "concept": 75}
 GRACE_S = 5
 FAST_CORRECT_S = 4          # a right answer to a code item faster than this is flagged for review
