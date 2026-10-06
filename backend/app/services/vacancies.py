@@ -6,7 +6,7 @@ from app.services.scoring.engine import RANK_ORDER, rank_at_least
 from app.services.skills import normalize_skill
 from app.services.survey import SPECIALIZATIONS
 
-GRADES = ("junior", "middle", "senior", "lead")
+GRADES = ("intern", "junior", "middle", "senior", "lead")
 
 
 def _at_least_grade(candidate_grade: str | None, required: str | None) -> bool:

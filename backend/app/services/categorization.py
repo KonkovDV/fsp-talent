@@ -11,7 +11,7 @@ from typing import TypedDict
 from app.services.skills import ROLES, roles_for
 
 RULES_VERSION = "v2.1.0"
-GRADES = ("junior", "middle", "senior", "lead")
+GRADES = ("intern", "junior", "middle", "senior", "lead")
 MIN_SKILLS_FOR_ROLE = 2
 
 DISCIPLINE_ROLE_MAP: dict[str, str] = {

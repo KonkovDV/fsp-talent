@@ -23,7 +23,7 @@ from app.services.survey import INDUSTRIES, SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/needs", tags=["needs"])
-Grade = Literal["junior", "middle", "senior", "lead"]
+Grade = Literal["intern", "junior", "middle", "senior", "lead"]
 
 
 class NeedParams(BaseModel):

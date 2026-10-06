@@ -2,13 +2,12 @@ import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { Search as SearchIcon, Sparkles } from 'lucide-react'
 import { parseQuery, searchCandidates } from '../../api/client'
-import { DISC_RU, ROLE_RU } from '../../labels'
+import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
 import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
 
 const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile']
-const GRADES = ['junior', 'middle', 'senior', 'lead']
 const DISCS = ['algorithmic', 'product', 'security', 'bas', 'robotics', 'ai']
 const RANKS = ['МС', 'КМС', 'I', 'II', 'III']
 const EXAMPLES = ['senior backend Python Kafka', 'middle фронтенд React TypeScript', 'специалист по ИБ с КМС']
@@ -91,7 +90,7 @@ export default function EmployerSearch() {
             </select></div>
           <div><label className={label} htmlFor="f-grade">Грейд</label>
             <select id="f-grade" value={grade} onChange={e => setGrade(e.target.value)} className="select">
-              <option value="">Любой</option>{GRADES.map(v => <option key={v} value={v}>{v}</option>)}
+              <option value="">Любой</option>{GRADES.map(v => <option key={v} value={v}>{gradeRu(v)}</option>)}
             </select></div>
           <div><label className={label} htmlFor="f-skills">Навыки</label>
             <input id="f-skills" value={skills} onChange={e => setSkills(e.target.value)} placeholder="Через запятую" className="input" /></div>

@@ -8,6 +8,17 @@ export const DISC_RU: Record<string, string> = {
   ai: 'Системы ИИ',
 }
 
+export const GRADES = ['intern', 'junior', 'middle', 'senior', 'lead'] as const
+
+export const GRADE_RU: Record<string, string> = {
+  intern: 'стажёр', junior: 'junior', middle: 'middle', senior: 'senior', lead: 'lead',
+}
+
+export function gradeRu(grade?: string | null): string {
+  if (!grade) return ''
+  return GRADE_RU[grade] ?? grade
+}
+
 export function roleRu(role?: string | null): string {
   if (!role) return 'роль не определена'
   return ROLE_RU[role] ?? role

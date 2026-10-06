@@ -9,7 +9,7 @@ import {
 import SurveyCard from '../../components/SurveyCard'
 import { Meter, PageHeader, plural } from '../../components/ui'
 
-const GRADES = ['junior', 'middle', 'senior', 'lead']
+import { GRADES, gradeRu } from '../../labels'
 
 interface Item {
   token: string; seq: number; stem: string; code: string | null; language: string | null
@@ -85,9 +85,11 @@ export default function CandidateAssessment() {
   // Preselect a sensible level so «Начать тест» is never a dead button: the declared grade, else the category grade.
   useEffect(() => {
     if (!profile || target) return
-    const order = ['junior', 'middle', 'senior', 'lead']
-    const base = profile.declared_grade ?? profile.grade ?? 'junior'
-    const next = profile.grade_source === 'assessed' ? order[Math.min(order.indexOf(profile.grade) + 1, 3)] : base
+    const order = [...GRADES]
+    const base = profile.declared_grade ?? profile.grade ?? (profile.work_goal === 'internship' ? 'intern' : 'junior')
+    const next = profile.grade_source === 'assessed'
+      ? order[Math.min(Math.max(order.indexOf(profile.grade), 0) + 1, order.length - 1)]
+      : base
     setTarget(order.includes(next) ? next : 'junior')
   }, [profile, target])
 
@@ -139,16 +141,16 @@ export default function CandidateAssessment() {
             <div>
               <p className="text-xs text-ink-3">Специализация из опроса</p>
               <p className="mt-1 text-lg font-semibold text-ink">{plan?.label ?? spec}</p>
-              <p className="mt-1 text-sm text-ink-2">Подтверждённый грейд: <b className="text-ink">{confirmation?.grade ?? 'пока нет'}</b>
+              <p className="mt-1 text-sm text-ink-2">Подтверждённый грейд: <b className="text-ink">{confirmation?.grade ? gradeRu(confirmation.grade) : 'пока нет'}</b>
                 {confirmation?.locked_until && <>, повышение после {new Date(confirmation.locked_until).toLocaleDateString('ru-RU')}</>}</p>
             </div>
             <fieldset>
               <legend className="field-label">Какой уровень подтвердить</legend>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Уровень">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="radiogroup" aria-label="Уровень">
                 {GRADES.map(g => (
                   <button key={g} type="button" role="radio" aria-checked={target === g} onClick={() => setTarget(g)}
                     className={`rounded-lg border px-3 py-3 text-center transition-colors ${target === g ? 'border-accent bg-accent-soft' : 'border-line-strong bg-panel hover:border-accent/60'}`}>
-                    <span className="block font-display text-sm font-bold text-ink">{g}</span>
+                    <span className="block font-display text-sm font-bold text-ink">{gradeRu(g)}</span>
                     {confirmation?.grade === g && <span className="text-2xs text-ok">подтверждён</span>}
                   </button>
                 ))}

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-GRADES = ("junior", "middle", "senior", "lead")
+GRADES = ("intern", "junior", "middle", "senior", "lead")
 
 # Fit to the need (skills, grade, role) decides who belongs in the list. Inside one hundredth of
 # that fit, the confirmed profile decides the order: a passed test and FSP results outrank a

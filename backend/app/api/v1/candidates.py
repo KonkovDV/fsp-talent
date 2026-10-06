@@ -120,7 +120,7 @@ class ProfileUpdate(BaseModel):
     granted by the minor through the same account. It must come from a separate guardian flow.
     """
     experience_years: int | None = Field(None, ge=0, le=50)
-    declared_grade: Literal["junior", "middle", "senior", "lead"] | None = None
+    declared_grade: Literal["intern", "junior", "middle", "senior", "lead"] | None = None
     # FIX (Pydantic v2): max_length on list[T] must use Annotated[], not Field() kwarg.
     # Old: list[SkillIn] | None = Field(None, max_length=40) -- silently ignored the limit.
     skills: Annotated[list[SkillIn], Field(max_length=40)] | None = None
@@ -433,7 +433,7 @@ class SurveyIn(BaseModel):
     specialization: str
     industry: str
     work_goal: str = "job"
-    declared_grade: Literal["junior", "middle", "senior", "lead"] | None = None
+    declared_grade: Literal["intern", "junior", "middle", "senior", "lead"] | None = None
     experience_years: int | None = Field(None, ge=0, le=50)
 
 
@@ -450,6 +450,8 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
     p.specialization, p.industry, p.work_goal = body.specialization, body.industry, body.work_goal
     if body.declared_grade is not None:
         p.declared_grade = body.declared_grade
+    elif body.work_goal == "internship" and not p.declared_grade:
+        p.declared_grade = "intern"
     if body.experience_years is not None:
         p.experience_years = body.experience_years
     p.survey_at = datetime.now(UTC)

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ROLE_RU } from '../labels'
+import { ROLE_RU, gradeRu } from '../labels'
 
 export function PageHeader({ title, lead, actions }: { title: string; lead?: ReactNode; actions?: ReactNode }) {
   return (
@@ -26,8 +26,6 @@ export function Meter({ value, label, muted, ariaLabel }: { value: number | null
   )
 }
 
-const GRADE_RU: Record<string, string> = { junior: 'junior', middle: 'middle', senior: 'senior', lead: 'lead' }
-
 /** The category plate: specialization × grade, like a start number. Source tells how the grade is known. */
 export function CategoryPlate({ role, grade, source, size = 'md' }: {
   role: string | null | undefined; grade: string | null | undefined; source?: string | null; size?: 'md' | 'lg'
@@ -37,7 +35,7 @@ export function CategoryPlate({ role, grade, source, size = 'md' }: {
     <span className={`inline-flex items-stretch overflow-hidden rounded-md ring-1 ring-inset ${confirmed ? 'ring-accent' : 'ring-line-strong'} ${size === 'lg' ? 'text-base' : 'text-xs'}`}>
       <span className={`px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-medium text-ink`}>{ROLE_RU[role ?? ''] ?? role ?? 'роль не задана'}</span>
       <span className={`flex items-center whitespace-nowrap px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-display font-bold ${confirmed ? 'bg-accent text-accent-ink' : 'bg-sunken text-ink-2'}`}>
-        {grade ? GRADE_RU[grade] ?? grade : '—'}
+        {grade ? gradeRu(grade) : '—'}
       </span>
     </span>
   )

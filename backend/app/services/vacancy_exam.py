@@ -31,7 +31,7 @@ SKILL_TOPIC = {
     "C": "embedded", "C++": "embedded", "STM32": "embedded", "Arduino": "embedded",
     "ROS": "embedded", "RTOS": "embedded", "PX4/ArduPilot": "embedded",
 }
-GRADE_LEVEL = {"junior": 2, "middle": 3, "senior": 4, "lead": 5}
+GRADE_LEVEL = {"intern": 1, "junior": 2, "middle": 3, "senior": 4, "lead": 5}
 TOPIC_LABELS = {
     "python": "Python", "sql": "SQL", "algorithms": "Алгоритмы", "javascript": "JavaScript",
     "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",

@@ -30,7 +30,7 @@ from app.services.matching import GRADES, ROLE_NEIGHBOURS, CandidateFacts, NeedS
 from app.services.skills import TAXONOMY
 
 ROLES = ("backend", "frontend", "fullstack", "ml", "devops", "security", "embedded", "mobile")
-CUTS = {"junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
+CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
 TESTABLE = {"Python", "SQL", "JavaScript", "Algorithms", "Networking", "Web Security", "Machine Learning", "C"}
 INDUSTRIES = ("fintech", "ecommerce", "gamedev", "edtech", "govtech", "telecom", "industry", "any")
 
@@ -40,7 +40,7 @@ def _pool(role: str) -> list[str]:
 
 
 def _grade(theta: float) -> str:
-    g = "junior"
+    g = "intern"
     for name, cut in CUTS.items():
         if theta >= cut:
             g = name
@@ -67,7 +67,8 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026) -
         true_grade = _grade(theta)
         gi = GRADES.index(true_grade)
         r = rng.random()
-        declared_grade = GRADES[min(gi + 1, 3)] if r < 0.30 else GRADES[max(gi - 1, 0)] if r < 0.40 else true_grade
+        declared_grade = (GRADES[min(gi + 1, len(GRADES) - 1)] if r < 0.30
+                          else GRADES[max(gi - 1, 0)] if r < 0.40 else true_grade)
         tested = rng.random() < 0.45
         grade, source, test_p = declared_grade, "declared", None
         if tested:

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ListChecks } from 'lucide-react'
 import { apiError, saveSurvey, surveyOptions } from '../api/client'
+import { gradeRu } from '../labels'
 
 export interface SurveyHint {
   specialization?: string
@@ -71,14 +72,18 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
           </select>
         </label>
         <label>Что ищете
-          <select value={goal} onChange={e => setGoal(e.target.value)} className={select}>
+          <select value={goal} onChange={e => {
+            const next = e.target.value
+            setGoal(next)
+            if (next === 'internship') setGrade('intern')
+          }} className={select}>
             {entries(opts?.work_goals).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>
         <label>Ваш грейд (заявленный)
           <select value={grade} onChange={e => setGrade(e.target.value)} className={select}>
             <option value="">не указан</option>
-            {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{g}</option>)}
+            {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{gradeRu(g)}</option>)}
           </select>
         </label>
         <label>Опыт, лет

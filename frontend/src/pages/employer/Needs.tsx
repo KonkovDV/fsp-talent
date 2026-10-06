@@ -8,7 +8,7 @@ import CandidateCard, { type CandidateCardData } from '../../components/Candidat
 import InviteDialog from '../../components/InviteDialog'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
-import { ROLE_RU } from '../../labels'
+import { ROLE_RU, gradeRu } from '../../labels'
 
 interface NeedParams {
   role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
@@ -95,7 +95,7 @@ export default function EmployerNeeds() {
             <div><label className={field} htmlFor="n-grade">Грейд</label>
               <select id="n-grade" value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} className="select" aria-label="Грейд">
                 <option value="">Любой</option>
-                {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{g}</option>)}
+                {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{gradeRu(g)}</option>)}
               </select></div>
             <div><label className={field} htmlFor="n-ind">Отрасль</label>
               <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select" aria-label="Отрасль">
@@ -147,7 +147,7 @@ export default function EmployerNeeds() {
                 <div>
                   <h2 className="font-display text-xl font-bold text-ink">{current.title}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
-                    <span>{current.params.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params.grade ?? 'любой грейд'}</span>
+                    <span>{current.params.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params.grade ? gradeRu(current.params.grade) : 'любой грейд'}</span>
                     {current.params.skills.map(s => <span key={s} className="chip-active">{s}</span>)}
                     {current.params.nice_to_have.map(s => <span key={s} className="chip-default">+ {s}</span>)}
                     {current.params.work_goal === 'internship' && <span className="badge-warn">стажировка</span>}

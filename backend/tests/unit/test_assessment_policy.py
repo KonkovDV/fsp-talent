@@ -88,6 +88,18 @@ def test_random_guessing_does_not_pass():
     assert sum(passed) <= 2
 
 
+def test_intern_is_the_step_below_junior():
+    assert cat.CUTS["intern"] == -2.5
+    assert cat.CUTS["intern"] == cat.CUTS["junior"] - 1.0
+    assert cat.next_grade("intern") == "junior"
+    assert cat.prev_grade("junior") == "intern"
+    assert cat.prev_grade("intern") is None
+    rng = random.Random(11)
+    ready = [_simulate(-1.2, "backend", "intern", rng)[1].passed for _ in range(30)]
+    below = [_simulate(-3.6, "backend", "intern", rng)[1].passed for _ in range(30)]
+    assert sum(ready) >= 24 and sum(below) <= 2
+
+
 def test_skipping_or_all_wrong_confirms_nothing():
     rng = random.Random(4)
     for target in ("junior", "middle", "senior", "lead"):

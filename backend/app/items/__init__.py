@@ -21,8 +21,8 @@ LEVELS = (1, 2, 3, 4, 5)
 CHOICE_C = 0.25
 TYPED_C = 0.02
 _WHOLE = re.compile(r"[+-]?\d{1,12}")
-# Prior difficulty on the theta scale for each level. Grade cuts are -1.5 / -0.5 / 0.5 / 1.5, so the
-# levels sit around them; per-level offsets are re-estimated from real answers (item_stats.b_offset).
+# Prior difficulty on the theta scale for each level. Grade cuts are -2.5 (intern) through 1.5 (lead),
+# one band apart, so the levels sit around them. Offsets are re-estimated from real answers.
 LEVEL_B = {1: -2.2, 2: -1.2, 3: -0.2, 4: 0.8, 5: 1.8}
 
 

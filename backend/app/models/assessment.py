@@ -43,7 +43,8 @@ class TestQuestion(Base):
     __tablename__ = "test_questions"
     __table_args__ = (
         CheckConstraint("question_type IN ('mcq', 'open')", name="ck_question_type"),
-        CheckConstraint("target_grade IN ('junior', 'middle', 'senior', 'lead')", name="ck_question_grade"),
+        CheckConstraint(
+            "target_grade IN ('intern', 'junior', 'middle', 'senior', 'lead')", name="ck_question_grade"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -71,7 +72,7 @@ class TestSession(Base):
             name="ck_session_status",
         ),
         CheckConstraint(
-            "target_grade IN ('junior', 'middle', 'senior', 'lead')",
+            "target_grade IN ('intern', 'junior', 'middle', 'senior', 'lead')",
             name="ck_session_grade",
         ),
     )
@@ -133,7 +134,7 @@ class TestAnswer(Base):
     question: Mapped[TestQuestion] = relationship("TestQuestion", back_populates="answers")
 
 
-GRADE_ORDER = ("junior", "middle", "senior", "lead")
+GRADE_ORDER = ("intern", "junior", "middle", "senior", "lead")
 
 
 class TestSessionItem(Base):

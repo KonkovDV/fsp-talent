@@ -26,8 +26,8 @@ from app.items import LEVEL_B, Family
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, expected_guess, families_for
 from app.models.assessment import GRADE_ORDER
 
-# Lower edge of each grade on the theta scale (junior starts at -1.5: below that nothing is confirmed).
-CUTS = {"junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
+# Lower edge of each grade. A band is 1.0 wide. Intern is the step under junior, for an internship.
+CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
 GRID = [-4.0 + 0.05 * i for i in range(161)]
 MIN_ITEMS = 8
 MAX_ITEMS = 20

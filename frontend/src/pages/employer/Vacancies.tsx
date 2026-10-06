@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, previewVacancyExam, updateApplicationStatus, updateVacancy, vacancyApplications } from '../../api/client'
-import { DISC_RU, ROLE_RU } from '../../labels'
+import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, date, rub } from '../../components/ui'
 
 const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
@@ -72,7 +72,7 @@ export default function EmployerVacancies() {
                 {Object.entries(ROLE_RU).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div><label className="field-label" htmlFor="v-grade">Грейд</label>
               <select id="v-grade" className="select" value={form.grade} onChange={set('grade')}>
-                {['junior', 'middle', 'senior', 'lead'].map(g => <option key={g}>{g}</option>)}</select></div>
+                {GRADES.map(g => <option key={g} value={g}>{gradeRu(g)}</option>)}</select></div>
             <div><label className="field-label" htmlFor="v-format">Формат</label>
               <select id="v-format" className="select" value={form.work_format} onChange={set('work_format')}>
                 {Object.entries(FORMAT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>

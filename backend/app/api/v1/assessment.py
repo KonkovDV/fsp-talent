@@ -53,7 +53,7 @@ from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 
-Grade = Literal["junior", "middle", "senior", "lead"]
+Grade = Literal["intern", "junior", "middle", "senior", "lead"]
 TOPIC_LABELS = {"python": "Python", "sql": "SQL", "algorithms": "Алгоритмы", "javascript": "JavaScript",
                 "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",
                 "embedded": "Встраиваемые системы", "concept": "Понимание"}
