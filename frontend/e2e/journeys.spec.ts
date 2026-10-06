@@ -44,7 +44,7 @@ test('кабинеты читаются на узком экране в тёмн
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.locator('#username').fill('fsp001@demo.talent')
   await page.locator('#password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
   await expect(page).toHaveURL(/\/candidate/)
   await page.goto('/candidate/assessment')
   await expect(page.getByRole('button', { name: /Пробный тест/ })).toBeVisible()
@@ -57,7 +57,7 @@ test('кабинеты читаются на узком экране в тёмн
   await page.goto('/login?role=employer')
   await page.locator('#username').fill('hr@sibcode.demo')
   await page.locator('#password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
   await expect(page).toHaveURL(/\/employer/)
   await page.goto('/employer/needs')
   await expect(page.getByRole('heading', { name: 'Потребности' })).toBeVisible()
@@ -86,7 +86,7 @@ test('кандидат проходит регистрацию и пробный
   await expect(page).toHaveURL(/\/candidate/)
 
   await page.getByLabel('Специализация').selectOption('backend')
-  await page.getByLabel('Сфера').selectOption({ index: 1 })
+  await page.getByLabel('Предметная область').selectOption({ index: 1 })
   await page.getByLabel('Ожидания по зарплате, от').fill('200000')
   await page.getByRole('button', { name: 'Сохранить опрос' }).click()
   await expect(page.getByRole('region', { name: 'Категория' })).toContainText('Backend')
@@ -103,7 +103,7 @@ test('кандидат проходит регистрацию и пробный
   await page.goto('/login?role=employer')
   await page.locator('#username').fill('hr@sibcode.demo')
   await page.locator('#password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
   await expect(page).toHaveURL(/\/employer/)
 
   await page.goto('/employer/needs')
@@ -138,7 +138,7 @@ test('кандидат проходит регистрацию и пробный
   await page.goto('/login')
   await page.locator('#username').fill(email)
   await page.locator('#password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
   await expect(page).toHaveURL(/\/candidate/)
   await page.goto('/candidate/offers')
   await page.getByRole('button', { name: 'Принять и открыть контакты' }).click()
@@ -148,7 +148,7 @@ test('кандидат проходит регистрацию и пробный
   await page.goto('/login?role=employer')
   await page.locator('#username').fill('hr@sibcode.demo')
   await page.locator('#password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
   await expect(page).toHaveURL(/\/employer/)
   const opened = await request.get(`/api/v1/offers/${offer.id}/contacts`, {
     headers: { Authorization: `Bearer ${(await session(page))?.token}` },
