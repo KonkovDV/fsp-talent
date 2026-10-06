@@ -1,5 +1,5 @@
 # Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
-.PHONY: help demo up down reset seed logs test lint check validate
+.PHONY: help demo up down reset seed logs test lint check validate load
 
 help:
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск)"
@@ -12,6 +12,7 @@ help:
 	@echo "make lint      — проверка стиля Python"
 	@echo "make validate  — проверка адаптивного теста и подбора на синтетике"
 	@echo "make check     — сквозная проверка API на запущенном стенде"
+	@echo "make load      — 40 пользователей одновременно в течение минуты"
 
 demo:
 	@test -f .env || cp .env.example .env
@@ -49,3 +50,6 @@ validate:
 
 check:
 	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py
+
+load:
+	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/load_api.py --users 40 --seconds 60
