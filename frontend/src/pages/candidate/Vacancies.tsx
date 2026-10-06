@@ -29,6 +29,7 @@ export default function CandidateVacancies() {
   const [taskError, setTaskError] = useState('')
   const [params] = useSearchParams()
   const topic = params.get('topic')
+  const fromVacancy = params.get('vacancy')
   const { data: cards = [], isLoading } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
   const { data: mine = [] } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
   const practice = useMutation({
@@ -36,7 +37,10 @@ export default function CandidateVacancies() {
     onSuccess: item => { setTaskError(''); setPicked(null); setTyped(''); setTask(item) },
     onError: (e: unknown) => setTaskError(apiError(e, 'Задание не собрано')),
   })
-  useEffect(() => { if (topic) practice.mutate({ topic }) }, [topic])
+  useEffect(() => {
+    if (fromVacancy) practice.mutate({ vacancy_id: fromVacancy })
+    else if (topic) practice.mutate({ topic })
+  }, [topic, fromVacancy])
   const submitPractice = useMutation({
     mutationFn: () => {
       const body = task!.answer_mode === 'number'
@@ -44,7 +48,7 @@ export default function CandidateVacancies() {
         : { answer_index: picked! }
       return answerPractice(task!.id, body).then(r => r.data as PracticeItem)
     },
-    onSuccess: item => setTask(item),
+    onSuccess: item => { setTask(item); qc.invalidateQueries({ queryKey: ['weeklyTask'] }) },
     onError: (e: unknown) => setTaskError(apiError(e, 'Ответ не принят')),
   })
   const apply = useMutation({

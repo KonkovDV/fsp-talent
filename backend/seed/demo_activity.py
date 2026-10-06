@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.services import assessment
 from app.services.notify import Outbox, category_label, notify, salary
+from app.services.practice import offer_weekly_tasks
 from app.services.profile import rebuild_profile
 from app.services.search.pipeline import search_candidates
 
@@ -254,8 +255,11 @@ async def main() -> None:
         needs = await _needs(db, employer, now)
         offers = await _offers(db, now)
         apps = await _applications(db, now)
+        weekly, outbox = await offer_weekly_tasks(db, now)
+        outbox.letters.clear()   # the bell shows the task of the week; no mail to fictional addresses
         await db.commit()
-        print(f"demo activity: tests={tests} needs={needs} offers={offers} applications={apps}")
+        print(f"demo activity: tests={tests} needs={needs} offers={offers} applications={apps} "
+              f"weekly_tasks={weekly}")
 
 
 if __name__ == "__main__":
