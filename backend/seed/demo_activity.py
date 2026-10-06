@@ -122,8 +122,9 @@ async def _simulate_tests(db, now: datetime) -> int:
 async def _needs(db, employer: Employer, now: datetime) -> int:
     for i, (title, params) in enumerate(NEEDS):
         p = NeedParams(**params)
-        need = Need(employer_id=employer.id, title=title, version=1, created_at=now - timedelta(days=5 - i),
-                    updated_at=now - timedelta(days=5 - i))
+        # The first need is the newest, so it opens first in the cabinet: the README scenario starts there.
+        need = Need(employer_id=employer.id, title=title, version=1, created_at=now - timedelta(days=3 + i),
+                    updated_at=now - timedelta(days=3 + i))
         db.add(need)
         await db.flush()
         db.add(NeedVersion(need_id=need.id, version=1, params=p.model_dump(), created_at=need.created_at))
@@ -133,7 +134,7 @@ async def _needs(db, employer: Employer, now: datetime) -> int:
             db.add(NeedShortlist(need_id=need.id, participant_id=card["candidate_id"], version=1,
                                  score=(card.get("match") or {}).get("score"),
                                  status="invited" if rank == 0 else "shortlisted",
-                                 added_at=now - timedelta(days=4 - i, hours=rank)))
+                                 added_at=now - timedelta(days=2 + i, hours=rank)))
     await db.flush()
     return len(NEEDS)
 

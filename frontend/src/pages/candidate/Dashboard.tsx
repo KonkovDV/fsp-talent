@@ -94,7 +94,7 @@ export default function CandidateDashboard() {
         <section className="card flex flex-col gap-4 border-l-4 border-l-accent sm:flex-row sm:items-center" aria-labelledby="weekly-title">
           <CalendarClock className="hidden shrink-0 text-accent sm:block" size={28} aria-hidden />
           <div className="min-w-0 flex-1">
-            <h2 id="weekly-title" className="section-title">Задача недели{weekly.company ? ` от «${weekly.company}»` : ''}</h2>
+            <h2 id="weekly-title" className="section-title">Задача недели{weekly.company ? ` от компании «${weekly.company}»` : ''}</h2>
             <p className="mt-1 text-sm text-ink-2">
               Одно задание{weekly.topic_label ? ` по теме «${weekly.topic_label}»` : ''} из вакансии «{weekly.title}».
               Грейд оно не меняет, а работодатели увидят в карточке свежий результат и его дату.

@@ -25,6 +25,21 @@ SKILLS = {
     "bas": ["C++", "Python", "PX4/ArduPilot", "ROS", "STM32"],
     "robotics": ["C++", "ROS", "Python", "Arduino", "Computer Vision"],
 }
+# Survey answer of a synthetic participant: competitors of one discipline go to different jobs.
+# Without this every algorithmic athlete would be "backend" and an ML need would find nobody of its own.
+SPEC_CHOICE = {
+    "algorithmic": (("backend", "ml", "fullstack", "devops"), (50, 30, 12, 8)),
+    "product": (("fullstack", "frontend", "backend", "mobile"), (40, 35, 15, 10)),
+    "security": (("security", "devops"), (80, 20)),
+    "bas": (("embedded",), (1,)),
+    "robotics": (("embedded", "ml"), (75, 25)),
+}
+SKILLS_OF_SPEC = {
+    "ml": ["Python", "PyTorch", "Pandas", "NumPy", "scikit-learn", "SQL", "NLP"],
+    "frontend": ["TypeScript", "React", "JavaScript", "HTML/CSS", "Next.js"],
+    "mobile": ["Kotlin", "TypeScript", "React", "Algorithms"],
+    "devops": ["Docker", "Kubernetes", "Linux", "Nginx", "Python"],
+}
 # Fictional companies: a demo must not look like a real employer is hiring here.
 EMPLOYERS = [
     ("Сибирский код", "hr@sibcode.demo"), ("Квантум Лаб", "hr@quantumlab.demo"),
@@ -128,7 +143,9 @@ async def main() -> None:
                 participant.public_profile = not participant.is_minor
             else:
                 disc = data.results[0].discipline if data.results else "algorithmic"
-                pool = SKILLS[disc]
+                options, weights = SPEC_CHOICE.get(disc, (("backend",), (1,)))
+                spec = rng.choices(options, weights=weights)[0]
+                pool = SKILLS_OF_SPEC.get(spec, SKILLS[disc])
                 names = rng.sample(pool, k=rng.randint(3, len(pool)))
                 if rng.random() < 0.85:
                     participant.experience_years = rng.randint(0, 12)
@@ -140,7 +157,8 @@ async def main() -> None:
             participant.email_verified_at = now
             # Survey answers: the demo accounts have them; synthetic profiles get the role of their discipline.
             first = data.results[0].discipline if data.results else "algorithmic"
-            participant.specialization = SPEC_OF.get(fsp_id) or DISCIPLINE_ROLE_MAP.get(first, "backend")
+            participant.specialization = (SPEC_OF.get(fsp_id) or (spec if fsp_id not in DEMOS else None)
+                                          or DISCIPLINE_ROLE_MAP.get(first, "backend"))
             participant.industry = rng.choice(list(INDUSTRIES))
             participant.work_goal = "both" if participant.is_minor else rng.choice(["job", "job", "both", "internship"])
             participant.survey_at = now
