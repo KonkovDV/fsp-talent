@@ -151,7 +151,7 @@ export default function EmployerVacancies() {
                       </select>
                     </td>
                     <td>{contacts[a.id] ? <span className="text-ink">{contacts[a.id]}</span>
-                      : <button className="btn-primary btn-sm" onClick={() => reveal.mutate(a.id)}>Показать</button>}</td>
+                      : <button className="btn-secondary btn-sm" onClick={() => reveal.mutate(a.id)}>Показать контакты</button>}</td>
                   </tr>
                 ))}
               </tbody>

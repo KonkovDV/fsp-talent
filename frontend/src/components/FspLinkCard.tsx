@@ -39,7 +39,7 @@ export default function FspLinkCard({ profile }: Props) {
         <Link2 className="text-accent shrink-0 mt-0.5" size={20} />
         <div className="text-sm">
           <p className="section-title">Нет истории ФСП — это нормально</p>
-          <p className="text-text-secondary">Категория строится по опросу, заявленному грейду и тесту. Если вы участвовали
+          <p className="text-ink-2">Категория строится по опросу, заявленному грейду и тесту. Если вы участвовали
             в соревнованиях ФСП, привяжите аккаунт: подтверждённые результаты добавятся в карточку.</p>
         </div>
       </div>

@@ -15,7 +15,7 @@ export function LegalDocModal({ kind, onClose }: { kind: string; onClose: () => 
         <div className="flex items-start justify-between gap-4 border-b border-line p-5">
           <div>
             <h2 id="legal-title" className="font-display text-lg font-bold text-ink">{data?.title ?? 'Документ'}</h2>
-            {data && <p className="font-mono text-xs text-ink-3">версия {data.version} · SHA-256 {data.sha256.slice(0, 12)}…</p>}
+            {data && <p className="font-mono text-xs text-ink-3">версия {data.version}, SHA-256 {data.sha256.slice(0, 12)}…</p>}
           </div>
           <button onClick={onClose} aria-label="Закрыть" className="btn-ghost h-8 w-8 p-0"><X size={18} /></button>
         </div>

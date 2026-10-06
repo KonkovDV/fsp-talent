@@ -53,6 +53,13 @@ NEEDS = [
      {"role": "ml", "grade": "middle", "skills": ["Python", "PyTorch"], "nice_to_have": ["SQL"]}),
 ]
 
+# Pending invitations for the demo candidate accounts: fsp id, employer, role, salary, days ago
+DEMO_INVITES = [
+    ("FSP001", "hr@quantumlab.demo", "Backend-разработчик в ML-платформу", (230000, 300000), 1),
+    ("FSP001", "hr@cloudwhale.demo", "Go-разработчик", (210000, 270000), 3),
+    ("FSP002", "hr@perimeter.demo", "Аналитик SOC", (140000, 190000), 2),
+]
+
 # employer email, role text, salary, status, days ago
 OFFERS = [
     ("hr@quantumlab.demo", "ML-инженер", (200000, 280000), "pending", 1),
@@ -166,6 +173,21 @@ async def _offers(db, now: datetime) -> int:
                          f"Кандидат {verb} приглашение «{role}»", f"Кандидат ({who}) {verb} приглашение.",
                          "/employer/offers")
         made += 1
+    # The demo candidates open their cabinet to a real invitation. Not from hr@sibcode.demo: the smoke test
+    # sends that one itself and expects no pending offer between the two.
+    for fsp_id, email, role, (lo, hi), days in DEMO_INVITES:
+        cand = await db.scalar(select(Participant).where(Participant.fsp_id == fsp_id))
+        employer = employers.get(email)
+        if cand is None or employer is None:
+            continue
+        created = now - timedelta(days=days, hours=3)
+        db.add(Offer(employer_id=employer.id, candidate_id=cand.id, salary_from_gross=lo, salary_to_gross=hi,
+                     role=role, work_format="hybrid", contact_method=email,
+                     message="Видели ваш протокол ФСП. Расскажем о команде на коротком созвоне.",
+                     status="pending", created_at=created, expires_at=created + timedelta(days=14)))
+        await notify(db, outbox, "participant", cand.id, "offer_new", f"Приглашение от «{employer.company_name}»",
+                     f"{employer.company_name} приглашает на роль «{role}»: {salary(lo, hi)}.", "/candidate/offers")
+        made += 1
     outbox.letters.clear()   # seed writes the bell, it does not mail fictional addresses
     return made
 
@@ -194,6 +216,29 @@ async def _applications(db, now: datetime) -> int:
     return made
 
 
+# Fictional companies: profile text the candidate reads in an invitation. No tax ids: a checksum-valid
+# number could belong to a real company.
+COMPANY_PROFILES = {
+    "hr@sibcode.demo": ("Финтех", "sibcode.demo", "Платёжный сервис для малого бизнеса. Команда из 40 инженеров "
+                        "в Новосибирске и удалённо, Python и Go, релизы каждый день."),
+    "hr@quantumlab.demo": ("ИИ и данные", "quantumlab.demo", "Рекомендательные системы для ритейла. "
+                           "Свой ML-стек, GPU-кластер, публикации на конференциях."),
+    "hr@perimeter.demo": ("Информационная безопасность", "perimeter.demo", "Центр мониторинга безопасности (SOC) "
+                          "24/7 для банков и госсектора, своя команда CTF."),
+    "hr@cloudwhale.demo": ("Облачная инфраструктура", "cloudwhale.demo", "Облачная платформа с Kubernetes "
+                           "и объектным хранилищем, дата-центры в трёх регионах."),
+    "hr@robotech.demo": ("Робототехника", "robotech.demo", "Промышленные роботы и беспилотники, "
+                         "встраиваемое ПО на C++ и ROS, производство в Екатеринбурге."),
+}
+
+
+async def _company_profiles(db) -> None:
+    for email, (industry, site, about) in COMPANY_PROFILES.items():
+        employer = await db.scalar(select(Employer).where(Employer.email == email))
+        if employer is not None and not employer.description:
+            employer.industry, employer.website, employer.description = industry, site, about
+
+
 async def main() -> None:
     now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
@@ -204,6 +249,7 @@ async def main() -> None:
         if await db.scalar(select(Need.id).where(Need.employer_id == employer.id, Need.title == NEEDS[0][0])):
             print("demo activity: already seeded")
             return
+        await _company_profiles(db)
         tests = await _simulate_tests(db, now)
         needs = await _needs(db, employer, now)
         offers = await _offers(db, now)

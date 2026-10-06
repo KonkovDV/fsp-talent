@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { getMyEmployerOffers, listNeeds, vacancyApplications } from '../../api/client'
-import { PageHeader } from '../../components/ui'
+import { PageHeader, plural } from '../../components/ui'
 
 interface Need { id: string; title: string; version: number; shortlist_count: number }
 interface OfferRow { status: string; candidate_viewed_at: string | null; contacts_revealed_at: string | null }
@@ -21,21 +21,41 @@ export default function EmployerDashboard() {
   ] as const
 
   const tiles = [
-    { n: needs.length, label: 'потребностей', hint: 'Описание того, кого ищете, с подборкой и шорт-листом', to: '/employer/needs', cta: needs.length ? 'Открыть' : 'Создать первую' },
-    { n: pending, label: 'приглашений ждут ответа', hint: `Принято: ${accepted}. Контакты открываются после согласия`, to: '/employer/offers', cta: 'К приглашениям' },
-    { n: apps.length, label: 'откликов на вакансии', hint: 'Кандидаты, которые откликнулись сами', to: '/employer/vacancies', cta: 'К вакансиям' },
+    { n: needs.length, label: plural(needs.length, ['потребность', 'потребности', 'потребностей']), hint: 'Описание того, кого ищете, с подборкой и шорт-листом', to: '/employer/needs', cta: needs.length ? 'Открыть' : 'Создать первую' },
+    { n: pending, label: `${plural(pending, ['приглашение ждёт', 'приглашения ждут', 'приглашений ждут'])} ответа`, hint: `Принято: ${accepted}. Контакты открываются после согласия`, to: '/employer/offers', cta: 'К приглашениям' },
+    { n: apps.length, label: `${plural(apps.length, ['отклик', 'отклика', 'откликов'])} на вакансии`, hint: 'Кандидаты, которые откликнулись сами', to: '/employer/vacancies', cta: 'К вакансиям' },
   ]
   return (
     <div>
       <PageHeader title="Кабинет работодателя" lead="Начните с потребности: опишите роль и навыки — подборка с объяснением появится сразу."
         actions={<><Link to="/employer/search" className="btn-secondary">Свободный поиск</Link><Link to="/employer/needs" className="btn-primary">Новая потребность</Link></>} />
-      {offers.length > 0 && (
-        <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {funnel.map(([label, n]) => (
-            <div key={label} className="stat-card"><dt className="stat-card-label">{label}</dt><dd className="stat-card-value">{n}</dd></div>
-          ))}
-        </dl>
-      )}
+      <section className="hero-ink mb-6 p-6 sm:p-8" aria-label="Воронка приглашений">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="font-display text-xl font-bold">Воронка приглашений</h2>
+            <p className="mt-1 max-w-[52ch] text-sm on-hero-muted">
+              {offers.length
+                ? 'От отправки до открытых контактов. Контакты появляются только после согласия кандидата.'
+                : 'Приглашений ещё нет. Опишите потребность — подборка с объяснением появится сразу, приглашать можно из неё.'}
+            </p>
+          </div>
+          <Link to="/employer/needs" className="btn-on-hero">{needs.length ? 'К подборкам' : 'Описать потребность'}</Link>
+        </div>
+        <ol className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-4">
+          {funnel.map(([label, n], i) => {
+            const top = funnel[0][1] || 1
+            return (
+              <li key={label}>
+                <p className="font-display font-bold leading-none tracking-tight num [font-size:clamp(2.25rem,5vw,3.25rem)]">{n}</p>
+                <p className="mt-2 text-sm on-hero-muted">{label}</p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20" aria-hidden>
+                  <span className="block h-full rounded-full bg-white" style={{ width: `${offers.length ? Math.round((n / top) * 100) : 0}%`, opacity: 1 - i * 0.15 }} />
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </section>
       <div className="grid gap-4 md:grid-cols-3">
         {tiles.map(t => (
           <Link key={t.label} to={t.to} className="card-hover flex flex-col">

@@ -3,14 +3,15 @@ import { BadgeCheck, FileSignature, ShieldCheck } from 'lucide-react'
 import { SiteFooter } from '../components/Layout'
 import { PublicHeader } from '../components/PublicShell'
 import RussiaNetwork from '../components/RussiaNetwork'
+import { CategoryPlate } from '../components/ui'
 
 /** Illustrative rows for the hero. They show the real card format; the people are invented. */
 const SAMPLE = [
-  { place: 1, cat: 'backend · senior', grade: 'senior', score: 91, evidence: ['Тест: 96 %', 'КМС, алгоритмическое'],
+  { place: 1, role: 'backend', grade: 'senior', score: 91, evidence: ['Тест: 96 %', 'КМС, алгоритмическое'],
     factors: [100, 100, 100, 96, 80] },
-  { place: 2, cat: 'backend · middle', grade: 'middle', score: 84, evidence: ['Тест: 88 %', 'Без истории ФСП'],
+  { place: 2, role: 'backend', grade: 'middle', score: 84, evidence: ['Тест: 88 %', 'Без истории ФСП'],
     factors: [92, 100, 100, 88, null] },
-  { place: 3, cat: 'fullstack · middle', grade: 'middle', score: 71, evidence: ['Грейд заявлен', 'I разряд, продуктовое'],
+  { place: 3, role: 'fullstack', grade: 'middle', score: 71, evidence: ['Грейд заявлен', 'I разряд, продуктовое'],
     factors: [80, 85, 50, 50, 60] },
 ]
 const FACTOR_NAMES = ['Навыки', 'Грейд', 'Роль', 'Тест', 'ФСП']
@@ -20,7 +21,7 @@ function ProtocolPreview() {
     <figure className="rounded-xl border border-line bg-panel shadow-pop" aria-label="Пример подборки">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-4">
         <span className="font-display text-sm font-bold text-ink">Потребность: backend, middle</span>
-        <span className="text-xs text-ink-3">Python, PostgreSQL · пример выдачи</span>
+        <span className="text-xs text-ink-3">Python, PostgreSQL. Пример выдачи</span>
       </figcaption>
       <ol className="divide-y divide-line">
         {SAMPLE.map((row, i) => (
@@ -28,7 +29,7 @@ function ProtocolPreview() {
             <span className="place text-ink-3">{row.place}</span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`badge-${row.grade}`}>{row.cat}</span>
+                <CategoryPlate role={row.role} grade={row.grade} source={row.evidence[0].startsWith('Тест') ? 'assessed' : 'declared'} />
                 {row.evidence.map(e => <span key={e} className="text-xs text-ink-2">{e}</span>)}
               </div>
               <div className="mt-2.5 grid grid-cols-5 gap-1.5" aria-hidden>
@@ -98,29 +99,29 @@ export default function LandingPage() {
       <PublicHeader />
 
       <main id="main">
-        <section className="mx-auto max-w-page px-4 pb-6 pt-12 sm:px-6 lg:pt-16">
-          <div className="grid items-end gap-10 lg:grid-cols-[1fr_1.1fr]">
+        <section className="bg-[#402FFF] text-white">
+          <div className="mx-auto grid max-w-page items-center gap-10 px-4 pb-12 pt-12 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:pb-16 lg:pt-16">
             <div>
-              <p className="text-sm text-ink-2">Федерация спортивного программирования, ЛЦТ 2026</p>
-              <h1 className="mt-5 font-display font-bold leading-[1.08] tracking-[-0.03em] text-ink [font-size:clamp(2rem,4.2vw,3.25rem)]">
+              <p className="text-sm text-white/80">Федерация спортивного программирования, ЛЦТ 2026</p>
+              <h1 className="mt-5 font-display font-bold leading-[1.06] tracking-[-0.03em] [font-size:clamp(2.1rem,4.4vw,3.5rem)]">
                 Приглашайте разработчиков по&nbsp;результату, а&nbsp;не по&nbsp;резюме
               </h1>
-              <p className="mt-6 max-w-[52ch] text-lg text-ink-2">
+              <p className="mt-6 max-w-[52ch] text-lg text-white/85">
                 Кандидат проходит адаптивный тест и подтверждает достижения на соревнованиях ФСП. Работодатель видит
                 категорию и объяснение подборки, а потом сам приглашает — сразу с зарплатной вилкой.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/register?role=employer" className="btn-primary px-6 py-3 text-base">Найти кандидата</Link>
-                <Link to="/register" className="btn-secondary px-6 py-3 text-base">Я ищу работу</Link>
+                <Link to="/register?role=employer" className="btn bg-white px-6 py-3 text-base text-[#2A1DD6] hover:bg-white/90">Найти кандидата</Link>
+                <Link to="/register" className="btn border border-white/60 px-6 py-3 text-base text-white hover:bg-white/10">Я ищу работу</Link>
               </div>
-              <p className="mt-5 text-xs text-ink-3">
-                Демо-вход: <Link to="/login?role=employer" className="text-accent hover:underline">hr@sibcode.demo</Link> или{' '}
-                <Link to="/login" className="text-accent hover:underline">fsp001@demo.talent</Link>, пароль demo12345.
+              <p className="mt-5 text-xs text-white/90">
+                Демо-вход: <Link to="/login?role=employer" className="font-medium text-white underline underline-offset-2">hr@sibcode.demo</Link> или{' '}
+                <Link to="/login" className="font-medium text-white underline underline-offset-2">fsp001@demo.talent</Link>, пароль demo12345.
               </p>
             </div>
             <figure>
-              <RussiaNetwork className="h-auto w-full" />
-              <figcaption className="mt-3 flex flex-wrap justify-between gap-2 border-t border-line-strong pt-3 font-display text-xs text-ink-2">
+              <RussiaNetwork onBrand className="h-auto w-full" />
+              <figcaption className="mt-3 flex flex-wrap justify-between gap-2 border-t border-white/30 pt-3 font-display text-xs text-white/85">
                 <span>89 региональных отделений ФСП</span>
                 <span>один протокол, одни правила категории</span>
               </figcaption>

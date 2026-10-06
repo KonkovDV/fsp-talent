@@ -67,7 +67,7 @@ export default function EmployerOffers() {
                     <td className="num text-ink-2">{date(o.created_at)}</td>
                     <td><span className={cls}>{label}</span></td>
                     <td className="whitespace-nowrap text-right">
-                      {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-primary btn-sm">Открыть контакты</button>}
+                      {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
                       {o.status === 'pending' && <button onClick={() => withdraw.mutate(o.id)} className="btn-ghost btn-sm">Отозвать</button>}
                     </td>
                   </tr>
