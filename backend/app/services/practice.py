@@ -223,7 +223,7 @@ async def offer_weekly_tasks(db: AsyncSession, now: datetime | None = None) -> t
         task = await weekly_task(db, person, now)
         if task is None:
             continue
-        company = f"«{task['company']}»" if task["company"] else "работодателя"
+        company = f"компании «{task['company']}»" if task["company"] else "работодателя"
         topic = f" по теме «{task['topic_label']}»" if task["topic_label"] else ""
         await notify(db, outbox, "participant", person.id, "practice_weekly",
                      f"Задача недели от {company}",
