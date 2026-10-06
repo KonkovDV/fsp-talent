@@ -1,7 +1,6 @@
 """Unit tests for AI assistant query parsing (no LLM or DB required)."""
 from app.services.ai.assistant import _word_hit
 
-
 # ---------------------------------------------------------------------------
 # Stem matching: long Cyrillic tokens (len > 4, ends in Cyrillic)
 # ---------------------------------------------------------------------------

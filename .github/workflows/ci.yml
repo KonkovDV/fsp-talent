@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: pip install "ruff==0.16.10"
-      - run: ruff check backend/app/
+      - run: ruff check backend/app backend/seed backend/tests
 
   test-backend:
     runs-on: ubuntu-latest
@@ -32,7 +32,7 @@ jobs:
           --health-retries 5
         ports: ['5432:5432']
       redis:
-        image: redis:7-alpine
+        image: redis:7.2-alpine
         ports: ['6379:6379']
     env:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@localhost:5432/fsp_talent_test
@@ -64,7 +64,7 @@ jobs:
           unzip -q kotlin.zip -d "$RUNNER_TEMP/kotlin"
           echo "$RUNNER_TEMP/kotlin/kotlinc/bin" >> "$GITHUB_PATH"
       - name: Install backend deps
-        run: cd backend && pip install -e .[test]
+        run: cd backend && pip install -c requirements.lock -e .[test]
       - name: Run unit tests
         run: cd backend && pytest tests/unit/ -v --cov=app/services --cov-report=xml
       # Fixed seed: a broken threshold is a regression in the item generators or the adaptive test.
@@ -94,6 +94,33 @@ jobs:
       - run: cd frontend && npm ci
       - run: cd frontend && npm run type-check
       - run: cd frontend && npm run build
+
+  # The jury's path, word for word: docs/INSTALL.md on a clean machine, then the API check with codes from Mailpit.
+  compose-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make demo (build, start, wait for health checks, load demo data)
+        run: make demo 2>&1 | tee /tmp/demo.log; exit ${PIPESTATUS[0]}
+      - name: The site, Swagger and health answer through nginx
+        run: |
+          curl -fsS http://localhost/health
+          curl -fsS http://localhost/ | grep -q 'id="root"'
+          curl -fsS http://localhost/docs | grep -qi swagger
+          curl -fsS http://localhost/openapi.json | python3 -c "import json,sys; print(len(json.load(sys.stdin)['paths']), 'paths')"
+      - name: make check (registration, FSP ID, test, search, invitation, contacts)
+        run: make check
+      - name: Logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a; docker compose logs --no-color --tail 200
+          # Annotations stay readable through the API when the raw log archive is not.
+          enc() { sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g'; }
+          echo "::error title=make demo::$(tail -n 60 /tmp/demo.log 2>/dev/null | enc)"
+          echo "::error title=compose ps::$(docker compose ps -a 2>&1 | enc)"
+          for s in backend frontend nginx worker; do
+            echo "::error title=$s::$(docker compose logs --no-color --tail 40 $s 2>&1 | enc)"
+          done
 
   docker-build:
     needs: [lint, test-backend, test-frontend]
@@ -127,9 +154,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ubuntu
           key: ${{ secrets.DEPLOY_KEY }}
+          # The public stand runs the production compose (Caddy, HTTPS, backups); migrations run at backend start.
           script: |
             cd /opt/fsp-talent
             git pull origin main
-            docker compose up -d --build --no-deps backend frontend worker beat
-            docker compose exec -T backend alembic upgrade head
+            docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"

@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.services import assessment
 from app.services.notify import Outbox, category_label, notify, salary
+from app.services.practice import offer_weekly_tasks
 from app.services.profile import rebuild_profile
 from app.services.search.pipeline import search_candidates
 
@@ -121,8 +122,9 @@ async def _simulate_tests(db, now: datetime) -> int:
 async def _needs(db, employer: Employer, now: datetime) -> int:
     for i, (title, params) in enumerate(NEEDS):
         p = NeedParams(**params)
-        need = Need(employer_id=employer.id, title=title, version=1, created_at=now - timedelta(days=5 - i),
-                    updated_at=now - timedelta(days=5 - i))
+        # The first need is the newest, so it opens first in the cabinet: the README scenario starts there.
+        need = Need(employer_id=employer.id, title=title, version=1, created_at=now - timedelta(days=3 + i),
+                    updated_at=now - timedelta(days=3 + i))
         db.add(need)
         await db.flush()
         db.add(NeedVersion(need_id=need.id, version=1, params=p.model_dump(), created_at=need.created_at))
@@ -132,7 +134,7 @@ async def _needs(db, employer: Employer, now: datetime) -> int:
             db.add(NeedShortlist(need_id=need.id, participant_id=card["candidate_id"], version=1,
                                  score=(card.get("match") or {}).get("score"),
                                  status="invited" if rank == 0 else "shortlisted",
-                                 added_at=now - timedelta(days=4 - i, hours=rank)))
+                                 added_at=now - timedelta(days=2 + i, hours=rank)))
     await db.flush()
     return len(NEEDS)
 
@@ -202,7 +204,7 @@ async def _applications(db, now: datetime) -> int:
             select(Participant).join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
             .where(CategoryAssignment.primary_role == vacancy.role, Participant.fsp_id.like("FSP1%"),
                    Participant.is_visible.is_(True), Participant.is_minor.is_(False))
-            .order_by(Participant.fsp_id).limit(3)))
+            .order_by(Participant.fsp_id).limit(2)))
         for cand in cands:
             status = statuses[made % len(statuses)]
             created = now - timedelta(days=3 - made % 3, hours=made)
@@ -254,8 +256,11 @@ async def main() -> None:
         needs = await _needs(db, employer, now)
         offers = await _offers(db, now)
         apps = await _applications(db, now)
+        weekly, outbox = await offer_weekly_tasks(db, now)
+        outbox.letters.clear()   # the bell shows the task of the week; no mail to fictional addresses
         await db.commit()
-        print(f"demo activity: tests={tests} needs={needs} offers={offers} applications={apps}")
+        print(f"demo activity: tests={tests} needs={needs} offers={offers} applications={apps} "
+              f"weekly_tasks={weekly}")
 
 
 if __name__ == "__main__":

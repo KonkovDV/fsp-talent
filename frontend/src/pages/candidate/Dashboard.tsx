@@ -1,18 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Check, Circle } from 'lucide-react'
-import { getMyOffers, getMyProfile } from '../../api/client'
+import { CalendarClock, Check, Circle } from 'lucide-react'
+import { getMyOffers, getMyProfile, weeklyTask } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, rub } from '../../components/ui'
 import { ROLE_RU } from '../../labels'
 
 interface Disc { discipline: string; label: string; score?: number; lcb: number; confidence: number; best_rank: string | null; events_count: number }
 interface Offer { id: string; company: string; role: string; salary_from: number; salary_to: number; status: string }
+interface Weekly { vacancy_id: string; title: string; company: string | null; topic_label: string | null; done: boolean; is_correct: boolean | null; week_from: string }
 
 /** Candidate home: the category employers see, what is missing for it, and fresh invitations. */
 export default function CandidateDashboard() {
   const { data: p, isLoading } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
   const { data: offers = [] } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
+  const { data: weekly } = useQuery<Weekly | null>({ queryKey: ['weeklyTask'], queryFn: () => weeklyTask().then(r => r.data) })
 
   if (isLoading || !p) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48" /><Skeleton className="h-64" /></div>
 
@@ -87,6 +89,22 @@ export default function CandidateDashboard() {
           </ul>
         </div>
       </section>
+
+      {weekly && (
+        <section className="card flex flex-col gap-4 border-l-4 border-l-accent sm:flex-row sm:items-center" aria-labelledby="weekly-title">
+          <CalendarClock className="hidden shrink-0 text-accent sm:block" size={28} aria-hidden />
+          <div className="min-w-0 flex-1">
+            <h2 id="weekly-title" className="section-title">Задача недели{weekly.company ? ` от компании «${weekly.company}»` : ''}</h2>
+            <p className="mt-1 text-sm text-ink-2">
+              Одно задание{weekly.topic_label ? ` по теме «${weekly.topic_label}»` : ''} из вакансии «{weekly.title}».
+              Грейд оно не меняет, а работодатели увидят в карточке свежий результат и его дату.
+            </p>
+          </div>
+          {weekly.done
+            ? <span className={`badge shrink-0 ${weekly.is_correct ? 'badge-ok' : 'badge-warn'}`}>Решена{weekly.is_correct ? ' верно' : ', есть ошибка'}</span>
+            : <Link to={`/candidate/vacancies?vacancy=${weekly.vacancy_id}`} className="btn-primary shrink-0">Решить задачу</Link>}
+        </section>
+      )}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="card">

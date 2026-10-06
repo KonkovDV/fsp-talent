@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -15,7 +16,7 @@ celery_app.conf.update(
     timezone="Europe/Moscow",
     enable_utc=True,
     # Individual task time limits: SIGTERM at 5 min, SIGKILL at 6 min.
-    # These fire automatically per task; the watchdog below is a belt-and-suspenders backstop.
+    # These fire automatically per task; the watchdog below is a backstop for a task that ignores signals.
     task_soft_time_limit=300,
     task_time_limit=360,
     task_routes={
@@ -24,11 +25,16 @@ celery_app.conf.update(
         "app.workers.tasks.expire_offers":        {"queue": "maintenance"},
         "app.workers.tasks.watchdog_stuck_tasks": {"queue": "maintenance"},
         "app.workers.tasks.purge_withdrawn":      {"queue": "maintenance"},
+        "app.workers.tasks.offer_weekly_tasks":   {"queue": "maintenance"},
     },
     beat_schedule={
         "expire-offers-hourly": {
             "task": "app.workers.tasks.expire_offers",
             "schedule": 3600,
+        },
+        "task-of-the-week": {
+            "task": "app.workers.tasks.offer_weekly_tasks",
+            "schedule": crontab(hour=10, minute=0, day_of_week="mon"),   # Moscow time, see timezone
         },
         "purge-withdrawn-daily": {
             "task": "app.workers.tasks.purge_withdrawn",

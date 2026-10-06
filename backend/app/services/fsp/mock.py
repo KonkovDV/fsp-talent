@@ -44,20 +44,18 @@ class FSPParticipant:
     display_name: str
     region: str
     birth_date: date
-    gender: str
+    gender: str | None = None   # used only to generate demo names; the registry contract does not ask for it
     results: list[FSPResult] = field(default_factory=list)
 
 
 class FSPAdapter(Protocol):
     async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None: ...
-    async def verify_secret(self, fsp_id: str, secret: str) -> bool: ...
 
 
 DEMO: dict[str, FSPParticipant] = {
     "FSP001": FSPParticipant("FSP001", "Алексей Иванов", "Москва", date(2003, 5, 12), "m", [
         FSPResult("CR2025-ALG", "Чемпионат России по спортивному программированию 2025", "algorithmic",
-                  "russia_championship", 3, 180, False, 1, date(2025, 11, 20), 52,
-                  protocol_url="https://fsp-russia.ru/protocols/CR2025-ALG"),
+                  "russia_championship", 3, 180, False, 1, date(2025, 11, 20), 52),
         FSPResult("KR2025-ALG", "Кубок России 2025, алгоритмическое", "algorithmic",
                   "russia_cup", 6, 140, False, 1, date(2025, 4, 18), 40),
         FSPResult("CR2025-PRD", "Чемпионат России 2025, продуктовое", "product",
@@ -65,8 +63,7 @@ DEMO: dict[str, FSPParticipant] = {
     ]),
     "FSP002": FSPParticipant("FSP002", "Мария Петрова", "Санкт-Петербург", date(2001, 9, 3), "f", [
         FSPResult("CR2025-IB", "Чемпионат России 2025, системы ИБ", "security",
-                  "russia_championship", 1, 90, True, 4, date(2025, 12, 2), 35,
-                  protocol_url="https://fsp-russia.ru/protocols/CR2025-IB"),
+                  "russia_championship", 1, 90, True, 4, date(2025, 12, 2), 35),
         FSPResult("VS2024-BAS", "Всероссийские соревнования по БАС 2024", "bas",
                   "all_russian", 5, 38, True, 3, date(2024, 9, 14), 18),
     ]),
@@ -137,15 +134,8 @@ class MockFSPAdapter:
         return secret == DEMO_SECRET and await self.fetch_participant(fsp_id) is not None
 
 
-class RealFSPAdapter:
-    """Placeholder until the FSP API specification is provided by the case holder."""
-
-    async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None:
-        raise NotImplementedError("FSP API specification not available yet")
-
-    async def verify_secret(self, fsp_id: str, secret: str) -> bool:
-        raise NotImplementedError("FSP API specification not available yet")
-
-
 def get_fsp_adapter() -> FSPAdapter:
-    return RealFSPAdapter() if settings.FSP_MODE == "real" else MockFSPAdapter()
+    if settings.FSP_MODE == "real":
+        from app.services.fsp.registry import HttpFSPAdapter
+        return HttpFSPAdapter()
+    return MockFSPAdapter()

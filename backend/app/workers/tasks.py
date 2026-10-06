@@ -100,6 +100,20 @@ def expire_offers():
     run_async(_inner())
 
 
+@celery_app.task(name="app.workers.tasks.offer_weekly_tasks")
+def offer_weekly_tasks():
+    """TZ 2.1: once a week offer every active candidate one short task from an employer's vacancy."""
+    async def _inner():
+        from app.core.database import AsyncSessionLocal
+        from app.services.practice import offer_weekly_tasks as offer
+        async with AsyncSessionLocal() as db:
+            sent, outbox = await offer(db)
+            await db.commit()
+            await outbox.deliver()
+            logger.info("offer_weekly_tasks: offered %d tasks", sent)
+    run_async(_inner())
+
+
 @celery_app.task(name="app.workers.tasks.purge_withdrawn")
 def purge_withdrawn():
     """Erase candidates 30 days after they withdrew the processing consent (152-FZ, art. 21, part 5)."""

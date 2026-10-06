@@ -26,3 +26,4 @@ redis_data/
 *.log
 deploy/backups/
 dump.rdb
+docs/tools/node_modules/

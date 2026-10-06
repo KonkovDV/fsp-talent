@@ -1,15 +1,22 @@
-"""One-shot API smoke test against a running server. Not part of the unit suite."""
+"""One-shot API smoke test against a running server. Not part of the unit suite.
+
+Letters with codes are read from MAIL_FILE_DIR (MAIL_MODE=file, as in CI) or, when MAILPIT_URL is set,
+from Mailpit (the docker compose stand: `make check`).
+"""
 import glob
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
-# The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR: codes are read from the letters.
+# The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
 MAIL_DIR = os.environ.get("MAIL_FILE_DIR", "/tmp/fsp-talent-mail")
+MAILPIT = os.environ.get("MAILPIT_URL", "").rstrip("/")
+SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset"}
 EMPLOYER = {"username": "hr@sibcode.demo", "password": "demo12345"}
 CANDIDATE = {"username": "fsp001@demo.talent", "password": "demo12345"}
 REQUIRED_CANDIDATE_CONSENTS = ["terms", "pd_candidate"]
@@ -40,9 +47,31 @@ def call(method, path, body=None, token=None, form=None):
         return error.code, payload
 
 
+def _mailpit_letter(email, purpose):
+    query = urllib.parse.urlencode({"query": f'to:"{email}"'})
+    with urllib.request.urlopen(f"{MAILPIT}/api/v1/search?{query}", timeout=5) as resp:
+        messages = json.load(resp).get("messages") or []
+    for message in messages:   # newest first
+        if not any(message["Subject"].startswith(p) and k == purpose for p, k in SUBJECT_PURPOSE.items()):
+            continue
+        with urllib.request.urlopen(f"{MAILPIT}/api/v1/message/{message['ID']}", timeout=5) as resp:
+            text = json.load(resp)["Text"]
+        code = re.search(r"\b(\d{6})\b", text)
+        token = re.search(r"token=([\w-]+)", text)
+        return {"to": email, "purpose": purpose, "code": code.group(1) if code else None,
+                "token": token.group(1) if token else None}
+    return None
+
+
 def last_letter(email, purpose="verify", timeout=10.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if MAILPIT:
+            letter = _mailpit_letter(email, purpose)
+            if letter:
+                return letter
+            time.sleep(0.3)
+            continue
         for path in sorted(glob.glob(os.path.join(MAIL_DIR, "*.json")), reverse=True):
             with open(path, encoding="utf-8") as fh:
                 letter = json.load(fh)
@@ -50,6 +79,20 @@ def last_letter(email, purpose="verify", timeout=10.0):
                 return letter
         time.sleep(0.2)
     raise AssertionError(f"no {purpose} letter for {email} in {MAIL_DIR}")
+
+
+def link_fsp(token, fsp_id, password="test"):
+    """FSP ID by OpenID Connect: start, log in on the (demo) provider page, return with code and state."""
+    status, started = call("POST", "/candidates/me/fsp/authorize", token=token)
+    assert status == 200 and started["provider"] == "mock", started
+    query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(started["authorize_url"]).query).items()}
+    assert query["code_challenge_method"] == "S256", query
+    status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": password, **{
+        k: query[k] for k in ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method")}})
+    if status != 200:
+        return status, login
+    back = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(login["redirect_to"]).query).items()}
+    return call("POST", "/candidates/me/fsp/callback", {"code": back["code"], "state": back["state"]}, token=token)
 
 
 def check_registration():
@@ -83,12 +126,12 @@ def check_registration():
     assert status == 200 and active == sorted(REQUIRED_CANDIDATE_CONSENTS), consents
     status, public = call("PUT", "/candidates/me/profile", {"public_profile": True}, token=token)
     assert status == 409 and public["error"]["details"]["missing"] == ["pd_distribution"], public
-    status, taken_fsp = call("POST", "/candidates/me/fsp", {"fsp_id": "FSP001", "fsp_secret": "test"}, token=token)
+    status, taken_fsp = link_fsp(token, "FSP001")
     assert status == 409 and taken_fsp["error"]["code"] == "fsp_taken", taken_fsp
-    status, bad_fsp = call("POST", "/candidates/me/fsp", {"fsp_id": "FSP2001", "fsp_secret": "nope"}, token=token)
+    status, bad_fsp = link_fsp(token, "FSP2001", password="nope")
     assert status == 400 and bad_fsp["error"]["code"] == "fsp_invalid", bad_fsp
     fsp_id = f"FSP{2000 + int(time.time()) % 100}"
-    status, linked = call("POST", "/candidates/me/fsp", {"fsp_id": fsp_id, "fsp_secret": "test"}, token=token)
+    status, linked = link_fsp(token, fsp_id)
     if status == 409:   # a previous smoke run on the same database already linked this id
         assert linked["error"]["code"] == "fsp_taken", linked
     else:
@@ -155,6 +198,17 @@ def main():
     participant_token = participant["access_token"]
     status, me = call("GET", "/candidates/me", token=participant_token)
     assert status == 200 and me["fsp_id"] == "FSP001" and me["grade"] == "middle", me
+    # TZ 2.1, regular tasks: an employer's vacancy offers this week's short task; solving it refreshes the card.
+    status, weekly = call("GET", "/assessment/practice/weekly", token=participant_token)
+    assert status == 200 and weekly and weekly["vacancy_id"] and weekly["company"], weekly
+    status, task = call("POST", "/assessment/practice/start", {"vacancy_id": weekly["vacancy_id"]},
+                        token=participant_token)
+    assert status == 200 and task["stem"], task
+    answer = {"answer_text": "0"} if task["answer_mode"] == "number" else {"answer_index": 0}
+    status, done = call("POST", f"/assessment/practice/{task['id']}/answer", answer, token=participant_token)
+    assert status == 200 and done["answered"], done
+    status, weekly = call("GET", "/assessment/practice/weekly", token=participant_token)
+    assert weekly["done"] is True, weekly
     status, legacy = call("POST", "/auth/participant/token", form={"username": "FSP001", "password": "test"})
     assert status == 401 and legacy["error"]["code"] == "invalid_credentials", legacy
     check_registration()
