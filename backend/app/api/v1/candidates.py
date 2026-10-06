@@ -274,6 +274,9 @@ async def get_my_offers(
         await db.commit()
     return [{
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
+        # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
+        "company_profile": {"industry": o.employer.industry, "website": o.employer.website,
+                            "about": o.employer.description, "inn_given": bool(o.employer.inn)},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "currency": o.currency, "work_format": o.work_format, "message": o.message,

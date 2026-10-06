@@ -1,8 +1,10 @@
 """Match an open vacancy to one candidate profile. Same axes as employer search, reversed."""
 from __future__ import annotations
 
+from app.services.categorization import DISCIPLINE_LABELS
 from app.services.scoring.engine import RANK_ORDER, rank_at_least
 from app.services.skills import normalize_skill
+from app.services.survey import SPECIALIZATIONS
 
 GRADES = ("junior", "middle", "senior", "lead")
 
@@ -46,11 +48,11 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
         matched = ", ".join(sorted(have))
         why.append(f"Навыки: {len(have)} из {len(wanted)}" + (f" ({matched})" if matched else ""))
     if role and candidate.get("role") == role:
-        why.append(f"Роль совпадает: {role}")
+        why.append(f"Специализация совпадает: {SPECIALIZATIONS.get(role, role)}")
     if vacancy.get("grade"):
         why.append(f"Грейд не ниже {vacancy['grade']}")
     if disc:
-        why.append(f"Есть результаты по дисциплине {disc}")
+        why.append(f"Есть результаты ФСП: {DISCIPLINE_LABELS.get(disc, disc).lower()}")
     return {
         "coverage": len(have),
         "wanted": len(wanted),

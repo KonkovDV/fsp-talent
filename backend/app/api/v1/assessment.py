@@ -282,11 +282,12 @@ async def start_test(body: StartIn, current: dict = Depends(get_current_particip
     return _session_out(session, [item])
 
 
-@router.get("/active", response_model=SessionOut)
+@router.get("/active", response_model=SessionOut | None)
 async def active(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """The unfinished session, or null. «No test in progress» is the normal state, not an error."""
     session = await get_active_session(db, uuid.UUID(current["sub"]))
     if session is None or session.expires_at <= datetime.now(UTC):
-        raise ApiError(404, "not_found", "Нет незавершённого теста")
+        return None
     return _session_out(session, await session_items(db, session.id))
 
 
