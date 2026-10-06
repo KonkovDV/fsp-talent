@@ -1,6 +1,14 @@
 from datetime import UTC, datetime
 
-from app.services.skills import SkillDraft, extract_skills, is_grounded, normalize_skill, plan_skill_replacement
+from app.services.skills import (
+    SkillDraft,
+    extract_skills,
+    is_grounded,
+    normalize_skill,
+    plan_skill_replacement,
+    read_resume_evidence,
+    sign_resume_evidence,
+)
 
 
 def test_aliases_and_cyrillic_lookalikes():
@@ -45,9 +53,16 @@ def test_saving_the_profile_keeps_skill_evidence():
     assert by_name["Python"].confirmed_at == earlier
     assert by_name["Python"].source_quote.startswith("Тест")
     assert by_name["PostgreSQL"].confirmed_at == earlier
-    assert by_name["Docker"].trust_level == "resume_confirmed" and by_name["Docker"].confirmed_at == now
+    # A quote the client typed itself does not become resume evidence.
+    assert by_name["Docker"].trust_level == "self_reported" and by_name["Docker"].source_quote is None
     assert by_name["Redis"].trust_level == "self_reported" and by_name["Redis"].confirmed_at is None
     assert by_name["Redis"].created_at == now
+    token = sign_resume_evidence("user-1", [("Docker", "Docker")])
+    proven = plan_skill_replacement(existing, [("Docker", "Docker", "Docker")], now,
+                                    read_resume_evidence(token, "user-1"))
+    assert proven[0].trust_level == "resume_confirmed" and proven[0].confirmed_at == now
+    assert read_resume_evidence(token, "user-2") == set()
+    assert read_resume_evidence(token[:-4] + "abcd", "user-1") == set()
 
 
 def test_grounding_requires_a_real_substring():

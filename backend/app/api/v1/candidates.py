@@ -28,7 +28,14 @@ from app.services.pdf_profile import extract_pdf_text, profile_lines, render_pro
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
-from app.services.skills import SkillDraft, normalize_skill, plan_skill_replacement, skill_line
+from app.services.skills import (
+    SkillDraft,
+    normalize_skill,
+    plan_skill_replacement,
+    read_resume_evidence,
+    skill_line,
+    with_resume_token,
+)
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -117,6 +124,9 @@ class ProfileUpdate(BaseModel):
     # FIX (Pydantic v2): max_length on list[T] must use Annotated[], not Field() kwarg.
     # Old: list[SkillIn] | None = Field(None, max_length=40) -- silently ignored the limit.
     skills: Annotated[list[SkillIn], Field(max_length=40)] | None = None
+    # Proof that a resume quote was extracted here, not typed into the request.
+    resume_tokens: Annotated[list[Annotated[str, Field(max_length=24000)]], Field(max_length=8)] = Field(
+        default_factory=list)
     # The login email is not editable here: it is the confirmed contact an employer receives.
     display_name: str | None = Field(None, min_length=1, max_length=200)
     region: str | None = Field(None, max_length=100)
@@ -167,10 +177,13 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
             canonical = normalize_skill(item["name"])
             quote = (item.get("source_quote") or "").strip() or None
             incoming.append((canonical or "", item["name"][:200], quote))
+        allowed: set[tuple[str, str]] = set()
+        for token in data.get("resume_tokens") or []:
+            allowed |= read_resume_evidence(token, str(p.id))
         drafts = plan_skill_replacement(
             [SkillDraft(s.name, s.raw_name, s.source_quote, s.trust_level, s.confirmed,
                         s.created_at, s.confirmed_at) for s in existing],
-            incoming, datetime.now(UTC))
+            incoming, datetime.now(UTC), allowed)
         await db.execute(delete(Skill).where(Skill.participant_id == p.id))
         await db.flush()
         db.add_all([
@@ -380,7 +393,7 @@ async def upload_resume(file: UploadFile = File(...), current: dict = Depends(ge
     if not text:
         raise ApiError(422, "validation_error", "В PDF не нашлось текста")
     parsed = await parse_resume(text)
-    return {"text": text[:4000], **parsed}
+    return {"text": text[:4000], **with_resume_token(str(_pid(current)), parsed)}
 
 
 async def _profile_pdf(db: AsyncSession, participant: Participant, named: bool) -> bytes:

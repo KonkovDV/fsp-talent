@@ -33,6 +33,13 @@ def public_attempt(row: PracticeAttempt) -> dict:
     }
 
 
+def resolve_practice_topic(asked: str | None, vacancy_topic: str | None, *, from_vacancy: bool) -> str | None:
+    """The topic the candidate asked for. A vacancy's own topic wins over that request."""
+    if from_vacancy:
+        return vacancy_topic if vacancy_topic in TOPIC_LABELS else None
+    return asked if asked in TOPIC_LABELS else None
+
+
 def _pick_family(spec: str, topic: str | None):
     code = [f for f in families_for(spec) if f.kind == "code"]
     if topic:
@@ -52,7 +59,7 @@ async def start_practice(db: AsyncSession, participant: Participant,
     if spec not in BLUEPRINTS:
         spec = "backend"
     grade = participant.declared_grade if participant.declared_grade in GRADE_LEVEL else "middle"
-    topic = None
+    asked = topic
     stored_vacancy = None
     if vacancy_id is not None:
         vacancy = await db.get(Vacancy, vacancy_id)
@@ -61,14 +68,13 @@ async def start_practice(db: AsyncSession, participant: Participant,
         exam = form_exam(vacancy.title, vacancy.description or "", list(vacancy.skills or []),
                          vacancy.role, vacancy.grade)
         spec = exam["specialization"]
-        topic = exam["topics"][0]["topic"] if exam["topics"] else None
+        vacancy_topic = exam["topics"][0]["topic"] if exam["topics"] else None
+        topic = resolve_practice_topic(asked, vacancy_topic, from_vacancy=True)
         stored_vacancy = vacancy.id
         if exam["target_grade"] in GRADE_LEVEL:
             grade = exam["target_grade"]
-    elif topic in TOPIC_LABELS:
-        topic = topic
     else:
-        topic = None
+        topic = resolve_practice_topic(asked, None, from_vacancy=False)
     family = _pick_family(spec, topic)
     if family is None:
         raise LookupError("family")

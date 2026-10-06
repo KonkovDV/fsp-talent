@@ -6,10 +6,16 @@ so any extraction (rule-based or LLM) can be verified mechanically.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
+
+from app.core.config import settings
 
 # canonical -> (roles, aliases); aliases are matched case-insensitively on word boundaries
 TAXONOMY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
@@ -173,14 +179,56 @@ class SkillDraft:
     confirmed_at: datetime | None
 
 
-def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str, str, str | None]],
-                           now: datetime) -> list[SkillDraft]:
-    """Rebuild a skill list without throwing away evidence.
+def sign_resume_evidence(participant_id: str, pairs: list[tuple[str, str]]) -> str:
+    """A quote raises a skill's weight only when this server extracted it from a resume."""
+    items = sorted({(name, quote) for name, quote in pairs if name and quote})[:40]
+    payload = json.dumps(
+        {"sub": participant_id, "items": [{"n": name, "q": quote} for name, quote in items]},
+        ensure_ascii=False, separators=(",", ":"),
+    ).encode()
+    sig = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(payload).decode().rstrip("=") + "." + sig
 
-    A skill the test confirmed stays confirmed, with the same dates. A resume quote confirms
-    a declaration and remembers the first day that happened. Saving the profile again does not
-    move those dates.
+
+def read_resume_evidence(token: str, participant_id: str) -> set[tuple[str, str]]:
+    """Pairs this token proves for this account. A forged or foreign token proves nothing."""
+    try:
+        raw, sig = token.split(".", 1)
+        payload = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+        expected = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return set()
+        data = json.loads(payload)
+        if data.get("sub") != participant_id:
+            return set()
+        found = set()
+        for item in data.get("items") or []:
+            name, quote = item.get("n"), item.get("q")
+            if isinstance(name, str) and isinstance(quote, str) and name and quote:
+                found.add((name, quote))
+        return found
+    except (ValueError, json.JSONDecodeError, TypeError, AttributeError):
+        return set()
+
+
+def with_resume_token(participant_id: str, parsed: dict) -> dict:
+    pairs = [
+        (item.get("name") or "", (item.get("source_quote") or "").strip())
+        for item in parsed.get("skills") or []
+    ]
+    pairs = [(name, quote) for name, quote in pairs if name and quote]
+    return {**parsed, "resume_token": sign_resume_evidence(participant_id, pairs) if pairs else None}
+
+
+def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str, str, str | None]],
+                           now: datetime, allowed: set[tuple[str, str]] | None = None) -> list[SkillDraft]:
+    """Rebuild a skill list without throwing away evidence or accepting a quote the client invented.
+
+    A skill the test confirmed stays confirmed. A resume quote counts only when this server
+    extracted it (``allowed``) or the profile already stored that same quote. Saving again
+    does not move the date.
     """
+    allowed = allowed or set()
     by_name = {row.name: row for row in existing}
     tested = {name: row for name, row in by_name.items() if row.trust_level == "test_confirmed"}
     seen: set[str] = set()
@@ -190,18 +238,21 @@ def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str,
             continue
         seen.add(name)
         old = by_name.get(name)
+        created = old.created_at if old and old.created_at else now
         if name in tested:
             src = tested[name]
             out.append(SkillDraft(name, src.raw_name or raw, src.source_quote, "test_confirmed", True,
                                   src.created_at or now, src.confirmed_at or now))
             continue
-        if quote:
-            kept = old.confirmed_at if old and old.trust_level == "resume_confirmed" else None
-            out.append(SkillDraft(name, raw, quote, "resume_confirmed", True,
-                                  old.created_at if old and old.created_at else now, kept or now))
+        proven = bool(quote) and (name, quote) in allowed
+        same = bool(old and old.trust_level == "resume_confirmed" and old.source_quote
+                    and quote == old.source_quote)
+        if proven or same:
+            src_quote = quote if proven else old.source_quote
+            confirmed_at = old.confirmed_at if same and old and old.confirmed_at else now
+            out.append(SkillDraft(name, raw, src_quote, "resume_confirmed", True, created, confirmed_at))
             continue
-        out.append(SkillDraft(name, raw, None, "self_reported", True,
-                              old.created_at if old and old.created_at else now, None))
+        out.append(SkillDraft(name, raw, None, "self_reported", True, created, None))
     return out
 
 

@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 from app.models.assessment import PracticeAttempt
-from app.services.practice import public_attempt
+from app.services.practice import public_attempt, resolve_practice_topic
 
 
 def test_public_practice_item_has_no_answer_key():
@@ -18,3 +18,9 @@ def test_public_practice_item_has_no_answer_key():
     assert "correct_index" not in payload
     assert "explanation" not in payload
     assert payload["answered"] is False
+
+
+def test_practice_uses_the_topic_the_candidate_asked_for():
+    assert resolve_practice_topic("sql", None, from_vacancy=False) == "sql"
+    assert resolve_practice_topic("не тема", None, from_vacancy=False) is None
+    assert resolve_practice_topic("sql", "python", from_vacancy=True) == "python"

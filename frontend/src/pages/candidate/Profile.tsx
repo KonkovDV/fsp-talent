@@ -14,7 +14,7 @@ import { roleRu } from '../../labels'
 interface SkillRow { name: string; source_quote?: string | null; trust_level?: string; created_at?: string | null; confirmed_at?: string | null }
 interface Quoted { value: string; quote: string }
 interface ResumeFound {
-  skills: SkillRow[]; llm_used?: boolean; note?: string
+  skills: SkillRow[]; llm_used?: boolean; note?: string; resume_token?: string | null
   full_name: Quoted | null; email: Quoted | null; phone: Quoted | null; telegram: Quoted | null
   experience_years: { value: number; quote: string } | null
   grade: Quoted | null; role: Quoted | null
@@ -33,6 +33,7 @@ export default function CandidateProfile() {
   const [displayName, setDisplayName] = useState('')
   const [publicProfile, setPublicProfile] = useState(false)
   const [resume, setResume] = useState('')
+  const [resumeTokens, setResumeTokens] = useState<string[]>([])
   const [found, setFound] = useState<ResumeFound | null>(null)
   const [hint, setHint] = useState<SurveyHint | null>(null)
   const [note, setNote] = useState('')
@@ -50,6 +51,7 @@ export default function CandidateProfile() {
   const save = useMutation({
     mutationFn: () => updateMyProfile({
       skills,
+      resume_tokens: resumeTokens,
       telegram: telegram || null,
       phone: phone || null,
       public_profile: publicProfile,
@@ -77,6 +79,9 @@ export default function CandidateProfile() {
       const known = new Set(prev.map(item => item.name))
       return [...prev, ...result.skills.filter(item => !known.has(item.name))]
     })
+    if (result.resume_token) {
+      setResumeTokens(prev => prev.includes(result.resume_token!) ? prev : [...prev, result.resume_token!])
+    }
     setFound(result)
     const skillsNote = result.skills.length
       ? (result.llm_used ? 'Навыки предложены моделью и правилами.' : 'Навыки добавлены в список.')
