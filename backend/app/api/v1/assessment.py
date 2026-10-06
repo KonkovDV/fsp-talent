@@ -341,7 +341,7 @@ async def practice_answer(attempt_id: uuid.UUID, body: PracticeAnswerIn,
     except LookupError as e:
         raise ApiError(404, "not_found", "Задание не найдено") from e
     except ValueError as e:
-        raise ApiError(422, "answer_required", "Нужен ответ") from e
+        raise ApiError(422, "validation_error", "Нужен ответ: номер варианта или число") from e
     return result
 
 
