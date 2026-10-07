@@ -151,6 +151,8 @@ class ParticipantRegister(BaseModel):
     display_name: str | None = Field(None, max_length=200)
     # Data minimisation: we ask "18 or older", not the birth date. A linked FSP account brings the date.
     is_adult: bool
+    # Under 18: registration is open from 15; the card waits for the guardian's consent (services/guardian.py).
+    age_15_17: bool = False
     consents: list[str] = Field(default_factory=list, max_length=10)
 
 
@@ -159,6 +161,8 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     email = normalize_email(body.email)
     await _limit("register:participant", email)
     await _limit("register-site", "all", limit=30)
+    if not body.is_adult and not body.age_15_17:
+        raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
     check_required_consents("participant", body.consents)
     p = await _account(db, "participant", email)
     if p is not None and p.email_verified_at is not None:

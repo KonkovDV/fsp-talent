@@ -2,8 +2,8 @@ import base64
 import json
 from datetime import date, timedelta
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.core.config import settings
 from app.core.security import (

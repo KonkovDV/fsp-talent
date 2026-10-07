@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_participant
 from app.api.errors import ApiError
 from app.api.v1.messages import unread_counts
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import (
@@ -32,7 +33,9 @@ from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
+from app.services.guardian import guardian_token
 from app.services.identity import active_consent
+from app.services.mail import send_mail
 from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import extract_pdf_text, profile_lines, render_profile_pdf
@@ -103,7 +106,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile,
-        "is_minor": p.is_minor, "minor_consent_given": p.minor_consent_given,
+        "is_minor": p.is_minor, "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
         "profile_version": p.profile_version,
         "salary_from": p.salary_from_gross, "salary_to": p.salary_to_gross,
         "discoverable": p.discoverable,
@@ -393,7 +396,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         raise HTTPException(409, "Срок оффера истёк")
     if body.action == "accept":
         offer.status = "accepted"
-        offer.contacts_revealed_at = datetime.now(UTC)
+        offer.contacts_revealed_at = offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:
@@ -401,6 +404,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
             raise HTTPException(422, "Укажите причину отказа")
         offer.status = "rejected"
         offer.decline_reason = body.reason
+        offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
                           actor_id=offer.candidate_id,
                           meta={"offer_id": str(offer.id), "reason": body.reason}))
@@ -553,6 +557,39 @@ async def my_profile_pdf(current: dict = Depends(get_current_participant), db: A
                              "Cache-Control": "private, no-store"})
 
 
+class GuardianIn(BaseModel):
+    # The representative's address, never the candidate's login.
+    guardian_email: Annotated[EmailStr, Field(max_length=200)]
+
+
+@router.post("/me/guardian")
+async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_participant),
+                       db: AsyncSession = Depends(get_db)):
+    """A candidate aged 15 to 17 sends the consent request to a legal representative (152-FZ art. 9 part 6)."""
+    p = await db.get(Participant, _pid(current), with_for_update=True)
+    if not p:
+        raise HTTPException(404, "Профиль не найден")
+    if not p.minor_now() or p.minor_consent_given:
+        raise ApiError(409, "conflict", "Согласие представителя не требуется")
+    email = str(body.guardian_email).strip().lower()
+    if email == (p.email or "").lower():
+        raise ApiError(422, "validation_error", "Укажите адрес родителя или другого законного представителя")
+    if await too_many(f"guardian:{p.id}", limit=3, window_seconds=86_400):
+        raise ApiError(429, "rate_limited", "Не больше трёх писем представителю в сутки")
+    p.guardian_email = email
+    db.add(ConsentLog(participant_id=p.id, event_type="guardian_requested", actor_id=p.id, meta={}))
+    await db.commit()
+    token = guardian_token(p.id, email)
+    link = f"{settings.PUBLIC_BASE_URL.rstrip('/')}/guardian?token={token}"
+    await send_mail(email, "Согласие законного представителя — ФСП Талант",
+                    f"{p.display_name or 'Ваш ребёнок'} зарегистрировался на платформе подбора ФСП Талант.\n"
+                    "Работодатели увидят анонимную карточку кандидата только после вашего согласия на обработку "
+                    "его персональных данных. Текст согласия и кнопка подтверждения — по ссылке:\n"
+                    f"{link}\n\nЕсли вы не знаете, о ком речь, просто не открывайте ссылку.",
+                    {"purpose": "guardian", "token": token})
+    return {"ok": True, "guardian_email": email}
+
+
 @router.get("/survey-options")
 async def survey_options():
     """Choices for the survey; public, so the registration flow can show them before login."""
@@ -565,7 +602,8 @@ class SurveyIn(BaseModel):
     # The subject area (fintech, retail…) is optional: the IT direction is the specialization itself.
     industry: str = "any"
     work_goal: str = "job"
-    declared_grade: Literal["intern", "junior", "middle", "senior", "lead"] | None = None
+    # Q&A: the candidate chooses the grade; the first test checks exactly this choice.
+    declared_grade: Literal["intern", "junior", "middle", "senior", "lead"]
     experience_years: int | None = Field(None, ge=0, le=50)
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
@@ -582,10 +620,7 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
     if not p:
         raise HTTPException(404, "Профиль не найден")
     p.specialization, p.industry, p.work_goal = body.specialization, body.industry, body.work_goal
-    if body.declared_grade is not None:
-        p.declared_grade = body.declared_grade
-    elif body.work_goal == "internship" and not p.declared_grade:
-        p.declared_grade = "intern"
+    p.declared_grade = body.declared_grade
     if "salary_from_gross" in body.model_fields_set or "salary_to_gross" in body.model_fields_set:
         if body.salary_from_gross and body.salary_to_gross and body.salary_from_gross > body.salary_to_gross:
             raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")

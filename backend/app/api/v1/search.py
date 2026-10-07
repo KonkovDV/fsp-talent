@@ -5,7 +5,7 @@ from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.services.matching import NeedSpec
-from app.services.search.pipeline import search_candidates
+from app.services.search.pipeline import bank_grid, search_candidates
 from app.services.skills import extract_skills, normalize_skill
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -18,6 +18,15 @@ def _wanted(skill_list: list[str], q: str | None) -> tuple[str, ...]:
     if q:
         names |= {e.skill for e in extract_skills(q)}
     return tuple(sorted(names))
+
+
+@router.get("/bank")
+async def bank(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Showcase of the bank: specialization × grade, people and how many confirmed the grade by test.
+
+    Cells with fewer than five people come back hidden. A click in the interface opens the search with filters.
+    """
+    return await bank_grid(db)
 
 
 @router.get("/candidates")

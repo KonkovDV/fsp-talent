@@ -22,7 +22,7 @@ export interface CandidateCardData {
     plus: string[]
     minus: string[]
     info: string[]
-    reasons?: { code: string; text: string; tone: string; source?: string | null }[]
+    reasons?: { code: string; text: string; tone: string; source?: string | null; points?: number | null }[]
     factors: { key: string; label: string; weight: number; value: number | null }[]
   }
   disciplines: {
@@ -44,6 +44,7 @@ const REASON_RU: Record<string, string> = {
   TEST_SCORE: 'Результат теста',
   SKILL_GAP: 'Нет навыка',
   FSP_BONUS: 'Протокол ФСП',
+  FSP_SCORE: 'Результаты ФСП',
   FSP_NEUTRAL: 'Без истории ФСП',
   RELATED_ROLE: 'Смежная специализация',
   RELATED_SKILL: 'Близкая технология',
@@ -52,8 +53,8 @@ const REASON_RU: Record<string, string> = {
   GRADE_ABOVE: 'Грейд выше',
   GRADE_BELOW: 'Грейд ниже',
   OTHER_ROLE: 'Другая специализация',
-  UNTESTED: 'Тест не сдан',
-  INDUSTRY: 'Сфера',
+  UNTESTED: 'Тест не пройден',
+  INDUSTRY: 'Предметная область',
   PAY_FIT: 'Вилка сходится',
   PAY_LOW: 'Вилка ниже',
   PAY_GAP: 'Вилка не сходится',
@@ -188,7 +189,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
               {!!card.match.reasons?.length && (
                 <ul className="mb-2 flex flex-wrap gap-1.5">
                   {card.match.reasons.map(r => (
-                    <li key={`${r.code}-${r.text}`} className={r.tone === 'minus' ? 'badge-warn' : r.tone === 'plus' ? 'badge-ok' : 'badge-vc'}>{REASON_RU[r.code] ?? r.code}{r.source ? ` · ${r.source}` : ''}</li>
+                    <li key={`${r.code}-${r.text}`} className={r.tone === 'minus' ? 'badge-warn' : r.tone === 'plus' ? 'badge-ok' : 'badge-vc'}>{REASON_RU[r.code] ?? r.code}{r.source ? ` · ${r.source}` : ''}{r.points ? ` · +${Math.round(r.points * 100)} к баллу` : ''}</li>
                   ))}
                 </ul>
               )}

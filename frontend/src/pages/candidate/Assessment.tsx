@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CheckCircle2, ClipboardCheck, Clock, Lock, XCircle } from 'lucide-react'
+import { CheckCircle2, ClipboardCheck, Clock, Info, Lock, XCircle } from 'lucide-react'
 import {
   abandonAssessment, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
   getMyProfile, reviewAssessment, startAssessment,
@@ -9,7 +9,7 @@ import {
 import SurveyCard from '../../components/SurveyCard'
 import { Meter, PageHeader, plural } from '../../components/ui'
 
-import { GRADES, gradeRu } from '../../labels'
+import { GRADES, ROLE_RU, SESSION_STATUS_RU, gradeRu } from '../../labels'
 
 interface Item {
   token: string; seq: number; stem: string; code: string | null; language: string | null
@@ -42,7 +42,7 @@ interface SessionState {
 interface HistoryItem {
   session_id: string; status: string; specialization: string | null; target_grade: string
   grade_assigned: string | null; p_pass: number | null; items_count: number | null; started_at: string
-  vacancy_test?: boolean
+  vacancy_test?: boolean; trial?: boolean
 }
 
 const OUTCOME_TEXT: Record<string, string> = {
@@ -287,24 +287,40 @@ export default function CandidateAssessment() {
           {result.family_review && (
             <p className="notice" role="status">По одному семейству доля верных ответов и скорость выбиваются из обычного хода. Грейд из-за этого не меняется.</p>
           )}
+          {result.trial ? (
+            <div className="flex items-start gap-3" data-testid="trial-verdict">
+              <Info className="shrink-0 text-accent" aria-hidden />
+              <div>
+                <p className="section-title">
+                  {result.p_pass >= (blueprint?.pass_probability ?? 0.75)
+                    ? `Уровень «${gradeRu(state.target_grade)}» по этим ответам подтвердился бы`
+                    : result.p_pass >= 0.5
+                      ? `Уровень «${gradeRu(state.target_grade)}» скорее подтвердился бы, но уверенности для решения не хватило`
+                      : `Уровень «${gradeRu(state.target_grade)}» по этим ответам пока не подтвердился бы`}
+                </p>
+                <p className="text-sm text-ink-2">Вероятность уровня {pct(result.p_pass)}. Основной тест подтверждает грейд, когда она доходит до {pct(blueprint?.pass_probability ?? 0.75)}. Пробный проход в профиль и поиск не попадает.</p>
+              </div>
+            </div>
+          ) : (
           <div className={result.passed ? 'hero-ink -m-5 mb-0 p-6 sm:-m-6 sm:mb-0 sm:p-8' : 'flex items-start gap-3'}>
             {result.passed ? (
               <>
                 <p className="flex items-center gap-2 text-sm on-hero-muted"><CheckCircle2 size={18} aria-hidden />
                   {result.vacancy_test ? 'Тест по вакансии пройден на уровне' : result.upgraded ? 'Грейд повышен' : 'Уровень подтверждён'}</p>
-                <p className="mt-3 font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3rem,7vw,4.5rem)]">{result.earned_grade}</p>
+                <p className="mt-3 font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3rem,7vw,4.5rem)]">{gradeRu(result.earned_grade)}</p>
                 <p className="mt-3 max-w-[56ch] text-sm on-hero-muted">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
               </>
             ) : (
               <>
                 <XCircle className="shrink-0 text-invite" aria-hidden />
                 <div>
-                  <p className="section-title">Уровень {state.target_grade} не подтверждён</p>
+                  <p className="section-title">Уровень «{gradeRu(state.target_grade)}» не подтверждён</p>
                   <p className="text-sm text-ink-2">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
                 </div>
               </>
             )}
           </div>
+          )}
           {result.recommended_grade && (
             <div className="notice-info flex-wrap items-center justify-between" data-testid="next-test">
               <p className="text-sm text-ink">
@@ -320,7 +336,7 @@ export default function CandidateAssessment() {
             </div>
           )}
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
-            <div className="stat-card"><dt className="stat-card-label">Вероятность уровня {state.target_grade}</dt><dd className="stat-card-value">{pct(result.p_pass)}</dd></div>
+            <div className="stat-card"><dt className="stat-card-label">Вероятность уровня «{gradeRu(state.target_grade)}»</dt><dd className="stat-card-value">{pct(result.p_pass)}</dd></div>
             <div className="stat-card"><dt className="stat-card-label">Заданий, из них верно</dt><dd className="stat-card-value">{result.items_count}<span className="text-base text-ink-3">, {pct(result.score)}</span></dd></div>
             <div className="stat-card"><dt className="stat-card-label">Оценка способности θ</dt><dd className="stat-card-value">{result.theta.toFixed(2)}<span className="text-base text-ink-3"> ± {result.se.toFixed(2)}</span></dd></div>
           </dl>
@@ -376,8 +392,8 @@ export default function CandidateAssessment() {
           <ul className="text-sm divide-y divide-border">
             {(history.items as HistoryItem[]).map(h => (
               <li key={h.session_id} className="py-2 flex justify-between gap-2">
-                <span>{new Date(h.started_at).toLocaleDateString('ru-RU')}, {h.specialization ?? '—'}, {h.target_grade}{h.vacancy_test ? ', по вакансии' : ''}</span>
-                <span className="text-ink-3">{h.status === 'completed' ? (h.grade_assigned ?? 'не подтверждён') : h.status}
+                <span>{new Date(h.started_at).toLocaleDateString('ru-RU')}, {h.specialization ? (ROLE_RU[h.specialization] ?? h.specialization) : '—'}, {gradeRu(h.target_grade)}{h.vacancy_test ? ', по вакансии' : ''}{h.trial ? ', пробный' : ''}</span>
+                <span className="text-ink-3">{h.status === 'completed' ? (h.trial ? 'без решения о грейде' : h.grade_assigned ? `подтверждён: ${gradeRu(h.grade_assigned)}` : 'не подтверждён') : (SESSION_STATUS_RU[h.status] ?? h.status)}
                   {h.p_pass != null && `, ${pct(h.p_pass)}`}</span>
               </li>
             ))}

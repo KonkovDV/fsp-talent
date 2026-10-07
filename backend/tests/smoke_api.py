@@ -16,7 +16,8 @@ BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
 # The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
 MAIL_DIR = os.environ.get("MAIL_FILE_DIR", "/tmp/fsp-talent-mail")
 MAILPIT = os.environ.get("MAILPIT_URL", "").rstrip("/")
-SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset"}
+SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset",
+                   "Согласие законного представителя": "guardian"}
 EMPLOYER = {"username": "hr@sibcode.demo", "password": "demo12345"}
 CANDIDATE = {"username": "fsp001@demo.talent", "password": "demo12345"}
 REQUIRED_CANDIDATE_CONSENTS = ["terms", "pd_candidate"]
@@ -57,7 +58,7 @@ def _mailpit_letter(email, purpose):
         with urllib.request.urlopen(f"{MAILPIT}/api/v1/message/{message['ID']}", timeout=5) as resp:
             text = json.load(resp)["Text"]
         code = re.search(r"\b(\d{6})\b", text)
-        token = re.search(r"token=([\w-]+)", text)
+        token = re.search(r"token=([\w.-]+)", text)
         return {"to": email, "purpose": purpose, "code": code.group(1) if code else None,
                 "token": token.group(1) if token else None}
     return None
@@ -193,6 +194,9 @@ def main():
     status, employer = call("POST", "/auth/employer/token", form=EMPLOYER)
     assert status == 200, employer
     employer_token = employer["access_token"]
+    status, bank = call("GET", "/search/bank", token=employer_token)
+    assert status == 200 and bank["cells"], bank
+    assert all(c["candidates"] is None or c["candidates"] >= bank["min_cell"] for c in bank["cells"]), bank
     status, participant = call("POST", "/auth/participant/token", form=CANDIDATE)
     assert status == 200, participant
     participant_token = participant["access_token"]
@@ -287,6 +291,9 @@ def main():
     check_revoke_contacts(offer["id"], employer_token, participant_token)
     check_erasure(employer_token)
     check_assessment()
+    check_jury_accounts()
+    check_minor()
+    check_idor(employer_token, participant_token)
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
 
 
@@ -501,6 +508,113 @@ def _right_answer(session_id, item):
         options = row["options"] if isinstance(row["options"], list) else _json.loads(row["options"])
         return {"answer_text": options[row["correct_index"]]}
     return {"answer_index": row["correct_index"]}
+
+
+def _ids(payload, key="id"):
+    rows = payload.get("items", payload) if isinstance(payload, dict) else payload
+    return [str(r[key]) for r in rows or [] if isinstance(r, dict) and r.get(key)]
+
+
+# Public by design: a published card, a credential check, a vacancy page and applying to it.
+IDOR_PUBLIC = ("/api/v1/public/", "/api/v1/vacancies/{vacancy_id}", "/api/v1/vacancies/{vacancy_id}/apply")
+
+
+def check_idor(owner_employer, owner_candidate):
+    """Every route with an object id from app.routes: another employer and another candidate get no 2xx."""
+    owned: dict[str, list[str]] = {}
+
+    def collect(param, path, token, key="id"):
+        status, body = call("GET", path, token=token)
+        if status == 200:
+            owned.setdefault(param, []).extend(_ids(body, key)[:2])
+
+    collect("need_id", "/needs", owner_employer)
+    collect("offer_id", "/offers/", owner_employer)
+    collect("task_id", "/tasks/", owner_employer)
+    collect("vacancy_id", "/vacancies/mine", owner_employer)
+    collect("application_id", "/vacancies/applications", owner_employer)
+    collect("offer_id", "/candidates/me/offers", owner_candidate)
+    collect("session_id", "/assessment/history", owner_candidate, "session_id")
+    collect("result_id", "/candidates/me/results", owner_candidate)
+    collect("notification_id", "/notifications", owner_candidate)
+    for task_id in owned.get("task_id", []):
+        collect("submission_id", f"/tasks/{task_id}/submissions", owner_employer)
+    other_employer = call("POST", "/auth/employer/token",
+                          form={"username": "hr@cloudwhale.demo", "password": "demo12345"})[1]["access_token"]
+    other_candidate = _login("nofsp@demo.talent")
+    root = BASE.rsplit("/api/v1", 1)[0]
+    with urllib.request.urlopen(root + "/openapi.json") as response:
+        spec = json.loads(response.read().decode())
+    checked = 0
+    leaks = []
+    for path, methods in spec["paths"].items():
+        params = re.findall(r"{([a-z_]+)}", path)
+        if not params or path.startswith(IDOR_PUBLIC[0]) or path in IDOR_PUBLIC[1:]:
+            continue
+        target = next((p for p in params if p in owned), None)
+        if target is None:
+            continue
+        for value in owned[target]:
+            concrete = path
+            for p in params:
+                concrete = concrete.replace("{" + p + "}", value if p == target else
+                                            ("1" if p == "version" else "00000000-0000-0000-0000-000000000001"))
+            for method in methods:
+                for token in (other_employer, other_candidate):
+                    status, _ = call(method.upper(), concrete[len("/api/v1"):], {}, token=token)
+                    checked += 1
+                    if 200 <= status < 300:
+                        leaks.append((method.upper(), concrete, status))
+    assert not leaks, leaks
+    assert checked >= 40, checked
+    print("IDOR OK", checked, "requests with foreign ids, no 2xx:", ", ".join(sorted(owned)))
+
+
+def check_minor():
+    """Registration opens at 15; a 15–17-year-old enters search only after the guardian confirms by the link."""
+    email = f"minor-{int(time.time() * 1000)}@example.com"
+    body = {"email": email, "password": "smoke-pass-1", "display_name": "Юный Кандидат", "is_adult": False,
+            "consents": REQUIRED_CANDIDATE_CONSENTS}
+    status, young = call("POST", "/auth/participant/register", body)
+    assert status == 422 and young["error"]["code"] == "too_young", young
+    status, sent = call("POST", "/auth/participant/register", {**body, "age_15_17": True})
+    assert status == 202, sent
+    status, tokens = call("POST", "/auth/verify-email", {"email": email, "code": last_letter(email)["code"]})
+    assert status == 200, tokens
+    token = tokens["access_token"]
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["is_minor"] and not me["minor_consent_given"], me
+    guardian = f"parent-{int(time.time() * 1000)}@example.com"
+    status, asked = call("POST", "/candidates/me/guardian", {"guardian_email": guardian}, token=token)
+    assert status == 200, asked
+    letter = last_letter(guardian, "guardian")
+    status, bad = call("POST", "/public/guardian-consent", {"token": letter["token"][:-4] + "0000"})
+    assert status == 404, bad
+    status, ok = call("POST", "/public/guardian-consent", {"token": letter["token"]})
+    assert status == 200 and ok["ok"], ok
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["minor_consent_given"], me
+    print("MINOR OK guardian consent by link")
+
+
+def check_jury_accounts():
+    """Demo stand: a jury account fills the survey and restarts the full test without pauses or limits."""
+    status, blueprint = call("GET", "/assessment/blueprint")
+    if not (status == 200 and blueprint.get("express")):
+        print("JURY SKIPPED (DEMO_MODE off)")
+        return
+    token = _login("jury2@demo.talent")
+    status, saved = call("PUT", "/candidates/me/survey", {"specialization": "backend", "declared_grade": "middle"},
+                         token=token)
+    assert status == 200, saved
+    status, missing = call("PUT", "/candidates/me/survey", {"specialization": "backend"}, token=token)
+    assert status == 422, missing
+    for attempt in range(4):
+        status, state = call("POST", "/assessment/start", {"target_grade": "middle"}, token=token)
+        assert status == 201, (attempt, state)
+        status, dropped = call("POST", f"/assessment/{state['session_id']}/abandon", token=token)
+        assert status == 200, dropped
+    print("JURY OK four full starts in a row")
 
 
 def check_assessment():

@@ -181,11 +181,15 @@ def population(n: int, rng: random.Random) -> list[Person]:
 
 
 def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: float = 0.0,
-           blocked: set[str] | None = None, offsets: dict[str, float] | None = None
-           ) -> tuple[CohortReport, list[Session]]:
+           blocked: set[str] | None = None, offsets: dict[str, float] | None = None,
+           stream: int | None = None) -> tuple[CohortReport, list[Session]]:
+    """`stream` gives every person an own random stream: two designs then differ only by the design
+    (the same people leak, the same answers fall the same way until the item sequences part)."""
     sessions = []
     seen: collections.Counter[str] = collections.Counter()
     for index, (theta, spec, target) in enumerate(people):
+        if stream is not None:
+            rng = random.Random(stream * 1_000_003 + index)
         leaked = MAIN_FAMILY[spec] if rng.random() < leak_share else None
         # The live bank starts Sympson–Hetter after the same warm-up the selector uses.
         rates = {key: count / index for key, count in seen.items()} if index >= 20 else None
@@ -302,6 +306,7 @@ class Retest:
     same_grade: float          # same confirmed grade (a test confirms only its target, or nothing)
     theta_r: float             # correlation of the two ability estimates
     weighted_kappa: float      # quadratic weighted kappa of the two earned grades
+    own_overlap: float = 0.0   # share of the second test's item keys the same person already saw in the first
 
 
 def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float]) -> Retest:
@@ -319,6 +324,8 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
         theta_r=_pearson([a.theta_hat for _, _, a, _ in pairs], [b.theta_hat for _, _, _, b in pairs]),
         weighted_kappa=_quadratic_kappa([a.earned for _, _, a, _ in pairs],
                                         [b.earned for _, _, _, b in pairs]),
+        own_overlap=statistics.mean(len(set(a.keys) & set(b.keys)) / max(1, len(set(b.keys)))
+                                    for _, _, a, b in pairs),
     )
 
 
@@ -345,6 +352,7 @@ def _quadratic_kappa(xs: list[str | None], ys: list[str | None]) -> float:
 
 @dataclass
 class Report:
+    ladder: dict[str, tuple[int, float]]   # true grade -> (people, share who passed the middle test)
     clean: CohortReport
     choices: CohortReport
     leak: CohortReport
@@ -542,11 +550,22 @@ def run(n: int = 3000, seed: int = 7) -> Report:
         retest_choices = retest(retest_people, truth, rng, offsets)
         guesser_choices = _guessers(truth, rng)
     clean_alarms = monitor(clean_sessions)
-    leak, leak_sessions = cohort(population(n, rng), truth, rng, leak_share=0.3, offsets=offsets)
+    # The monitor learns on one leaking cohort; the next cohort is then tested twice on the same people and
+    # the same random streams, once as is and once with the flagged keys in quarantine.
+    _, leak_sessions = cohort(population(n, rng), truth, rng, leak_share=0.3, offsets=offsets)
     stats = monitor(leak_sessions)
     flagged = {k for k, st in stats.items() if st.alarm or st.cusum_alarm}
     leaked_keys = {k for k in stats if k.split(":")[0] in set(MAIN_FAMILY.values()) and stats[k].n >= 30}
-    monitored, _ = cohort(population(n, rng), truth, rng, leak_share=0.3, blocked=flagged, offsets=offsets)
+    next_people = population(n, random.Random(seed + 5))
+    leak, _ = cohort(next_people, truth, rng, leak_share=0.3, offsets=offsets, stream=seed + 6)
+    monitored, _ = cohort(next_people, truth, rng, leak_share=0.3, blocked=flagged, offsets=offsets,
+                          stream=seed + 6)
+    # Ladder: everyone takes the middle test; the pass rate by true grade shows where the test separates.
+    ladder_people = [(theta, spec, "middle") for theta, spec, _ in people]
+    _, ladder_sessions = cohort(ladder_people, truth, rng, offsets=offsets, stream=seed + 7)
+    ladder: dict[str, list[bool]] = {}
+    for session in ladder_sessions:
+        ladder.setdefault(true_grade(session.theta) or "below", []).append(session.passed)
     served = [c for s in clean_sessions for *_, c, _ in s.answers]
     side = random.Random(seed + 99)
     rates = _collision_rates(side)
@@ -578,6 +597,7 @@ def run(n: int = 3000, seed: int = 7) -> Report:
         topic_false_pass=topic_fp, topic_accuracy=topic_acc,
         rudner_accuracy=rudner_acc, rudner_consistency=rudner_cons, posterior_accuracy=posterior_acc,
         grade_matrix=matrix, overlap=overlap, region_peaks=region_peaks,
+        ladder={g: (len(v), statistics.mean(v)) for g, v in ladder.items()},
     )
 
 
@@ -593,6 +613,8 @@ CHECKS = {
     "choice median r ≥ 0.15": lambda r: r.discrimination["choice"].median_r >= 0.15,
     # A key from another draw of the same family must not pass the test.
     "transfer_pass ≤ 0.02": lambda r: r.transfer_pass <= 0.02,
+    # Quarantine must not make leaked keys pay off more: same people, same streams, with and without it.
+    "quarantine false_pass ≤ no monitoring": lambda r: r.monitored.false_pass <= r.leak.false_pass,
 }
 
 
@@ -677,6 +699,11 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"распределению: {r.posterior_accuracy:.1%}.",
         f"- Перекрытие заданий: в среднем другой кандидат этой же симуляции видел {r.overlap:.1%} "
         f"заданий данного кандидата. Максимальная экспозиция ключа — в таблице выше.",
+        f"- Два теста одного кандидата: во втором в среднем {r.retest.own_overlap:.1%} заданий совпадают "
+        f"с первым по семейству и уровню. Сами задания собираются заново, а ключ от другого экземпляра "
+        f"того же семейства сдаёт {r.transfer_pass:.1%}.",
+        f"- Карантин на тех же людях и тех же случайных потоках: ложные сдачи {r.leak.false_pass:.1%} без "
+        f"мониторинга и {r.monitored.false_pass:.1%} с карантином.",
         _region_line(r),
         "",
         "Матрица «истинный грейд по θ × грейд, который назначила сессия» в сценарии «без утечки». "
@@ -688,6 +715,13 @@ def markdown(r: Report, n: int, seed: int) -> str:
             f"| {MATRIX_LABELS[i]} | " + " | ".join(str(cell) for cell in row) + " |"
             for i, row in enumerate(r.grade_matrix)
         ],
+        "",
+        "Лестница: все кандидаты проходят тест на middle. Доля сдавших по истинному грейду.",
+        "",
+        "| Истинный грейд | Кандидатов | Сдали тест middle |",
+        "|---|---|---|",
+        *[f"| {MATRIX_LABELS[i]} | {r.ladder[g][0]} | {r.ladder[g][1]:.1%} |"
+          for i, g in enumerate(("below", *GRADE_ORDER)) if g in r.ladder],
         "",
     ])
 

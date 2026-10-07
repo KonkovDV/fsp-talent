@@ -6,6 +6,7 @@ Requirements (only for whoever rebuilds the PDF, not for running the platform):
     cd frontend && npm ci          # fonts of the brand book come from @fontsource
 
     python docs/tools/build_pdf.py
+    python docs/tools/build_pdf.py --pitch   # docs/pitch.html -> docs/pitch.pdf (after build_pitch.mjs)
 """
 from __future__ import annotations
 
@@ -153,5 +154,19 @@ mermaid.run({{querySelector: '.mermaid'}}).then(() => document.body.dataset.read
     return OUT
 
 
+def build_pitch() -> Path:
+    """Print the slides that docs/tools/build_pitch.mjs wrote, one slide per page."""
+    out = DOCS / "pitch.pdf"
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        tab = browser.new_page()
+        tab.goto((DOCS / "pitch.html").as_uri())
+        tab.wait_for_load_state("networkidle")
+        tab.pdf(path=str(out), width="13.333in", height="7.5in", print_background=True,
+                margin={"top": "0", "bottom": "0", "left": "0", "right": "0"})
+        browser.close()
+    return out
+
+
 if __name__ == "__main__":
-    print(build())
+    print(build_pitch() if "--pitch" in sys.argv else build())

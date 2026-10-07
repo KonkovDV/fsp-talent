@@ -2,7 +2,8 @@
 Rule-based categorization: role x grade x stack.
 
 Grade and the FSP-verified level are independent axes: grade comes from a test result when there is
-one, otherwise from the candidate's declaration or experience, never from competition results.
+one, otherwise from the grade the candidate chose in the survey, never from experience or competition results.
+Experience only suggests which grade to choose.
 """
 from __future__ import annotations
 
@@ -102,13 +103,15 @@ def assign_category(
     elif declared_grade in GRADES:
         grade, source = declared_grade, "declared"
         explanation.append("Грейд указан кандидатом, тестом не подтверждён")
-    elif experience_years is not None:
-        grade, source = grade_from_experience(experience_years), "experience"
-        explanation.append(
-            f"Грейд по опыту: {experience_years} {_ru_word(experience_years, 'год', 'года', 'лет')}")
     else:
+        # Q&A: the candidate chooses the grade. Experience is only a hint for that choice, never the grade.
         grade, source = "junior", "default"
-        explanation.append("Опыт не указан, грейд по умолчанию")
+        explanation.append("Грейд не выбран в опросе: до выбора карточка стоит как junior")
+    if source != "assessed" and experience_years is not None:
+        hint = grade_from_experience(experience_years)
+        explanation.append(
+            f"Подсказка по стажу ({experience_years} {_ru_word(experience_years, 'год', 'года', 'лет')}): "
+            f"обычно это {hint}. Грейд даёт только тест")
 
     stack = sorted({s for s in skills if roles_for(s)})[:12]
     return CategoryResult(primary_role=role, grade=grade, grade_source=source, stack=stack,

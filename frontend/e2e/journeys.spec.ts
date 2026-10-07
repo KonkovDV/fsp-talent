@@ -87,14 +87,22 @@ test('кандидат проходит регистрацию и пробный
 
   await page.getByLabel('Специализация').selectOption('backend')
   await page.getByLabel('Предметная область').selectOption({ index: 1 })
+  await page.getByLabel('Грейд').selectOption('middle')
   await page.getByLabel('Ожидания по зарплате, от').fill('200000')
   await page.getByRole('button', { name: 'Сохранить опрос' }).click()
   await expect(page.getByRole('region', { name: 'Категория' })).toContainText('Backend')
 
   await page.goto('/candidate/assessment')
   await page.getByRole('button', { name: /Пробный тест/ }).click()
-  for (let step = 1; step <= 6; step++) await answerOne(page, step)
-  await expect(page.getByRole('status')).toContainText('не подтверждается')
+  // The trial length comes from the stand (blueprint.express_items); answer until the neutral verdict shows.
+  const verdict = page.getByTestId('trial-verdict')
+  for (let step = 1; step <= 20; step++) {
+    await expect(page.getByText(`Задание ${step}.`).or(verdict)).toBeVisible()
+    if (await verdict.isVisible()) break
+    await answerOne(page, step)
+  }
+  await expect(verdict).toContainText('Вероятность уровня')
+  await expect(page.getByRole('status').first()).toContainText('не подтверждается')
 
   const candidate = await session(page)
   expect(candidate?.userId).toBeTruthy()

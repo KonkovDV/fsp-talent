@@ -1,6 +1,7 @@
 """Idempotent demo data.
 
-Logins (password demo12345): candidates fsp001@demo.talent, fsp002@demo.talent (FSP linked) and
+Logins (password demo12345): jury1..jury10@demo.talent (empty survey, full test without pauses under DEMO_MODE),
+candidates fsp001@demo.talent, fsp002@demo.talent (FSP linked) and
 nofsp@demo.talent (no FSP history); employer hr@sibcode.demo. Companies are fictional.
 """
 import asyncio
@@ -14,7 +15,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
 from app.legal import documents
 from app.models import Consent, Employer, Participant, Skill, Vacancy
-from app.services.categorization import DISCIPLINE_ROLE_MAP
+from app.services.categorization import DISCIPLINE_ROLE_MAP, grade_from_experience
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.survey import INDUSTRIES
@@ -158,6 +159,9 @@ async def main() -> None:
             for name in names:
                 db.add(Skill(participant_id=participant.id, name=name, raw_name=name,
                              trust_level="self_reported", confirmed=True))
+            # The survey grade is the candidate's own choice; demo people choose what their experience suggests.
+            years_told = participant.experience_years
+            participant.declared_grade = participant.declared_grade or grade_from_experience(years_told)
             participant.email = f"{fsp_id.lower()}@demo.talent"
             participant.email_verified_at = now
             # Survey answers: the demo accounts have them; synthetic profiles get the role of their discipline.
@@ -197,6 +201,18 @@ async def main() -> None:
                              trust_level="self_reported", confirmed=True))
             _consents(db, "participant", participant.id, now)
             await rebuild_profile(db, participant)
+            created += 1
+        # Jury accounts: empty survey, so a jury member walks the candidate path from step one.
+        # With DEMO_MODE they take the full test without pauses (app.services.assessment.jury_unlimited).
+        for n in range(1, 11):
+            email = f"jury{n}@demo.talent"
+            if await db.scalar(select(Participant.id).where(Participant.email == email)) is not None:
+                continue
+            juror = Participant(email=email, display_name=f"Член жюри {n}", password_hash=password_hash,
+                                email_verified_at=now, is_minor=False, is_visible=True, public_profile=False)
+            db.add(juror)
+            await db.flush()
+            _consents(db, "participant", juror.id, now)
             created += 1
         jobs = 0
         for email, title, role, grade, disc, rank, skills, lo, hi, fmt, text in DEMO_VACANCIES:

@@ -25,6 +25,8 @@ class Offer(Base):
     status = Column(String(20), nullable=False, default="pending")
     # Optional, set when the candidate declines: salary, format, stack, not_looking, other.
     decline_reason = Column(String(20))
+    # When the candidate accepted or declined (migration 0002). A decline pauses new invitations for 30 days.
+    responded_at = Column(DateTime(timezone=True))
     contacts_revealed_at = Column(DateTime(timezone=True))
     # The candidate closed the contacts for this company after accepting. Other companies are not affected.
     contacts_revoked_at = Column(DateTime(timezone=True))

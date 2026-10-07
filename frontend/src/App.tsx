@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import VerifyPage from './pages/VerifyPage'
+import GuardianPage from './pages/GuardianPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import CandidateDashboard from './pages/candidate/Dashboard'
 import CandidateProfile from './pages/candidate/Profile'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/guardian" element={<GuardianPage />} />
         <Route path="/forgot" element={<ForgotPasswordPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/method" element={<MethodPage />} />

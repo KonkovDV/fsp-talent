@@ -12,7 +12,12 @@ export const DISC_RU: Record<string, string> = {
 export const GRADES = ['intern', 'junior', 'middle', 'senior', 'lead'] as const
 
 export const GRADE_RU: Record<string, string> = {
-  intern: 'стажёр', junior: 'junior', middle: 'middle', senior: 'senior', lead: 'lead',
+  intern: 'стажёр', junior: 'джуниор', middle: 'мидл', senior: 'сеньор', lead: 'лид',
+}
+
+/** Session statuses in the test history. */
+export const SESSION_STATUS_RU: Record<string, string> = {
+  completed: 'завершён', in_progress: 'идёт', abandoned: 'прерван', expired: 'время вышло',
 }
 
 export function gradeRu(grade?: string | null): string {

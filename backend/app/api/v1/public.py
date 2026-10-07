@@ -1,17 +1,20 @@
 import json
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Consent, Participant, Skill, VerifiableCredential
+from app.models import Consent, ConsentLog, Participant, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.guardian import token_participant, token_valid
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
 from app.services.skills import skill_line
@@ -285,3 +288,23 @@ async def psychometrics(spec: str = "backend", db: AsyncSession = Depends(get_db
     rows = list(await db.execute(
         select(ItemStat.family_id, ItemStat.level, ItemStat.n, ItemStat.cusum, ItemStat.status)))
     return {**bank_curve(spec), **summarize_exposure([(f, lvl, n, c, s) for f, lvl, n, c, s in rows])}
+
+
+class GuardianConsentIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/guardian-consent")
+async def guardian_consent(body: GuardianConsentIn, db: AsyncSession = Depends(get_db)):
+    """The legal representative confirms by the signed link from the letter. Only then the card enters search."""
+    pid = token_participant(body.token)
+    p = await db.get(Participant, pid) if pid else None
+    if p is None or p.deleted_at is not None or not token_valid(body.token, p.id, p.guardian_email):
+        raise HTTPException(404, "Ссылка недействительна или устарела")
+    if not p.minor_consent_given:
+        p.minor_consent_given = True
+        p.guardian_consent_at = datetime.now(UTC)
+        db.add(ConsentLog(participant_id=p.id, event_type="guardian_consent", actor_id=p.id,
+                          meta={"by": "guardian", "guardian_email": p.guardian_email}))
+        await db.commit()
+    return {"ok": True, "display_name": p.display_name}

@@ -11,10 +11,13 @@ whose LCB correlates with the level. Relevance labels come from the hidden truth
     1  role matches or is adjacent, at least half of the required skills are real
     0  otherwise
 
-Rankers: random, a keyword baseline (count of declared required skills, then declared grade), the production
-factor score (app.services.matching.score) and its ablations. The weights were set by hand before this
-benchmark existed and are not fitted to it. The dataset is deterministic per seed and its SHA-256 is printed,
-so anyone can regenerate and check it; `--import` evaluates a jury-labelled file in the same JSON format.
+Rankers: random, the resume baseline (count of declared required skills, then role and declared grade), the
+production factor score (app.services.matching.score) and its ablations. Besides nDCG@10, P@min(10, n) and MAP
+the run reports the Spearman correlation between the order inside the category the employer sees (same role,
+same shown grade) and the hidden ability θ, the share of overrated people (shown grade above the real one) in
+the top 10, bootstrap 95 % intervals over needs, and the same table on three consecutive seeds. The weights
+were set by hand and are not fitted to this benchmark. The dataset is deterministic per seed and its SHA-256 is
+printed; `--import` evaluates a labelled file in the same JSON format, `--pairs` a JSONL of jury pairs.
 """
 from __future__ import annotations
 
@@ -86,7 +89,8 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026) -
         has_fsp = rng.random() < 0.55
         lcb = max(0.0, min(0.9, 0.3 + 0.15 * theta + rng.gauss(0, 0.08))) if has_fsp else None
         candidates.append({
-            "id": f"c{i}", "truth": {"role": role, "grade": true_grade, "skills": true_skills},
+            "id": f"c{i}",
+            "truth": {"role": role, "grade": true_grade, "skills": true_skills, "theta": round(theta, 4)},
             "observed": {"role": role, "grade": grade, "grade_source": source, "skills": declared,
                          "test_p": test_p, "test_correct": test_correct, "test_n": test_n,
                          "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)},
@@ -201,7 +205,8 @@ def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str
             return (-hits, -(o["role"] == need["role"]), -(o["grade"] == need["grade"]), c["id"])
         return [c["id"] for c in sorted(cands, key=key)]
     flags = {"full": {}, "no_trust": {"use_trust": False}, "no_test": {"use_test": False},
-             "no_fsp": {"use_fsp": False}, "no_related": {"use_related": False}}[method]
+             "no_fsp": {"use_fsp": False}, "no_evidence": {"use_test": False, "use_fsp": False},
+             "no_related": {"use_related": False}}[method]
     spec = _spec(need)
     scored = [(score(spec, _facts(c), **flags).score, c["id"]) for c in cands]
     return [cid for _, cid in sorted(scored, key=lambda t: (-t[0], t[1]))]
@@ -215,7 +220,9 @@ def ndcg(ranked: list[str], labels: dict[str, int], k: int = 10) -> float:
 
 
 def precision(ranked: list[str], labels: dict[str, int], k: int = 10) -> float:
-    return sum(1 for cid in ranked[:k] if labels.get(cid, 0) >= 2) / k
+    """P@min(k, n): with three labelled pairs the top three are judged, not ten seats."""
+    seats = min(k, len(labels)) or 1
+    return sum(1 for cid in ranked[:seats] if labels.get(cid, 0) >= 2) / seats
 
 
 def average_precision(ranked: list[str], labels: dict[str, int]) -> float:
@@ -230,43 +237,158 @@ def average_precision(ranked: list[str], labels: dict[str, int]) -> float:
     return total / relevant
 
 
+def _ranks(values: list[float]) -> list[float]:
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    out = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        for k in range(i, j + 1):
+            out[order[k]] = (i + j) / 2.0
+        i = j + 1
+    return out
+
+
+def spearman(xs: list[float], ys: list[float]) -> float | None:
+    """Rank correlation with average ranks for ties. None when either side is constant."""
+    if len(xs) != len(ys) or len(xs) < 3:
+        return None
+    rx, ry = _ranks(xs), _ranks(ys)
+    mx, my = statistics.mean(rx), statistics.mean(ry)
+    sx = math.sqrt(sum((a - mx) ** 2 for a in rx))
+    sy = math.sqrt(sum((b - my) ** 2 for b in ry))
+    if not sx or not sy:
+        return None
+    return sum((a - mx) * (b - my) for a, b in zip(rx, ry, strict=True)) / (sx * sy)
+
+
+CATEGORY_MIN = 5
+
+
+def category_spearman(ranked: list[str], need: dict, by_id: dict[str, dict]) -> float | None:
+    """Order inside the category the employer sees (role and shown grade equal the need) against hidden θ.
+
+    The category is what the platform shows, so it holds people whose declared grade is too high. A ranker
+    that lifts the stronger ones inside it has a positive correlation. Needs with fewer than five people
+    in the category are skipped.
+    """
+    members = [cid for cid in ranked
+               if by_id[cid]["observed"]["role"] == need["role"] and by_id[cid]["observed"]["grade"] == need["grade"]]
+    if len(members) < CATEGORY_MIN:
+        return None
+    return spearman([-float(i) for i in range(len(members))], [by_id[c]["truth"]["theta"] for c in members])
+
+
+def overrated_share(ranked: list[str], by_id: dict[str, dict], k: int = 10) -> float:
+    """Share of the top k whose shown grade is above the real one."""
+    top = ranked[:k]
+    over = sum(1 for cid in top
+               if GRADES.index(by_id[cid]["observed"]["grade"]) > GRADES.index(by_id[cid]["truth"]["grade"]))
+    return over / max(1, len(top))
+
+
+def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tuple[float, float]:
+    """95 % percentile interval of the mean, resampling needs with replacement."""
+    if not values:
+        return (float("nan"), float("nan"))
+    rng = random.Random(seed)
+    n = len(values)
+    means = sorted(statistics.mean(rng.choices(values, k=n)) for _ in range(rounds))
+    return means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
+
+
 @dataclass
 class Row:
     method: str
     ndcg10: float
     p10: float
     map: float
+    rho: float | None = None              # Spearman inside the category against hidden θ
+    overrated: float | None = None        # share of the top 10 whose shown grade is above the real one
+    ndcg_ci: tuple[float, float] | None = None
+    rho_ci: tuple[float, float] | None = None
 
 
-METHODS = ("random", "keyword", "full", "no_trust", "no_test", "no_fsp", "no_related")
-TITLES = {"random": "Случайный порядок", "keyword": "Базовая линия: совпадение заявленных навыков",
+METHODS = ("random", "keyword", "full", "no_trust", "no_test", "no_fsp", "no_evidence", "no_related")
+TITLES = {"random": "Случайный порядок", "keyword": "Базовая линия «по резюме»: заявленные навыки и грейд",
           "full": "ФСП Талант: оценка соответствия", "no_trust": "  без весов доверия к навыкам",
-          "no_test": "  без теста", "no_fsp": "  без оси ФСП", "no_related": "  без близких технологий"}
+          "no_test": "  без теста", "no_fsp": "  без оси ФСП", "no_evidence": "  без теста и без ФСП",
+          "no_related": "  без близких технологий"}
 
 
 def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
     rng = random.Random(seed)
     rows = []
     needs = [n for n in dataset["needs"] if any(v >= 2 for v in dataset["labels"][n["id"]].values())]
+    by_id = {c["id"]: c for c in dataset["candidates"]}
+    hidden = bool(dataset["candidates"]) and "theta" in (dataset["candidates"][0].get("truth") or {})
     for method in METHODS:
-        nd, pr, ap = [], [], []
+        nd, pr, ap, rho, over = [], [], [], [], []
         for need in needs:
             ranked = rank(dataset, need, method, rng)
             labels = dataset["labels"][need["id"]]
             nd.append(ndcg(ranked, labels))
             pr.append(precision(ranked, labels))
             ap.append(average_precision(ranked, labels))
-        rows.append(Row(method, statistics.mean(nd), statistics.mean(pr), statistics.mean(ap)))
+            if hidden:
+                over.append(overrated_share(ranked, by_id))
+                r = category_spearman(ranked, need, by_id)
+                if r is not None:
+                    rho.append(r)
+        rows.append(Row(method, statistics.mean(nd), statistics.mean(pr), statistics.mean(ap),
+                        statistics.mean(rho) if rho else None, statistics.mean(over) if over else None,
+                        bootstrap_ci(nd), bootstrap_ci(rho) if rho else None))
     return rows
+
+
+def _num(value: float | None) -> str:
+    return "—" if value is None else f"{value:.3f}"
+
+
+def _ci(ci: tuple[float, float] | None) -> str:
+    return "—" if ci is None else f"{ci[0]:.3f}…{ci[1]:.3f}"
 
 
 def markdown(rows: list[Row], dataset: dict) -> str:
     n_needs = sum(1 for n in dataset["needs"] if any(v >= 2 for v in dataset["labels"][n["id"]].values()))
     lines = [f"Набор: {len(dataset['candidates'])} кандидатов, {n_needs} потребностей с релевантными кандидатами, "
              f"seed {dataset.get('seed')}, SHA-256 `{sha256(dataset)[:16]}…`.", "",
-             "| Ранжирование | nDCG@10 | P@10 (оценка ≥ 2) | MAP |", "|---|---|---|---|"]
-    lines += [f"| {TITLES[r.method]} | {r.ndcg10:.3f} | {r.p10:.3f} | {r.map:.3f} |" for r in rows]
+             "| Ранжирование | nDCG@10 | 95 % ДИ nDCG | P@10, оценка ≥ 2 | MAP | Спирмен внутри категории "
+             "| 95 % ДИ Спирмена | Завышенный грейд в топ-10 |",
+             "|---|---|---|---|---|---|---|---|"]
+    lines += [f"| {TITLES[r.method]} | {r.ndcg10:.3f} | {_ci(r.ndcg_ci)} | {r.p10:.3f} | {r.map:.3f} "
+              f"| {_num(r.rho)} | {_ci(r.rho_ci)} | {_pct(r.overrated)} |" for r in rows]
     return "\n".join(lines) + "\n"
+
+
+def _pct(value: float | None) -> str:
+    return "—" if value is None else f"{value * 100:.1f} %"
+
+
+def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str, dict[str, dict[str, float]]]:
+    """The same benchmark on several seeds: mean and spread, so one lucky seed cannot carry a claim."""
+    keys = ("keyword", "full", "no_test", "no_fsp", "no_evidence")
+    per: dict[str, dict[str, list[float]]] = {k: {"ndcg": [], "rho": [], "over": []} for k in keys}
+    for sd in seeds:
+        rows = {r.method: r for r in evaluate(make_dataset(n_candidates, n_needs, sd))}
+        for k in keys:
+            per[k]["ndcg"].append(rows[k].ndcg10)
+            per[k]["rho"].append(rows[k].rho if rows[k].rho is not None else float("nan"))
+            per[k]["over"].append(rows[k].overrated or 0.0)
+
+    def ms(xs: list[float], scale: float = 1.0, digits: int = 3) -> str:
+        sd = statistics.stdev(xs) if len(xs) > 1 else 0.0
+        return f"{statistics.mean(xs) * scale:.{digits}f} ± {sd * scale:.{digits}f}"
+
+    lines = [f"Зёрна {', '.join(map(str, seeds))}: среднее ± стандартное отклонение.", "",
+             "| Ранжирование | nDCG@10 | Спирмен внутри категории | Завышенный грейд в топ-10, % |",
+             "|---|---|---|---|"]
+    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['rho'])} | {ms(per[k]['over'], 100, 1)} |"
+              for k in keys]
+    summary = {k: {m: statistics.mean(v) for m, v in per[k].items()} for k in keys}
+    return "\n".join(lines) + "\n", summary
 
 
 def load_pairs(path: str) -> dict:
@@ -299,14 +421,29 @@ def load_pairs(path: str) -> dict:
     return {"seed": None, "candidates": list(candidates.values()), "needs": list(needs.values()), "labels": labels}
 
 
-def checks_ok(rows: list[Row]) -> list[str]:
-    """The production ranker must beat the keyword baseline and a random order."""
+# Thresholds of --check. They guard the claims in docs/VALIDATION_MATCHING.md, not a tuned optimum.
+RHO_DROP = 0.05          # removing the test or the FSP axis must cost at least this much Spearman in the category
+NDCG_FLOOR = 0.65        # full model on the default seed; the release before the category order had 0.661
+
+
+def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
+    """The production ranker beats the baselines; inside a category the test and the FSP axis both matter."""
     by = {r.method: r for r in rows}
     failed = []
     if not by["full"].ndcg10 > by["keyword"].ndcg10:
         failed.append("full nDCG@10 > keyword")
     if not by["full"].ndcg10 > by["random"].ndcg10:
         failed.append("full nDCG@10 > random")
+    if not synthetic:
+        return failed
+    if by["full"].ndcg10 < NDCG_FLOOR:
+        failed.append(f"full nDCG@10 >= {NDCG_FLOOR}")
+    full_rho = by["full"].rho or 0.0
+    for ablation in ("no_test", "no_fsp"):
+        if full_rho - (by[ablation].rho or 0.0) < RHO_DROP:
+            failed.append(f"Spearman full - {ablation} >= {RHO_DROP}")
+    if not (by["full"].overrated or 0.0) < (by["keyword"].overrated or 0.0):
+        failed.append("overrated in top 10: full < keyword")
     return failed
 
 
@@ -315,10 +452,11 @@ def main() -> None:
     parser.add_argument("--candidates", type=int, default=800)
     parser.add_argument("--needs", type=int, default=80)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--seeds", type=int, default=3, help="repeat on this many consecutive seeds (0: skip)")
     parser.add_argument("--export", help="write the generated dataset (with labels) to this JSON file")
     parser.add_argument("--import", dest="imported", help="evaluate a labelled dataset in the same JSON format")
     parser.add_argument("--pairs", help="JSONL of jury pairs: need, candidate, label 0..3")
-    parser.add_argument("--check", action="store_true", help="fail unless the full model beats the baselines")
+    parser.add_argument("--check", action="store_true", help="fail unless the thresholds in checks_ok hold")
     args = parser.parse_args()
     if args.pairs and args.imported:
         raise SystemExit("Укажите либо --pairs, либо --import")
@@ -334,17 +472,22 @@ def main() -> None:
             json.dump(dataset, fh, ensure_ascii=False)
     rows = evaluate(dataset)
     print(markdown(rows, dataset))
-    no_fsp = next(r for r in rows if r.method == "no_fsp")
-    full = next(r for r in rows if r.method == "full")
-    print(f"ось ФСП: nDCG@10 {full.ndcg10:.3f} с осью, {no_fsp.ndcg10:.3f} без неё. "
-          "Ось задаёт порядок среди одинакового соответствия и не обязана поднимать nDCG.")
-    if dataset["candidates"] and "truth" in dataset["candidates"][0]:
+    synthetic = bool(dataset["candidates"]) and "theta" in (dataset["candidates"][0].get("truth") or {})
+    by = {r.method: r for r in rows}
+    if synthetic:
+        print(f"внутри категории: Спирмен с полной моделью {_num(by['full'].rho)}, "
+              f"без теста {_num(by['no_test'].rho)}, без ФСП {_num(by['no_fsp'].rho)}, "
+              f"по резюме {_num(by['keyword'].rho)}")
         rater_seed = (args.seed or 0) + 1
         print(f"слепая разметка против оракула: каппа Коэна {blind_kappa(dataset, rater_seed):.2f} "
               f"(зерно разметчика {rater_seed}, набор размечен по скрытой правде и это зерно не видит)")
+        if args.seeds and not args.imported:
+            table, _ = seeds_table([args.seed + i for i in range(args.seeds)], args.candidates, args.needs)
+            print()
+            print(table)
     print("sha256", sha256(dataset))
     if args.check:
-        failed = checks_ok(rows)
+        failed = checks_ok(rows, synthetic)
         print("checks:", "failed " + ", ".join(failed) if failed else "passed")
         if failed:
             raise SystemExit(1)

@@ -25,7 +25,7 @@ from app.core.ratelimit import too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
 from app.services.market import quartiles, reason_shares, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
-from app.services.offers import expire_if_stale, expire_stale
+from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.privacy import contacts_allowed
 
 router = APIRouter(prefix="/offers", tags=["offers"])
@@ -154,6 +154,13 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
         pending = None
     if pending:
         raise HTTPException(409, "Активный оффер этому кандидату уже есть")
+    declined = list(await db.scalars(select(Offer).where(
+        Offer.employer_id == employer.id, Offer.candidate_id == candidate.id, Offer.status == "rejected")))
+    pause = reinvite_after(declined)
+    if pause:
+        raise ApiError(409, "decline_pause",
+                       f"Кандидат отклонил ваше приглашение. Повторно пригласить можно после {pause:%d.%m.%Y}",
+                       details={"reinvite_after": pause.isoformat()})
     offer = Offer(
         employer_id=employer.id, candidate_id=candidate.id,
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,

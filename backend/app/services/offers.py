@@ -5,7 +5,9 @@ a pending row past expires_at still blocks a new offer and still looks active in
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+
+DECLINE_PAUSE = timedelta(days=30)
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -32,3 +34,16 @@ def expire_stale(offers, now: datetime | None = None) -> bool:
         if expire_if_stale(offer, now):
             changed = True
     return changed
+
+
+def reinvite_after(declined, now: datetime | None = None) -> datetime | None:
+    """When the company may invite the person again after their declines; None means now.
+
+    A decline is the candidate's answer: the same company waits 30 days before asking again. The pause runs
+    from the answer, or from the invitation itself for rows that predate the answer time.
+    """
+    now = now or datetime.now(UTC)
+    ends = [(_aware(o.responded_at) or _aware(o.created_at)) + DECLINE_PAUSE for o in declined
+            if (_aware(o.responded_at) or _aware(o.created_at)) is not None]
+    latest = max(ends, default=None)
+    return latest if latest and latest > now else None
