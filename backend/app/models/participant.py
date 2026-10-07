@@ -42,6 +42,9 @@ class Participant(Base):
     survey_at = Column(DateTime(timezone=True))
     # is_visible: anonymous card is searchable by employers; public_profile: named page + leaderboard
     is_visible = Column(Boolean, nullable=False, default=True)
+    # active: looking now; open: will consider an offer; not_looking: out of search and shortlists.
+    # «Не ищу» does not withdraw the publication consent.
+    job_search = Column(String(20), nullable=False, default="open", server_default="open")
     public_profile = Column(Boolean, nullable=False, default=False)
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
@@ -90,7 +93,8 @@ class Participant(Base):
 
     @property
     def discoverable(self) -> bool:
-        return bool(self.is_visible) and (not self.minor_now() or bool(self.minor_consent_given))
+        looking = (self.job_search or "open") != "not_looking"
+        return bool(self.is_visible) and looking and (not self.minor_now() or bool(self.minor_consent_given))
 
 
 class Qualification(Base):

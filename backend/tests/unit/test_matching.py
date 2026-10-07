@@ -13,14 +13,19 @@ from app.services.matching import (
 )
 from app.services.search.pipeline import order_pool
 from app.validation.matching import (
+    blind_candidate_ids,
     blind_kappa,
     blind_label,
     cohen_kappa,
     evaluate,
     load_pairs,
     make_dataset,
+    merge_rater_labels,
+    quadratic_weighted_kappa,
+    rank,
     relevance,
     sha256,
+    write_blind_sheet,
 )
 
 NEED = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"))
@@ -199,6 +204,57 @@ def test_compare_omits_a_candidate_who_is_not_in_the_list():
     assert len(anonymous_compare(cards, ["a", "b"])) == 1
 
 
+def test_quadratic_kappa_penalises_a_far_miss_more_than_a_near_one():
+    same = [0, 1, 2, 3, 0, 1, 2, 3]
+    assert quadratic_weighted_kappa(same, same) == 1.0
+    near = quadratic_weighted_kappa(same, [0, 1, 2, 3, 1, 2, 3, 3])
+    far = quadratic_weighted_kappa(same, [3, 2, 1, 0, 3, 2, 1, 0])
+    assert far < near < 1.0
+
+
+def test_blind_sheet_hides_the_truth_and_mixes_the_two_tops(tmp_path):
+    dataset = make_dataset(40, 2, seed=4)
+    need = dataset["needs"][0]
+    ids = blind_candidate_ids(dataset, need, random.Random(5))
+    assert len(ids) == len(set(ids)) == 8
+    model = rank(dataset, need, "full", random.Random(0))
+    keyword = rank(dataset, need, "keyword", random.Random(0))
+    assert set(model[:3]) <= set(ids)
+    taken = []
+    for cid in keyword:
+        if cid in model[:3]:
+            continue
+        taken.append(cid)
+        if len(taken) == 3:
+            break
+    assert set(taken) <= set(ids)
+    path = tmp_path / "sheet.csv"
+    write_blind_sheet(dataset, str(path), 8, random.Random(5))
+    text = path.read_text(encoding="utf-8-sig")
+    assert "theta" not in text and "балл" not in text.lower()
+    key = (tmp_path / "sheet.key.json").read_text(encoding="utf-8")
+    assert "theta" not in key and "truth" not in key
+    assert text.splitlines()[0] == "pair_id,need,candidate_card,label"
+
+
+def test_merged_labels_use_the_floor_of_the_mean():
+    key = {"pairs": [{"pair_id": "p001", "need": {"id": "n", "role": "backend", "grade": "middle",
+                                                  "skills": ["Python"]},
+                      "candidate_id": "c1", "observed": {"role": "backend", "grade": "middle"}}]}
+    lines = merge_rater_labels({"p001": 3}, {"p001": 2}, key)
+    assert lines[0]["label"] == 2
+    assert merge_rater_labels({"p001": 3}, {"p001": 0}, key)[0]["label"] == 1
+
+
+def test_a_labelled_handful_is_not_ranked_against_the_rest_of_the_bank():
+    dataset = make_dataset(12, 1, seed=2)
+    need = dataset["needs"][0]
+    only = dataset["candidates"][0]["id"]
+    dataset["labels"] = {need["id"]: {only: 3}}
+    rows = {row.method: row for row in evaluate(dataset)}
+    assert rows["full"].ndcg10 == 1.0
+
+
 def test_jury_pairs_file_is_scored(tmp_path):
     path = tmp_path / "pairs.jsonl"
     observed = {"role": "backend", "grade": "middle", "grade_source": "assessed",
@@ -320,6 +376,124 @@ def test_wilson_bounds_a_share_and_is_not_a_rank_input():
     low = wilson_lower(8, 10)
     assert low is not None and 0.4 < low < 0.8
     assert wilson_lower(0, 10) == 0.0
+
+
+def test_open_to_offers_lowers_the_chance_of_accepting():
+    band = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"),
+                    salary_from=180_000, salary_to=260_000)
+    person = dict(salary_from=200_000, salary_to=280_000)
+    active = score(band, _cand(job_search="active", **person))
+    opened = score(band, _cand(job_search="open", **person))
+    assert opened.score < active.score
+    assert any(r.code == "JOB_SEARCH_ACTIVE" for r in active.reasons)
+    assert any(r.code == "JOB_SEARCH_OPEN" for r in opened.reasons)
+    assert any(r.code == "PAY_FIT" for r in opened.reasons)
+    quiet = score(NEED, _cand(job_search="open"))
+    busy = score(NEED, _cand(job_search="active"))
+    assert quiet.score == busy.score
+
+
+def test_not_looking_stays_out_of_search_without_withdrawing_consent():
+    from app.models.participant import Participant
+    person = Participant(is_visible=True, is_minor=False, job_search="not_looking")
+    assert person.is_visible and not person.discoverable
+    listed = Participant(is_visible=True, is_minor=False, job_search="open")
+    assert listed.discoverable
+
+
+def test_not_looking_refuses_an_invitation(monkeypatch):
+    import asyncio
+    import uuid
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from app.api.v1.offers import OfferCreate, _create_offer
+    from app.models.participant import Participant
+
+    async def quiet(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr("app.api.v1.offers.too_many", quiet)
+    employer_id = uuid.uuid4()
+    candidate = Participant(is_visible=True, is_minor=False, job_search="not_looking")
+
+    class _Db:
+        async def get(self, model, _id):
+            if model.__name__ == "Employer":
+                return SimpleNamespace(id=employer_id)
+            return candidate
+
+    body = OfferCreate(
+        candidate_id=uuid.uuid4(), salary_from_gross=100_000, salary_to_gross=150_000,
+        role="backend", contact_method="почта",
+    )
+    try:
+        asyncio.run(_create_offer(body, {"sub": str(employer_id)}, _Db()))
+    except HTTPException as exc:
+        assert exc.status_code == 404
+        assert exc.detail == "Кандидат недоступен для предложений"
+        return
+    raise AssertionError("приглашение прошло")
+
+
+def test_seed_splits_job_search_forty_fortyfive_fifteen():
+    import random
+    from collections import Counter
+
+    from seed.generate_seed import job_search_of
+
+    rng = random.Random(1)
+    counts = Counter(job_search_of(rng) for _ in range(20_000))
+    assert abs(counts["active"] / 20_000 - 0.40) < 0.02
+    assert abs(counts["open"] / 20_000 - 0.45) < 0.02
+    assert abs(counts["not_looking"] / 20_000 - 0.15) < 0.02
+
+
+def test_search_sql_skips_people_who_are_not_looking():
+    from sqlalchemy import literal
+    from sqlalchemy.dialects import postgresql
+
+    from app.services.search.pipeline import _in_search
+    sql = str(_in_search(literal(True)).compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "job_search" in sql and "not_looking" in sql
+
+
+def test_confirmed_grade_outranks_declared_grade_inside_one_tier(monkeypatch):
+    """Same skills, same tier: a passed test stays above a declared grade even with a lower score."""
+    monkeypatch.setattr("app.services.matching.FIT_TIER_DELTA", 0.10)
+    declared = score(NEED, _cand(grade_source="declared"))
+    assessed = score(NEED, _cand(grade_source="assessed", test_p=0.9))
+    assert declared.tier == assessed.tier
+    ordered = order_pool(
+        ["declared", "assessed"],
+        {"declared": 0.99, "assessed": 0.10}, {}, {},
+        tiers={"declared": declared.tier, "assessed": assessed.tier},
+        confirmed={"declared": 0, "assessed": 1},
+        fits={"declared": declared.fit, "assessed": assessed.fit})
+    assert ordered[0] == "assessed"
+
+
+def test_a_lower_tier_cannot_overtake_with_a_test():
+    weak = score(NEED, _cand(skills={}))
+    strong = score(NEED, _cand())
+    assert weak.tier is not None and strong.tier is not None and weak.tier < strong.tier
+    ordered = order_pool(
+        ["weak", "strong"],
+        {"weak": 0.99, "strong": 0.01}, {}, {},
+        tiers={"weak": weak.tier, "strong": strong.tier},
+        confirmed={"weak": 1, "strong": 0},
+        fits={"weak": weak.fit or 0.0, "strong": strong.fit or 0.0})
+    assert ordered[0] == "strong"
+
+
+def test_missing_fsp_does_not_change_the_fit_tier():
+    without = score(NEED, _cand(fsp_lcb=None))
+    with_fsp = score(NEED, _cand(fsp_lcb=0.8))
+    assert without.fit == with_fsp.fit
+    assert without.tier == with_fsp.tier
+    assert without.score <= with_fsp.score
 
 
 def test_compare_keeps_four_cards():

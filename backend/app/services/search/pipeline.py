@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import GradeConfirmation, Offer, Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
+from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.matching import (
@@ -51,14 +52,23 @@ from app.services.vacancy_exam import TOPIC_LABELS
 logger = logging.getLogger(__name__)
 
 
-def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | None = None) -> list:
+def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | None = None,
+               tiers: dict | None = None, confirmed: dict | None = None, fits: dict | None = None) -> list:
     """Rank the whole pool, then the caller slices a page. A later page cannot reorder an earlier one.
 
+    With tiers, the key is (−tier, −confirmed grade, −score, −fit, id): the fit decides the tier,
+    and a passed test orders people inside it. Without tiers the key stays score, fused rank, LCB, id.
+
     `cold` holds candidates with no grade test. Each block of ten that would otherwise be all tested
-    gives its last seat to the next cold candidate, when that candidate's score is within 0.08.
-    A cold candidate who already earned a seat stays there.
+    gives its last seat to the next cold candidate of the same tier, when that candidate's score
+    is within 0.08. A cold candidate who already earned a seat stays there.
     """
-    ranked = sorted(ids, key=lambda i: (-scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
+    if tiers is None:
+        ranked = sorted(ids, key=lambda i: (-scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
+    else:
+        ranked = sorted(ids, key=lambda i: (
+            -tiers.get(i, 0), -(confirmed or {}).get(i, 0), -scores.get(i, 0.0),
+            -(fits or {}).get(i, 0.0), str(i)))
     if not cold:
         return ranked
     out = list(ranked)
@@ -72,9 +82,12 @@ def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | Non
         host = scores.get(out[end - 1], 0.0)
         for j in range(end, n):
             guest = out[j]
-            if guest in cold and scores.get(guest, 0.0) >= host - band:
-                out[end - 1], out[j] = guest, out[end - 1]
-                break
+            if guest not in cold or scores.get(guest, 0.0) < host - band:
+                continue
+            if tiers is not None and tiers.get(guest, 0) != tiers.get(out[end - 1], 0):
+                continue
+            out[end - 1], out[j] = guest, out[end - 1]
+            break
     return out
 
 
@@ -142,6 +155,15 @@ def bank_cells(rows: list[tuple[str | None, str | None, int, int]], min_n: int =
     return cells
 
 
+def _in_search(adult):
+    """Who an employer may see: the card is published, age allows it, and the person is not «не ищу»."""
+    return and_(
+        Participant.is_visible.is_(True),
+        Participant.job_search != "not_looking",
+        or_(adult, Participant.minor_consent_given.is_(True)),
+    )
+
+
 async def bank_grid(db: AsyncSession) -> dict:
     """The candidate bank by specialization and grade: who is in search and how many confirmed the grade by test.
 
@@ -157,7 +179,7 @@ async def bank_grid(db: AsyncSession) -> dict:
     rows = (await db.execute(
         select(PSI.role, PSI.grade, func.count(), tested)
         .join(Participant, Participant.id == PSI.participant_id)
-        .where(Participant.is_visible.is_(True), or_(adult, Participant.minor_consent_given.is_(True)))
+        .where(_in_search(adult))
         .group_by(PSI.role, PSI.grade))).all()
     return {"min_cell": BANK_MIN, "cells": bank_cells([tuple(r) for r in rows])}
 
@@ -219,8 +241,7 @@ async def search_candidates(
     stmt = (select(Participant.id, func.coalesce(max_lcb.c.max_lcb, 0.0).label("max_lcb"), lex)
             .join(PSI, PSI.participant_id == Participant.id)
             .outerjoin(max_lcb, max_lcb.c.participant_id == Participant.id)
-            .where(Participant.is_visible.is_(True),
-                   or_(adult, Participant.minor_consent_given.is_(True))))
+            .where(_in_search(adult)))
     if assessed_only:
         stmt = stmt.where(Participant.assessed_grade.is_not(None))
     if has_fsp is not None:
@@ -261,10 +282,7 @@ async def search_candidates(
             dense = list(await db.scalars(
                 select(ProfileEmbedding.participant_id)
                 .join(Participant, Participant.id == ProfileEmbedding.participant_id)
-                .where(
-                    Participant.is_visible.is_(True),
-                    or_(adult, Participant.minor_consent_given.is_(True)),
-                )
+                .where(_in_search(adult))
                 .order_by(ProfileEmbedding.embedding.cosine_distance(vec))
                 .limit(DENSE_POOL)
             ))
@@ -312,7 +330,15 @@ async def search_candidates(
     cold = {i for i in all_ids if matches[i].facts and matches[i].facts.test_p is None}
     # One explainable score orders the list; ties fall back to the fused retrieval rank.
     # Untested candidates take one seat in a block of ten when they are close.
-    ordered = order_pool(all_ids, {i: matches[i].score for i in all_ids}, fused, best, cold)
+    score_of = {i: matches[i].score for i in all_ids}
+    if matching_service.USE_FIT_TIERS:
+        ordered = order_pool(
+            all_ids, score_of, fused, best, cold,
+            tiers={i: matches[i].tier or 0 for i in all_ids},
+            confirmed={i: matches[i].confirmed for i in all_ids},
+            fits={i: matches[i].fit or 0.0 for i in all_ids})
+    else:
+        ordered = order_pool(all_ids, score_of, fused, best, cold)
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)])
     ordered = ordered[:limit]
@@ -340,6 +366,9 @@ class PoolMatch:
     facts: CandidateFacts | None
     basis: str = "fit"
     reasons: list | None = None
+    fit: float | None = None
+    tier: int | None = None
+    confirmed: int = 0
 
 
 async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
@@ -404,9 +433,11 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             test_n=counts.get(conf.session_id, (None, None))[1] if conf and conf.session_id else None,
             open_invites=int(pending.get(pid, 0)),
             salary_refusals=int(refusals.get(pid, 0)),
+            job_search=(p.job_search if p else None) or "open",
         )
         m = match_score(need, facts)
-        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons)
+        out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,
+                             m.fit, m.tier, m.confirmed)
     return out
 
 

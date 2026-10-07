@@ -52,3 +52,15 @@ def test_show_code_ignored_outside_demo(sent):
 def test_demo_mode_alone_keeps_code_in_the_letter(sent):
     answer, _ = sent(True, False)
     assert answer.demo_code is None
+
+
+def test_public_demo_reports_only_the_flag(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    assert client.get("/api/v1/public/demo").json() == {"demo_mode": True}
+    monkeypatch.setattr(settings, "DEMO_MODE", False)
+    assert client.get("/api/v1/public/demo").json() == {"demo_mode": False}

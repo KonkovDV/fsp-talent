@@ -38,6 +38,14 @@ WEIGHTS = {
 UNTESTED = 0.20
 # Weight of the evidence next to the fit (fit has weight 1).
 EVIDENCE_WEIGHT = 0.40
+# Width of one fit tier, used only while USE_FIT_TIERS is on.
+# Sweep on 07.10.2026, seeds 2026–2028, 800 candidates and 80 needs:
+# `python -m app.validation.matching --tier-delta 0.02,0.03,0.05,0.08,0.10`
+# Only 0.02 kept nDCG(full) within 0.005 of nDCG(no evidence), and it dropped
+# Spearman to 0.098 and raised overclaim to 24.3 %. That misses Spearman ≥ 0.22
+# and overclaim ≤ 20 %, so the product order does not use tiers.
+FIT_TIER_DELTA = 0.05
+USE_FIT_TIERS = False
 # A grade the candidate only declared counts for this share of a grade the test confirmed.
 DECLARED_GRADE = 0.85
 # Half of the evidence lift is always there inside the category, the other half follows skill coverage:
@@ -90,6 +98,7 @@ REASON_SOURCE = {
     "RELATED_SKILL": "заявлено",
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
     "CONGESTION": "очередь",
+    "JOB_SEARCH_ACTIVE": "профиль", "JOB_SEARCH_OPEN": "профиль",
 }
 
 
@@ -123,6 +132,7 @@ class CandidateFacts:
     test_n: int | None = None             # answers in that session; with test_correct, Wilson enters the rank
     open_invites: int = 0                 # pending invitations; above the free allowance the card steps down
     salary_refusals: int = 0              # earlier declines whose reason was the pay band
+    job_search: str = "open"              # active | open | not_looking; open multiplies P(accept) by 0.8
 
 
 @dataclass(frozen=True)
@@ -153,10 +163,25 @@ class MatchResult:
     # so the score is the strength of the confirmed profile (test, FSP) and the UI says so.
     basis: str = "fit"
     reasons: list[Reason] = field(default_factory=list)
+    fit: float | None = None          # weighted mean of the need-fit factors; None when the need names nothing
+    tier: int | None = None           # floor(fit / FIT_TIER_DELTA); None when there is no fit
+    confirmed: int = 0                # 1 when the shown grade comes from the test
 
 
 def reason_source(code: str) -> str | None:
     return REASON_SOURCE.get(code)
+
+
+def fit_tier(fit: float, delta: float | None = None) -> int:
+    """Tier index of a fit in [0, 1]. A hair above the cut stays in the upper tier."""
+    step = FIT_TIER_DELTA if delta is None else delta
+    if step <= 0:
+        return 0
+    return int(math.floor((fit + 1e-9) / step))
+
+
+def tier_ceiling(delta: float | None = None) -> int:
+    return fit_tier(1.0, delta)
 
 
 def wilson_lower(successes: int, n: int, z: float = 1.96) -> float | None:
@@ -357,11 +382,8 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     if accept is not None and c.salary_refusals > 0:
         accept *= SALARY_REFUSAL_FACTOR ** min(c.salary_refusals, SALARY_REFUSAL_CAP)
         _note(info, reasons, "info", "SALARY_HISTORY", "Раньше отказ был из-за вилки")
-    total = employer
     if accept is not None:
-        # Reciprocal score: harmonic mean of "the employer would invite" and "the candidate would accept".
-        # Absent on either side, the factor is omitted and the ranking stays the employer-only score.
-        total = _harmonic(employer, accept)
+        # The pay line describes the bands. The job-search factor is applied after it.
         floor = c.salary_from if c.salary_from is not None else c.salary_to
         ceiling = need.salary_to if need.salary_to is not None else need.salary_from
         if accept >= 1.0:
@@ -371,12 +393,30 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             _note(minus if accept < 0.5 else info, reasons, "minus" if accept < 0.5 else "info",
                   "PAY_GAP" if accept < 0.5 else "PAY_LOW",
                   f"Вилка ниже ожидания примерно на {short} %")
+    if c.job_search == "open" and accept is not None:
+        accept *= 0.8
+    if c.job_search == "active":
+        _note(plus, reasons, "plus", "JOB_SEARCH_ACTIVE", "Активно ищет")
+    elif c.job_search == "open":
+        _note(info, reasons, "info", "JOB_SEARCH_OPEN", "Открыт к предложениям")
+    total = employer
+    if accept is not None:
+        # Reciprocal score: harmonic mean of "the employer would invite" and "the candidate would accept".
+        # Absent on either side, the factor is omitted and the ranking stays the employer-only score.
+        total = _harmonic(employer, accept)
     if c.open_invites > OPEN_INVITE_FREE:
         penalty = min(CONGESTION_CAP, CONGESTION_STEP * (c.open_invites - OPEN_INVITE_FREE))
         total = max(0.0, total - penalty)
         _note(info, reasons, "info", "CONGESTION",
               f"Открытых приглашений уже {c.open_invites}: карточка чуть ниже")
-    return MatchResult(round(total, 4), factors, plus, minus, info, basis, reasons)
+    tier = None
+    if fit is not None and basis == "fit":
+        tier = fit_tier(fit)
+        if USE_FIT_TIERS:
+            _note(info, reasons, "info", "FIT_TIER", f"Ярус соответствия {tier} из {tier_ceiling()}")
+    confirmed = 1 if c.grade_source == "assessed" else 0
+    return MatchResult(round(total, 4), factors, plus, minus, info, basis, reasons,
+                       fit=None if fit is None else round(fit, 4), tier=tier, confirmed=confirmed)
 
 
 def accept_probability(offer_from: int | None, offer_to: int | None,

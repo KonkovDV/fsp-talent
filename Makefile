@@ -50,6 +50,7 @@ lint:
 validate:
 	docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check
 	docker compose exec -T backend python -m app.validation.matching --check
+	docker compose exec -T backend python -m app.validation.fsp_axis --seeds 3 --check
 
 evaluate: validate
 	docker compose exec -T backend python -m app.validation.jury_pack app/validation/resources/jury_profiles.json

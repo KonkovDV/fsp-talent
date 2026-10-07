@@ -1,6 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown, ClipboardList, Columns3, Star } from 'lucide-react'
+import { JOB_SEARCH_BADGE } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 
 export interface CandidateCardData {
@@ -60,6 +61,7 @@ const REASON_RU: Record<string, string> = {
   PAY_GAP: 'Вилка не сходится',
   SALARY_HISTORY: 'Отказ из-за вилки',
   CONGESTION: 'Много приглашений',
+  ...JOB_SEARCH_BADGE,
 }
 
 interface Props {

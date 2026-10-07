@@ -9,7 +9,7 @@ import ConsentsPanel from '../../components/ConsentsPanel'
 import DeleteAccountCard from '../../components/DeleteAccountCard'
 import SurveyCard, { type SurveyHint } from '../../components/SurveyCard'
 import SkillPassport from '../../components/SkillPassport'
-import { roleRu } from '../../labels'
+import { JOB_SEARCH_RU, roleRu } from '../../labels'
 
 interface SkillRow { name: string; source_quote?: string | null; trust_level?: string; created_at?: string | null; confirmed_at?: string | null }
 interface Quoted { value: string; quote: string }
@@ -75,6 +75,14 @@ export default function CandidateProfile() {
     mutationFn: (value: boolean) => updateVisibility(value),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
   })
+  const jobSearch = useMutation({
+    mutationFn: (value: 'active' | 'open' | 'not_looking') => updateMyProfile({
+      job_search: value,
+      ...(profile?.profile_version != null ? { expected_version: profile.profile_version } : {}),
+    }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
+    onError: (error: unknown) => setNote(apiError(error, 'Не удалось сохранить статус')),
+  })
   const takeParsed = (result: ResumeFound) => {
     setSkills(prev => {
       const known = new Set(prev.map(item => item.name))
@@ -117,6 +125,21 @@ export default function CandidateProfile() {
             {profile.is_visible ? <Eye size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
             {profile.discoverable ? 'Виден работодателям' : 'Скрыт из поиска'}
           </button>} />
+
+      <section className="card mb-6" aria-labelledby="job-search-h">
+        <h2 id="job-search-h" className="section-title">Поиск работы</h2>
+        <p className="mt-1 text-sm text-ink-2">«Не ищу» убирает карточку из поиска и подборки. Согласие на публикацию при этом не отзывается.</p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          {(Object.keys(JOB_SEARCH_RU) as ('active' | 'open' | 'not_looking')[]).map(value => (
+            <button key={value} type="button" aria-pressed={(profile.job_search ?? 'open') === value}
+              disabled={jobSearch.isPending}
+              onClick={() => jobSearch.mutate(value)}
+              className={`w-full sm:flex-1 ${(profile.job_search ?? 'open') === value ? 'btn-primary' : 'btn-secondary'}`}>
+              {JOB_SEARCH_RU[value]}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">
         <div className="space-y-6">

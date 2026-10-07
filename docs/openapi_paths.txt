@@ -73,6 +73,7 @@
 /api/v1/public/credentials/verify/{credential_id}
 /api/v1/public/credentials/{credential_id}/status
 /api/v1/public/credentials/{participant_id}
+/api/v1/public/demo
 /api/v1/public/guardian-consent
 /api/v1/public/issuer
 /api/v1/public/leaderboard

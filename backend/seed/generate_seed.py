@@ -109,6 +109,11 @@ DEMO_VACANCIES = [
 ]
 
 
+def job_search_of(rng: random.Random) -> str:
+    """40 % actively looking, 45 % open to offers, 15 % not looking."""
+    return rng.choices(("active", "open", "not_looking"), weights=(40, 45, 15), k=1)[0]
+
+
 async def main() -> None:
     _refuse_production()
     from app.core.rls import bypass_rls
@@ -145,6 +150,7 @@ async def main() -> None:
             rng = random.Random(fsp_id)
             if fsp_id in DEMOS:
                 names, years = DEMOS[fsp_id]
+                participant.job_search = "open"
                 participant.experience_years = years
                 participant.public_profile = not participant.is_minor
             else:
@@ -156,6 +162,7 @@ async def main() -> None:
                 if rng.random() < 0.85:
                     participant.experience_years = rng.randint(0, 12)
                 participant.public_profile = (not participant.is_minor) and rng.random() < 0.30
+                participant.job_search = job_search_of(rng)
             for name in names:
                 db.add(Skill(participant_id=participant.id, name=name, raw_name=name,
                              trust_level="self_reported", confirmed=True))

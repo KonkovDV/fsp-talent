@@ -12,24 +12,31 @@ whose LCB correlates with the level. Relevance labels come from the hidden truth
     0  otherwise
 
 Rankers: random, the resume baseline (count of declared required skills, then role and declared grade), the
-production factor score (app.services.matching.score) and its ablations. Besides nDCG@10, P@min(10, n) and MAP
+production order (app.services.search.pipeline.order_pool on the factor score) and its ablations.
+«Без квоты для новичков» is the previous sort by score alone. Besides nDCG@10, P@min(10, n) and MAP
 the run reports the Spearman correlation between the order inside the category the employer sees (same role,
-same shown grade) and the hidden ability θ, the share of overrated people (shown grade above the real one) in
-the top 10, bootstrap 95 % intervals over needs, and the same table on three consecutive seeds. The weights
+same shown grade) and the hidden ability θ, two top-10 shares (shown grade above the real one, and real grade
+below the need's grade), bootstrap 95 % intervals over needs, and the same table on three consecutive seeds.
+`--tier-delta` prints a fit-tier sweep and does not change the product order: the sweep of 07.10.2026 was
+rejected. The weights
 were set by hand and are not fitted to this benchmark. The dataset is deterministic per seed and its SHA-256 is
 printed; `--import` evaluates a labelled file in the same JSON format, `--pairs` a JSONL of jury pairs.
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
 import random
 import statistics
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
+from app.services import matching as matching_service
 from app.services.matching import GRADES, ROLE_NEIGHBOURS, CandidateFacts, NeedSpec, score
+from app.services.search.pipeline import order_pool
 from app.services.skills import ROLES, TAXONOMY
 
 CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
@@ -206,10 +213,34 @@ def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str
         return [c["id"] for c in sorted(cands, key=key)]
     flags = {"full": {}, "no_trust": {"use_trust": False}, "no_test": {"use_test": False},
              "no_fsp": {"use_fsp": False}, "no_evidence": {"use_test": False, "use_fsp": False},
-             "no_related": {"use_related": False}}[method]
+             "no_related": {"use_related": False}, "no_quota": {}}[method]
+    use_test = flags.get("use_test", True)
     spec = _spec(need)
-    scored = [(score(spec, _facts(c), **flags).score, c["id"]) for c in cands]
-    return [cid for _, cid in sorted(scored, key=lambda t: (-t[0], t[1]))]
+    scores: dict[str, float] = {}
+    best: dict[str, float] = {}
+    cold: set[str] = set()
+    ids: list[str] = []
+    tiers: dict[str, int] = {}
+    confirmed: dict[str, int] = {}
+    fits: dict[str, float] = {}
+    for c in cands:
+        facts = _facts(c)
+        cid = c["id"]
+        ids.append(cid)
+        result = score(spec, facts, **flags)
+        scores[cid] = result.score
+        best[cid] = facts.fsp_lcb or 0.0
+        tiers[cid] = result.tier or 0
+        # An ablation that drops the test must not keep sorting by "the test confirmed the grade".
+        confirmed[cid] = result.confirmed if use_test else 0
+        fits[cid] = result.fit or 0.0
+        if facts.test_n is None:
+            cold.add(cid)
+    if method == "no_quota":
+        return [cid for cid, _ in sorted(scores.items(), key=lambda t: (-t[1], t[0]))]
+    if not matching_service.USE_FIT_TIERS:
+        return order_pool(ids, scores, {}, best, cold)
+    return order_pool(ids, scores, {}, best, cold, tiers=tiers, confirmed=confirmed, fits=fits)
 
 
 def ndcg(ranked: list[str], labels: dict[str, int], k: int = 10) -> float:
@@ -282,11 +313,20 @@ def category_spearman(ranked: list[str], need: dict, by_id: dict[str, dict]) -> 
 
 
 def overrated_share(ranked: list[str], by_id: dict[str, dict], k: int = 10) -> float:
-    """Share of the top k whose shown grade is above the real one."""
+    """Our definition: share of the top k whose shown grade is above the real one."""
     top = ranked[:k]
     over = sum(1 for cid in top
                if GRADES.index(by_id[cid]["observed"]["grade"]) > GRADES.index(by_id[cid]["truth"]["grade"]))
     return over / max(1, len(top))
+
+
+def below_need_share(ranked: list[str], need: dict, by_id: dict[str, dict], k: int = 10) -> float:
+    """The other definition: share of the top k whose real grade is below the grade the need asks for."""
+    if need.get("grade") not in GRADES:
+        return 0.0
+    need_i = GRADES.index(need["grade"])
+    top = ranked[:k]
+    return sum(1 for cid in top if GRADES.index(by_id[cid]["truth"]["grade"]) < need_i) / max(1, len(top))
 
 
 def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tuple[float, float]:
@@ -307,13 +347,15 @@ class Row:
     map: float
     rho: float | None = None              # Spearman inside the category against hidden θ
     overrated: float | None = None        # share of the top 10 whose shown grade is above the real one
+    below_need: float | None = None       # share of the top 10 whose real grade is below the need's grade
     ndcg_ci: tuple[float, float] | None = None
     rho_ci: tuple[float, float] | None = None
 
 
-METHODS = ("random", "keyword", "full", "no_trust", "no_test", "no_fsp", "no_evidence", "no_related")
+METHODS = ("random", "keyword", "full", "no_quota", "no_trust", "no_test", "no_fsp", "no_evidence", "no_related")
 TITLES = {"random": "Случайный порядок", "keyword": "Базовая линия «по резюме»: заявленные навыки и грейд",
-          "full": "ФСП Талант: оценка соответствия", "no_trust": "  без весов доверия к навыкам",
+          "full": "ФСП Талант: оценка соответствия", "no_quota": "  без квоты для новичков",
+          "no_trust": "  без весов доверия к навыкам",
           "no_test": "  без теста", "no_fsp": "  без оси ФСП", "no_evidence": "  без теста и без ФСП",
           "no_related": "  без близких технологий"}
 
@@ -325,20 +367,27 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
     by_id = {c["id"]: c for c in dataset["candidates"]}
     hidden = bool(dataset["candidates"]) and "theta" in (dataset["candidates"][0].get("truth") or {})
     for method in METHODS:
-        nd, pr, ap, rho, over = [], [], [], [], []
+        nd, pr, ap, rho, over, below = [], [], [], [], [], []
         for need in needs:
-            ranked = rank(dataset, need, method, rng)
             labels = dataset["labels"][need["id"]]
+            # A jury sheet labels a handful of people. Rank those, not the rest of the bank.
+            pool = dataset
+            if len(labels) < len(dataset["candidates"]):
+                chosen = set(labels)
+                pool = {"candidates": [c for c in dataset["candidates"] if c["id"] in chosen]}
+            ranked = rank(pool, need, method, rng)
             nd.append(ndcg(ranked, labels))
             pr.append(precision(ranked, labels))
             ap.append(average_precision(ranked, labels))
             if hidden:
                 over.append(overrated_share(ranked, by_id))
+                below.append(below_need_share(ranked, need, by_id))
                 r = category_spearman(ranked, need, by_id)
                 if r is not None:
                     rho.append(r)
         rows.append(Row(method, statistics.mean(nd), statistics.mean(pr), statistics.mean(ap),
                         statistics.mean(rho) if rho else None, statistics.mean(over) if over else None,
+                        statistics.mean(below) if below else None,
                         bootstrap_ci(nd), bootstrap_ci(rho) if rho else None))
     return rows
 
@@ -356,10 +405,14 @@ def markdown(rows: list[Row], dataset: dict) -> str:
     lines = [f"Набор: {len(dataset['candidates'])} кандидатов, {n_needs} потребностей с релевантными кандидатами, "
              f"seed {dataset.get('seed')}, SHA-256 `{sha256(dataset)[:16]}…`.", "",
              "| Ранжирование | nDCG@10 | 95 % ДИ nDCG | P@10, оценка ≥ 2 | MAP | Спирмен внутри категории "
-             "| 95 % ДИ Спирмена | Завышенный грейд в топ-10 |",
-             "|---|---|---|---|---|---|---|---|"]
+             "| 95 % ДИ Спирмена | Завышенный грейд в топ-10 | Настоящий грейд ниже потребности |",
+             "|---|---|---|---|---|---|---|---|---|"]
     lines += [f"| {TITLES[r.method]} | {r.ndcg10:.3f} | {_ci(r.ndcg_ci)} | {r.p10:.3f} | {r.map:.3f} "
-              f"| {_num(r.rho)} | {_ci(r.rho_ci)} | {_pct(r.overrated)} |" for r in rows]
+              f"| {_num(r.rho)} | {_ci(r.rho_ci)} | {_pct(r.overrated)} | {_pct(r.below_need)} |" for r in rows]
+    lines += ["",
+              "«Завышенный грейд в топ-10» — показанный грейд выше настоящего. "
+              "«Настоящий грейд ниже потребности» — настоящее ниже грейда, который просит потребность; "
+              "это второе определение завышения, его используют чужие работы."]
     return "\n".join(lines) + "\n"
 
 
@@ -370,22 +423,25 @@ def _pct(value: float | None) -> str:
 def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str, dict[str, dict[str, float]]]:
     """The same benchmark on several seeds: mean and spread, so one lucky seed cannot carry a claim."""
     keys = ("keyword", "full", "no_test", "no_fsp", "no_evidence")
-    per: dict[str, dict[str, list[float]]] = {k: {"ndcg": [], "rho": [], "over": []} for k in keys}
+    per: dict[str, dict[str, list[float]]] = {k: {"ndcg": [], "rho": [], "over": [], "below": []} for k in keys}
     for sd in seeds:
         rows = {r.method: r for r in evaluate(make_dataset(n_candidates, n_needs, sd))}
         for k in keys:
             per[k]["ndcg"].append(rows[k].ndcg10)
             per[k]["rho"].append(rows[k].rho if rows[k].rho is not None else float("nan"))
             per[k]["over"].append(rows[k].overrated or 0.0)
+            per[k]["below"].append(rows[k].below_need or 0.0)
 
     def ms(xs: list[float], scale: float = 1.0, digits: int = 3) -> str:
         sd = statistics.stdev(xs) if len(xs) > 1 else 0.0
         return f"{statistics.mean(xs) * scale:.{digits}f} ± {sd * scale:.{digits}f}"
 
     lines = [f"Зёрна {', '.join(map(str, seeds))}: среднее ± стандартное отклонение.", "",
-             "| Ранжирование | nDCG@10 | Спирмен внутри категории | Завышенный грейд в топ-10, % |",
-             "|---|---|---|---|"]
-    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['rho'])} | {ms(per[k]['over'], 100, 1)} |"
+             "| Ранжирование | nDCG@10 | Спирмен внутри категории | Завышенный грейд в топ-10, % "
+             "| Настоящий грейд ниже потребности, % |",
+             "|---|---|---|---|---|"]
+    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['rho'])} | {ms(per[k]['over'], 100, 1)} "
+              f"| {ms(per[k]['below'], 100, 1)} |"
               for k in keys]
     summary = {k: {m: statistics.mean(v) for m, v in per[k].items()} for k in keys}
     return "\n".join(lines) + "\n", summary
@@ -447,6 +503,201 @@ def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
     return failed
 
 
+def _print_tier_sweep(args: argparse.Namespace) -> None:
+    """Three seeds for each tier width. The choice rule is printed, not applied."""
+    from app.services import matching as matching_mod
+
+    deltas = [float(part) for part in args.tier_delta.split(",") if part.strip()]
+    saved = matching_mod.FIT_TIER_DELTA
+    saved_flag = matching_mod.USE_FIT_TIERS
+    matching_mod.USE_FIT_TIERS = True
+    seeds = [args.seed + i for i in range(3)]
+    print("Перебор ширины яруса. Условие: nDCG(полная) ≥ nDCG(без теста и без ФСП) − 0,005 "
+          "на среднем трёх зёрен. Среди прошедших берётся наибольший Спирмен.")
+    print(f"зёрна {', '.join(map(str, seeds))}, кандидатов {args.candidates}, потребностей {args.needs}")
+    print("| Δ | nDCG полная | nDCG без теста и без ФСП | разница | Спирмен | завышенный грейд, % | проходит |")
+    print("|---|---|---|---|---|---|---|")
+    try:
+        for delta in deltas:
+            matching_mod.FIT_TIER_DELTA = delta
+            nd_f, nd_e, rho, over = [], [], [], []
+            for sd in seeds:
+                rows = {r.method: r for r in evaluate(make_dataset(args.candidates, args.needs, sd))}
+                nd_f.append(rows["full"].ndcg10)
+                nd_e.append(rows["no_evidence"].ndcg10)
+                rho.append(rows["full"].rho or 0.0)
+                over.append(rows["full"].overrated or 0.0)
+            mean_full = statistics.mean(nd_f)
+            mean_bare = statistics.mean(nd_e)
+            mean_rho = statistics.mean(rho)
+            mean_over = statistics.mean(over)
+            ok = mean_full >= mean_bare - 0.005
+            print(f"| {delta:.2f} | {mean_full:.3f} | {mean_bare:.3f} | {mean_full - mean_bare:+.3f} "
+                  f"| {mean_rho:.3f} | {mean_over * 100:.1f} | {'да' if ok else 'нет'} |")
+    finally:
+        matching_mod.FIT_TIER_DELTA = saved
+        matching_mod.USE_FIT_TIERS = saved_flag
+
+
+GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "мидл", "senior": "сеньор", "lead": "лид"}
+TRUST_RU = {"test_confirmed": "тест", "resume_confirmed": "резюме", "self_reported": "заявлено"}
+
+
+def quadratic_weighted_kappa(left: list[int], right: list[int], cats: int = 4) -> float:
+    """Quadratic weighted kappa. A miss of one grade costs less than a miss of three.
+
+    κ_w = 1 − Σ w_ij·O_ij / Σ w_ij·E_ij, w_ij = (i − j)² / 9.
+    """
+    if len(left) != len(right) or not left:
+        raise ValueError("kappa needs two equal non-empty lists")
+    if any(v < 0 or v >= cats for v in (*left, *right)):
+        raise ValueError("label out of 0..3")
+    n = len(left)
+    table = [[0.0] * cats for _ in range(cats)]
+    for a, b in zip(left, right, strict=True):
+        table[a][b] += 1.0
+    row = [sum(table[i]) for i in range(cats)]
+    col = [sum(table[i][j] for i in range(cats)) for j in range(cats)]
+    num = den = 0.0
+    for i in range(cats):
+        for j in range(cats):
+            weight = ((i - j) ** 2) / ((cats - 1) ** 2)
+            num += weight * table[i][j]
+            den += weight * row[i] * col[j] / n
+    if den == 0.0:
+        return 1.0
+    return 1.0 - num / den
+
+
+def blind_candidate_ids(dataset: dict, need: dict, rng: random.Random, per_need: int = 8) -> list[str]:
+    """Three from the model top, three from the resume top, two at random. Then shuffle.
+
+    A person already taken is skipped, so the eight cards are eight people. The shuffle hides
+    which list a card came from.
+    """
+    model = rank(dataset, need, "full", rng)
+    keyword = rank(dataset, need, "keyword", rng)
+    picked: list[str] = []
+    for cid in model:
+        if len(picked) == 3:
+            break
+        picked.append(cid)
+    taken = 0
+    for cid in keyword:
+        if cid in picked:
+            continue
+        picked.append(cid)
+        taken += 1
+        if taken == 3:
+            break
+    rest = [c["id"] for c in dataset["candidates"] if c["id"] not in picked]
+    rng.shuffle(rest)
+    picked.extend(rest[: max(0, per_need - len(picked))])
+    rng.shuffle(picked)
+    return picked[:per_need]
+
+
+def _need_card(need: dict) -> str:
+    from app.services.survey import SPECIALIZATIONS
+
+    role = SPECIALIZATIONS.get(need.get("role"), need.get("role") or "не указана")
+    grade = GRADE_RU.get(need.get("grade"), need.get("grade") or "не указан")
+    skills = ", ".join(need.get("skills") or []) or "не названы"
+    return f"Специализация: {role}. Грейд: {grade}. Навыки: {skills}"
+
+
+def _candidate_card(observed: dict) -> str:
+    from app.services.survey import INDUSTRIES, SPECIALIZATIONS
+
+    role = SPECIALIZATIONS.get(observed.get("role"), observed.get("role") or "не указана")
+    grade = GRADE_RU.get(observed.get("grade"), observed.get("grade") or "не указан")
+    grade_line = f"{grade}, подтверждён тестом" if observed.get("grade_source") == "assessed" else f"{grade}, заявлен"
+    skills = observed.get("skills") or {}
+    skill_line = ", ".join(
+        f"{name} ({TRUST_RU.get(level, level)})" for name, level in sorted(skills.items())) or "не указаны"
+    if observed.get("test_n"):
+        test_line = f"Тест: верных ответов {observed.get('test_correct')} из {observed['test_n']}"
+    else:
+        test_line = "Теста нет"
+    lcb = observed.get("fsp_lcb")
+    fsp_line = "Истории ФСП нет" if lcb is None else f"Ось ФСП, нижняя граница {lcb:.2f}"
+    lines = [f"Специализация: {role}", f"Грейд: {grade_line}", f"Навыки: {skill_line}", test_line, fsp_line]
+    industry = observed.get("industry")
+    if industry and industry != "any":
+        lines.append(f"Предметная область: {INDUSTRIES.get(industry, industry)}")
+    return ". ".join(lines)
+
+
+def write_blind_sheet(dataset: dict, path: str, per_need: int, rng: random.Random) -> int:
+    """CSV the two raters fill in, plus a key with the same observed facts and no hidden truth."""
+    by_id = {c["id"]: c for c in dataset["candidates"]}
+    rows: list[dict] = []
+    pairs: list[dict] = []
+    for need in dataset["needs"]:
+        for cid in blind_candidate_ids(dataset, need, rng, per_need):
+            pair_id = f"p{len(rows) + 1:03d}"
+            observed = by_id[cid]["observed"]
+            rows.append({"pair_id": pair_id, "need": _need_card(need),
+                         "candidate_card": _candidate_card(observed), "label": ""})
+            pairs.append({
+                "pair_id": pair_id,
+                "need": {"id": need["id"], "role": need["role"], "grade": need["grade"], "skills": need["skills"]},
+                "candidate_id": cid,
+                "observed": observed,
+            })
+    with open(path, "w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["pair_id", "need", "candidate_card", "label"])
+        writer.writeheader()
+        writer.writerows(rows)
+    key = str(Path(path).with_suffix(".key.json"))
+    Path(key).write_text(json.dumps({"pairs": pairs}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return len(rows)
+
+
+def read_rater_labels(path: str) -> dict[str, int]:
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    labels: dict[str, int] = {}
+    for row in rows:
+        pair_id = (row.get("pair_id") or "").strip()
+        raw = (row.get("label") or "").strip()
+        if raw == "":
+            raise SystemExit(f"Пустая оценка в {path}, пара {pair_id}")
+        value = int(raw)
+        if value not in (0, 1, 2, 3):
+            raise SystemExit(f"Оценка вне 0…3 в {path}, пара {pair_id}")
+        labels[pair_id] = value
+    if not labels:
+        raise SystemExit(f"В {path} нет строк")
+    return labels
+
+
+def merge_rater_labels(left: dict[str, int], right: dict[str, int], key: dict) -> list[dict]:
+    """Floor of the mean of the two labels. 3 and 2 become 2; 3 and 0 become 1."""
+    lines = []
+    for pair in key["pairs"]:
+        pair_id = pair["pair_id"]
+        if pair_id not in left or pair_id not in right:
+            raise SystemExit(f"Пары {pair_id} нет в одном из файлов")
+        cid = pair["candidate_id"]
+        lines.append({
+            "need": pair["need"],
+            "candidate_id": cid,
+            "candidate": {"id": cid, "observed": pair["observed"]},
+            "label": (left[pair_id] + right[pair_id]) // 2,
+        })
+    return lines
+
+
+def _kappa_from_sheets(path_a: str, path_b: str) -> float:
+    left = read_rater_labels(path_a)
+    right = read_rater_labels(path_b)
+    ids = sorted(set(left) | set(right))
+    if set(left) != set(right):
+        raise SystemExit("В двух файлах разные пары")
+    return quadratic_weighted_kappa([left[i] for i in ids], [right[i] for i in ids])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--candidates", type=int, default=800)
@@ -457,7 +708,42 @@ def main() -> None:
     parser.add_argument("--import", dest="imported", help="evaluate a labelled dataset in the same JSON format")
     parser.add_argument("--pairs", help="JSONL of jury pairs: need, candidate, label 0..3")
     parser.add_argument("--check", action="store_true", help="fail unless the thresholds in checks_ok hold")
+    parser.add_argument("--tier-delta", default="",
+                        help="comma-separated tier widths; print the three-seed sweep and exit")
+    parser.add_argument("--blind-export", help="CSV for two people: observed profile only, empty label column")
+    parser.add_argument("--per-need", type=int, default=8, help="cards per need in --blind-export")
+    parser.add_argument("--kappa", nargs=2, metavar=("A", "B"),
+                        help="quadratic weighted kappa of two filled sheets")
+    parser.add_argument("--merge-raters", nargs=2, metavar=("A", "B"),
+                        help="floor of the mean of two sheets, written as JSONL for --pairs")
+    parser.add_argument("--merged", help="where --merge-raters writes the JSONL")
     args = parser.parse_args()
+    if args.kappa:
+        value = _kappa_from_sheets(args.kappa[0], args.kappa[1])
+        print(f"взвешенная каппа {value:.2f} на парах из двух файлов")
+        print(f"порог годности 0,6: {'да' if value >= 0.6 else 'нет'}")
+        return
+    if args.merge_raters:
+        if not args.merged:
+            raise SystemExit("Укажите --merged для файла JSONL")
+        left = read_rater_labels(args.merge_raters[0])
+        right = read_rater_labels(args.merge_raters[1])
+        key_file = str(Path(args.merge_raters[0]).with_suffix(".key.json"))
+        key = json.loads(Path(key_file).read_text(encoding="utf-8"))
+        lines = merge_rater_labels(left, right, key)
+        Path(args.merged).write_text(
+            "\n".join(json.dumps(line, ensure_ascii=False) for line in lines) + "\n", encoding="utf-8")
+        print(f"слито {len(lines)} пар в {args.merged}")
+        return
+    if args.tier_delta:
+        _print_tier_sweep(args)
+        return
+    if args.blind_export:
+        dataset = make_dataset(args.candidates, args.needs, args.seed)
+        count = write_blind_sheet(dataset, args.blind_export, args.per_need, random.Random(args.seed + 1))
+        print(f"лист: {count} пар, {args.needs} потребностей, по {args.per_need} кандидатов, зерно {args.seed}")
+        print("Оценку 0, 1, 2 или 3 двое ставят независимо в колонку label. Баллов подбора в листе нет.")
+        return
     if args.pairs and args.imported:
         raise SystemExit("Укажите либо --pairs, либо --import")
     if args.pairs:

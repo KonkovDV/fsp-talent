@@ -82,6 +82,8 @@ jobs:
         run: cd backend && python -m app.validation.assessment --n 300 --seed 7 --check
       - name: Validate ranking
         run: cd backend && python -m app.validation.matching --check
+      - name: Validate the FSP axis
+        run: cd backend && python -m app.validation.fsp_axis --seeds 3 --check
       - name: Validate the jury profile pack
         run: |
           cd backend

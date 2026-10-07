@@ -55,6 +55,12 @@ def _public_skill(s: Skill) -> dict:
     }
 
 
+@router.get("/demo")
+async def demo_stand():
+    """Whether this stand shows the jury trial and the jury accounts. No other settings."""
+    return {"demo_mode": bool(settings.DEMO_MODE)}
+
+
 @router.get("/issuer")
 async def issuer():
     return issuer_document()

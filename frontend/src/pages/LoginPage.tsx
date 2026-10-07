@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '../store/authStore'
-import { apiError, apiErrorCode, loginEmployer, loginParticipant } from '../api/client'
+import { apiError, apiErrorCode, loginEmployer, loginParticipant, publicDemo } from '../api/client'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
 import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
 
@@ -25,7 +25,18 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore(s => s.setAuth)
   const [error, setError] = useState('')
+  const [demo, setDemo] = useState(false)
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<Form>({ resolver: zodResolver(schema) })
+
+  useEffect(() => {
+    publicDemo().then(res => setDemo(Boolean(res.data.demo_mode))).catch(() => setDemo(false))
+  }, [])
+
+  const takeJury = () => {
+    const n = 1 + Math.floor(Math.random() * 10)
+    setValue('username', `jury${n}@demo.talent`)
+    setValue('password', 'demo12345')
+  }
 
   const onSubmit = async ({ username, password }: Form) => {
     setError('')
@@ -46,7 +57,11 @@ export default function LoginPage() {
     <AuthShell title="Вход" lead={role === 'participant' ? 'Кабинет кандидата: категория, тест, приглашения.' : 'Кабинет работодателя: потребности, подборка, приглашения.'}
       aside={<>Нет аккаунта? <Link to={`/register?role=${role}`} className="font-medium text-accent hover:underline">Зарегистрироваться</Link></>}>
       <RoleSwitch role={role} base="/login" />
-      {role === 'participant' && <><FspSignInButton /><OrDivider /></>}
+      {role === 'participant' && <>
+        <FspSignInButton />
+        {demo && <p className="mt-2 text-xs text-ink-3">демо: FSP001 / test</p>}
+        <OrDivider />
+      </>}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <div>
           <label className="field-label" htmlFor="username">Email</label>
@@ -67,16 +82,22 @@ export default function LoginPage() {
           {isSubmitting ? 'Входим…' : 'Войти'}
         </button>
       </form>
-      <div className="mt-6 border-t border-line pt-4">
+      <div className="mt-6 flex flex-col gap-2 border-t border-line pt-4">
         <p className="text-xs text-ink-3">Демо-аккаунты, пароль demo12345:</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {DEMO[role].map(([email, note]) => (
-            <button key={email} type="button" className="chip-default hover:border-accent hover:text-accent"
-              onClick={() => { setValue('username', email); setValue('password', 'demo12345') }}>
-              {email} <span className="text-ink-3">{note}</span>
-            </button>
-          ))}
-        </div>
+        {DEMO[role].map(([email, note]) => (
+          <button key={email} type="button" className="chip-default w-full justify-start hover:border-accent hover:text-accent"
+            onClick={() => { setValue('username', email); setValue('password', 'demo12345') }}>
+            {email} <span className="text-ink-3">{note}</span>
+          </button>
+        ))}
+        {demo && role === 'participant' && <>
+          <p className="text-xs leading-relaxed text-ink-3">
+            Для жюри: jury1@demo.talent … jury10@demo.talent, пароль demo12345 — у каждого свои попытки
+          </p>
+          <button type="button" className="btn w-full border border-line py-2 text-sm" onClick={takeJury}>
+            Взять свободный аккаунт жюри
+          </button>
+        </>}
       </div>
     </AuthShell>
   )

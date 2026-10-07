@@ -77,6 +77,7 @@ export type Role = 'participant' | 'employer'
 const form = (username: string, password: string) =>
   [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const
 
+export const publicDemo = () => api.get<{ demo_mode: boolean }>('/public/demo')
 export const registerParticipant = (data: {
   email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; consents: string[]
 }) => api.post('/auth/participant/register', data)

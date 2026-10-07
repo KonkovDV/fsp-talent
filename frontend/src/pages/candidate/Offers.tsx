@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, getMyOffers, respondToOffer, revokeContacts } from '../../api/client'
+import { apiError, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 
@@ -30,10 +30,21 @@ export default function CandidateOffers() {
   const qc = useQueryClient()
   const { data: offers = [], isLoading, isError, error } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const [reason, setReason] = useState('')
+  const [hideFor, setHideFor] = useState<string | null>(null)
+  const [hidden, setHidden] = useState(false)
+  const [hideError, setHideError] = useState('')
   const respond = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
       respondToOffer(id, action, action === 'reject' ? reason : undefined),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
+    onSuccess: (res, vars) => {
+      qc.invalidateQueries({ queryKey: ['myOffers'] })
+      if (vars.action === 'accept' && res.data?.suggest_hide) setHideFor(vars.id)
+    },
+  })
+  const hideMe = useMutation({
+    mutationFn: () => updateMyProfile({ job_search: 'not_looking' }),
+    onSuccess: () => { setHideFor(null); setHidden(true); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
+    onError: e => setHideError(apiError(e, 'Не удалось скрыть карточку')),
   })
   const [params] = useSearchParams()
   const [thread, setThread] = useState<string | null>(params.get('thread'))
@@ -86,6 +97,17 @@ export default function CandidateOffers() {
                   {o.contacts_revoked_at
                     ? <p className="text-sm text-ink-2">Контакты для этой компании закрыты {date(o.contacts_revoked_at)}. Другие компании это не затрагивает.</p>
                     : <p className="text-sm text-ink-2">Компании открыты ваши контакты.</p>}
+                  {hidden && <p className="mt-2 text-sm text-ink-2">Карточка скрыта из поиска. Вернуть её можно в профиле.</p>}
+                  {hideFor === o.id && (
+                    <div className="notice-info mt-3 flex-col">
+                      <p>Приглашение принято. Скрыть карточку из поиска, пока вы не ищете работу? Согласие на публикацию остаётся.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => hideMe.mutate()} disabled={hideMe.isPending} className="btn-primary btn-sm">Да, скрыть меня</button>
+                        <button type="button" onClick={() => setHideFor(null)} className="btn-secondary btn-sm">Не сейчас</button>
+                      </div>
+                      {hideError && <p className="notice-error" role="alert">{hideError}</p>}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
                       <MessageSquare size={14} aria-hidden /> Переписка

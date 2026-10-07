@@ -105,7 +105,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "assessed_grade": p.assessed_grade,
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
-        "is_visible": p.is_visible, "public_profile": p.public_profile,
+        "is_visible": p.is_visible, "public_profile": p.public_profile, "job_search": p.job_search,
         "is_minor": p.is_minor, "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
         "profile_version": p.profile_version,
         "salary_from": p.salary_from_gross, "salary_to": p.salary_to_gross,
@@ -152,6 +152,7 @@ class ProfileUpdate(BaseModel):
     phone: str | None = Field(None, max_length=20)
     public_profile: bool | None = None
     is_visible: bool | None = None
+    job_search: Literal["active", "open", "not_looking"] | None = None
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
     expected_version: int | None = Field(None, ge=0)
@@ -193,6 +194,8 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     if "region" in data and p.fsp_id is None:
         # With FSP linked, the region comes from the protocols.
         p.region = (data["region"] or "").strip() or None
+    if "job_search" in data and data["job_search"]:
+        p.job_search = data["job_search"]
     for field in ("salary_from_gross", "salary_to_gross"):
         if field in data:
             setattr(p, field, data[field])
@@ -423,7 +426,11 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                      "/employer/offers")
     await db.commit()
     await outbox.deliver()
-    return {"status": offer.status}
+    suggest_hide = False
+    if offer.status == "accepted":
+        person = await db.get(Participant, offer.candidate_id)
+        suggest_hide = person is not None and person.job_search != "not_looking"
+    return {"status": offer.status, "suggest_hide": suggest_hide}
 
 
 @router.post("/me/offers/{offer_id}/revoke-contacts")
