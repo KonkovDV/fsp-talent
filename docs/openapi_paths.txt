@@ -30,6 +30,7 @@
 /api/v1/candidates/me/credentials/{credential_id}/revoke
 /api/v1/candidates/me/fsp/authorize
 /api/v1/candidates/me/fsp/callback
+/api/v1/candidates/me/guardian
 /api/v1/candidates/me/offers
 /api/v1/candidates/me/offers/{offer_id}/respond
 /api/v1/candidates/me/offers/{offer_id}/revoke-contacts
@@ -72,6 +73,7 @@
 /api/v1/public/credentials/verify/{credential_id}
 /api/v1/public/credentials/{credential_id}/status
 /api/v1/public/credentials/{participant_id}
+/api/v1/public/guardian-consent
 /api/v1/public/issuer
 /api/v1/public/leaderboard
 /api/v1/search/bank

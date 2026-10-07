@@ -14,7 +14,8 @@ const participantSchema = z.object({
   email: z.string().email('Проверьте email'),
   password: z.string().min(8, 'Минимум 8 символов'),
   is_adult: z.boolean(),
-})
+  age_15_17: z.boolean(),
+}).refine(v => v.is_adult || v.age_15_17, { message: 'Регистрация открыта с 15 лет', path: ['age_15_17'] })
 const employerSchema = z.object({
   company_name: z.string().min(2, 'Название компании'),
   email: z.string().email('Проверьте email'),
@@ -36,7 +37,7 @@ export default function RegisterPage() {
   })
   const missing = requiredKinds(docs).filter(k => !consents.includes(k))
 
-  const pf = useForm<ParticipantForm>({ resolver: zodResolver(participantSchema), defaultValues: { is_adult: false } })
+  const pf = useForm<ParticipantForm>({ resolver: zodResolver(participantSchema), defaultValues: { is_adult: false, age_15_17: false } })
   const ef = useForm<EmployerForm>({ resolver: zodResolver(employerSchema) })
 
   const done = (email: string) => navigate(`/verify?email=${encodeURIComponent(email)}&role=${role}`)
@@ -82,6 +83,13 @@ export default function RegisterPage() {
             <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...pf.register('is_adult')} />
             <span>Мне исполнилось 18 лет<span className="block text-xs text-ink-3">Если нет, карточка скрыта от работодателей до согласия родителя.</span></span>
           </label>
+          {!pf.watch('is_adult') && (
+            <label className="flex items-start gap-2.5 text-sm text-ink">
+              <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...pf.register('age_15_17')} />
+              <span>Мне 15, 16 или 17 лет<span className="block text-xs text-ink-3">После входа укажите email родителя или другого законного представителя: он подтвердит согласие по ссылке из письма. Младше 15 лет регистрация закрыта.</span></span>
+            </label>
+          )}
+          {err(pf.formState.errors.age_15_17?.message)}
           <p className="panel-quiet text-xs text-ink-2">
             История соревнований ФСП не нужна. ФСП ID можно привязать позже в профиле — результаты появятся
             в карточке отдельным подтверждённым блоком.

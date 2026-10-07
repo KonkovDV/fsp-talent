@@ -16,7 +16,8 @@ BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
 # The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
 MAIL_DIR = os.environ.get("MAIL_FILE_DIR", "/tmp/fsp-talent-mail")
 MAILPIT = os.environ.get("MAILPIT_URL", "").rstrip("/")
-SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset"}
+SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset",
+                   "Согласие законного представителя": "guardian"}
 EMPLOYER = {"username": "hr@sibcode.demo", "password": "demo12345"}
 CANDIDATE = {"username": "fsp001@demo.talent", "password": "demo12345"}
 REQUIRED_CANDIDATE_CONSENTS = ["terms", "pd_candidate"]
@@ -57,7 +58,7 @@ def _mailpit_letter(email, purpose):
         with urllib.request.urlopen(f"{MAILPIT}/api/v1/message/{message['ID']}", timeout=5) as resp:
             text = json.load(resp)["Text"]
         code = re.search(r"\b(\d{6})\b", text)
-        token = re.search(r"token=([\w-]+)", text)
+        token = re.search(r"token=([\w.-]+)", text)
         return {"to": email, "purpose": purpose, "code": code.group(1) if code else None,
                 "token": token.group(1) if token else None}
     return None
@@ -291,6 +292,7 @@ def main():
     check_erasure(employer_token)
     check_assessment()
     check_jury_accounts()
+    check_minor()
     check_idor(employer_token, participant_token)
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
 
@@ -566,6 +568,33 @@ def check_idor(owner_employer, owner_candidate):
     assert not leaks, leaks
     assert checked >= 40, checked
     print("IDOR OK", checked, "requests with foreign ids, no 2xx:", ", ".join(sorted(owned)))
+
+
+def check_minor():
+    """Registration opens at 15; a 15–17-year-old enters search only after the guardian confirms by the link."""
+    email = f"minor-{int(time.time() * 1000)}@example.com"
+    body = {"email": email, "password": "smoke-pass-1", "display_name": "Юный Кандидат", "is_adult": False,
+            "consents": REQUIRED_CANDIDATE_CONSENTS}
+    status, young = call("POST", "/auth/participant/register", body)
+    assert status == 422 and young["error"]["code"] == "too_young", young
+    status, sent = call("POST", "/auth/participant/register", {**body, "age_15_17": True})
+    assert status == 202, sent
+    status, tokens = call("POST", "/auth/verify-email", {"email": email, "code": last_letter(email)["code"]})
+    assert status == 200, tokens
+    token = tokens["access_token"]
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["is_minor"] and not me["minor_consent_given"], me
+    guardian = f"parent-{int(time.time() * 1000)}@example.com"
+    status, asked = call("POST", "/candidates/me/guardian", {"guardian_email": guardian}, token=token)
+    assert status == 200, asked
+    letter = last_letter(guardian, "guardian")
+    status, bad = call("POST", "/public/guardian-consent", {"token": letter["token"][:-4] + "0000"})
+    assert status == 404, bad
+    status, ok = call("POST", "/public/guardian-consent", {"token": letter["token"]})
+    assert status == 200 and ok["ok"], ok
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["minor_consent_given"], me
+    print("MINOR OK guardian consent by link")
 
 
 def check_jury_accounts():

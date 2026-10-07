@@ -78,7 +78,7 @@ const form = (username: string, password: string) =>
   [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const
 
 export const registerParticipant = (data: {
-  email: string; password: string; display_name?: string; is_adult: boolean; consents: string[]
+  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; consents: string[]
 }) => api.post('/auth/participant/register', data)
 export const registerEmployer = (data: object) => api.post('/auth/employer/register', data)
 export const verifyEmail = (data: { email?: string; code?: string; token?: string; role?: Role }) =>
@@ -120,6 +120,8 @@ export const updateVisibility = (is_visible: boolean) =>
 
 export const searchCandidates = (params: object) => api.get('/search/candidates', { params })
 export const searchBank = () => api.get('/search/bank')
+export const askGuardian = (guardian_email: string) => api.post('/candidates/me/guardian', { guardian_email })
+export const guardianConsent = (token: string) => api.post('/public/guardian-consent', { token })
 export const parseQuery = (q: string) => api.post('/ai/parse-query', { q })
 export const parseResume = (text: string) => api.post('/ai/parse-resume', { text })
 
