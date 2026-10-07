@@ -64,6 +64,9 @@ check:
 load:
 	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/load_api.py --users 40 --seconds 60
 
+load-big:
+	sh backend/tests/load_big.sh
+
 docs-pdf:
 	test -d docs/tools/node_modules/mermaid || npm install --prefix docs/tools --no-save mermaid@11
 	python3 docs/tools/build_pdf.py

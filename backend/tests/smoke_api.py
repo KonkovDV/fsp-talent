@@ -11,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
 # The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
@@ -308,7 +309,22 @@ def main():
     check_jury_accounts()
     check_minor()
     check_idor(employer_token, participant_token)
+    check_trust(participant_token, offer["id"])
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
+
+
+def check_trust(participant_token, offer_id):
+    """A candidate can complain about their own invitation, not about someone else's."""
+    status, filed = call("POST", "/candidates/me/complaints",
+                         {"offer_id": offer_id, "reason": "не_вакансия"}, token=participant_token)
+    assert status == 201 and filed["paused"] is False, filed
+    status, again = call("POST", "/candidates/me/complaints",
+                         {"offer_id": offer_id, "reason": "другое"}, token=participant_token)
+    assert status == 409 and again["error"]["code"] == "complaint_duplicate", again
+    status, foreign = call("POST", "/candidates/me/complaints",
+                           {"offer_id": str(uuid.uuid4()), "reason": "оскорбление"}, token=participant_token)
+    assert status == 404, foreign
+    print("TRUST OK")
 
 
 def check_employer_tasks(employer_token, participant_token, candidate_id):

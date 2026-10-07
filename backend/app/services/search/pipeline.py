@@ -13,14 +13,14 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, bindparam, func, literal, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import GradeConfirmation, Offer, Participant, Result, Skill, TestSession
+from app.models import GradeConfirmation, InterviewSlot, Offer, Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
@@ -155,6 +155,13 @@ def bank_cells(rows: list[tuple[str | None, str | None, int, int]], min_n: int =
     return cells
 
 
+def created_after(now: datetime, fresh_days: int | None) -> datetime | None:
+    """Lower bound for «новые за N дней». None means the filter is off."""
+    if not fresh_days:
+        return None
+    return now - timedelta(days=fresh_days)
+
+
 def _in_search(adult):
     """Who an employer may see: the card is published, age allows it, and the person is not «не ищу»."""
     return and_(
@@ -193,10 +200,13 @@ async def search_candidates(
     skills: list[str] | None = None,
     q: str | None = None,
     limit: int = 20,
+    offset: int = 0,
+    fresh_days: int | None = None,
     assessed_only: bool = False,
     has_fsp: bool | None = None,
     work_goal: str | None = None,
     need: NeedSpec | None = None,
+    employer_id: uuid.UUID | None = None,
 ) -> dict:
     wanted = {n for s in (skills or []) if (n := normalize_skill(s))}
     if q:
@@ -242,6 +252,8 @@ async def search_candidates(
             .join(PSI, PSI.participant_id == Participant.id)
             .outerjoin(max_lcb, max_lcb.c.participant_id == Participant.id)
             .where(_in_search(adult)))
+    if since := created_after(datetime.now(UTC), fresh_days):
+        stmt = stmt.where(Participant.created_at >= since)
     if assessed_only:
         stmt = stmt.where(Participant.assessed_grade.is_not(None))
     if has_fsp is not None:
@@ -323,7 +335,7 @@ async def search_candidates(
             have.setdefault(pid, set()).add(name)
 
     need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
-    matches = await score_pool(db, all_ids, need, fused, discipline)
+    matches = await score_pool(db, all_ids, need, fused, discipline, employer_id)
     facts = [matches[i].facts for i in all_ids if matches[i].facts]
     pay_hint = pay_counterfactual(need, facts)
     skill_hint = skill_counterfactual(need, facts)
@@ -340,8 +352,9 @@ async def search_candidates(
     else:
         ordered = order_pool(all_ids, score_of, fused, best, cold)
     categories = recommended_categories(
-        [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)])
-    ordered = ordered[:limit]
+        [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
+        min_n=BANK_MIN)
+    ordered = ordered[offset:offset + limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
@@ -371,8 +384,23 @@ class PoolMatch:
     confirmed: int = 0
 
 
+async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: list[uuid.UUID]) -> dict:
+    """Latest decided meeting of this company. A company the candidate has not met does not appear."""
+    found: dict[uuid.UUID, tuple] = {}
+    rows = await db.execute(
+        select(Offer.candidate_id, InterviewSlot.outcome, InterviewSlot.outcome_at)
+        .join(InterviewSlot, InterviewSlot.offer_id == Offer.id)
+        .where(Offer.employer_id == employer_id, Offer.candidate_id.in_(ids),
+               InterviewSlot.chosen.is_(True), InterviewSlot.outcome.is_not(None)))
+    for pid, outcome, at in rows:
+        prev = found.get(pid)
+        if prev is None or (at or datetime.min.replace(tzinfo=UTC)) >= (prev[1] or datetime.min.replace(tzinfo=UTC)):
+            found[pid] = (outcome, at)
+    return {pid: outcome for pid, (outcome, _) in found.items()}
+
+
 async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
-                     discipline: str | None = None) -> dict[uuid.UUID, PoolMatch]:
+                     discipline: str | None = None, employer_id: uuid.UUID | None = None) -> dict[uuid.UUID, PoolMatch]:
     """Load the facts the factor score needs for every candidate of the pool, in four queries."""
     if not ids:
         return {}
@@ -413,6 +441,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
         ).bindparams(bindparam("ids", type_=ARRAY(PG_UUID(as_uuid=True))))
         for sid, n, correct in await db.execute(counts_query, {"ids": session_ids}):
             counts[sid] = (int(correct or 0), int(n or 0))
+    interviews = await _interview_outcomes(db, employer_id, ids) if employer_id else {}
     top = max(fused.values(), default=0.0) or 1.0
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
@@ -434,6 +463,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             open_invites=int(pending.get(pid, 0)),
             salary_refusals=int(refusals.get(pid, 0)),
             job_search=(p.job_search if p else None) or "open",
+            interview_outcome=interviews.get(pid),
         )
         m = match_score(need, facts)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,

@@ -6,8 +6,10 @@ from app.models.assessment import (
     TestSessionItem,
 )
 from app.models.audit import AccessLog, ConsentLog
+from app.models.complaint import Complaint
 from app.models.employer import Employer
 from app.models.identity import Consent, EmailVerification
+from app.models.interview import InterviewSlot
 from app.models.need import Need, NeedShortlist, NeedVersion
 from app.models.notification import Notification
 from app.models.offer import Offer, OfferMessage
@@ -21,6 +23,7 @@ __all__ = [
     "AccessLog",
     "Application",
     "CategoryAssignment",
+    "Complaint",
     "Consent",
     "ConsentLog",
     "DisciplineScore",
@@ -28,6 +31,7 @@ __all__ = [
     "Employer",
     "EmployerTask",
     "GradeConfirmation",
+    "InterviewSlot",
     "ItemStat",
     "Need",
     "NeedShortlist",

@@ -1,0 +1,5 @@
+# Four API processes for the large-bank load check. The default file stays at two.
+#   docker compose -f docker-compose.yml -f docker-compose.load.yml up -d --no-deps --force-recreate --wait backend
+services:
+  backend:
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"]

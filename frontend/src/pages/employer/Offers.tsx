@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
 import { apiError, apiErrorCode, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
+import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { ROLE_RU, gradeRu } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
@@ -42,6 +43,7 @@ export default function EmployerOffers() {
   })
   const [params] = useSearchParams()
   const [thread, setThread] = useState<string | null>(params.get('thread'))
+  const [meeting, setMeeting] = useState<string | null>(null)
   const withdraw = useMutation({ mutationFn: withdrawOffer, onSuccess: () => qc.invalidateQueries({ queryKey: ['employerOffers'] }) })
 
   const stage = (o: Offer) => (o.status === 'pending' && o.candidate_viewed_at ? 'viewed' : o.status)
@@ -101,6 +103,9 @@ export default function EmployerOffers() {
                     <td className="whitespace-nowrap text-right">
                       {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
                       {o.status === 'accepted' && (
+                        <button onClick={() => setMeeting(meeting === o.id ? null : o.id)} aria-expanded={meeting === o.id} className="btn-ghost btn-sm">Собеседование</button>
+                      )}
+                      {o.status === 'accepted' && (
                         <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
                           <MessageSquare size={14} aria-hidden /> Переписка
                           {(o.unread_messages ?? 0) > 0 && <span className="ml-1 rounded-full bg-invite px-1.5 text-2xs text-invite-ink num" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
@@ -109,6 +114,9 @@ export default function EmployerOffers() {
                       {o.status === 'pending' && <button onClick={() => withdraw.mutate(o.id)} className="btn-ghost btn-sm">Отозвать</button>}
                     </td>
                   </tr>
+                  {meeting === o.id && (
+                    <tr><td colSpan={6} className="!whitespace-normal"><InterviewSlots offerId={o.id} side="employer" listKey="employerOffers" /></td></tr>
+                  )}
                   {thread === o.id && (
                     <tr><td colSpan={6} className="!whitespace-normal"><MessageThread offerId={o.id} listKey="employerOffers" other="Кандидат" /></td></tr>
                   )}

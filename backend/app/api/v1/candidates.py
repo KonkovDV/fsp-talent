@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,12 +19,15 @@ from app.core.ratelimit import too_many
 from app.models import (
     AccessLog,
     CategoryAssignment,
+    Complaint,
     ConsentLog,
     GradeConfirmation,
     Offer,
     Participant,
+    Vacancy,
     VerifiableCredential,
 )
+from app.models.complaint import REASONS
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
 from app.services.ai.assistant import parse_resume
@@ -52,6 +55,7 @@ from app.services.skills import (
     with_resume_token,
 )
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
+from app.services.trust import refresh_hold
 from app.services.vc.issuer import issue_derived_credential, issue_sd_jwt, present_sd_jwt
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -379,6 +383,49 @@ async def get_my_offers(
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "unread_messages": unread.get(o.id, 0),
     } for o in rows]
+
+
+class ComplaintIn(BaseModel):
+    reason: Literal["не_вакансия", "сбор_данных", "зарплата_не_та", "оскорбление", "другое"]
+    offer_id: uuid.UUID | None = None
+    vacancy_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_object(self):
+        if (self.offer_id is None) == (self.vacancy_id is None):
+            raise ValueError("Укажите приглашение или вакансию")
+        return self
+
+
+@router.post("/me/complaints", status_code=201)
+async def file_complaint(body: ComplaintIn, current: dict = Depends(get_current_participant),
+                         db: AsyncSession = Depends(get_db)):
+    """One complaint per candidate per invitation or vacancy. May pause that company's invitations."""
+    if body.reason not in REASONS:
+        raise ApiError(422, "validation_error", "Неизвестная причина жалобы")
+    participant_id = _pid(current)
+    employer_id: uuid.UUID | None = None
+    if body.offer_id is not None:
+        offer = await db.get(Offer, body.offer_id)
+        if offer is None or offer.candidate_id != participant_id:
+            raise ApiError(404, "not_found", "Приглашение не найдено")
+        employer_id = offer.employer_id
+    else:
+        vacancy = await db.get(Vacancy, body.vacancy_id)
+        if vacancy is None or not vacancy.is_open:
+            raise ApiError(404, "not_found", "Вакансия не найдена")
+        employer_id = vacancy.employer_id
+    row = Complaint(participant_id=participant_id, offer_id=body.offer_id, vacancy_id=body.vacancy_id,
+                    reason=body.reason)
+    db.add(row)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ApiError(409, "complaint_duplicate", "Жалоба на это приглашение или вакансию уже отправлена") from exc
+    paused = await refresh_hold(db, employer_id)
+    await db.commit()
+    return {"id": str(row.id), "paused": paused}
 
 
 class RespondIn(BaseModel):

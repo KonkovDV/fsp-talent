@@ -1,5 +1,8 @@
 """The role × grade showcase hides small cells, so a count cannot single out a person."""
-from app.services.search.pipeline import BANK_MIN, bank_cells
+from datetime import UTC, datetime, timedelta
+
+from app.services.matching import recommended_categories
+from app.services.search.pipeline import BANK_MIN, bank_cells, created_after
 
 
 def test_small_cells_are_hidden_and_counts_kept():
@@ -8,3 +11,15 @@ def test_small_cells_are_hidden_and_counts_kept():
     shown, hidden = cells
     assert shown == {"role": "backend", "grade": "middle", "hidden": False, "candidates": 12, "tested": 4}
     assert hidden["hidden"] and hidden["candidates"] is None and hidden["tested"] is None
+
+
+def test_recommended_chip_skips_a_cell_under_five():
+    rows = [("backend", "senior", 0.7)] * 6 + [("qa", "intern", 0.99)] * 4
+    cells = recommended_categories(rows, min_n=BANK_MIN)
+    assert cells == [{"role": "backend", "grade": "senior", "candidates": 6, "best": 0.7}]
+
+
+def test_fresh_window_is_fourteen_days_when_asked():
+    now = datetime(2026, 10, 8, tzinfo=UTC)
+    assert created_after(now, None) is None
+    assert created_after(now, 14) == now - timedelta(days=14)

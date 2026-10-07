@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +40,7 @@ async def search(
     min_rank: str | None = None,
     skills: str | None = Query(None, max_length=400, description="Через запятую"),
     limit: int = Query(20, ge=1, le=50),
+    fresh_days: int | None = Query(None, ge=1, le=90, description="Только профили, созданные за последние N дней"),
     assessed_only: bool = Query(False, description="Только кандидаты с грейдом, подтверждённым тестом"),
     has_fsp: bool | None = Query(None, description="true — только с историей ФСП, false — только без неё"),
     work_goal: str | None = Query(None, pattern="^(job|internship)$", description="internship — режим стажировки"),
@@ -55,8 +58,9 @@ async def search(
     skill_list = [s.strip() for s in skills.split(",") if s.strip()] if skills else []
     return await search_candidates(
         db, role=role or None, grade=grade or None, discipline=discipline or None,
-        min_rank=min_rank or None, skills=skill_list, q=q or None, limit=limit,
+        min_rank=min_rank or None, skills=skill_list, q=q or None, limit=limit, fresh_days=fresh_days,
         assessed_only=assessed_only, has_fsp=has_fsp, work_goal=work_goal,
         need=NeedSpec(role=role or None, grade=grade or None, skills=_wanted(skill_list, q),
                       industry=industry or None, text=bool(q)),
+        employer_id=uuid.UUID(employer_id),
     )

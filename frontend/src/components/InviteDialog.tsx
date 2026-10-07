@@ -31,6 +31,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   }
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: k.startsWith('salary') ? Number(e.target.value) : e.target.value })
+  const rangeReady = form.salary_from_gross > 0 && form.salary_to_gross >= form.salary_from_gross
   const look = () => {
     previewOffer(candidateId, form.salary_to_gross).then(r => setHint(r.data.salary_hint || '')).catch(() => setHint(''))
   }
@@ -71,7 +72,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
         {error && <p className="notice-error mt-4" role="alert">{error}</p>}
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="btn-secondary">Отмена</button>
-          <button type="submit" disabled={send.isPending} className="btn-invite">{send.isPending ? 'Отправляем…' : 'Отправить приглашение'}</button>
+          <button type="submit" disabled={send.isPending || !rangeReady} className="btn-invite">{send.isPending ? 'Отправляем…' : 'Отправить приглашение'}</button>
         </div>
       </form>
     </Modal>

@@ -263,7 +263,13 @@ export default function CandidateAssessment() {
             </div>
           )}
           <div className="flex items-center justify-between">
-            <button onClick={() => { if (window.confirm('Прервать тест? Попытка засчитается, пересдача — через 7 дней.')) stop.mutate() }}
+            <button onClick={() => {
+              const trial = state.progress.min_items === state.progress.max_items
+              const warning = trial
+                ? 'Прервать пробный проход? Грейд не изменится и паузы перед следующим тестом не будет.'
+                : 'Прервать тест? Попытка засчитается, пересдача — через 7 дней.'
+              if (window.confirm(warning)) stop.mutate()
+            }}
               className="text-sm text-ink-3 hover:text-invite">Прервать</button>
             <button onClick={() => answer.mutate()} disabled={!ready || answer.isPending} className="btn-primary">
               {answer.isPending ? 'Проверяем…' : 'Ответить'}

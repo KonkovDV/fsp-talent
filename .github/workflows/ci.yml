@@ -71,7 +71,10 @@ jobs:
       - name: Install backend deps
         run: cd backend && pip install -c requirements.lock -e .[test]
       - name: Run unit tests
-        run: cd backend && pytest tests/unit/ -v --cov=app/services --cov-report=xml --cov-fail-under=63
+        run: |
+          cd backend
+          pytest tests/unit/ -q --cov=app --cov-report=xml --cov-report=json --cov-fail-under=65
+          python tests/coverage_lines.py
       - name: Dependency audit
         # Tokens are signed with PyJWT; nothing is ignored. pip itself is upgraded first.
         run: |
@@ -114,6 +117,7 @@ jobs:
       # High findings in the Tailwind build toolchain need a major upgrade. The gate covers what the site ships.
       - run: cd frontend && npm audit --omit=dev --audit-level=high
       - run: cd frontend && npm run type-check
+      - run: cd frontend && npm test
       - run: cd frontend && npm run build
 
   sbom:

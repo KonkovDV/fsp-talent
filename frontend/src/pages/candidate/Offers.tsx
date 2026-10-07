@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
+import { apiError, fileComplaint, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
+import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 
@@ -24,6 +25,13 @@ const REASONS: [string, string][] = [
   ['stack', 'Стек'],
   ['not_looking', 'Сейчас не ищу'],
   ['other', 'Другое'],
+]
+const COMPLAINTS: [string, string][] = [
+  ['не_вакансия', 'Это не вакансия'],
+  ['сбор_данных', 'Собирают данные'],
+  ['зарплата_не_та', 'Зарплата не та'],
+  ['оскорбление', 'Оскорбление'],
+  ['другое', 'Другое'],
 ]
 
 export default function CandidateOffers() {
@@ -49,7 +57,20 @@ export default function CandidateOffers() {
   const [params] = useSearchParams()
   const [thread, setThread] = useState<string | null>(params.get('thread'))
   const [confirm, setConfirm] = useState<string | null>(null)
+  const [complaintFor, setComplaintFor] = useState<string | null>(null)
+  const [complaintReason, setComplaintReason] = useState('не_вакансия')
+  const [complaintNote, setComplaintNote] = useState('')
   const [revokeError, setRevokeError] = useState('')
+  const complain = useMutation({
+    mutationFn: (id: string) => fileComplaint(id, complaintReason),
+    onSuccess: (res) => {
+      setComplaintNote(res.data.paused
+        ? 'Жалоба принята. Приглашения этой компании приостановлены до проверки.'
+        : 'Жалоба принята.')
+      setComplaintFor(null)
+    },
+    onError: e => setComplaintNote(apiError(e, 'Не удалось отправить жалобу')),
+  })
   const revoke = useMutation({
     mutationFn: (id: string) => revokeContacts(id),
     onSuccess: () => { setConfirm(null); setRevokeError(''); qc.invalidateQueries({ queryKey: ['myOffers'] }) },
@@ -61,6 +82,7 @@ export default function CandidateOffers() {
         lead="Работодатель пишет первым и сразу называет зарплату. Ваши имя и контакты он увидит, только если вы примете приглашение." />
       {isLoading && <Skeleton className="h-40" />}
       {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить приглашения')}</p>}
+      {complaintNote && <p className="notice-info mb-4" role="status">{complaintNote}</p>}
       {!isLoading && !isError && offers.length === 0 && <Empty title="Приглашений пока нет">Подтвердите грейд тестом и заполните навыки — так вас быстрее найдут.</Empty>}
       <ul className="space-y-4">
         {offers.map(o => {
@@ -92,6 +114,18 @@ export default function CandidateOffers() {
                 </details>
               )}
               {o.contact_method && <p className="mt-2 text-sm text-ink-2">Связь с компанией: <span className="text-ink">{o.contact_method}</span></p>}
+              {complaintFor !== o.id ? (
+                <button type="button" className="btn-ghost btn-sm mt-3" onClick={() => { setComplaintFor(o.id); setComplaintNote('') }}>Пожаловаться</button>
+              ) : (
+                <form className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center" onSubmit={e => { e.preventDefault(); complain.mutate(o.id) }}>
+                  <label className="text-sm text-ink-2">Причина
+                    <select value={complaintReason} onChange={e => setComplaintReason(e.target.value)} className="select mt-1 sm:ml-2 sm:mt-0" aria-label="Причина жалобы">
+                      {COMPLAINTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <button type="submit" className="btn-secondary btn-sm" disabled={complain.isPending}>Отправить жалобу</button>
+                </form>
+              )}
               {o.status === 'accepted' && (
                 <div className="mt-5 border-t border-line pt-4">
                   {o.contacts_revoked_at
@@ -108,6 +142,7 @@ export default function CandidateOffers() {
                       {hideError && <p className="notice-error" role="alert">{hideError}</p>}
                     </div>
                   )}
+                  <InterviewSlots offerId={o.id} side="participant" listKey="myOffers" />
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
                       <MessageSquare size={14} aria-hidden /> Переписка

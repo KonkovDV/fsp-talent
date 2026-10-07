@@ -1,6 +1,7 @@
 """Employer needs: versioned search profiles, matches with explanations, recommended categories, shortlist."""
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
@@ -15,7 +16,8 @@ from app.api.deps import get_current_employer
 from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import CategoryAssignment, Need, NeedShortlist, NeedVersion, Participant
+from app.core.redis_client import get_redis
+from app.models import CategoryAssignment, InterviewSlot, Need, NeedShortlist, NeedVersion, Offer, Participant
 from app.services.matching import NeedSpec, anonymous_compare
 from app.services.search.pipeline import score_pool, search_candidates
 from app.services.skills import normalize_skill
@@ -24,6 +26,19 @@ from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/needs", tags=["needs"])
 Grade = Literal["intern", "junior", "middle", "senior", "lead"]
+# One shortlist per need version and bank stamp. An edit bumps need.version, so the old entry is unused.
+_MATCH_CACHE_S = 60
+
+
+def cached_page(stored: dict, offset: int, limit: int) -> dict | None:
+    """Return one stored page of a shortlist. None if this offset was not saved yet."""
+    pages = stored.get("pages") or {}
+    items = pages.get(f"{offset}:{limit}")
+    if items is None:
+        return None
+    page = {key: value for key, value in stored.items() if key != "pages"}
+    page["items"] = items
+    return page
 
 
 class NeedParams(BaseModel):
@@ -167,16 +182,53 @@ async def archive_need(need_id: uuid.UUID, current: dict = Depends(get_current_e
     return {"archived": True}
 
 
+async def _matches_cached(db: AsyncSession, need: Need, params: NeedParams, limit: int, offset: int) -> dict:
+    """Redis keeps the shortlist for 60 seconds. The key is the need, its version and the bank stamp."""
+    stamp = await db.scalar(select(func.max(Participant.updated_at)))
+    decided = await db.scalar(
+        select(func.max(InterviewSlot.outcome_at))
+        .join(Offer, Offer.id == InterviewSlot.offer_id)
+        .where(Offer.employer_id == need.employer_id))
+    bank = (stamp.isoformat() if stamp is not None else "0") + ":" + (
+        decided.isoformat() if decided is not None else "0")
+    key = f"need-matches:{need.id}:{need.version}:{bank}"
+    redis = None
+    stored: dict | None = None
+    try:
+        redis = await get_redis()
+        raw = await redis.get(key)
+        if raw:
+            stored = json.loads(raw)
+            page = cached_page(stored, offset, limit)
+            if page is not None:
+                return page
+    except Exception:
+        redis = None
+    result = await search_candidates(
+        db, skills=params.skills, q=params.q, limit=limit, offset=offset, has_fsp=params.has_fsp,
+        work_goal=params.work_goal, need=params.spec(), employer_id=need.employer_id)
+    if redis is not None:
+        try:
+            if stored is None:
+                stored = {k: v for k, v in result.items() if k != "items"}
+                stored["pages"] = {}
+            stored["pages"][f"{offset}:{limit}"] = result["items"]
+            await redis.set(key, json.dumps(stored), ex=_MATCH_CACHE_S)
+        except Exception:
+            pass
+    return result
+
+
 @router.get("/{need_id}/matches")
 async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
+                  offset: int = Query(0, ge=0, le=200),
                   current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
     """Candidates for the need, ordered by the explainable score; role and grade are soft (neighbours count)."""
     if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
     need = await _own(db, need_id, current)
     p = NeedParams(**(await _params(db, need)).params)
-    result = await search_candidates(
-        db, skills=p.skills, q=p.q, limit=limit, has_fsp=p.has_fsp, work_goal=p.work_goal, need=p.spec())
+    result = await _matches_cached(db, need, p, limit, offset)
     listed = {str(pid) for pid in await db.scalars(
         select(NeedShortlist.participant_id).where(NeedShortlist.need_id == need.id))}
     for card in result["items"]:
@@ -213,7 +265,8 @@ async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
             continue
     p = NeedParams(**(await _params(db, need)).params)
     result = await search_candidates(
-        db, skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal, need=p.spec())
+        db, skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal,
+        need=p.spec(), employer_id=need.employer_id)
     picked = wanted[:4]
     items = anonymous_compare(result["items"], picked)
     if picked and len(items) != len(picked):

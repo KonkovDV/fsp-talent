@@ -5,6 +5,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Chrome still hit-tests the body of a closed disclosure, so it steals clicks from the list under it. */
+details:not([open]) > :not(summary) {
+  display: none;
+}
+
 /* ФСП Талант — design system v4 «Протокол».
    The product turns results into a ranked list, so the interface borrows the language of a competition protocol:
    places, ranks, tabular numbers, hairline rules. Colours are RGB triplets so Tailwind can apply opacity. */

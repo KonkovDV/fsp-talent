@@ -170,3 +170,79 @@ test('кандидат проходит регистрацию и пробный
   await row.getByRole('button', { name: 'Открыть контакты' }).click()
   await expect(row.getByText(email)).toBeVisible()
 })
+
+test('до принятия контактов нет ни в карточке, ни в ответе API', async ({ page }) => {
+  await page.goto('/login?role=employer')
+  await page.locator('#username').fill('hr@sibcode.demo')
+  await page.locator('#password').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page).toHaveURL(/\/employer/)
+  await page.goto('/employer/search')
+  const card = page.getByTestId('candidate-card').first()
+  await expect(card).toBeVisible()
+  await expect(card).not.toContainText('@')
+  const token = (await session(page))?.token
+  const found = await page.request.get('/api/v1/search/candidates?limit=20', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(found.ok(), await found.text()).toBeTruthy()
+  const body = await found.json() as { items: Record<string, unknown>[] }
+  expect(body.items.length).toBeGreaterThan(0)
+  for (const item of body.items) {
+    expect(item.email).toBeUndefined()
+    expect(item.display_name).toBeUndefined()
+    expect(item.phone).toBeUndefined()
+    expect(item.telegram).toBeUndefined()
+  }
+})
+
+async function loginCandidate(page: Page, email: string) {
+  await page.goto('/login')
+  await page.locator('#username').fill(email)
+  await page.locator('#password').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page).toHaveURL(/\/candidate/)
+}
+
+async function passTrial(page: Page) {
+  await page.goto('/candidate/assessment')
+  const verdict = page.getByTestId('trial-verdict')
+  const again = page.getByRole('button', { name: 'К тестам' })
+  const survey = page.getByLabel('Специализация')
+  const trial = page.getByRole('button', { name: /Пробный тест/ })
+  const item = page.getByText(/Задание \d+\./)
+  await expect(trial.or(survey).or(again).or(item)).toBeVisible()
+  if (await again.isVisible()) {
+    await again.click()
+    await expect(verdict).toBeHidden()
+  }
+  if (await survey.isVisible() && !(await trial.isVisible())) {
+    await survey.selectOption('backend')
+    await page.getByLabel('Грейд').selectOption('junior')
+    await page.getByRole('button', { name: 'Сохранить опрос' }).click()
+  }
+  const running = page.getByTestId('assessment-item')
+  if (!(await running.isVisible())) {
+    await expect(trial).toBeEnabled()
+    await trial.click()
+    const alert = page.getByRole('alert')
+    await expect(running.or(alert)).toBeVisible()
+    if (await alert.isVisible() && !(await running.isVisible())) throw new Error(await alert.innerText())
+  }
+  await expect(page.getByText('Это пробный проход')).toBeVisible()
+  for (let step = 1; step <= 20; step++) {
+    await expect(page.getByText(`Задание ${step}.`).or(verdict)).toBeVisible()
+    if (await verdict.isVisible()) break
+    await answerOne(page, step)
+  }
+  await expect(verdict).toBeVisible()
+  await expect(page.getByText('не подтверждается').first()).toBeVisible()
+}
+
+test('член жюри jury2 проходит пробный тест сразу после jury1', async ({ page }) => {
+  await loginCandidate(page, 'jury1@demo.talent')
+  await passTrial(page)
+  await page.getByRole('button', { name: 'Выйти' }).click()
+  await loginCandidate(page, 'jury2@demo.talent')
+  await passTrial(page)
+})

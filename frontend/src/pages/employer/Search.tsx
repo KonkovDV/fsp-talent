@@ -15,7 +15,7 @@ const DISCS = ['algorithmic', 'product', 'security', 'bas', 'robotics', 'ai']
 const RANKS = ['МС', 'КМС', 'I', 'II', 'III']
 const EXAMPLES = ['senior backend Python Kafka', 'middle фронтенд React TypeScript', 'специалист по ИБ с КМС']
 
-type Params = Record<string, string | boolean | undefined>
+type Params = Record<string, string | boolean | number | undefined>
 
 /** Free search over the anonymous base. The explainable score orders the list; filters narrow it. */
 export default function EmployerSearch() {
@@ -30,6 +30,7 @@ export default function EmployerSearch() {
   const [assessedOnly, setAssessedOnly] = useState(false)
   const [hasFsp, setHasFsp] = useState('')
   const [internship, setInternship] = useState(false)
+  const [freshDays, setFreshDays] = useState<number | undefined>()
   const [inviteFor, setInviteFor] = useState<string | null>(null)
   const [taskFor, setTaskFor] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
@@ -39,6 +40,7 @@ export default function EmployerSearch() {
     q: q || undefined, role: role || undefined, grade: grade || undefined, discipline: discipline || undefined,
     min_rank: minRank || undefined, skills: skills || undefined, assessed_only: assessedOnly || undefined,
     has_fsp: hasFsp || undefined, work_goal: internship ? 'internship' : undefined,
+    fresh_days: freshDays,
   }
   // Filters edit a draft; the list on screen changes only on «Найти» and stays visible while the new one loads.
   const [submitted, setSubmitted] = useState<Params>({ role: url.get('role') || undefined, grade: url.get('grade') || undefined })
@@ -84,11 +86,20 @@ export default function EmployerSearch() {
         </button>
         <button type="submit" className="btn-primary px-6 py-3">{isFetching ? 'Ищем…' : 'Найти'}</button>
       </form>
-      {!q && (
-        <p className="mt-2 text-xs text-ink-3">Например:{' '}
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-3">
+        {!q && <span>Например:{' '}
           {EXAMPLES.map((ex, i) => <span key={ex}>{i > 0 && ', '}<button type="button" className="text-accent hover:underline" onClick={() => setQ(ex)}>{ex}</button></span>)}
-        </p>
-      )}
+        </span>}
+        <button type="button" className={freshDays ? 'chip-active' : 'chip-default'}
+          aria-pressed={!!freshDays}
+          onClick={() => {
+            const next = freshDays ? undefined : 14
+            setFreshDays(next)
+            setSubmitted(prev => ({ ...prev, fresh_days: next }))
+          }}>
+          Новые за 14 дней
+        </button>
+      </div>
 
       <details className="mt-4" open={!url.get('role') && window.matchMedia('(min-width: 1024px)').matches}>
         <summary className="cursor-pointer text-sm font-medium text-accent">Банк кандидатов по специализациям и грейдам</summary>
@@ -138,9 +149,9 @@ export default function EmployerSearch() {
               <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{draftChanged && ' — фильтры изменены, список ещё прежний'}</p>
               {data.recommended_categories?.length > 0 && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Сильнее всего:
-                  {data.recommended_categories.map((c: { role: string; grade: string; candidates: number }) => (
+                  {data.recommended_categories.filter((c: { candidates: number | null }) => (c.candidates ?? 0) >= 5).map((c: { role: string; grade: string; candidates: number }) => (
                     <button key={`${c.role}-${c.grade}`} className="chip-default hover:border-accent hover:text-accent"
-                      onClick={() => { setRole(c.role ?? ''); setGrade(c.grade ?? ''); setSubmitted({ ...params, role: c.role, grade: c.grade }) }}>
+                      onClick={() => { setRole(c.role ?? ''); setGrade(c.grade ?? ''); setSubmitted({ ...params, role: c.role, grade: c.grade, fresh_days: freshDays }) }}>
                       {ROLE_RU[c.role] ?? c.role}, {gradeRu(c.grade)} <span className="num text-ink-3">{c.candidates}</span>
                     </button>
                   ))}

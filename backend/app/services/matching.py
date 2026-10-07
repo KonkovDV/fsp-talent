@@ -91,6 +91,9 @@ CONGESTION_CAP = 0.10
 # One earlier refusal over pay lowers P(accept). Three is the cap, so a long history cannot zero it.
 SALARY_REFUSAL_FACTOR = 0.85
 SALARY_REFUSAL_CAP = 3
+# Latest interview with this company, applied only when both sides named a salary.
+# A pass can lift P(accept) up to 1. A fail and a no-show lower it. No interview leaves the score as it is.
+INTERVIEW_FACTOR = {"passed": 1.10, "failed": 0.85, "no_show": 0.70}
 REASON_SOURCE = {
     "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "UNTESTED": "тест",
     "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП",
@@ -99,6 +102,8 @@ REASON_SOURCE = {
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
     "CONGESTION": "очередь",
     "JOB_SEARCH_ACTIVE": "профиль", "JOB_SEARCH_OPEN": "профиль",
+    "INTERVIEW_PASSED": "собеседование", "INTERVIEW_FAILED": "собеседование",
+    "INTERVIEW_NO_SHOW": "собеседование",
 }
 
 
@@ -133,6 +138,7 @@ class CandidateFacts:
     open_invites: int = 0                 # pending invitations; above the free allowance the card steps down
     salary_refusals: int = 0              # earlier declines whose reason was the pay band
     job_search: str = "open"              # active | open | not_looking; open multiplies P(accept) by 0.8
+    interview_outcome: str | None = None  # passed | failed | no_show with this company; None leaves P(accept)
 
 
 @dataclass(frozen=True)
@@ -395,6 +401,14 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                   f"Вилка ниже ожидания примерно на {short} %")
     if c.job_search == "open" and accept is not None:
         accept *= 0.8
+    if accept is not None and c.interview_outcome in INTERVIEW_FACTOR:
+        accept = min(1.0, accept * INTERVIEW_FACTOR[c.interview_outcome])
+        _note(info, reasons, "info",
+              {"passed": "INTERVIEW_PASSED", "failed": "INTERVIEW_FAILED",
+               "no_show": "INTERVIEW_NO_SHOW"}[c.interview_outcome],
+              {"passed": "Собеседование с этой компанией пройдено",
+               "failed": "Собеседование с этой компанией не пройдено",
+               "no_show": "На собеседование с этой компанией не пришёл"}[c.interview_outcome])
     if c.job_search == "active":
         _note(plus, reasons, "plus", "JOB_SEARCH_ACTIVE", "Активно ищет")
     elif c.job_search == "open":
@@ -530,10 +544,14 @@ def anonymous_compare(cards: list[dict], ids: list[str]) -> list[dict]:
     return rows
 
 
-def recommended_categories(rows: list[tuple[str | None, str | None, float]], top: int = 3) -> list[dict]:
-    """Which role × grade cells hold the best matches: (role, grade, score) -> cells by mean score of the top."""
+def recommended_categories(rows: list[tuple[str | None, str | None, float]], top: int = 3,
+                           min_n: int = 5) -> list[dict]:
+    """Strongest role × grade cells in this list. A cell under min_n is not recommended:
+    the showcase hides that count as «<5», and a chip must not name fewer people.
+    """
     cells: dict[tuple[str | None, str | None], list[float]] = {}
     for role, grade, s in rows:
         cells.setdefault((role, grade), []).append(s)
     ranked = sorted(cells.items(), key=lambda kv: (-sum(sorted(kv[1])[-5:]) / min(5, len(kv[1])), -len(kv[1])))
+    ranked = [item for item in ranked if len(item[1]) >= min_n]
     return [{"role": r, "grade": g, "candidates": len(v), "best": round(max(v), 3)} for (r, g), v in ranked[:top]]

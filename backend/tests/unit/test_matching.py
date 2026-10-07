@@ -155,8 +155,11 @@ def test_compare_stays_anonymous():
 
 
 def test_recommended_categories_pick_the_strongest_cells():
-    cells = recommended_categories([("backend", "middle", 0.9), ("backend", "middle", 0.8), ("ml", "junior", 0.3)])
-    assert cells[0]["role"] == "backend" and cells[0]["candidates"] == 2
+    rows = [("backend", "middle", 0.9)] * 5 + [("backend", "middle", 0.8)]
+    rows += [("ml", "junior", 0.99), ("ml", "junior", 0.3)]
+    cells = recommended_categories(rows)
+    assert cells[0]["role"] == "backend" and cells[0]["candidates"] == 6
+    assert all(cell["candidates"] >= 5 for cell in cells)
 
 
 def test_relevance_labels_follow_the_hidden_truth():
@@ -282,6 +285,14 @@ def test_salary_changes_rank_only_when_both_sides_named_a_band():
                   _cand(salary_from=200_000, salary_to=280_000))
     assert short.score < plain.score
     assert any(r.code == "PAY_GAP" for r in short.reasons)
+
+
+def test_the_demo_ceiling_hints_when_wishes_straddle_it():
+    from app.services.matching import pay_counterfactual
+    need = NeedSpec(salary_from=180_000, salary_to=260_000)
+    people = [_cand(salary_from=amount) for amount in (220_000, 240_000, 280_000, 285_000, 290_000)]
+    hint = pay_counterfactual(need, people)
+    assert hint is not None and hint["known"] >= 5 and hint["gained"] >= 1
 
 
 def test_pay_counterfactual_starts_at_five_named_wishes():

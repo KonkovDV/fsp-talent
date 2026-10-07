@@ -10,6 +10,7 @@ venv/
 .env
 *.env
 .coverage
+coverage.json
 htmlcov/
 .pytest_cache/
 node_modules/

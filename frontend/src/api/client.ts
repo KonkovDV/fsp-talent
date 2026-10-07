@@ -116,6 +116,8 @@ export const getMyResults = () => api.get('/candidates/me/results')
 export const getMyOffers = () => api.get('/candidates/me/offers')
 export const respondToOffer = (offerId: string, action: 'accept' | 'reject', reason?: string) =>
   api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null })
+export const fileComplaint = (offerId: string, reason: string) =>
+  api.post('/candidates/me/complaints', { offer_id: offerId, reason })
 export const updateVisibility = (is_visible: boolean) =>
   api.patch('/candidates/me/visibility', { is_visible })
 
@@ -134,6 +136,13 @@ export const offerMarket = () => api.get('/offers/market')
 export const getMyEmployerOffers = () => api.get('/offers/')
 export const getOfferContacts = (id: string) => api.get(`/offers/${id}/contacts`)
 export const withdrawOffer = (id: string) => api.post(`/offers/${id}/withdraw`)
+export const getSlots = (offerId: string) => api.get(`/offers/${offerId}/slots`)
+export const proposeSlots = (offerId: string, slots: object[]) => api.post(`/offers/${offerId}/slots`, { slots })
+export const chooseSlot = (offerId: string, slotId: string) => api.post(`/offers/${offerId}/slots/${slotId}/choose`)
+export const setInterviewOutcome = (offerId: string, outcome: string) =>
+  api.post(`/offers/${offerId}/interview/outcome`, { outcome })
+export const downloadInterview = (offerId: string) =>
+  api.get(`/offers/${offerId}/interview.ics`, { responseType: 'blob' })
 
 export const getEmployerMe = () => api.get('/employer/me')
 export const updateEmployerMe = (data: object) => api.patch('/employer/me', data)

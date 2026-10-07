@@ -141,6 +141,8 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
     employer = await db.get(Employer, _eid(current))
     if not employer:
         raise HTTPException(404, "Работодатель не найден")
+    if getattr(employer, "invites_paused_at", None) is not None:
+        raise ApiError(403, "invites_paused", "Приглашения приостановлены до проверки")
     # Employers are not verified in the MVP: cap how many people one account can message per day.
     if await too_many(f"offers:create:{employer.id}", limit=_OFFERS_PER_DAY, window_seconds=86_400):
         raise HTTPException(429, "Лимит приглашений на сегодня исчерпан")
