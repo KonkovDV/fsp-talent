@@ -34,15 +34,45 @@ def _cand(**kw) -> CandidateFacts:
 
 
 def test_confirmed_profile_outranks_the_same_declared_fit():
-    """Same skills and grade: a passed test and FSP results sort first, without jumping a worse fit."""
-    declared = score(NEED, _cand(test_p=0.4, grade_source="assessed",
-                                 skills={"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
+    """Same skills and grade: a stronger test and FSP results sort first by a visible margin."""
+    weak = score(NEED, _cand(test_p=0.4, grade_source="assessed",
+                             skills={"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
     confirmed = score(NEED, _cand(test_p=0.95, fsp_lcb=0.7, grade_source="assessed",
                                   skills={"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
-    assert confirmed.score > declared.score
-    assert confirmed.score - declared.score < 0.01
+    assert confirmed.score - weak.score >= 0.05
     resume = score(NEED, _cand())
     assert confirmed.score - resume.score >= 0.15
+
+
+def test_inside_the_category_a_declared_skill_does_not_outweigh_the_test():
+    """Three required skills: one more self-described skill loses to a confirmed grade with a strong test."""
+    need = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL", "Docker"))
+    resume = score(need, _cand(skills={"Python": "self_reported", "PostgreSQL": "self_reported",
+                                       "Docker": "self_reported"}))
+    tested = score(need, _cand(grade_source="assessed", test_p=0.9,
+                               skills={"Python": "self_reported", "PostgreSQL": "self_reported"}))
+    assert tested.score > resume.score
+
+
+def test_confirmed_grade_outranks_declared_grade_at_the_same_skills():
+    declared = score(NEED, _cand(fsp_lcb=0.5))
+    assessed = score(NEED, _cand(fsp_lcb=0.5, grade_source="assessed", test_p=0.8))
+    assert assessed.score > declared.score
+
+
+def test_evidence_does_not_pull_another_category_over_a_matching_one():
+    """A strong frontend profile with the same skills stays below an untested backend candidate."""
+    matching = score(NEED, _cand())
+    other = score(NEED, _cand(role="frontend", grade_source="assessed", test_p=0.99, fsp_lcb=0.9,
+                              skills={"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
+    assert matching.score > other.score
+
+
+def test_test_and_fsp_lines_carry_their_contribution():
+    m = score(NEED, _cand(grade_source="assessed", test_p=0.9, fsp_lcb=0.2))
+    points = {r.code: r.points for r in m.reasons if r.points is not None}
+    assert set(points) == {"TEST_SCORE", "FSP_SCORE"}
+    assert points["TEST_SCORE"] > points["FSP_SCORE"] > 0
 
 
 def test_tested_skills_and_grade_outrank_declared_ones():

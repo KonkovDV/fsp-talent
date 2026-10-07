@@ -12,16 +12,17 @@ from __future__ import annotations
 
 import math
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.services.survey import SPECIALIZATIONS
 
 GRADES = ("intern", "junior", "middle", "senior", "lead")
 
-# Fit to the need (skills, grade, role) decides who belongs in the list. Inside one hundredth of
-# that fit, the confirmed profile decides the order: a passed test and FSP results outrank a
-# self-described resume (TZ section 2). A missing FSP history is omitted, not scored as zero.
-# A declared skill counts as 0.55 of a skill the test confirmed. docs/VALIDATION_MATCHING.md.
+# Fit to the need (skills, grade, role) decides who belongs in the list. Evidence (test and FSP) decides
+# the order inside the category: it is added with EVIDENCE_WEIGHT, scaled by how close the candidate is to the
+# requested role and grade, so a strong profile from another category is not pulled over a matching one,
+# while inside the category a passed test and FSP results outrank one more self-described skill (TZ section 2).
+# A missing FSP history is omitted, not scored as zero. docs/VALIDATION_MATCHING.md has the ablations.
 FIT_KEYS = ("skills", "grade", "role", "text", "industry")
 EVIDENCE_KEYS = ("test", "fsp")
 WEIGHTS = {
@@ -30,10 +31,17 @@ WEIGHTS = {
     "role": 0.20,
     "text": 0.05,
     "industry": 0.05,
-    "test": 0.62,
-    "fsp": 0.38,
+    "test": 0.50,
+    "fsp": 0.50,
 }
 UNTESTED = 0.20
+# Weight of the evidence next to the fit (fit has weight 1).
+EVIDENCE_WEIGHT = 0.40
+# A grade the candidate only declared counts for this share of a grade the test confirmed.
+DECLARED_GRADE = 0.85
+# Half of the evidence lift is always there inside the category, the other half follows skill coverage:
+# a candidate without the requested skills is not lifted over one who has them by test results alone.
+SKILL_GATE = 0.5
 LABELS = {
     "skills": "Навыки", "grade": "Грейд", "test": "Тест", "role": "Специализация",
     "fsp": "ФСП", "text": "Запрос", "industry": "Сфера",
@@ -76,7 +84,7 @@ SALARY_REFUSAL_FACTOR = 0.85
 SALARY_REFUSAL_CAP = 3
 REASON_SOURCE = {
     "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "UNTESTED": "тест",
-    "FSP_BONUS": "ФСП", "FSP_NEUTRAL": "ФСП",
+    "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП",
     "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
     "RELATED_SKILL": "заявлено",
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
@@ -130,6 +138,7 @@ class Reason:
     code: str
     text: str
     tone: str   # plus | minus | info
+    points: float | None = None   # contribution to the employer score, 0..1; set for the test and FSP lines
 
 
 @dataclass
@@ -175,6 +184,23 @@ def pass_lower_bound(p: float, z: float = 1.64) -> float:
 def _note(bucket: list[str], reasons: list[Reason], tone: str, code: str, text: str) -> None:
     bucket.append(text)
     reasons.append(Reason(code, text, tone))
+
+
+EVIDENCE_REASONS = {"test": ("TEST_SCORE", "UNTESTED"), "fsp": ("FSP_BONUS", "FSP_SCORE")}
+
+
+def _with_points(reasons: list[Reason], factors: list[Factor], scale: float) -> list[Reason]:
+    """Attach to the test and FSP lines how much each moved the score, so the card shows the contribution."""
+    present = [f for f in factors if f.key in EVIDENCE_KEYS and f.value is not None]
+    total = sum(f.weight for f in present)
+    if not total:
+        return reasons
+    points = {f.key: scale * f.weight / total * f.value for f in present}
+    out = []
+    for r in reasons:
+        key = next((k for k, codes in EVIDENCE_REASONS.items() if r.code in codes), None)
+        out.append(replace(r, points=round(points[key], 3)) if key in points else r)
+    return out
 
 
 def _related(skill: str, have: dict[str, str]) -> str | None:
@@ -236,11 +262,13 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         if missing:
             _note(minus, reasons, "minus", "SKILL_GAP", "Нет навыков: " + ", ".join(missing))
 
+    closeness = 1.0   # 1 inside the requested category; evidence weighs less the further the candidate is from it
     if need.grade in GRADES and c.grade in GRADES:
         gap = GRADES.index(c.grade) - GRADES.index(need.grade)
         base = {0: 1.0, 1: 0.6, -1: 0.35}.get(gap, 0.0)
+        closeness *= base
         assessed = c.grade_source == "assessed"
-        values["grade"] = base * (1.0 if assessed or not use_test else 0.85)
+        values["grade"] = base * (1.0 if assessed or not use_test else DECLARED_GRADE)
         if gap == 0:
             tail = " подтверждён тестом" if assessed else " указан кандидатом, тестом не подтверждён"
             text = f"Грейд {c.grade}{tail}"
@@ -297,6 +325,8 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             if values["fsp"] >= 0.5:
                 _note(plus, reasons, "plus", "FSP_BONUS",
                       f"Подтверждённый уровень ФСП (нижняя граница {c.fsp_lcb:.2f})")
+            else:
+                _note(info, reasons, "info", "FSP_SCORE", f"Результаты ФСП учтены (нижняя граница {c.fsp_lcb:.2f})")
 
     if need.text:
         values["text"] = max(0.0, min(1.0, c.text_rank))
@@ -313,8 +343,15 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         # Nothing to match against (an empty search): rank by how well the profile is confirmed.
         employer, basis = evidence or 0.0, "evidence"
     else:
-        # Evidence moves the score by less than 0.01, so it reorders only candidates the need fits equally.
-        employer, basis = fit + (0.009 * evidence if evidence is not None else 0.0), "fit"
+        # Inside one category the evidence decides: a test and FSP results outrank a self-described resume.
+        if values["role"] is not None:
+            closeness *= values["role"]
+        if values["skills"] is not None:
+            closeness *= (1.0 - SKILL_GATE) + SKILL_GATE * values["skills"]
+        lift = EVIDENCE_WEIGHT * (evidence or 0.0) * closeness
+        employer = (fit + lift) / (1.0 + EVIDENCE_WEIGHT)
+        reasons = _with_points(reasons, factors, EVIDENCE_WEIGHT * closeness / (1.0 + EVIDENCE_WEIGHT))
+        basis = "fit"
     accept = accept_probability(need.salary_from, need.salary_to, c.salary_from, c.salary_to)
     if accept is not None and c.salary_refusals > 0:
         accept *= SALARY_REFUSAL_FACTOR ** min(c.salary_refusals, SALARY_REFUSAL_CAP)

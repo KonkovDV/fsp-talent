@@ -1,6 +1,7 @@
 """
 Candidate search: SQL hard filters -> lexical / quality / optional dense rankings -> RRF fusion.
-Final order: (skill coverage, grade confirmed by a test, fused score, best LCB, id). Cards are
+Final order (order_pool): the explainable match score of app.services.matching, then the fused rank,
+the best LCB and the id; a cold candidate may take the last seat of a block of ten. Cards are
 anonymous: no name, no FSP id, evidence shown as status + year + percentile bucket instead of
 exact event and place.
 
@@ -285,7 +286,7 @@ async def search_candidates(
         m = matches[uuid.UUID(card["candidate_id"])]
         card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
                          "reasons": [{"code": r.code, "text": r.text, "tone": r.tone,
-                                      "source": reason_source(r.code)} for r in m.reasons],
+                                      "source": reason_source(r.code), "points": r.points} for r in m.reasons],
                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
                                      for f in m.factors]}
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
