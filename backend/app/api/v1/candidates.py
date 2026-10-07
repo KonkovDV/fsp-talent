@@ -393,7 +393,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         raise HTTPException(409, "Срок оффера истёк")
     if body.action == "accept":
         offer.status = "accepted"
-        offer.contacts_revealed_at = datetime.now(UTC)
+        offer.contacts_revealed_at = offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:
@@ -401,6 +401,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
             raise HTTPException(422, "Укажите причину отказа")
         offer.status = "rejected"
         offer.decline_reason = body.reason
+        offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
                           actor_id=offer.candidate_id,
                           meta={"offer_id": str(offer.id), "reason": body.reason}))
