@@ -73,10 +73,10 @@ jobs:
       - name: Run unit tests
         run: cd backend && pytest tests/unit/ -v --cov=app/services --cov-report=xml --cov-fail-under=63
       - name: Dependency audit
-        # python-jose 3.5.0 and ecdsa 0.19.2 have no patched release. pip itself is upgraded first.
+        # Tokens are signed with PyJWT; nothing is ignored. pip itself is upgraded first.
         run: |
           python -m pip install -U pip pip-audit
-          cd backend && pip-audit --ignore-vuln PYSEC-2026-1325 --ignore-vuln CVE-2026-85394
+          cd backend && pip-audit
       # Fixed seed: a broken threshold is a regression in the item generators or the adaptive test.
       - name: Validate the adaptive test
         run: cd backend && python -m app.validation.assessment --n 300 --seed 7 --check

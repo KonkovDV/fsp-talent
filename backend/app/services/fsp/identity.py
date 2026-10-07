@@ -26,7 +26,7 @@ from typing import Protocol
 from urllib.parse import urlencode
 
 import httpx
-from jose import jwt
+import jwt
 
 from app.core.config import settings
 from app.core.redis_client import get_redis
@@ -156,10 +156,13 @@ class KeycloakFspIdProvider:
             if self._http is None:
                 await client.aclose()
         try:
-            claims = jwt.decode(token.json()["id_token"], jwks, algorithms=["RS256", "ES256"],
-                                audience=settings.FSP_ID_CLIENT_ID, issuer=self.issuer,
-                                options={"verify_at_hash": False})
-        except Exception as e:   # jose raises several error types; all mean "do not trust this token"
+            id_token = token.json()["id_token"]
+            kid = jwt.get_unverified_header(id_token).get("kid")
+            keyset = jwt.PyJWKSet.from_dict(jwks)
+            signing = next(k for k in keyset.keys if kid is None or k.key_id == kid)
+            claims = jwt.decode(id_token, signing.key, algorithms=["RS256", "ES256"],
+                                audience=settings.FSP_ID_CLIENT_ID, issuer=self.issuer)
+        except Exception as e:   # a bad signature, key, audience or issuer all mean "do not trust this token"
             raise FspIdError("id_token") from e
         fsp_id = claims.get(settings.FSP_ID_CLAIM)
         if not isinstance(fsp_id, str) or not fsp_id:

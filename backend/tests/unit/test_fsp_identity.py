@@ -5,10 +5,11 @@ import uuid
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from jose import jwk, jwt
+from jwt.algorithms import RSAAlgorithm
 
 from app.core.config import settings
 from app.services.fsp import identity
@@ -104,11 +105,8 @@ def _keypair():
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                             serialization.NoEncryption()).decode()
-    public = key.public_key().public_bytes(serialization.Encoding.PEM,
-                                           serialization.PublicFormat.SubjectPublicKeyInfo).decode()
-    jwk_public = jwk.construct(public, "RS256").to_dict()
+    jwk_public = RSAAlgorithm.to_jwk(key.public_key(), as_dict=True)
     jwk_public.update(kid="k1", use="sig", alg="RS256")
-    jwk_public = {k: (v.decode() if isinstance(v, bytes) else v) for k, v in jwk_public.items()}
     return pem, {"keys": [jwk_public]}
 
 
