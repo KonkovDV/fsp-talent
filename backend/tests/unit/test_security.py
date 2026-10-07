@@ -148,14 +148,14 @@ def test_offer_terms_stay_immutable_and_one_pending_pair_is_unique():
     for route in router.routes:
         methods |= set(getattr(route, "methods", ()))
     assert "PUT" not in methods and "PATCH" not in methods
-    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0002_integrity.py"
+    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0001_initial.py"
     assert "uq_offers_pending_pair" in migration.read_text(encoding="utf-8")
 
 
 def test_app_connections_leave_the_superuser_role():
     from pathlib import Path
 
-    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0029_app_role.py"
+    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0001_initial.py"
     text = migration.read_text(encoding="utf-8")
     assert "CREATE ROLE fsp_app NOLOGIN NOSUPERUSER NOBYPASSRLS" in text
     engine = Path(__file__).resolve().parents[2] / "app" / "core" / "database.py"
