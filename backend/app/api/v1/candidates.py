@@ -565,7 +565,8 @@ class SurveyIn(BaseModel):
     # The subject area (fintech, retail…) is optional: the IT direction is the specialization itself.
     industry: str = "any"
     work_goal: str = "job"
-    declared_grade: Literal["intern", "junior", "middle", "senior", "lead"] | None = None
+    # Q&A: the candidate chooses the grade; the first test checks exactly this choice.
+    declared_grade: Literal["intern", "junior", "middle", "senior", "lead"]
     experience_years: int | None = Field(None, ge=0, le=50)
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
@@ -582,10 +583,7 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
     if not p:
         raise HTTPException(404, "Профиль не найден")
     p.specialization, p.industry, p.work_goal = body.specialization, body.industry, body.work_goal
-    if body.declared_grade is not None:
-        p.declared_grade = body.declared_grade
-    elif body.work_goal == "internship" and not p.declared_grade:
-        p.declared_grade = "intern"
+    p.declared_grade = body.declared_grade
     if "salary_from_gross" in body.model_fields_set or "salary_to_gross" in body.model_fields_set:
         if body.salary_from_gross and body.salary_to_gross and body.salary_from_gross > body.salary_to_gross:
             raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")

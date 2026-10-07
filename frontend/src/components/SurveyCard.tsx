@@ -19,6 +19,11 @@ interface Props {
   hint?: SurveyHint | null
 }
 
+/** Experience only suggests a grade; the candidate chooses it (Q&A), the test confirms it. */
+function byExperience(years: number): string {
+  return years < 2 ? 'junior' : years < 5 ? 'middle' : 'senior'
+}
+
 /** TZ 2.1: direction and specialization from the survey + declared grade + test make the category.
  * The TZ word «отрасль» is the IT direction; the subject area (fintech, retail…) is optional. */
 export default function SurveyCard({ profile, compact, hint }: Props) {
@@ -44,7 +49,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
   }, [hint])
 
   const save = useMutation({
-    mutationFn: () => saveSurvey({ specialization: spec, industry: industry || 'any', work_goal: goal, declared_grade: grade || null,
+    mutationFn: () => saveSurvey({ specialization: spec, industry: industry || 'any', work_goal: goal, declared_grade: grade,
       experience_years: years === '' ? null : Number(years),
       salary_from_gross: payFrom === '' ? null : Number(payFrom),
       salary_to_gross: payTo === '' ? null : Number(payTo) }),
@@ -87,11 +92,17 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
             {entries(opts?.work_goals).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>
-        <label>Ваш грейд (заявленный)
-          <select value={grade} onChange={e => setGrade(e.target.value)} className={select}>
-            <option value="">не указан</option>
+        <label>Ваш грейд
+          <select value={grade} onChange={e => setGrade(e.target.value)} className={select} aria-label="Грейд" required>
+            <option value="">выберите</option>
             {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{gradeRu(g)}</option>)}
           </select>
+          <span className="field-hint">
+            {years !== '' && Number.isFinite(Number(years))
+              ? `По стажу ${years} лет обычно выбирают ${gradeRu(byExperience(Number(years)))}. `
+              : ''}
+            Первый тест проверит именно этот грейд.
+          </span>
         </label>
         <label>Опыт, лет
           <input type="number" min={0} max={50} value={years} onChange={e => setYears(e.target.value)} className="input mt-1" />
@@ -104,7 +115,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button onClick={() => save.mutate()} disabled={!spec || save.isPending} className="btn-primary text-sm">
+        <button onClick={() => save.mutate()} disabled={!spec || !grade || save.isPending} className="btn-primary text-sm">
           {save.isPending ? 'Сохраняем…' : 'Сохранить опрос'}
         </button>
         {note && <span className="text-sm text-ink-2" role="status">{note}</span>}

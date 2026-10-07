@@ -16,8 +16,10 @@ def test_skills_outrank_discipline_and_declaration_outranks_experience():
     assert by_discipline["primary_role"] == "security"
     declared = assign_category(["Python", "Go"], [], experience_years=6, declared_grade="junior")
     assert declared["grade"] == "junior" and declared["grade_source"] == "declared"
+    # Experience is only a hint: without a chosen grade the card is not raised to senior by years.
     experienced = assign_category(["Python", "Go"], [], experience_years=6)
-    assert experienced["grade"] == "senior" and experienced["grade_source"] == "experience"
+    assert experienced["grade"] == "junior" and experienced["grade_source"] == "default"
+    assert any("обычно это senior" in line for line in experienced["explanation"])
     years = assign_category(["Python", "Go"], [], experience_years=3)
     assert any("3 года" in line for line in years["explanation"])
     many = assign_category(["Python", "Go", "FastAPI", "PostgreSQL", "Docker", "Algorithms"], [], experience_years=5)
@@ -28,7 +30,7 @@ def test_skills_outrank_discipline_and_declaration_outranks_experience():
     assert unknown["grade_source"] == "default"
     # Contest LCB never becomes an HR grade, including a near-certain top result.
     rookie = assign_category(["Python", "FastAPI"], [{"discipline": "algorithmic", "lcb": 0.95}], experience_years=1)
-    assert rookie["grade"] == "junior" and rookie["grade_source"] == "experience"
+    assert rookie["grade"] == "junior" and rookie["grade_source"] == "default"
 
 
 # ---------------------------------------------------------------------------
