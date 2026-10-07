@@ -10,6 +10,8 @@ from app.api.docs import install_docs
 from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
 from app.core.config import PUBLISHED_SECRETS, settings
+from app.core.rls import reset_rls, set_rls
+from app.core.security import decode_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -46,10 +48,34 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+_OPEN = ("/api/v1/auth", "/api/v1/public", "/api/v1/fsp-id-demo", "/health", "/docs", "/openapi.json")
+
+
+def _rls_token(request: Request):
+    path = request.url.path
+    if path.startswith(_OPEN) or path in _OPEN:
+        return set_rls(bypass=True)
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        try:
+            payload = decode_token(header.split(" ", 1)[1])
+        except ValueError:
+            payload = None
+        if payload and payload.get("role") == "participant":
+            return set_rls(participant_id=str(payload.get("sub") or ""))
+        if payload and payload.get("role") == "employer":
+            return set_rls(employer_id=str(payload.get("sub") or ""))
+    return set_rls()
+
+
 @app.middleware("http")
 async def request_timing(request: Request, call_next):
     start = time.perf_counter()
-    response = await call_next(request)
+    scope = _rls_token(request)
+    try:
+        response = await call_next(request)
+    finally:
+        reset_rls(scope)
     duration_ms = (time.perf_counter() - start) * 1000
     response.headers["X-Response-Time"] = f"{duration_ms:.1f}ms"
     if duration_ms > 2000:

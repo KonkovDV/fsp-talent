@@ -432,6 +432,11 @@ def check_needs(token):
     status, no_fsp = call("GET", "/search/candidates?skills=Python,Django&has_fsp=false", token=token)
     assert status == 200 and no_fsp["items"], no_fsp
     assert any("Нет истории ФСП" in line for line in no_fsp["items"][0]["match"]["info"]), no_fsp["items"][0]
+    other = _employer_login("hr@quantumlab.demo")
+    status, stolen = call("GET", f"/needs/{need['id']}", token=other)
+    assert status == 404, stolen
+    status, stolen_matches = call("GET", f"/needs/{need['id']}/matches", token=other)
+    assert status == 404, stolen_matches
 
 
 def _employer_login(email):

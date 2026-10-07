@@ -51,8 +51,9 @@ class NeedParams(BaseModel):
         return self
 
     def spec(self) -> NeedSpec:
-        return NeedSpec(role=self.role, grade=self.grade, skills=tuple(self.skills), nice=tuple(self.nice_to_have),
-                        industry=self.industry, text=bool(self.q))
+        return NeedSpec(
+            role=self.role, grade=self.grade, skills=tuple(self.skills), nice=tuple(self.nice_to_have),
+            industry=self.industry, text=bool(self.q), salary_from=self.salary_from, salary_to=self.salary_to)
 
 
 class NeedIn(BaseModel):
@@ -197,7 +198,7 @@ async def exam_preview(need_id: uuid.UUID, current: dict = Depends(get_current_e
 @router.get("/{need_id}/compare")
 async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
                   current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    """Side-by-side factors for up to three candidates already in this need's match list."""
+    """Side-by-side factors for up to four candidates already in this need's match list."""
     if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
     need = await _own(db, need_id, current)
@@ -213,7 +214,7 @@ async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
     p = NeedParams(**(await _params(db, need)).params)
     result = await search_candidates(
         db, skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal, need=p.spec())
-    picked = wanted[:3]
+    picked = wanted[:4]
     items = anonymous_compare(result["items"], picked)
     if picked and len(items) != len(picked):
         raise ApiError(404, "not_found", "Кто-то из выбранных кандидатов недоступен")

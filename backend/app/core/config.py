@@ -39,12 +39,16 @@ class Settings(BaseSettings):
     # JWT
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # The refresh cookie is Secure only on HTTPS. The local stand is HTTP.
+    COOKIE_SECURE: bool = False
     ALGORITHM: str = "HS256"
 
     # GigaChat (AI advisor). Credentials = Authorization key from developers.sber.ru
     GIGACHAT_CREDENTIALS: str = ""
     GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
     GIGACHAT_MODEL: str = "GigaChat-2-Pro"
+    # A different model re-reads an item draft. Empty means drafts are not requested.
+    GIGACHAT_CHECK_MODEL: str = ""
     GIGACHAT_VERIFY_SSL: bool = True
 
     # Embeddings
@@ -73,7 +77,8 @@ class Settings(BaseSettings):
 
     # FSP ID login (OpenID Connect, Keycloak-compatible). mock: demo provider page on this site.
     FSP_ID_MODE: str = "mock"   # mock | oidc
-    FSP_ID_ISSUER: str = ""     # https://<keycloak>/realms/<realm>
+    FSP_ID_ISSUER: str = ""     # https://<keycloak>/realms/<realm>, the address the browser opens
+    FSP_ID_BACKEND_ISSUER: str = ""  # same realm as seen from the API container; empty uses FSP_ID_ISSUER
     FSP_ID_CLIENT_ID: str = "fsp-talent"
     FSP_ID_CLIENT_SECRET: str = ""
     FSP_ID_CLAIM: str = "fsp_id"

@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from app.services.scoring.engine import (
+    EVENT_CAP,
     compute_discipline_score,
     event_quality,
     event_weight,
@@ -63,7 +64,7 @@ def test_rank_ladder_and_small_field_downgrade():
 
 
 # ---------------------------------------------------------------------------
-# v3.0.0: result class instead of competition status (Q&A with ФСП)
+# v3.1.0: participation scores 0 and only the strongest events enter the sum (Q&A with ФСП)
 # ---------------------------------------------------------------------------
 
 STATUSES = ["world", "russia_championship", "russia_cup", "russia_youth", "all_russian",
@@ -105,6 +106,16 @@ def test_many_participations_do_not_beat_a_few_wins():
     # A participation added to a win lowers the mean instead of padding it.
     mixed = compute_discipline_score(wins + padded[:1], reference_date=ref)
     assert mixed["score"] < few["score"]
+
+
+def test_participation_scores_nothing_and_the_cap_drops_the_weakest():
+    assert event_quality(90, 100) == 0.0
+    ref = date(2026, 10, 1)
+    kept = [{**ev(1, 100, "other", when=ref), "id": f"w{i}"} for i in range(EVENT_CAP)]
+    extra = [*kept, {**ev(90, 100, "other", when=ref), "id": "pad"}]
+    assert compute_discipline_score(kept, reference_date=ref)["lcb"] == (
+        compute_discipline_score(extra, reference_date=ref)["lcb"])
+    assert compute_discipline_score(extra, reference_date=ref)["events_count"] == EVENT_CAP + 1
 
 
 def test_more_equal_evidence_raises_the_lower_bound():

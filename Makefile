@@ -1,5 +1,5 @@
 # Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
-.PHONY: help demo up down reset seed logs test lint check validate load docs-pdf
+.PHONY: help demo up down reset seed logs test lint check validate evaluate load docs-pdf
 
 help:
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск)"
@@ -11,6 +11,7 @@ help:
 	@echo "make test      — юнит-тесты внутри контейнера"
 	@echo "make lint      — проверка стиля Python"
 	@echo "make validate  — проверка адаптивного теста и подбора на синтетике"
+	@echo "make evaluate — проверка стенда, набор жюри и полные прогоны теста на 2000 и 5000"
 	@echo "make check     — сквозная проверка API на запущенном стенде"
 	@echo "make load      — 40 пользователей одновременно в течение минуты"
 	@echo "make docs-pdf  — собрать docs/FSP_Talent_documentation.pdf (нужны Python, Node.js и Chromium)"
@@ -48,6 +49,12 @@ lint:
 validate:
 	docker compose exec -T backend python -m app.validation.assessment --n 300 --seed 7 --check
 	docker compose exec -T backend python -m app.validation.matching --check
+
+evaluate: validate
+	docker compose exec -T backend python -m app.validation.jury_pack app/validation/resources/jury_profiles.json
+	docker compose exec -T backend python -m app.validation.jury_pack app/validation/resources/jury_profiles.csv
+	docker compose exec -T backend python -m app.validation.assessment --n 2000 --seed 7
+	docker compose exec -T backend python -m app.validation.assessment --n 5000 --seed 7
 
 check:
 	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py

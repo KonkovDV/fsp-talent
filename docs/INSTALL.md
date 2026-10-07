@@ -62,7 +62,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | http://localhost/health | `{"status":"ok",...}` |
 | http://localhost:8025 | Mailpit: письма с кодами подтверждения и уведомлениями |
 
-Команда `docker compose ps` должна показать восемь контейнеров в состоянии `running`. У всех, кроме `redis` и `nginx`, дополнительно стоит `healthy`.
+Команда `docker compose ps` должна показать девять контейнеров в состоянии `running`. У всех, кроме `redis` и `nginx`, дополнительно стоит `healthy`.
 
 Сквозная проверка API на запущенном стенде:
 

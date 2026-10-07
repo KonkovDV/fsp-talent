@@ -8,6 +8,7 @@ regexes = [
   '''change-me-use-openssl-rand-hex-32''',
   '''test-secret-key-for-ci-only''',
   '''demo12345''',
+  '''fsp-talent-demo''',
 ]
 paths = [
   '''docs/.*''',

@@ -31,6 +31,7 @@ export function apiError(error: unknown, fallback = 'Ошибка'): string {
 export const api = axios.create({
   baseURL: '/api/v1',
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 })
 
 api.interceptors.request.use((config) => {
@@ -44,16 +45,33 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
+  async (error) => {
     const url = String(error.config?.url ?? '')
+    const config = error.config as ({ _retried?: boolean } & NonNullable<typeof error.config>) | undefined
     // A failed login is also 401. Reloading /login would wipe the error on the form.
-    if (error.response?.status === 401 && !url.includes('/auth/')) {
+    if (error.response?.status === 401 && config && !url.includes('/auth/') && !config._retried) {
+      config._retried = true
+      try {
+        const renewed = await api.post('/auth/refresh', {})
+        const token = renewed.data?.access_token as string | undefined
+        const role = useAuthStore.getState().userRole
+        if (token && role) {
+          useAuthStore.getState().setAuth(token, role)
+          config.headers.Authorization = `Bearer ${token}`
+          return api(config)
+        }
+      } catch { /* the cookie is missing or already used */ }
       useAuthStore.getState().logout()
       if (window.location.pathname !== '/login') window.location.href = '/login'
     }
     return Promise.reject(error)
   }
 )
+
+export async function signOut() {
+  try { await api.post('/auth/logout') } catch { /* the cookie may already be gone */ }
+  useAuthStore.getState().logout()
+}
 
 export type Role = 'participant' | 'employer'
 const form = (username: string, password: string) =>
@@ -135,12 +153,14 @@ export const vacancyApplications = () => api.get('/vacancies/applications')
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
 export const assessmentBlueprint = () => api.get('/assessment/blueprint')
-export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null; mode?: 'grade' | 'express' }) =>
-  api.post('/assessment/start', data)
+export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null; mode?: 'grade' | 'express' }, idempotencyKey?: string) =>
+  api.post('/assessment/start', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined)
 export const activeAssessment = () => api.get('/assessment/active')
 export const answerAssessment = (sessionId: string, item_token: string,
   answer: { answer_index: number } | { answer_text: string }) =>
-  api.post(`/assessment/${sessionId}/answer`, { item_token, ...answer })
+  api.post(`/assessment/${sessionId}/answer`, { item_token, ...answer }, {
+    headers: { 'Idempotency-Key': `${sessionId}:${item_token}` },
+  })
 export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
 export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
 export const assessmentCooldown = (specialization?: string) =>
@@ -155,6 +175,7 @@ export const answerPractice = (id: string, body: { answer_index?: number; answer
   api.post(`/assessment/practice/${id}/answer`, body)
 export const myApplications = () => api.get('/vacancies/my-applications')
 export const itemHealth = () => api.get('/public/assessment/items')
+export const itemPsychometrics = (spec: string) => api.get('/public/assessment/psychometrics', { params: { spec } })
 
 export const surveyOptions = () => api.get('/candidates/survey-options')
 export const saveSurvey = (data: {
@@ -167,6 +188,8 @@ export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)
 export const verifyCredential = (credential: object) => api.post('/public/credentials/verify', credential)
+export const credentialStatus = (id: string) => api.get(`/public/credentials/${id}/status`)
+export const presentResult = (id: string) => api.post(`/candidates/me/results/${id}/presentation`)
 
 export const listNeeds = () => api.get('/needs')
 export const createNeed = (data: object) => api.post('/needs', data)

@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import collections
 import contextlib
+import math
 import random
 import statistics
 import sys
@@ -78,6 +79,8 @@ class Session:
     # key, family, a, b, c, correct
     answers: list[tuple[str, str, float, float, float, bool]] = field(default_factory=list)
     theta_hat: float = 0.0
+    se: float = 1.0
+    p_pass: float = 0.5
 
 
 _TYPED = True   # switched off by choices_only() for the ablation
@@ -100,7 +103,8 @@ def choices_only():
 def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.Random,
                 leaked_family: str | None = None, blocked: set[str] | None = None,
                 guesser: bool = False, offsets: dict[str, float] | None = None,
-                attack: str | None = None, collision: dict[str, float] | None = None) -> Session:
+                attack: str | None = None, collision: dict[str, float] | None = None,
+                exposure: dict[str, float] | None = None) -> Session:
     state = State(spec=spec, target=target)
     keys: list[str] = []
     answers = []
@@ -108,7 +112,7 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         verdict = evaluate(state)
         if verdict.done:
             break
-        ch = choose(state, rng, offsets=offsets, blocked=blocked)
+        ch = choose(state, rng, offsets=offsets, blocked=blocked, exposure=exposure)
         key = item_key(ch.family, ch.level)
         typed = _TYPED and rng.random() < typed_share(ch.family.id, ch.level)
         c = TYPED_C if typed else CHOICE_C
@@ -130,7 +134,8 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         keys.append(key)
         answers.append((key, ch.family.id, ch.a, ch.b, c, correct))
     out = decide(state)
-    s = Session(spec, target, theta, out.earned, out.passed, out.recommend_next, state.n, keys, answers, out.theta)
+    s = Session(spec, target, theta, out.earned, out.passed, out.recommend_next, state.n, keys, answers,
+                out.theta, out.se, out.p_pass)
     return s
 
 
@@ -179,9 +184,15 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
            blocked: set[str] | None = None, offsets: dict[str, float] | None = None
            ) -> tuple[CohortReport, list[Session]]:
     sessions = []
-    for theta, spec, target in people:
+    seen: collections.Counter[str] = collections.Counter()
+    for index, (theta, spec, target) in enumerate(people):
         leaked = MAIN_FAMILY[spec] if rng.random() < leak_share else None
-        sessions.append(run_session(theta, spec, target, truth, rng, leaked, blocked, offsets=offsets))
+        # The live bank starts Sympson–Hetter after the same warm-up the selector uses.
+        rates = {key: count / index for key, count in seen.items()} if index >= 20 else None
+        session = run_session(theta, spec, target, truth, rng, leaked, blocked, offsets=offsets,
+                              exposure=rates)
+        seen.update(set(session.keys))
+        sessions.append(session)
     n = len(sessions)
     right = sum(s.passed == (s.theta >= CUTS[s.target]) for s in sessions)
     clear = [s for s in sessions if abs(s.theta - CUTS[s.target]) > 0.5]
@@ -358,6 +369,12 @@ class Report:
     mae_a_after: float
     topic_false_pass: float
     topic_accuracy: float
+    rudner_accuracy: float
+    rudner_consistency: float
+    posterior_accuracy: float
+    grade_matrix: list[list[int]]
+    overlap: float
+    region_peaks: list[float]
 
 
 def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
@@ -431,6 +448,80 @@ def _topic_floor_effect(sessions: list[Session]) -> tuple[float, float]:
     return right / n, below_pass / max(1, below_n)
 
 
+def _phi(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+MATRIX_LABELS = ("ниже", *GRADE_ORDER)
+
+
+def grade_matrix(sessions: list[Session]) -> list[list[int]]:
+    """Counts of true grade (from θ) by the grade the session assigned. «ниже» is below intern, or no grade."""
+    index = {name: i for i, name in enumerate(MATRIX_LABELS)}
+    grid = [[0 for _ in MATRIX_LABELS] for _ in MATRIX_LABELS]
+    for session in sessions:
+        row = index[true_grade(session.theta) or "ниже"]
+        col = index[session.earned or "ниже"]
+        grid[row][col] += 1
+    return grid
+
+
+def region_exposure(sessions: list[Session], seed: int) -> list[float]:
+    """Max share of one item key inside each of four hidden groups.
+
+    The group label comes from its own generator. The item selector never receives it,
+    so a gap between groups is sampling noise.
+    """
+    labels = ("1", "2", "3", "4")
+    rng = random.Random(seed)
+    groups: dict[str, list[Session]] = {label: [] for label in labels}
+    for session in sessions:
+        groups[rng.choice(labels)].append(session)
+    peaks: list[float] = []
+    for group in groups.values():
+        if not group:
+            peaks.append(0.0)
+            continue
+        counts = collections.Counter(key for session in group for key in set(session.keys))
+        peaks.append(max(counts.values()) / len(group))
+    return peaks
+
+
+def item_overlap(sessions: list[Session]) -> float:
+    """Mean share of a candidate's items that another candidate in the same run also saw."""
+    freq: collections.Counter[str] = collections.Counter(key for session in sessions for key in set(session.keys))
+    n = len(sessions)
+    if n < 2:
+        return 0.0
+    total = used = 0.0
+    for session in sessions:
+        keys = set(session.keys)
+        if not keys:
+            continue
+        total += sum(freq[key] - 1 for key in keys) / len(keys)
+        used += 1
+    return total / used / (n - 1) if used else 0.0
+
+
+def rudner(sessions: list[Session]) -> tuple[float, float, float]:
+    """Classification accuracy at the declared-grade cut.
+
+    Rudner (2001) treats θ̂ as normal with the posterior SD and averages the probability of the
+    assigned side of the cut. Consistency is the average of p² + (1−p)². The third number is the
+    same accuracy from the grid posterior the product actually uses, not from the normal approximation.
+    """
+    rudner_acc, consistency, posterior = [], [], []
+    for s in sessions:
+        se = max(s.se, 1e-3)
+        p_above = 1.0 - _phi((CUTS[s.target] - s.theta_hat) / se)
+        assigned = p_above if s.passed else 1.0 - p_above
+        rudner_acc.append(assigned)
+        consistency.append(p_above * p_above + (1.0 - p_above) ** 2)
+        posterior.append(s.p_pass if s.passed else 1.0 - s.p_pass)
+    n = max(1, len(sessions))
+    return sum(rudner_acc) / n, sum(consistency) / n, sum(posterior) / n
+
+
 def _guessers(truth: Truth, rng: random.Random) -> float:
     guess = [run_session(0.0, rng.choice(SPECS), rng.choice(GRADE_ORDER), truth, rng, guesser=True)
              for _ in range(300)]
@@ -464,6 +555,10 @@ def run(n: int = 3000, seed: int = 7) -> Report:
     fixed_pass = _attack_pass(transfer_people, truth, side, offsets, rates, fixed=True)
     mae_before, mae_after = _discrimination_mae(clean_sessions, truth)
     topic_acc, topic_fp = _topic_floor_effect(clean_sessions)
+    rudner_acc, rudner_cons, posterior_acc = rudner(clean_sessions)
+    matrix = grade_matrix(clean_sessions)
+    overlap = item_overlap(clean_sessions)
+    region_peaks = region_exposure(clean_sessions, seed + 17)
     cusum_leaked = len({k for k, st in stats.items() if st.cusum_alarm} & leaked_keys)
     cusum_false = sum(1 for st in clean_alarms.values() if st.cusum_alarm)
     return Report(
@@ -481,6 +576,8 @@ def run(n: int = 3000, seed: int = 7) -> Report:
         cusum_leaked=cusum_leaked, cusum_false_clean=cusum_false,
         mae_a_before=mae_before, mae_a_after=mae_after,
         topic_false_pass=topic_fp, topic_accuracy=topic_acc,
+        rudner_accuracy=rudner_acc, rudner_consistency=rudner_cons, posterior_accuracy=posterior_acc,
+        grade_matrix=matrix, overlap=overlap, region_peaks=region_peaks,
     )
 
 
@@ -513,6 +610,16 @@ def _retest_row(name: str, r: Retest) -> str:
 def _disc_row(name: str, d: Discrimination) -> str:
     return (f"| {name} | {d.keys} | {d.median_r:.2f} | {d.good_share:.0%} | {d.weak_right:.0%} | "
             f"{d.strong_right:.0%} |")
+
+
+def _region_line(r: Report) -> str:
+    peaks = ", ".join(f"{p:.0%}" for p in r.region_peaks)
+    high = max(r.region_peaks) if r.region_peaks else 0.0
+    ratio = (min(r.region_peaks) / high) if high else 1.0
+    return (
+        "- Экспозиция по регионам: четыре метки назначены отдельным генератором и в выбор задания не входят. "
+        f"Максимальная доля одного ключа в группах: {peaks}. Отношение меньшей к большей: {ratio:.2f}."
+    )
 
 
 def markdown(r: Report, n: int, seed: int) -> str:
@@ -565,6 +672,22 @@ def markdown(r: Report, n: int, seed: int) -> str:
            if r.mae_a_after > r.mae_a_before else ""),
         f"- Если слабая тема блокирует сдачу: точность {r.topic_accuracy:.1%}, ложные сдачи {r.topic_false_pass:.1%} "
         f"(в продукте порог по теме не включён, пока сравнение не подтвердит его).",
+        f"- Точность классификации по Руднеру у порога заявленного грейда: {r.rudner_accuracy:.1%}, "
+        f"согласованность {r.rudner_consistency:.1%}. Вероятность принятого решения по апостериорному "
+        f"распределению: {r.posterior_accuracy:.1%}.",
+        f"- Перекрытие заданий: в среднем другой кандидат этой же симуляции видел {r.overlap:.1%} "
+        f"заданий данного кандидата. Максимальная экспозиция ключа — в таблице выше.",
+        _region_line(r),
+        "",
+        "Матрица «истинный грейд по θ × грейд, который назначила сессия» в сценарии «без утечки». "
+        "Строка «ниже» — способность ниже стажёра или сессия не назначила грейд.",
+        "",
+        "| Истинный \\ назначенный | " + " | ".join(MATRIX_LABELS) + " |",
+        "|" + "---|" * (len(MATRIX_LABELS) + 1),
+        *[
+            f"| {MATRIX_LABELS[i]} | " + " | ".join(str(cell) for cell in row) + " |"
+            for i, row in enumerate(r.grade_matrix)
+        ],
         "",
     ])
 

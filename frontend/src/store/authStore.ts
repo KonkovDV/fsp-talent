@@ -5,17 +5,16 @@ type Role = 'participant' | 'employer'
 
 interface AuthFields {
   token: string | null
-  refreshToken: string | null
   userRole: Role | null
   userId: string | null
 }
 
 interface AuthState extends AuthFields {
-  setAuth: (token: string, refreshToken: string, role: Role) => void
+  setAuth: (token: string, role: Role) => void
   logout: () => void
 }
 
-const SIGNED_OUT: AuthFields = { token: null, refreshToken: null, userRole: null, userId: null }
+const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null }
 
 function parseJwtPayload(token: string): Record<string, unknown> {
   try {
@@ -38,21 +37,25 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       ...SIGNED_OUT,
-      setAuth: (token, refreshToken, role) => {
+      setAuth: (token, role) => {
         const payload = parseJwtPayload(token)
-        set({ token, refreshToken, userRole: role, userId: String(payload['sub'] ?? '') })
+        set({ token, userRole: role, userId: String(payload['sub'] ?? '') })
       },
       logout: () => set(SIGNED_OUT),
     }),
     {
       name: 'fsp-auth',
       // Runs while the store is being created, so it must not touch useAuthStore itself.
-      // An expired session is dropped as a whole: the client has no refresh flow yet, and a
-      // stray refresh token or role left in storage is only a credential lying around.
+      // The refresh token is an HttpOnly cookie, so a copy in this store is dropped.
       merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as Partial<AuthFields>
+        const saved = (persisted ?? {}) as Partial<AuthFields> & { refreshToken?: string | null }
         if (isTokenExpired(saved.token ?? null)) return { ...current, ...SIGNED_OUT }
-        return { ...current, ...saved }
+        return {
+          ...current,
+          token: saved.token ?? null,
+          userRole: saved.userRole ?? null,
+          userId: saved.userId ?? null,
+        }
       },
       // merge only fixes the in-memory state. Writing it back through the store's own action also
       // wipes the stale tokens from localStorage.

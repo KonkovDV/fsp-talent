@@ -56,6 +56,7 @@ from app.services.assessment import (
     session_items,
     start_session,
 )
+from app.services.matching import wilson_lower
 from app.services.practice import (
     answer_practice,
     public_attempt,
@@ -134,6 +135,12 @@ class TopicOut(BaseModel):
     label: str
     answered: int
     correct: int
+    wilson_low: float | None = None
+
+
+class PersonFitOut(BaseModel):
+    lz_star: float
+    review: bool = Field(description="Ответы расходятся с моделью: повод пересдать, не вывод о списывании")
 
 
 class ResultOut(BaseModel):
@@ -159,6 +166,8 @@ class ResultOut(BaseModel):
     excluded_items: int
     trial: bool = False
     note: str | None = None
+    person_fit: PersonFitOut | None = None
+    family_review: bool = False
 
 
 class ProgressOut(BaseModel):
@@ -166,6 +175,8 @@ class ProgressOut(BaseModel):
     min_items: int = cat.MIN_ITEMS
     max_items: int = cat.MAX_ITEMS
     p_pass: float | None = None
+    theta: float | None = None
+    se: float | None = None
 
 
 class SessionOut(BaseModel):
@@ -203,6 +214,9 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
         GRADE_ORDER.index(session.grade_assigned) >= GRADE_ORDER.index(session.target_grade)
     flags = session.flags or {}
     outcome = reason or flags.get("outcome") or ("passed" if passed else "not_passed")
+    raw_fit = flags.get("person_fit")
+    fit = PersonFitOut(lz_star=float(raw_fit["lz_star"]), review=bool(raw_fit.get("review"))) \
+        if isinstance(raw_fit, dict) and "lz_star" in raw_fit else None
     return ResultOut(
         outcome="trial" if trial else outcome, passed=passed, upgraded=outcome == "upgrade", trial=trial,
         vacancy_test=bool(flags.get("vacancy_id")), recommended_grade=flags.get("recommended_grade"),
@@ -213,9 +227,11 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
         p_upgrade=round(session.p_upgrade, 3) if session.p_upgrade is not None else None,
         theta=round(session.irt_theta or 0.0, 3), se=round(session.theta_se or 0.0, 3),
         items_count=session.items_count or len(answered), score=round(session.score or 0.0, 3),
-        stop_reason=session.stop_reason, grade_locked_until=locked,
+        stop_reason=session.stop_reason, grade_locked_until=locked, person_fit=fit,
+        family_review=bool(flags.get("family_cusum_review")),
         confirmed_skills=[SkillOut(name=n, share=round(v, 2)) for n, v in (skills or [])],
-        topics=[TopicOut(topic=k, label=TOPIC_LABELS.get(k, k), answered=v[0], correct=v[1])
+        topics=[TopicOut(topic=k, label=TOPIC_LABELS.get(k, k), answered=v[0], correct=v[1],
+                         wilson_low=None if (low := wilson_lower(v[1], v[0])) is None else round(low, 3))
                 for k, v in sorted(topics.items())],
         excluded_items=sum(1 for it in items if it.excluded),
     )
@@ -232,6 +248,9 @@ def _session_out(session: TestSession, items: list[TestSessionItem], result: Res
             answered=answered,
             min_items=cat.EXPRESS_ITEMS if trial else cat.MIN_ITEMS,
             max_items=cat.EXPRESS_ITEMS if trial else cat.MAX_ITEMS,
+            p_pass=round(session.p_pass, 3) if session.p_pass is not None else None,
+            theta=round(session.irt_theta, 3) if session.irt_theta is not None else None,
+            se=round(session.theta_se, 3) if session.theta_se is not None else None,
         ),
         item=_item_out(session.id, current) if current else None,
         result=result,
@@ -264,6 +283,7 @@ async def blueprint():
     return {
         "min_items": cat.MIN_ITEMS, "max_items": cat.MAX_ITEMS, "pass_probability": cat.PASS_P,
         "express": settings.DEMO_MODE, "express_items": cat.EXPRESS_ITEMS,
+        "express_minutes": cat.EXPRESS_MINUTES,
         "code_languages": LANGUAGE_LABELS,
         "next_test_probability": cat.RECOMMEND_NEXT_P, "concept_max_share": CONCEPT_MAX_SHARE,
         "cuts": cat.CUTS,

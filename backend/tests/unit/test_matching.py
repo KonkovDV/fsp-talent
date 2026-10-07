@@ -1,7 +1,27 @@
 """Explainable match score and the offline ranking benchmark."""
-from app.services.matching import CandidateFacts, NeedSpec, anonymous_compare, recommended_categories, score
+import random
+
+from app.services.matching import (
+    CandidateFacts,
+    NeedSpec,
+    anonymous_compare,
+    reason_source,
+    recommended_categories,
+    score,
+    skill_counterfactual,
+    wilson_lower,
+)
 from app.services.search.pipeline import order_pool
-from app.validation.matching import evaluate, load_pairs, make_dataset, relevance, sha256
+from app.validation.matching import (
+    blind_kappa,
+    blind_label,
+    cohen_kappa,
+    evaluate,
+    load_pairs,
+    make_dataset,
+    relevance,
+    sha256,
+)
 
 NEED = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"))
 
@@ -163,6 +183,30 @@ def test_jury_pairs_file_is_scored(tmp_path):
     assert any(row.method == "full" for row in evaluate(data))
 
 
+def test_salary_changes_rank_only_when_both_sides_named_a_band():
+    plain = score(NEED, _cand())
+    wish_only = score(NEED, _cand(salary_from=200_000, salary_to=280_000))
+    assert wish_only.score == plain.score
+    covered_need = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"),
+                            salary_from=180_000, salary_to=260_000)
+    covered = score(covered_need, _cand(salary_from=200_000, salary_to=280_000))
+    assert any(r.code == "PAY_FIT" for r in covered.reasons)
+    short = score(NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"),
+                           salary_from=100_000, salary_to=140_000),
+                  _cand(salary_from=200_000, salary_to=280_000))
+    assert short.score < plain.score
+    assert any(r.code == "PAY_GAP" for r in short.reasons)
+
+
+def test_pay_counterfactual_starts_at_five_named_wishes():
+    from app.services.matching import pay_counterfactual
+    need = NeedSpec(salary_from=150_000, salary_to=200_000)
+    assert pay_counterfactual(need, [_cand(salary_from=250_000) for _ in range(4)]) is None
+    hint = pay_counterfactual(need, [_cand(salary_from=220_000) for _ in range(6)])
+    assert hint is not None
+    assert hint["gained"] >= 1 and hint["proposed_to"] > 200_000
+
+
 def test_empty_need_ranks_by_profile_strength_not_a_near_zero_fit():
     """No criteria: the score must not collapse to ~0.01 (it was shown as «1 из 100»)."""
     from app.services.matching import CandidateFacts, NeedSpec, score
@@ -175,3 +219,80 @@ def test_empty_need_ranks_by_profile_strength_not_a_near_zero_fit():
     fitted = score(NeedSpec(role="backend"), CandidateFacts(role="backend", grade="middle", grade_source="assessed",
                                                             skills={}, test_p=0.95, test_spec="backend", fsp_lcb=0.6))
     assert fitted.basis == "fit"
+
+
+def test_wilson_on_the_answer_count_lowers_the_test_factor():
+    point = score(NEED, _cand(test_p=0.9, grade_source="assessed"))
+    counted = score(NEED, _cand(test_p=0.9, test_correct=9, test_n=12, grade_source="assessed"))
+    assert counted.score < point.score
+    assert any("нижняя граница" in line for line in counted.plus)
+
+
+def test_lower_bound_and_queue_do_not_touch_a_profile_without_those_signals():
+    plain = score(NEED, _cand(test_p=0.9, grade_source="assessed"))
+    bounded = score(NEED, _cand(test_p=0.9, test_se=0.3, grade_source="assessed"))
+    assert bounded.score < plain.score
+    assert any("нижняя граница" in line for line in bounded.plus)
+    assert score(NEED, _cand(open_invites=0)).score == score(NEED, _cand()).score
+    busy = score(NEED, _cand(open_invites=5))
+    assert busy.score < score(NEED, _cand()).score
+    assert any(r.code == "CONGESTION" for r in busy.reasons)
+    assert reason_source("TEST_SCORE") == "тест"
+    assert reason_source("CONGESTION") == "очередь"
+
+
+def test_a_past_pay_refusal_lowers_acceptance_only_together_with_a_named_band():
+    band = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"),
+                    salary_from=180_000, salary_to=260_000)
+    calm = score(band, _cand(salary_from=200_000))
+    refused = score(band, _cand(salary_from=200_000, salary_refusals=1))
+    assert refused.score < calm.score
+    assert any(r.code == "SALARY_HISTORY" for r in refused.reasons)
+    assert score(NEED, _cand(salary_refusals=2)).score == score(NEED, _cand()).score
+
+
+def test_skill_counterfactual_names_the_only_missing_skill():
+    people = [_cand(skills={"Python": "self_reported"}) for _ in range(5)]
+    hint = skill_counterfactual(NEED, people)
+    assert hint is not None and hint["skill"] == "PostgreSQL" and hint["gained"] == 5
+    assert skill_counterfactual(NEED, people[:4]) is None
+
+
+def test_an_untested_candidate_takes_the_last_seat_of_a_close_block():
+    scores = {f"t{i}": 1.0 - i * 0.001 for i in range(10)}
+    scores["cold"] = scores["t9"] - 0.05
+    fused = {key: 0.0 for key in scores}
+    best = {key: 0.0 for key in scores}
+    ordered = order_pool(list(scores), scores, fused, best, {"cold"})
+    assert ordered[9] == "cold"
+    scores["cold"] = 0.999
+    stayed = order_pool(list(scores), scores, fused, best, {"cold"})
+    assert stayed.index("cold") == 1
+
+
+def test_blind_rater_uses_its_own_seed_and_not_the_hidden_truth():
+    assert cohen_kappa([0, 1, 2, 3], [0, 1, 2, 3]) == 1.0
+    assert cohen_kappa([0, 0, 1, 1], [0, 1, 0, 1]) < 1.0
+    data = make_dataset(30, 4, seed=3)
+    digest = sha256(data)
+    first = blind_kappa(data, seed=99)
+    assert sha256(data) == digest
+    assert -1.0 <= first < 1.0
+    assert blind_kappa(data, seed=99) == first
+    assert blind_kappa(data, seed=100) != first
+    need = data["needs"][0]
+    observed = data["candidates"][0]["observed"]
+    assert blind_label(need, observed, random.Random(1)) == blind_label(need, dict(observed), random.Random(1))
+
+
+def test_wilson_bounds_a_share_and_is_not_a_rank_input():
+    assert wilson_lower(0, 0) is None
+    low = wilson_lower(8, 10)
+    assert low is not None and 0.4 < low < 0.8
+    assert wilson_lower(0, 10) == 0.0
+
+
+def test_compare_keeps_four_cards():
+    cards = [{"candidate_id": str(i), "role": "backend", "grade": "middle",
+              "match": {"factors": [], "reasons": []}} for i in range(5)]
+    assert len(anonymous_compare(cards, [str(i) for i in range(5)])) == 4

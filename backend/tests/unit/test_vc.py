@@ -9,8 +9,12 @@ def signing_key(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "VC_PRIVATE_KEY_PATH", str(tmp_path / "vc.pem"))
     monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "http://issuer.test")
     issuer._private_key.cache_clear()
+    issuer.public_key_multibase.cache_clear()
+    issuer._public_key_obj.cache_clear()
     yield
     issuer._private_key.cache_clear()
+    issuer.public_key_multibase.cache_clear()
+    issuer._public_key_obj.cache_clear()
 
 
 def test_sign_verify_and_tamper(signing_key):
@@ -18,6 +22,9 @@ def test_sign_verify_and_tamper(signing_key):
         "type": "FSPCompetitionResult", "eventId": "CR", "place": 1, "totalParticipants": 100,
     })
     assert credential["proof"]["cryptosuite"] == "eddsa-jcs-2022"
+    assert "OpenBadgeCredential" in credential["type"]
+    assert credential["credentialStatus"]["type"] == "FSPCredentialStatus"
+    assert credential["credentialStatus"]["id"].endswith("/cred-1/status")
     assert credential["proof"]["proofValue"].startswith("z")
     assert len(credential["proof"]["proofValue"]) < 200
     assert issuer.verify_credential(credential)
@@ -27,3 +34,37 @@ def test_sign_verify_and_tamper(signing_key):
     assert not issuer.verify_credential(tampered)
     forged = {**credential, "proof": {**credential["proof"], "proofValue": "z" + "1" * 20}}
     assert not issuer.verify_credential(forged)
+
+
+def test_derived_credential_omits_the_event_title(signing_key):
+    credential = issuer.issue_derived_credential(
+        "cred-2", "person-1", year=2024, status="всероссийское", bucket="топ-10%", discipline="Алгоритмическое",
+    )
+    text = str(credential)
+    assert issuer.verify_credential(credential)
+    assert "credentialStatus" not in credential
+    assert "DerivedFSPClaim" in credential["credentialSubject"]["achievement"]["type"]
+    assert "eventName" not in text and "2024" in text and "топ-10%" in text
+
+
+def test_credential_uuid_reads_only_a_real_uuid():
+    from app.api.v1.public import credential_uuid
+    raw = "6f9b1c2e-3a44-4d1e-9c0a-1b2c3d4e5f60"
+    assert credential_uuid({"id": f"urn:uuid:{raw}"}) is not None
+    assert str(credential_uuid({"id": f"urn:uuid:{raw}"})) == raw
+    assert credential_uuid({"id": "urn:uuid:cred-1"}) is None
+    assert credential_uuid({"id": 12}) is None
+    assert credential_uuid({}) is None
+
+
+def test_sd_jwt_hides_the_event_title_until_it_is_disclosed(signing_key):
+    token, disclosures = issuer.issue_sd_jwt("person-1", {
+        "year": 2024, "bucket": "топ-10%", "eventName": "Чемпионат России",
+    })
+    shown = issuer.present_sd_jwt(token, disclosures, {"year", "bucket"})
+    claims = issuer.verify_sd_jwt(shown)
+    assert claims == {"year": 2024, "bucket": "топ-10%"}
+    assert "Чемпионат России" not in shown
+    opened = issuer.present_sd_jwt(token, disclosures, {"year", "bucket", "eventName"})
+    assert issuer.verify_sd_jwt(opened)["eventName"] == "Чемпионат России"
+    assert issuer.verify_sd_jwt(shown + "tamper") is None

@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { ExternalLink } from 'lucide-react'
-import { apiError, getMyResults } from '../../api/client'
+import { apiError, getMyResults, presentResult } from '../../api/client'
 import { Empty, PageHeader, RankBadge, Skeleton, date } from '../../components/ui'
 
 interface Row {
@@ -11,13 +13,30 @@ interface Row {
 
 /** Competition protocols as a protocol: place first, field size next to it. */
 export default function CandidateResults() {
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [cardError, setCardError] = useState('')
   const { data: rows = [], isLoading, isError, error } = useQuery<Row[]>({ queryKey: ['myResults'], queryFn: () => getMyResults().then(r => r.data) })
+  const openCard = async (id: string) => {
+    setBusy(id)
+    setCardError('')
+    try {
+      const { data } = await presentResult(id)
+      sessionStorage.setItem('fsp-badge', JSON.stringify(data.credential))
+      navigate('/badge')
+    } catch (err) {
+      setCardError(apiError(err, 'Не удалось собрать карточку'))
+    } finally {
+      setBusy(null)
+    }
+  }
   return (
     <div>
       <PageHeader title="Результаты ФСП"
         lead="Места из официальных протоколов. Каждый результат подписан удостоверением, работодатель видит год, уровень соревнования и процентиль без названия события." />
       {isLoading && <Skeleton className="h-64" />}
       {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить протоколы')}</p>}
+      {cardError && <p className="notice-error mb-4" role="alert">{cardError}</p>}
       {!isLoading && !isError && rows.length === 0 && (
         <Empty title="Протоколов пока нет">Привяжите ФСП ID в профиле — результаты подтянутся автоматически. Без них категория строится по опросу и тесту.</Empty>
       )}
@@ -33,6 +52,7 @@ export default function CandidateResults() {
                   <td className="text-right"><span className="place">{r.place}</span><span className="num block text-xs text-ink-3">из {r.total_participants}</span></td>
                   <td>
                     <p className="font-medium text-ink">{r.event_name}</p>
+                    <button type="button" className="mt-1 text-xs text-accent underline" disabled={busy === r.id} onClick={() => openCard(r.id)}>Краткое удостоверение</button>
                     <p className="text-xs text-ink-3">{r.status_label}{r.is_team ? `, команда из ${r.team_size}` : ''}{r.ekp_number ? `. ${r.ekp_number.startsWith('ЕКП-демо') ? 'Демо-номер календаря' : 'Номер в календаре ЕКП'}: ${r.ekp_number}` : ''}</p>
                   </td>
                   <td className="text-ink-2">{r.discipline_label}</td>

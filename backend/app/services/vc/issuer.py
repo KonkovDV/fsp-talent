@@ -9,10 +9,12 @@ credentials without floats and astral-plane keys, which holds for everything iss
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
 import os
+import secrets
 from datetime import UTC, datetime
 from functools import lru_cache
 
@@ -101,20 +103,65 @@ def issuer_document() -> dict:
     }
 
 
+def _open_badge(achievement: dict) -> dict:
+    """Open Badges 3 achievement: a name, criteria, and type Achievement. Extra claims stay."""
+    achievement = dict(achievement)
+    kind = achievement.get("type")
+    if kind == "Achievement" or kind is None:
+        achievement["type"] = ["Achievement"]
+    elif isinstance(kind, str):
+        achievement["type"] = ["Achievement", kind]
+    achievement.setdefault("name", achievement.get("eventName") or "Результат ФСП")
+    achievement.setdefault("criteria", {"narrative": "Строка протокола, полученная платформой от реестра ФСП."})
+    return achievement
+
+
+def issue_derived_credential(credential_id: str, subject_id: str, *, year: int, status: str,
+                             bucket: str, discipline: str) -> dict:
+    """A signed card with the year, the competition status and the place band.
+
+    The event title and the holder's name are not in the document. It is not stored, so it has no
+    revocation entry: the signature is the whole check.
+    """
+    return issue_achievement_credential(credential_id, subject_id, {
+        "type": "DerivedFSPClaim",
+        "name": f"Результат ФСП, {year}",
+        "year": year,
+        "competitionStatus": status,
+        "bucket": bucket,
+        "discipline": discipline,
+        "criteria": {"narrative": "Год, статус соревнования и корзина места. Название события и имя не входят."},
+    }, status=False)
+
+
 def _hash_data(document: dict, proof_config: dict) -> bytes:
     return hashlib.sha256(_jcs(proof_config)).digest() + hashlib.sha256(_jcs(document)).digest()
 
 
-def issue_achievement_credential(credential_id: str, subject_id: str, achievement: dict) -> dict:
+def issue_achievement_credential(credential_id: str, subject_id: str, achievement: dict, *,
+                                  status: bool = True) -> dict:
     now = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    achievement = _open_badge(achievement)
     document = {
-        "@context": ["https://www.w3.org/ns/credentials/v2"],
-        "type": ["VerifiableCredential", "FSPAchievementCredential"],
+        "@context": [
+            "https://www.w3.org/ns/credentials/v2",
+            "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json",
+        ],
+        "type": ["VerifiableCredential", "OpenBadgeCredential"],
         "id": f"urn:uuid:{credential_id}",
         "issuer": {"id": issuer_id(), "name": "ФСП Талант (прототип платформы)"},
         "validFrom": now,
-        "credentialSubject": {"id": f"urn:uuid:{subject_id}", "achievement": achievement},
+        "credentialSubject": {
+            "id": f"urn:uuid:{subject_id}",
+            "type": ["AchievementSubject"],
+            "achievement": achievement,
+        },
     }
+    if status:
+        document["credentialStatus"] = {
+            "id": f"{settings.PUBLIC_BASE_URL}/api/v1/public/credentials/{credential_id}/status",
+            "type": "FSPCredentialStatus",
+        }
     proof_config = {
         "@context": document["@context"],
         "type": "DataIntegrityProof",
@@ -155,3 +202,78 @@ def verify_credential(credential: dict) -> bool:
         return True
     except (InvalidSignature, ValueError):
         return False
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def _b64url_decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def issue_sd_jwt(subject_id: str, claims: dict) -> tuple[str, dict[str, str]]:
+    """SD-JWT (salted hashes, EdDSA). Every claim is hidden behind `_sd` until the holder discloses it.
+
+    Returns the issuer JWT and the disclosure for each claim name. The event title can be one of the
+    claims and still stay out of a presentation.
+    """
+    disclosures: dict[str, str] = {}
+    hashes: list[str] = []
+    for name in sorted(claims):
+        salt = secrets.token_urlsafe(16)
+        disclosure = _b64url(_jcs([salt, name, claims[name]]))
+        disclosures[name] = disclosure
+        hashes.append(_b64url(hashlib.sha256(disclosure.encode()).digest()))
+    now = int(datetime.now(UTC).timestamp())
+    payload = {
+        "iss": issuer_id(), "sub": f"urn:uuid:{subject_id}", "iat": now, "exp": now + 86400 * 365,
+        "_sd_alg": "sha-256", "_sd": sorted(hashes),
+    }
+    header = {"alg": "EdDSA", "typ": "sd-jwt", "kid": f"{issuer_id()}#key-1"}
+    signing_input = f"{_b64url(_jcs(header))}.{_b64url(_jcs(payload))}".encode()
+    token = signing_input.decode() + "." + _b64url(_private_key().sign(signing_input))
+    return token, disclosures
+
+
+def present_sd_jwt(token: str, disclosures: dict[str, str], keep: set[str]) -> str:
+    """A presentation is the issuer JWT, the chosen disclosures, and a trailing tilde."""
+    chosen = [disclosures[name] for name in sorted(keep)]
+    return "~".join([token, *chosen, ""])
+
+
+def verify_sd_jwt(presentation: str) -> dict | None:
+    """The revealed claims, or None when the signature or a disclosure hash does not hold.
+
+    A claim that was not attached is absent from the result. The hash in `_sd` does not reveal it.
+    """
+    pieces = presentation.split("~")
+    if len(pieces) < 2 or pieces[-1] != "":
+        return None
+    token, attached = pieces[0], pieces[1:-1]
+    try:
+        header_b64, payload_b64, signature_b64 = token.split(".")
+        _public_key_obj().verify(_b64url_decode(signature_b64), f"{header_b64}.{payload_b64}".encode())
+        header = json.loads(_b64url_decode(header_b64))
+        payload = json.loads(_b64url_decode(payload_b64))
+    except (InvalidSignature, ValueError, json.JSONDecodeError):
+        return None
+    if header.get("alg") != "EdDSA" or payload.get("_sd_alg") != "sha-256":
+        return None
+    if header.get("kid") != f"{issuer_id()}#key-1":
+        return None
+    digest_set = set(payload.get("_sd") or [])
+    revealed: dict = {}
+    for disclosure in attached:
+        digest = _b64url(hashlib.sha256(disclosure.encode()).digest())
+        if digest not in digest_set:
+            return None
+        try:
+            decoded = json.loads(_b64url_decode(disclosure))
+            _salt, name, value = decoded
+        except (ValueError, json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(name, str):
+            return None
+        revealed[name] = value
+    return revealed

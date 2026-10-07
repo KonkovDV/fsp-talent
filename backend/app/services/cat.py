@@ -13,8 +13,9 @@ current ability estimate, and the test stops as soon as the posterior probabilit
 Stop: at least MIN_ITEMS and both probabilities outside [DECIDED_LOW, DECIDED_HIGH], or MAX_ITEMS.
 Decision: pass when p_pass ≥ PASS_P. A test at grade G confirms only G: when also p_upgrade ≥ RECOMMEND_NEXT_P,
 the outcome recommends a separate test at G + 1 and does not assign it (Q&A with ФСП: no automatic jump).
-Item choice: information at the active cut × blueprint deficit × exposure penalty, then a random pick among
-the best RANDOMESQUE (randomesque exposure control). Topic and concept shares are capped.
+Item choice: information at the active cut × blueprint deficit × exposure penalty, then Sympson–Hetter
+inside the best RANDOMESQUE. With no measured exposure the window is uniform. Topic and concept shares
+are capped.
 """
 from __future__ import annotations
 
@@ -23,7 +24,8 @@ import random
 from collections import Counter
 from dataclasses import dataclass, field
 
-from app.items import LEVEL_B, Family
+from app.items import Family
+from app.items.hierarchy import parent
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, expected_guess, families_for
 from app.models.assessment import GRADE_ORDER
 
@@ -37,7 +39,7 @@ DECIDED_LOW, DECIDED_HIGH = 0.10, 0.90
 UPGRADE_GIVE_UP = 0.30
 PASS_P = 0.75
 RECOMMEND_NEXT_P = 0.90
-RANDOMESQUE = 3
+RANDOMESQUE = 5
 MAX_PER_FAMILY = 5
 TOPIC_SLACK = 0.15
 EXPOSURE_TARGET = 0.40
@@ -151,8 +153,58 @@ class Verdict:
     stop_reason: str | None
 
 
-# A jury trial is six items and stops on the count, not on the grade decision.
-EXPRESS_ITEMS = 6
+# A jury trial is fifteen items and five minutes. It stops on the count, not on the grade decision.
+EXPRESS_ITEMS = 15
+EXPRESS_MINUTES = 5
+EXPRESS_ITEM_S = 20
+# Indifference zone around a grade cut (a band is 1.0 wide). GLR stops when the likelihood
+# is clear outside this zone and the posterior is on the same side. α = β = 0.10, so the
+# threshold is ln((1−β)/α) = ln 9.
+GLR_DELTA = 0.25
+GLR_ALPHA = 0.10
+GLR_BETA = 0.10
+
+
+def _glr_bounds() -> tuple[float, float]:
+    above = math.log((1.0 - GLR_BETA) / GLR_ALPHA)
+    below = math.log(GLR_BETA / (1.0 - GLR_ALPHA))
+    return above, below
+
+
+def _likelihood_at(state: State, theta: float) -> float:
+    state.post()
+    index = int(round((theta - GRID[0]) / 0.05))
+    index = max(0, min(len(GRID) - 1, index))
+    return state._ll[index]
+
+
+def sprt_log_lambda(state: State, cut: float) -> float:
+    """Wald SPRT at the edges of the indifference zone: ℓ(cut+δ) − ℓ(cut−δ).
+
+    Positive favors «at or above the cut». Likelihood only, no prior.
+    """
+    return _likelihood_at(state, cut + GLR_DELTA) - _likelihood_at(state, cut - GLR_DELTA)
+
+
+def glr_log_lambda(state: State, cut: float) -> float:
+    """Thompson GLR: max likelihood above cut+δ minus max likelihood below cut−δ.
+
+    Same sign as the SPRT statistic. The maximum on each side uses the grid likelihood.
+    """
+    state.post()
+    lo, hi = cut - GLR_DELTA, cut + GLR_DELTA
+    lower = [ll for t, ll in zip(GRID, state._ll, strict=True) if t <= lo + 1e-9]
+    upper = [ll for t, ll in zip(GRID, state._ll, strict=True) if t >= hi - 1e-9]
+    if not lower or not upper:
+        return 0.0
+    return max(upper) - max(lower)
+
+
+def _open_cut(state: State, p_pass: float, p_up: float | None) -> float:
+    """The cut the stop rule is currently about. Same choice as item selection."""
+    if p_up is not None and not (DECIDED_LOW < p_pass < DECIDED_HIGH):
+        return CUTS[next_grade(state.target)]
+    return CUTS[state.target]
 
 
 def evaluate(state: State, item_limit: int | None = None) -> Verdict:
@@ -160,15 +212,27 @@ def evaluate(state: State, item_limit: int | None = None) -> Verdict:
     p_pass = post.prob_at_least(CUTS[state.target])
     up = next_grade(state.target)
     p_up = post.prob_at_least(CUTS[up]) if up else None
-    if item_limit is not None and item_limit < MIN_ITEMS:
+    if item_limit is not None:
+        # The express trial stops on its own count. It does not take the grade decision.
         done = state.n >= item_limit
         return Verdict(done, p_pass, p_up, post.theta, post.se, "express" if done else None)
     decided_pass = p_pass <= DECIDED_LOW or p_pass >= DECIDED_HIGH
     decided_up = p_up is None or p_pass <= DECIDED_LOW or p_up <= UPGRADE_GIVE_UP or p_up >= DECIDED_HIGH
+    cut = _open_cut(state, p_pass, p_up)
+    side = p_up if cut != CUTS[state.target] and p_up is not None else p_pass
+    glr_stop = False
+    if state.n >= MIN_ITEMS:
+        glr = glr_log_lambda(state, cut)
+        above, below = _glr_bounds()
+        glr_stop = (glr >= above and side >= 0.5) or (glr <= below and side <= 0.5)
     if state.n >= MAX_ITEMS:
         return Verdict(True, p_pass, p_up, post.theta, post.se, "max_items")
     if state.n >= MIN_ITEMS and decided_pass and decided_up:
         return Verdict(True, p_pass, p_up, post.theta, post.se, "decided")
+    # GLR may finish while the posterior is still inside (0.10, 0.90), but only once the
+    # next-grade question is already settled and the ratio agrees with the posterior side.
+    if glr_stop and decided_up:
+        return Verdict(True, p_pass, p_up, post.theta, post.se, "glr")
     return Verdict(False, p_pass, p_up, post.theta, post.se, None)
 
 
@@ -221,16 +285,35 @@ def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = 
             key = item_key(fam, level)
             if key in blocked or not fam.available(state.spec, level):
                 continue
-            b = LEVEL_B[level] + offsets.get(key, 0.0)
+            a, b = parent(fam, level, offsets.get(key, 0.0))
             c = expected_guess(fam.id, level)
-            info = info3(cut, fam.a, b, c)
+            info = info3(cut, a, b, c)
             rate = exposure.get(key, 0.0)
             penalty = min(1.0, EXPOSURE_TARGET / rate) if rate > EXPOSURE_TARGET else 1.0
-            candidates.append(Choice(fam, level, fam.a, b, c, info * (1.0 + max(0.0, deficit)) * penalty))
+            candidates.append(Choice(fam, level, a, b, c, info * (1.0 + max(0.0, deficit)) * penalty))
     if not candidates:
         raise LookupError(f"no eligible items for {state.spec}")
     candidates.sort(key=lambda ch: -ch.score)
-    return rng.choice(candidates[:RANDOMESQUE])
+    return sympson_hetter(candidates[:RANDOMESQUE], rng, exposure)
+
+
+def sympson_hetter(window: list[Choice], rng: random.Random, exposure: dict[str, float]) -> Choice:
+    """Serve one item from the randomesque window.
+
+    An empty exposure record keeps the uniform draw. Once a key's share is above the target,
+    it is served with probability target/rate. The last item in the window is certain, so the
+    test never stalls.
+    """
+    if not window:
+        raise LookupError("empty item window")
+    if not exposure or len(window) == 1:
+        return rng.choice(window)
+    for choice in window[:-1]:
+        rate = exposure.get(item_key(choice.family, choice.level), 0.0)
+        probability = 1.0 if rate <= EXPOSURE_TARGET else EXPOSURE_TARGET / rate
+        if rng.random() < probability:
+            return choice
+    return window[-1]
 
 
 @dataclass(frozen=True)

@@ -21,6 +21,8 @@ class Participant(Base):
     password_hash = Column(String(200))
     # Bumped on password reset. Tokens carry the same number and die when it moves.
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
+    # Bumped when a refresh token is exchanged. The new refresh carries the new number.
+    refresh_nonce = Column(Integer, nullable=False, default=0, server_default="0")
     # Bumped on every profile save. A stale form sends the number it loaded and gets a conflict.
     profile_version = Column(Integer, nullable=False, default=0, server_default="0")
     # What the candidate hopes to earn, gross, before tax. Optional. Used only as a hint to employers.

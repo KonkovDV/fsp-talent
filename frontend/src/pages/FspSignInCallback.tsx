@@ -32,7 +32,7 @@ export default function FspSignInCallback() {
     fspSignInCallback(code, state)
       .then(({ data }) => {
         if (data.status === 'signed_in') {
-          setAuth(data.access_token, data.refresh_token, 'participant')
+          setAuth(data.access_token, 'participant')
           navigate('/candidate', { replace: true })
         } else setPending(data as NeedsConsent)
       })
@@ -45,7 +45,7 @@ export default function FspSignInCallback() {
     setBusy(true); setError('')
     try {
       const { data } = await fspSignUp(pending.ticket, consents)
-      setAuth(data.access_token, data.refresh_token, 'participant')
+      setAuth(data.access_token, 'participant')
       navigate('/candidate', { replace: true })
     } catch (err) {
       setError(apiError(err, 'Аккаунт не создан'))

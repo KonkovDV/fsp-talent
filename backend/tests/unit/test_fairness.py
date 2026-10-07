@@ -2,7 +2,10 @@
 
 The plan's fairness check: a counterfactual change of identity must not move a candidate.
 These fields are absent from the score inputs, so they cannot change the order.
+A hidden group with the same professional facts must also clear the four-fifths rule.
 """
+import random
+
 from app.services.matching import WEIGHTS, CandidateFacts, NeedSpec, score
 from app.services.scoring.engine import EventInput
 
@@ -26,3 +29,26 @@ def test_same_professional_facts_rank_the_same():
     first, second = score(need, facts), score(need, facts)
     assert first.score == second.score
     assert [(f.key, f.value) for f in first.factors] == [(f.key, f.value) for f in second.factors]
+
+
+def test_hidden_group_clears_the_four_fifths_rule():
+    """The same professional facts under two hidden labels produce the same scores, so the top keeps both."""
+    rng = random.Random(7)
+    need = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"))
+    scored = []
+    for i in range(200):
+        facts = CandidateFacts(
+            role="backend", grade="middle", grade_source="assessed",
+            skills={"Python": "test_confirmed" if rng.random() < 0.5 else "self_reported"},
+            test_p=rng.choice((0.4, 0.8, 0.95)), test_spec="backend",
+            fsp_lcb=rng.choice((None, 0.4, 0.7)),
+        )
+        value = score(need, facts).score
+        scored.append((True, value, i))
+        scored.append((False, value, i))
+    scored.sort(key=lambda row: (-row[1], row[2]))
+    top = scored[:200]
+    minority_in_top = sum(flag for flag, _, _ in top) / len(top)
+    majority_in_top = 1 - minority_in_top
+    ratio = (minority_in_top / 0.5) / (majority_in_top / 0.5)
+    assert ratio == 1.0

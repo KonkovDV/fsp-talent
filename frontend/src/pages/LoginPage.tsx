@@ -31,7 +31,7 @@ export default function LoginPage() {
     setError('')
     try {
       const res = role === 'participant' ? await loginParticipant(username, password) : await loginEmployer(username, password)
-      setAuth(res.data.access_token, res.data.refresh_token, role)
+      setAuth(res.data.access_token, role)
       navigate(role === 'participant' ? '/candidate' : '/employer')
     } catch (e: unknown) {
       if (apiErrorCode(e) === 'email_not_verified') {

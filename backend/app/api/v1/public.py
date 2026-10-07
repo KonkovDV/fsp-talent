@@ -7,6 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import Consent, Participant, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
@@ -130,11 +131,26 @@ async def verify_stored(credential_id: uuid.UUID, db: AsyncSession = Depends(get
     )
     if not visible:
         raise HTTPException(404, "Удостоверение не найдено")
-    return {"valid": verify_credential(vc.credential_json), "credential": vc.credential_json}
+    signed = verify_credential(vc.credential_json)
+    revoked = vc.revoked_at is not None
+    return {"valid": signed and not revoked, "signature": signed, "revoked": revoked,
+            "credential": vc.credential_json}
+
+
+def credential_uuid(document: dict) -> uuid.UUID | None:
+    """The credential id, if the document names one. A foreign document stays signature-only."""
+    raw = document.get("id")
+    if not isinstance(raw, str):
+        return None
+    token = raw.removeprefix("urn:uuid:")
+    try:
+        return uuid.UUID(token)
+    except ValueError:
+        return None
 
 
 @router.post("/credentials/verify")
-async def verify_posted(request: Request):
+async def verify_posted(request: Request, db: AsyncSession = Depends(get_db)):
     """Verify a W3C Verifiable Credential submitted as JSON.
 
     Body is capped at 64 KB before any JSON parsing or cryptographic work.
@@ -150,7 +166,13 @@ async def verify_posted(request: Request):
         raise HTTPException(422, "Invalid JSON")
     if not isinstance(data, dict):
         raise HTTPException(422, "Expected a JSON object")
-    return {"valid": verify_credential(data)}
+    signed = verify_credential(data)
+    revoked = False
+    credential_id = credential_uuid(data)
+    if signed and credential_id is not None:
+        stored = await db.get(VerifiableCredential, credential_id)
+        revoked = stored is not None and stored.revoked_at is not None
+    return {"valid": signed and not revoked, "signature": signed, "revoked": revoked}
 
 
 @router.get("/credentials/{participant_id}")
@@ -163,15 +185,32 @@ async def get_credentials(participant_id: uuid.UUID, db: AsyncSession = Depends(
     rows = await db.scalars(
         select(VerifiableCredential).where(VerifiableCredential.participant_id == participant_id)
     )
-    return [
-        {
+    out = []
+    for vc in rows:
+        signed = verify_credential(vc.credential_json)
+        revoked = vc.revoked_at is not None
+        out.append({
             "id": str(vc.id),
             "credential": vc.credential_json,
-            "valid": verify_credential(vc.credential_json),
+            "signature": signed,
+            "revoked": revoked,
+            "valid": signed and not revoked,
             "issued_at": vc.issued_at.isoformat() if vc.issued_at else None,
-        }
-        for vc in rows
-    ]
+        })
+    return out
+
+
+@router.get("/credentials/{credential_id}/status")
+async def credential_status(credential_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Revocation only. The body has no name, no result and no achievement."""
+    vc = await db.get(VerifiableCredential, credential_id)
+    if vc is None:
+        raise HTTPException(404, "Удостоверение не найдено")
+    return {
+        "id": f"{settings.PUBLIC_BASE_URL}/api/v1/public/credentials/{vc.id}/status",
+        "type": "FSPCredentialStatus",
+        "revoked": vc.revoked_at is not None,
+    }
 
 
 @router.get("/leaderboard")
@@ -232,3 +271,17 @@ async def item_health(db: AsyncSession = Depends(get_db)):
         "expected_rate": round(r.expected / r.n, 3) if r.n else None,
         "z": round(r.z, 2), "status": r.status, "b_offset": round(r.b_offset, 2), "sessions": r.sessions,
     } for r in rows]
+
+
+@router.get("/assessment/psychometrics")
+async def psychometrics(spec: str = "backend", db: AsyncSession = Depends(get_db)):
+    """Information at the grade cuts and exposure by family. No stems and no answer keys."""
+    from app.items.registry import BLUEPRINTS
+    from app.models.assessment import ItemStat
+    from app.services.psychometrics import bank_curve, summarize_exposure
+
+    if spec not in BLUEPRINTS:
+        raise HTTPException(400, "Неизвестная специализация")
+    rows = list(await db.execute(
+        select(ItemStat.family_id, ItemStat.level, ItemStat.n, ItemStat.cusum, ItemStat.status)))
+    return {**bank_curve(spec), **summarize_exposure([(f, lvl, n, c, s) for f, lvl, n, c, s in rows])}

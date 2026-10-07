@@ -11,19 +11,20 @@ Per event e (competition_status is NOT used):
             prize-winner (places 2–3)   0.85   needs N ≥ MIN_FIELD_FOR_PRIZE
             top 10 % (place ≤ 0.1·N)    0.65
             top half (place ≤ 0.5·N)    0.45
-            other participation         0.25
-  q_e = class_e                                    result quality in (0, 1]
+            other participation         0.00
+  q_e = class_e                                    result quality in [0, 1]
   d_e = 2^(-months / HALF_LIFE_MONTHS)             recency
   w_e = d_e / sqrt(team_size)                      evidence weight: a team result says less about the individual
 
+Only the EVENT_CAP strongest events (by q·w) enter the sums. A long list cannot crowd out a few real results.
+
 Per discipline (empirical-Bayes shrinkage to the population prior):
-  n_eff = sum(w_e)
+  n_eff = sum(w_e)                                 over the capped events
   mu    = (sum(w_e * q_e) + K * PRIOR_MEAN) / (n_eff + K)
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
   lcb   = mu - sigma                               ranking key (conservative)
 
-Padding does not pay: a participation-only result (0.25) sits below the prior mean (0.30), so many of them
-pull mu down while they narrow sigma; a few wins keep a higher lower bound. Team results reduce evidence
+A plain participation scores 0, so it never lifts the mean. Team results reduce evidence
 weight (wider sigma) instead of lowering the level; the team contribution is not separated (Q&A).
 The ЕВСК rank equivalent (МС, КМС, …) is display information only (profile, credential, employer filter)
 and does not enter the score. All constants are expert priors; any change must bump VERSION.
@@ -34,15 +35,17 @@ import math
 from datetime import date
 from typing import TypedDict
 
-VERSION = "v3.0.0"
+VERSION = "v3.1.0"
 HALF_LIFE_MONTHS = 18.0
 PRIOR_STRENGTH = 2.0      # K: prior counts as two full-weight events
 PRIOR_MEAN = 0.30
 PRIOR_VAR = 0.04
+# How many events enter the discipline sum. The rest stay on the profile and do not move the score.
+EVENT_CAP = 5
 
 # Result class -> quality. Monotone in the result; the same for every competition status.
 RESULT_CLASSES: dict[str, float] = {
-    "winner": 1.00, "prize": 0.85, "top10": 0.65, "top50": 0.45, "participant": 0.25,
+    "winner": 1.00, "prize": 0.85, "top10": 0.65, "top50": 0.45, "participant": 0.0,
 }
 RESULT_CLASS_LABELS = {
     "winner": "победитель", "prize": "призёр", "top10": "в топ-10 %", "top50": "в верхней половине",
@@ -156,13 +159,14 @@ def compute_discipline_score(events: list[EventInput], reference_date: date | No
         q = event_quality(e["place"], e["total_participants"], e["competition_status"])
         w = event_weight(e["event_date"], e["team_size"], ref)
         weighted.append((q, w, e))
-    n_eff = sum(w for _, w, _ in weighted)
-    mu = (sum(q * w for q, w, _ in weighted) + PRIOR_STRENGTH * PRIOR_MEAN) / (n_eff + PRIOR_STRENGTH)
+    ranked = sorted(weighted, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:EVENT_CAP]
+    n_eff = sum(w for _, w, _ in ranked)
+    mu = (sum(q * w for q, w, _ in ranked) + PRIOR_STRENGTH * PRIOR_MEAN) / (n_eff + PRIOR_STRENGTH)
     sigma = math.sqrt(PRIOR_VAR / (n_eff + PRIOR_STRENGTH))
     ranks = [rank_equivalent(e["competition_status"], e["place"], e["total_participants"]) for _, _, e in weighted]
     known = [r for r in ranks if r is not None]
     best_rank = min(known, key=RANK_ORDER.index) if known else None
-    top = sorted(weighted, key=lambda t: t[0] * t[1], reverse=True)[:3]
+    top = ranked[:3]
     return DisciplineResult(
         score=round(mu, 4),
         sigma=round(sigma, 4),

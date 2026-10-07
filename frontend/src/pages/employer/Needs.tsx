@@ -8,16 +8,20 @@ import CandidateCard, { type CandidateCardData } from '../../components/Candidat
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
-import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
+import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 import { ROLE_RU, gradeRu } from '../../labels'
 
 interface NeedParams {
   role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
   industry: string | null; work_goal: string | null; has_fsp: boolean | null
+  salary_from?: number | null; salary_to?: number | null
 }
+interface PayHint { known: number; covered: number; proposed_to: number; covered_if_raised: number; gained: number }
+interface SkillHint { skill: string; gained: number; pool: number }
 interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number }
 
-const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false }
+const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '' }
+const money = (raw: string) => { const n = Number(raw); return raw.trim() && Number.isFinite(n) ? n : null }
 const csv = (s: string) => s.split(',').map(x => x.trim()).filter(Boolean)
 
 /** Employer needs: what we look for (versioned), explainable matches, recommended categories, shortlist. */
@@ -54,7 +58,8 @@ export default function EmployerNeeds() {
   const body = () => ({
     title: form.title,
     params: { role: form.role || null, grade: form.grade || null, skills: csv(form.skills), nice_to_have: csv(form.nice),
-      industry: form.industry || null, work_goal: form.internship ? 'internship' : null },
+      industry: form.industry || null, work_goal: form.internship ? 'internship' : null,
+      salary_from: money(form.payFrom), salary_to: money(form.payTo) },
     ...(editing && editing !== 'new' && current ? { expected_version: current.version } : {}),
   })
   const save = useMutation({
@@ -84,7 +89,9 @@ export default function EmployerNeeds() {
   const edit = (n: Need) => {
     setEditing(n.id)
     setForm({ title: n.title, role: n.params.role ?? '', grade: n.params.grade ?? '', skills: n.params.skills.join(', '),
-      nice: n.params.nice_to_have.join(', '), industry: n.params.industry ?? '', internship: n.params.work_goal === 'internship' })
+      nice: n.params.nice_to_have.join(', '), industry: n.params.industry ?? '', internship: n.params.work_goal === 'internship',
+      payFrom: n.params.salary_from != null ? String(n.params.salary_from) : '',
+      payTo: n.params.salary_to != null ? String(n.params.salary_to) : '' })
   }
   const field = 'field-label'
   const shortItems = shortlist.data?.items ?? []
@@ -124,6 +131,13 @@ export default function EmployerNeeds() {
             <div><label className={field} htmlFor="n-nice">Желательные навыки</label>
               <input id="n-nice" value={form.nice} onChange={e => setForm({ ...form, nice: e.target.value })} placeholder="Docker, Kafka" className="input" aria-label="Желательные навыки" />
               <p className="field-hint">Весят вдвое меньше обязательных.</p></div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div><label className={field} htmlFor="n-from">Вилка от, до вычета НДФЛ</label>
+              <input id="n-from" inputMode="numeric" value={form.payFrom} onChange={e => setForm({ ...form, payFrom: e.target.value })} placeholder="180000" className="input num" aria-label="Вилка от" /></div>
+            <div><label className={field} htmlFor="n-to">Вилка до, до вычета НДФЛ</label>
+              <input id="n-to" inputMode="numeric" value={form.payTo} onChange={e => setForm({ ...form, payTo: e.target.value })} placeholder="260000" className="input num" aria-label="Вилка до" />
+              <p className="field-hint">Если кандидат указал ожидание, место в подборке учитывает, примет ли он такую вилку.</p></div>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.internship} onChange={e => setForm({ ...form, internship: e.target.checked })} />Ищем стажёра или практиканта</label>
           {error && <p className="notice-error" role="alert">{error}</p>}
@@ -166,6 +180,9 @@ export default function EmployerNeeds() {
                     {current.params.skills.map(s => <span key={s} className="chip-active">{s}</span>)}
                     {current.params.nice_to_have.map(s => <span key={s} className="chip-default">+ {s}</span>)}
                     {current.params.work_goal === 'internship' && <span className="badge-warn">стажировка</span>}
+                    {(current.params.salary_from != null || current.params.salary_to != null) && (
+                      <span className="num">{rub(current.params.salary_from)} – {rub(current.params.salary_to)}</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -209,10 +226,21 @@ export default function EmployerNeeds() {
 
               {tab === 'matches' && (
                 <div className="mt-5 space-y-4">
+                  {matches.data?.pay_hint?.gained > 0 && (
+                    <p className="text-sm text-ink-2">
+                      Если поднять верх вилки до <span className="num">{rub((matches.data.pay_hint as PayHint).proposed_to)}</span>,
+                      ожидание закроется ещё у {(matches.data.pay_hint as PayHint).gained} из {(matches.data.pay_hint as PayHint).known} кандидатов, которые его указали.
+                    </p>
+                  )}
+                  {matches.data?.skill_hint?.gained > 0 && (
+                    <p className="text-sm text-ink-2">
+                      Если не требовать «{(matches.data.skill_hint as SkillHint).skill}», ещё {(matches.data.skill_hint as SkillHint).gained} кандидатов закроют все остальные обязательные навыки.
+                    </p>
+                  )}
                   {picked.length > 0 && (
                     <div className="card">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <p className="text-sm text-ink-2">В сравнении {picked.length} из 3{picked.length < 2 ? ': отметьте ещё одного кандидата' : ''}. Имя и контакты в сравнение не попадают.</p>
+                        <p className="text-sm text-ink-2">В сравнении {picked.length} из 4{picked.length < 2 ? ': отметьте ещё одного кандидата' : ''}. Имя и контакты в сравнение не попадают.</p>
                         <button type="button" onClick={() => setPicked([])} className="text-xs text-accent hover:underline">Очистить</button>
                       </div>
                       {compared.data && compared.data.items.length >= 2 && (
@@ -245,8 +273,8 @@ export default function EmployerNeeds() {
                     <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}
                       compare={{
-                        on: picked.includes(card.candidate_id), full: picked.length >= 3,
-                        toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 3 ? prev : [...prev, card.candidate_id]),
+                        on: picked.includes(card.candidate_id), full: picked.length >= 4,
+                        toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 4 ? prev : [...prev, card.candidate_id]),
                       }} />
                   ))}
                 </div>

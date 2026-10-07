@@ -15,7 +15,15 @@ from app.api.errors import ApiError
 from app.api.v1.messages import unread_counts
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import AccessLog, CategoryAssignment, ConsentLog, GradeConfirmation, Offer, Participant
+from app.models import (
+    AccessLog,
+    CategoryAssignment,
+    ConsentLog,
+    GradeConfirmation,
+    Offer,
+    Participant,
+    VerifiableCredential,
+)
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
 from app.services.ai.assistant import parse_resume
@@ -31,6 +39,7 @@ from app.services.pdf_profile import extract_pdf_text, profile_lines, render_pro
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
+from app.services.search.pipeline import _bucket
 from app.services.skills import (
     SkillDraft,
     normalize_skill,
@@ -40,6 +49,7 @@ from app.services.skills import (
     with_resume_token,
 )
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
+from app.services.vc.issuer import issue_derived_credential, issue_sd_jwt, present_sd_jwt
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -280,6 +290,51 @@ async def get_my_results(
     } for r in rows]
 
 
+@router.post("/me/results/{result_id}/presentation")
+async def present_result(result_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                         db: AsyncSession = Depends(get_db)):
+    """A signed card with the year, the status and the place band. The event title is not included."""
+    pid = _pid(current)
+    if await too_many(f"presentation:{pid}", limit=30):
+        raise ApiError(429, "rate_limited", "Слишком много запросов краткого удостоверения")
+    result = await db.get(Result, result_id)
+    if result is None or result.participant_id != pid:
+        raise HTTPException(404, "Результат не найден")
+    year = result.event_date.year
+    status = STATUS_LABELS.get(result.competition_status, result.competition_status)
+    bucket = _bucket(result.place, result.total_participants)
+    discipline = DISCIPLINE_LABELS.get(result.discipline, result.discipline)
+    credential = issue_derived_credential(
+        str(uuid.uuid4()), str(pid),
+        year=year, status=status, bucket=bucket, discipline=discipline,
+    )
+    token, disclosures = issue_sd_jwt(str(pid), {
+        "year": year, "competitionStatus": status, "bucket": bucket, "discipline": discipline,
+        "eventName": result.event_name,
+    })
+    shown = present_sd_jwt(token, disclosures, {"year", "competitionStatus", "bucket", "discipline"})
+    db.add(ConsentLog(participant_id=pid, event_type="derived_claim_issued", actor_id=pid,
+                      meta={"result_id": str(result.id), "fields": ["year", "status", "bucket", "discipline"]}))
+    await db.commit()
+    return {"credential": credential, "sd_jwt": shown}
+
+
+@router.post("/me/credentials/{credential_id}/revoke")
+async def revoke_credential(credential_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                            db: AsyncSession = Depends(get_db)):
+    """The signature stays verifiable. The status document starts saying the credential is revoked."""
+    pid = _pid(current)
+    vc = await db.get(VerifiableCredential, credential_id)
+    if vc is None or vc.participant_id != pid:
+        raise HTTPException(404, "Удостоверение не найдено")
+    if vc.revoked_at is None:
+        vc.revoked_at = datetime.now(UTC)
+        db.add(ConsentLog(participant_id=pid, event_type="credential_revoked", actor_id=pid,
+                          meta={"credential_id": str(vc.id)}))
+        await db.commit()
+    return {"revoked_at": vc.revoked_at.isoformat()}
+
+
 @router.get("/me/offers")
 async def get_my_offers(
     limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
@@ -342,6 +397,8 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:
+        if body.reason is None:
+            raise HTTPException(422, "Укажите причину отказа")
         offer.status = "rejected"
         offer.decline_reason = body.reason
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",

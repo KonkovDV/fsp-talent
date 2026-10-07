@@ -79,12 +79,17 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026) -
             for s in true_skills:
                 if s in TESTABLE and rng.random() < 0.9:
                     declared[s] = "test_confirmed"
+        test_n = test_correct = None
+        if test_p is not None:
+            test_n = 12
+            test_correct = int(round(test_p * test_n))
         has_fsp = rng.random() < 0.55
         lcb = max(0.0, min(0.9, 0.3 + 0.15 * theta + rng.gauss(0, 0.08))) if has_fsp else None
         candidates.append({
             "id": f"c{i}", "truth": {"role": role, "grade": true_grade, "skills": true_skills},
             "observed": {"role": role, "grade": grade, "grade_source": source, "skills": declared,
-                         "test_p": test_p, "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)},
+                         "test_p": test_p, "test_correct": test_correct, "test_n": test_n,
+                         "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)},
         })
     needs = []
     for j in range(n_needs):
@@ -112,6 +117,61 @@ def relevance(need: dict, truth: dict) -> int:
     return 0
 
 
+def cohen_kappa(left: list[int], right: list[int]) -> float:
+    """Unweighted Cohen's kappa. 1 when the two raters always agree, 0 when they match by chance."""
+    if len(left) != len(right) or not left:
+        raise ValueError("kappa needs two equal non-empty lists")
+    n = len(left)
+    observed = sum(a == b for a, b in zip(left, right, strict=True)) / n
+    cats = set(left) | set(right)
+    chance = sum((left.count(c) / n) * (right.count(c) / n) for c in cats)
+    if chance >= 1.0:
+        return 1.0
+    return (observed - chance) / (1.0 - chance)
+
+
+def blind_label(need: dict, observed: dict, rng: random.Random) -> int:
+    """A rater who sees only the noisy profile and then slips by one step one time in five.
+
+    The rubric is the relevance rule applied to the declared profile, not to the hidden truth
+    and not to the production score. The slip comes from `rng`, which the caller builds with its own seed.
+    """
+    role = observed.get("role")
+    role_ok = role == need.get("role")
+    near = role_ok or role in ROLE_NEIGHBOURS.get(need.get("role"), set())
+    skills = observed.get("skills") or {}
+    required = list(need.get("skills") or [])
+    have = sum(1 for skill in required if skill in skills)
+    try:
+        gap = abs(GRADES.index(observed.get("grade")) - GRADES.index(need.get("grade")))
+    except ValueError:
+        gap = 9
+    if role_ok and required and have == len(required) and gap == 0:
+        label = 3
+    elif near and required and have == len(required) and gap <= 1:
+        label = 2
+    elif near and required and have * 2 >= len(required):
+        label = 1
+    else:
+        label = 0
+    if rng.random() < 0.20:
+        label = min(3, label + 1) if rng.random() < 0.5 else max(0, label - 1)
+    return label
+
+
+def blind_kappa(dataset: dict, seed: int) -> float:
+    """Cohen's kappa of the blind rater against labels that were computed from the hidden truth."""
+    rng = random.Random(seed)
+    oracle: list[int] = []
+    blind: list[int] = []
+    by_id = {c["id"]: c for c in dataset["candidates"]}
+    for need in dataset["needs"]:
+        for cid, label in dataset["labels"][need["id"]].items():
+            oracle.append(int(label))
+            blind.append(blind_label(need, by_id[cid]["observed"], rng))
+    return cohen_kappa(oracle, blind)
+
+
 def sha256(dataset: dict) -> str:
     return hashlib.sha256(json.dumps(dataset, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
@@ -119,7 +179,8 @@ def sha256(dataset: dict) -> str:
 def _facts(c: dict) -> CandidateFacts:
     o = c["observed"]
     return CandidateFacts(role=o["role"], grade=o["grade"], grade_source=o["grade_source"], skills=dict(o["skills"]),
-                          test_p=o["test_p"], test_spec=o["role"], fsp_lcb=o["fsp_lcb"], industry=o["industry"])
+                          test_p=o["test_p"], test_spec=o["role"], fsp_lcb=o["fsp_lcb"], industry=o["industry"],
+                          test_correct=o.get("test_correct"), test_n=o.get("test_n"))
 
 
 def _spec(n: dict) -> NeedSpec:
@@ -277,6 +338,10 @@ def main() -> None:
     full = next(r for r in rows if r.method == "full")
     print(f"ось ФСП: nDCG@10 {full.ndcg10:.3f} с осью, {no_fsp.ndcg10:.3f} без неё. "
           "Ось задаёт порядок среди одинакового соответствия и не обязана поднимать nDCG.")
+    if dataset["candidates"] and "truth" in dataset["candidates"][0]:
+        rater_seed = (args.seed or 0) + 1
+        print(f"слепая разметка против оракула: каппа Коэна {blind_kappa(dataset, rater_seed):.2f} "
+              f"(зерно разметчика {rater_seed}, набор размечен по скрытой правде и это зерно не видит)")
     print("sha256", sha256(dataset))
     if args.check:
         failed = checks_ok(rows)

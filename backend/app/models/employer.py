@@ -15,6 +15,8 @@ class Employer(Base):
     email = Column(String(200), unique=True, nullable=False)
     password_hash = Column(String(200), nullable=False)
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
+    # Bumped when a refresh token is exchanged. The new refresh carries the new number.
+    refresh_nonce = Column(Integer, nullable=False, default=0, server_default="0")
     email_verified_at = Column(DateTime(timezone=True))
     inn = Column(String(12))
     website = Column(String(200))

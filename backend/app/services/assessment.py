@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import random
 import secrets
 import uuid
@@ -47,14 +48,61 @@ from app.models.assessment import (
 from app.models.participant import Participant, Skill
 from app.services import cat
 from app.services.item_monitor import KeyStats, leave_family_out
+from app.services.person_fit import LZ_FLAG, person_fit
 from app.services.skills import normalize_skill
 
 RETAKE_INTERVAL_DAYS = 7
 TIME_LIMIT_S = {"code": 180, "concept": 75}
 GRACE_S = 5
 FAST_CORRECT_S = 4          # a right answer to a code item faster than this is flagged for review
+PACE_REVIEW_FAST = 3        # this many fast right answers in one family mark the session for a look
+# Session CUSUM by family. It does not quarantine a key and does not move the grade.
+SHARE_REF = 0.55
+SHARE_SLACK = 0.10
+TIME_REF_S = 8.0
+TIME_SLACK = 0.20
+FAMILY_CUSUM_H = 1.6
 SKILL_CONFIRM_SHARE = 0.75  # a tested skill counts as confirmed at ≥ 75 % right answers (≥ 3 items)
 EXPOSURE_MIN_SESSIONS = 20
+
+
+def note_pace(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str) -> dict:
+    """Count fast right answers per family. Three in one family ask for a look; the grade does not move."""
+    flags = dict(flags)
+    pace = {key: dict(value) for key, value in (flags.get("family_pace") or {}).items()}
+    cell = dict(pace.get(family_id) or {"n": 0, "fast": 0})
+    cell["n"] += 1
+    if correct and kind == "code" and elapsed < FAST_CORRECT_S:
+        cell["fast"] += 1
+        flags["fast_correct"] = int(flags.get("fast_correct") or 0) + 1
+    pace[family_id] = cell
+    flags["family_pace"] = pace
+    if cell["fast"] >= PACE_REVIEW_FAST:
+        flags["pace_review"] = family_id
+    return flags
+
+
+def note_family_cusum(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str) -> dict:
+    """One-sided CUSUM of the right-answer share and of fast code answers, per family.
+
+    The key-level CUSUM in the item monitor is a different signal and still decides quarantine.
+    This one only asks for a look at the session.
+    """
+    flags = dict(flags)
+    pace = {key: dict(value) for key, value in (flags.get("family_pace") or {}).items()}
+    cell = dict(pace.get(family_id) or {})
+    share = max(0.0, float(cell.get("share_cusum") or 0.0) + (int(correct) - SHARE_REF - SHARE_SLACK))
+    time_cusum = float(cell.get("time_cusum") or 0.0)
+    if kind == "code":
+        excess = max(0.0, (TIME_REF_S - float(elapsed)) / TIME_REF_S)
+        time_cusum = max(0.0, time_cusum + excess - TIME_SLACK)
+    cell["share_cusum"] = round(share, 3)
+    cell["time_cusum"] = round(time_cusum, 3)
+    pace[family_id] = cell
+    flags["family_pace"] = pace
+    if cell["share_cusum"] >= FAMILY_CUSUM_H or cell["time_cusum"] >= FAMILY_CUSUM_H:
+        flags["family_cusum_review"] = family_id
+    return flags
 
 
 class QuestionBankError(RuntimeError):
@@ -164,6 +212,29 @@ def item_token(session_id: uuid.UUID, seq: int, item_id: uuid.UUID) -> str:
     return hmac.new(settings.SECRET_KEY.encode(), msg, hashlib.sha256).hexdigest()[:32]
 
 
+def answer_mac(session_id: uuid.UUID, seq: int, correct_index: int, options: list) -> str:
+    """Sign the key that was stored with the item. The browser never receives this value."""
+    body = json.dumps(
+        {"session": str(session_id), "seq": seq, "index": correct_index, "options": list(options)},
+        ensure_ascii=False, separators=(",", ":"),
+    )
+    return hmac.new(settings.SECRET_KEY.encode(), f"answer:{body}".encode(), hashlib.sha256).hexdigest()
+
+
+def answer_holds(stored: str | None, session_id: uuid.UUID, seq: int, correct_index: int, options: list) -> bool:
+    """A row from before the mac existed is still scored. A row whose key was rewritten is not."""
+    if not stored:
+        return True
+    return hmac.compare_digest(stored, answer_mac(session_id, seq, correct_index, options))
+
+
+def scored_answer(holds: bool, right: bool, timed_out: bool) -> tuple[bool | None, bool]:
+    """Return (is_correct, excluded). A key that does not match its mac does not move θ."""
+    if not holds:
+        return None, True
+    return (not timed_out) and right, False
+
+
 # ── lookups ─────────────────────────────────────────────────────────────────
 
 async def confirmation(db: AsyncSession, participant_id: uuid.UUID, spec: str) -> GradeConfirmation | None:
@@ -267,11 +338,14 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
     if vacancy_id is not None:
         # A vacancy test: same items and scale, but it never changes the grade (see decide_grade).
         flags["vacancy_id"] = str(vacancy_id)
+    ttl = cat.EXPRESS_MINUTES if mode == "express" else SESSION_TTL_MINUTES
     session = TestSession(
         participant_id=participant_id, target_grade=target_grade, discipline=spec, specialization=spec,
         engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags=flags,
-        expires_at=now + timedelta(minutes=SESSION_TTL_MINUTES),
+        expires_at=now + timedelta(minutes=ttl),
     )
+    prior = cat.evaluate(cat.State(spec=spec, target=target_grade, blueprint=topic_shares))
+    session.p_pass, session.irt_theta, session.theta_se = prior.p_pass, prior.theta, prior.se
     db.add(session)
     await db.flush()
     bank = await bank_state(db)
@@ -342,8 +416,10 @@ async def serve_next(db: AsyncSession, session: TestSession, state: cat.State, b
         session_id=session.id, seq=seq, item_key=key, family_id=fam.id, level=choice.level, topic=fam.topic,
         kind=fam.kind, skills=list(fam.skills), stem=item.stem, code=item.code, language=item.language,
         options=item.options, correct_index=item.correct, explanation=item.explanation, typed=typed,
-        a=choice.a, b=b, c=TYPED_C if typed else 1.0 / len(item.options), time_limit_s=TIME_LIMIT_S[fam.kind],
+        a=choice.a, b=b, c=TYPED_C if typed else 1.0 / len(item.options),
+        time_limit_s=cat.EXPRESS_ITEM_S if is_trial(session.flags) else TIME_LIMIT_S[fam.kind],
         served_at=datetime.now(UTC),
+        answer_mac=answer_mac(session.id, seq, item.correct, item.options),
     )
     db.add(row)
     await db.flush()
@@ -391,12 +467,18 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     elapsed = (now - current.served_at).total_seconds()
     current.answered_at = now
     current.timed_out = elapsed > current.time_limit_s + GRACE_S
-    current.is_correct = (not current.timed_out) and right
+    holds = answer_holds(current.answer_mac, session.id, current.seq, current.correct_index, current.options)
+    current.is_correct, dropped = scored_answer(holds, right, current.timed_out)
+    if dropped:
+        current.excluded = True
     flags = dict(session.flags or {})
+    if not holds:
+        flags["integrity_review"] = True
     if current.timed_out:
         flags["timeouts"] = flags.get("timeouts", 0) + 1
-    if current.is_correct and current.kind == "code" and elapsed < FAST_CORRECT_S:
-        flags["fast_correct"] = flags.get("fast_correct", 0) + 1
+    flags = note_pace(flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind)
+    flags = note_family_cusum(
+        flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind)
     session.flags = flags
     await db.flush()
 
@@ -404,6 +486,8 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     state = build_state(session.specialization, session.target_grade, items, bank.blocked,
                         _topic_shares(session))
     verdict = cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS if is_trial(session.flags) else None)
+    session.p_pass, session.p_upgrade = verdict.p_pass, verdict.p_upgrade
+    session.irt_theta, session.theta_se = verdict.theta, verdict.se
     if verdict.done:
         finished = await finalize(db, session, items, bank, verdict.stop_reason or "decided")
         return session, None, finished
@@ -471,6 +555,10 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
         await sync_assessed_grade(db, participant)
     flags = dict(session.flags or {})
     flags["outcome"] = decision.reason
+    if len(answered) >= cat.MIN_ITEMS and not trial:
+        lz, lz_star = person_fit(
+            [cat.Response(it.a, it.b, it.c, bool(it.is_correct)) for it in answered], outcome.theta)
+        flags["person_fit"] = {"lz": round(lz, 3), "lz_star": round(lz_star, 3), "review": lz_star < LZ_FLAG}
     recommend = recommended_grade(decision.assessed_grade, outcome, session.target_grade, vacancy_test)
     if recommend:
         flags["recommended_grade"] = recommend

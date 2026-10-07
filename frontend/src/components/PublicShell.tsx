@@ -14,6 +14,7 @@ export function PublicHeader() {
         <Brand />
         <nav className="flex items-center gap-1" aria-label="Главное меню">
           <Link to="/leaderboard" className="btn-nav hidden sm:inline-flex">Рейтинг</Link>
+          <Link to="/method" className="btn-nav hidden sm:inline-flex">Тест</Link>
           <ThemeToggle />
           {role ? <Link to={role === 'participant' ? '/candidate' : '/employer'} className="btn-primary btn-sm">Мой кабинет</Link> : <>
             <Link to="/login" className="btn-nav">Войти</Link>

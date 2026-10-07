@@ -24,6 +24,7 @@ redis_data/
 .mypy_cache/
 .ruff_cache/
 *.log
+sbom.cdx.json
 deploy/backups/
 dump.rdb
 docs/tools/node_modules/

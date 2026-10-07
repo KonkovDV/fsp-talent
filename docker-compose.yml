@@ -9,7 +9,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
-      # Six-item trial for the jury. A production deploy sets DEMO_MODE=false.
+      # Fifteen-item, five-minute trial for the jury. A production deploy sets DEMO_MODE=false.
       DEMO_MODE: ${DEMO_MODE:-true}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       # Letters with confirmation codes land in Mailpit: http://localhost:8025. Override in .env for real SMTP.
@@ -109,6 +109,27 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports: ['127.0.0.1:8025:8025']
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_STRICT: "false"
+    ports: ["127.0.0.1:8080:8080"]
+    volumes:
+      - ./deploy/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     restart: unless-stopped
 
   nginx:

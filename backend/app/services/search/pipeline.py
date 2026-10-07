@@ -14,14 +14,25 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, func, literal, or_, select, tuple_
+from sqlalchemy import and_, bindparam, func, literal, or_, select, text, tuple_
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import GradeConfirmation, Participant, Result, Skill, TestSession
+from app.models import GradeConfirmation, Offer, Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
-from app.services.matching import RELATED, CandidateFacts, NeedSpec, category_percentile, recommended_categories
+from app.services.matching import (
+    RELATED,
+    CandidateFacts,
+    NeedSpec,
+    category_percentile,
+    pay_counterfactual,
+    reason_source,
+    recommended_categories,
+    skill_counterfactual,
+)
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.engine import (
@@ -39,9 +50,31 @@ from app.services.vacancy_exam import TOPIC_LABELS
 logger = logging.getLogger(__name__)
 
 
-def order_pool(ids: list, scores: dict, fused: dict, best: dict) -> list:
-    """Rank the whole pool, then the caller slices a page. A later page cannot reorder an earlier one."""
-    return sorted(ids, key=lambda i: (-scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
+def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | None = None) -> list:
+    """Rank the whole pool, then the caller slices a page. A later page cannot reorder an earlier one.
+
+    `cold` holds candidates with no grade test. Each block of ten that would otherwise be all tested
+    gives its last seat to the next cold candidate, when that candidate's score is within 0.08.
+    A cold candidate who already earned a seat stays there.
+    """
+    ranked = sorted(ids, key=lambda i: (-scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
+    if not cold:
+        return ranked
+    out = list(ranked)
+    block = 10
+    band = 0.08
+    n = len(out)
+    for end in range(block, n + 1, block):
+        window = out[end - block:end]
+        if any(i in cold for i in window):
+            continue
+        host = scores.get(out[end - 1], 0.0)
+        for j in range(end, n):
+            guest = out[j]
+            if guest in cold and scores.get(guest, 0.0) >= host - band:
+                out[end - 1], out[j] = guest, out[end - 1]
+                break
+    return out
 
 
 def days_ago(moment: datetime, now: datetime | None = None) -> str:
@@ -237,8 +270,13 @@ async def search_candidates(
 
     need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
     matches = await score_pool(db, all_ids, need, fused, discipline)
+    facts = [matches[i].facts for i in all_ids if matches[i].facts]
+    pay_hint = pay_counterfactual(need, facts)
+    skill_hint = skill_counterfactual(need, facts)
+    cold = {i for i in all_ids if matches[i].facts and matches[i].facts.test_p is None}
     # One explainable score orders the list; ties fall back to the fused retrieval rank.
-    ordered = order_pool(all_ids, {i: matches[i].score for i in all_ids}, fused, best)
+    # Untested candidates take one seat in a block of ten when they are close.
+    ordered = order_pool(all_ids, {i: matches[i].score for i in all_ids}, fused, best, cold)
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)])
     ordered = ordered[:limit]
@@ -246,12 +284,14 @@ async def search_candidates(
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
         card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
-                         "reasons": [{"code": r.code, "text": r.text, "tone": r.tone} for r in m.reasons],
+                         "reasons": [{"code": r.code, "text": r.text, "tone": r.tone,
+                                      "source": reason_source(r.code)} for r in m.reasons],
                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
                                      for f in m.factors]}
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
-            "recommended_categories": categories, "items": cards}
+            "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
+            "items": cards}
 
 
 @dataclass
@@ -291,6 +331,23 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
     lcb = dict((pid, v) for pid, v in await db.execute(lcb_q.group_by(DisciplineScore.participant_id)))
     confs = {(c.participant_id, c.specialization): c for c in await db.scalars(
         select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ids)))}
+    pending = {pid: n for pid, n in await db.execute(
+        select(Offer.candidate_id, func.count()).where(
+            Offer.candidate_id.in_(ids), Offer.status == "pending").group_by(Offer.candidate_id))}
+    refusals = {pid: n for pid, n in await db.execute(
+        select(Offer.candidate_id, func.count()).where(
+            Offer.candidate_id.in_(ids), Offer.status == "rejected",
+            Offer.decline_reason == "salary").group_by(Offer.candidate_id))}
+    session_ids = [c.session_id for c in confs.values() if c.session_id]
+    counts: dict[uuid.UUID, tuple[int, int]] = {}
+    if session_ids:
+        # Item rows hide answer keys from employers. The aggregate returns only counts
+        # and puts the row-level bypass back before the request continues.
+        counts_query = text(
+            "SELECT session_id, n, correct FROM app_answer_counts(:ids)"
+        ).bindparams(bindparam("ids", type_=ARRAY(PG_UUID(as_uuid=True))))
+        for sid, n, correct in await db.execute(counts_query, {"ids": session_ids}):
+            counts[sid] = (int(correct or 0), int(n or 0))
     top = max(fused.values(), default=0.0) or 1.0
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
@@ -305,6 +362,12 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             test_spec=conf.specialization if conf else None,
             fsp_lcb=(lcb.get(pid, 0.0) if has_fsp else None), industry=p.industry if p else None,
             text_rank=fused.get(pid, 0.0) / top,
+            salary_from=p.salary_from_gross if p else None, salary_to=p.salary_to_gross if p else None,
+            test_se=conf.se if conf and conf.se else None,
+            test_correct=counts.get(conf.session_id, (None, None))[0] if conf and conf.session_id else None,
+            test_n=counts.get(conf.session_id, (None, None))[1] if conf and conf.session_id else None,
+            open_invites=int(pending.get(pid, 0)),
+            salary_refusals=int(refusals.get(pid, 0)),
         )
         m = match_score(need, facts)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons)

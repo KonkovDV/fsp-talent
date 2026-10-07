@@ -29,12 +29,14 @@ interface Result {
   p_pass: number; p_upgrade: number | null; theta: number; se: number; items_count: number; score: number
   stop_reason: string | null; grade_locked_until: string | null; trial?: boolean; note?: string | null
   confirmed_skills: { name: string; share: number }[]
-  topics: { topic: string; label: string; answered: number; correct: number }[]
+  topics: { topic: string; label: string; answered: number; correct: number; wilson_low?: number | null }[]
   excluded_items: number
+  person_fit?: { lz_star: number; review: boolean } | null
+  family_review?: boolean
 }
 interface SessionState {
   session_id: string; status: string; specialization: string | null; target_grade: string; expires_at: string
-  progress: { answered: number; min_items: number; max_items: number }
+  progress: { answered: number; min_items: number; max_items: number; p_pass?: number | null; theta?: number | null; se?: number | null }
   item: Item | null; result: Result | null
 }
 interface HistoryItem {
@@ -106,10 +108,15 @@ export default function CandidateAssessment() {
   const refresh = () => {
     for (const key of ['myProfile', 'assessmentHistory', 'assessmentActive']) qc.invalidateQueries({ queryKey: [key] })
   }
+  const startKey = useRef<{ sig: string; key: string } | null>(null)
   const start = useMutation({
-    mutationFn: (mode: 'grade' | 'express' = 'grade') =>
-      startAssessment({ target_grade: target, code_language: lang, mode, vacancy_id: mode === 'grade' ? vacancyId : null }).then(r => r.data),
-    onSuccess: (data: SessionState) => { setState(data); setPicked(null); setTyped(''); setError(''); setShowReview(false) },
+    mutationFn: (mode: 'grade' | 'express' = 'grade') => {
+      const body = { target_grade: target, code_language: lang, mode, vacancy_id: mode === 'grade' ? vacancyId : null }
+      const sig = JSON.stringify(body)
+      if (!startKey.current || startKey.current.sig !== sig) startKey.current = { sig, key: crypto.randomUUID() }
+      return startAssessment(body, startKey.current.key).then(r => r.data)
+    },
+    onSuccess: (data: SessionState) => { startKey.current = null; setState(data); setPicked(null); setTyped(''); setError(''); setShowReview(false) },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось начать тест')),
   })
   const answer = useMutation({
@@ -178,11 +185,11 @@ export default function CandidateAssessment() {
               </button>
               {blueprint?.express && !vacancyId && (
                 <button onClick={() => start.mutate('express')} disabled={!target || start.isPending} className="btn-secondary px-6 py-3">
-                  Пробный тест, {blueprint.express_items ?? 6} заданий
+                  Пробный тест, {blueprint.express_items ?? 15} заданий, {blueprint.express_minutes ?? 5} минут
                 </button>
               )}
             </div>
-            {blueprint?.express && !vacancyId && <p className="field-hint">Пробный проход для знакомства: грейд не подтверждается и в поиске не учитывается.</p>}
+            {blueprint?.express && !vacancyId && <p className="field-hint">Пробный проход: {blueprint.express_items ?? 15} заданий и {blueprint.express_minutes ?? 5} минут. Грейд не подтверждается и в поиске не учитывается.</p>}
           </div>
           <aside className="card space-y-4">
             <h2 className="section-title">Из чего состоит тест</h2>
@@ -216,13 +223,23 @@ export default function CandidateAssessment() {
         <div className="card mx-auto max-w-3xl space-y-5" data-testid="assessment-item">
           <div className="flex items-center justify-between text-xs text-ink-3">
             <span>Задание {item.seq}. {item.family_title.toLowerCase().startsWith(item.topic_label.toLowerCase()) ? item.family_title : `${item.topic_label}: ${item.family_title}`}</span>
-            <span className={`flex items-center gap-1 font-mono ${left < 20 ? 'text-invite' : ''}`}>
-              <Clock size={12} />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+            <span role="timer" aria-label={`Осталось ${Math.floor(left / 60)} мин ${left % 60} с`}
+              className={`flex items-center gap-1 font-mono ${left < 20 ? 'text-invite' : ''}`}>
+              <Clock size={12} aria-hidden />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
             </span>
           </div>
-          <div className="h-1.5 bg-sunken rounded-full overflow-hidden" aria-hidden>
-            <div className="h-full bg-accent" style={{ width: `${Math.min(100, (state.progress.answered / state.progress.max_items) * 100)}%` }} />
-          </div>
+          {state.progress.answered >= 1 && state.progress.p_pass != null && (
+            <div>
+              <div className="mb-1 flex justify-between text-xs text-ink-3">
+                <span>Уверенность, что уровень уже ясен</span>
+                <span className="num">{pct(state.progress.p_pass)}{state.progress.se != null ? ` · θ ${state.progress.theta?.toFixed(2)} ± ${state.progress.se.toFixed(2)}` : ''}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-sunken" role="meter" aria-valuemin={0} aria-valuemax={100}
+                aria-valuenow={Math.round(state.progress.p_pass * 100)} aria-label="Уверенность решения">
+                <div className="h-full bg-accent" style={{ width: `${Math.min(100, state.progress.p_pass * 100)}%` }} />
+              </div>
+            </div>
+          )}
           <p className={`whitespace-pre-wrap text-sm leading-relaxed ${item.stem.includes(" | ") ? "font-mono" : ""}`}>{item.stem}</p>
           {item.code && (
             <pre className="code-block"><code>{item.code}</code></pre>
@@ -252,13 +269,24 @@ export default function CandidateAssessment() {
               {answer.isPending ? 'Проверяем…' : 'Ответить'}
             </button>
           </div>
-          <p className="text-xs text-ink-3">Ответ нельзя изменить. Отвечено: {state.progress.answered}, тест закончится не раньше {state.progress.min_items}-го и не позже {state.progress.max_items}-го задания.</p>
+          <p className="text-xs text-ink-3">
+            Ответ нельзя изменить. Отвечено: {state.progress.answered}.{' '}
+            {state.progress.min_items === state.progress.max_items
+              ? `Это пробный проход из ${state.progress.max_items} заданий: шкала уверенности видна, но грейд не меняется.`
+              : `Тест закончится, когда уверенность дойдёт до 90 % или упадёт ниже 10 %, не раньше ${state.progress.min_items}-го и не позже ${state.progress.max_items}-го задания.`}
+          </p>
         </div>
       )}
 
       {result && state && (
         <div className="card mx-auto max-w-3xl space-y-5" data-testid="assessment-result">
           {result.trial && <p className="notice" role="status">{result.note || 'Пробный проход: грейд не подтверждается и в поиске не учитывается.'}</p>}
+          {result.person_fit?.review && (
+            <p className="notice" role="status">Ответы плохо сходятся с оценкой уровня. Это не вывод о списывании: имеет смысл пересдать.</p>
+          )}
+          {result.family_review && (
+            <p className="notice" role="status">По одному семейству доля верных ответов и скорость выбиваются из обычного хода. Грейд из-за этого не меняется.</p>
+          )}
           <div className={result.passed ? 'hero-ink -m-5 mb-0 p-6 sm:-m-6 sm:mb-0 sm:p-8' : 'flex items-start gap-3'}>
             {result.passed ? (
               <>
@@ -302,6 +330,7 @@ export default function CandidateAssessment() {
                 <li key={t.topic}>
                   <div className="flex justify-between text-sm"><span className="text-ink">{t.label}</span><span className="num text-ink-2">{t.correct} из {t.answered}</span></div>
                   <div className="mt-1.5"><Meter value={t.answered ? t.correct / t.answered : 0} ariaLabel={`${t.label}: ${t.correct} из ${t.answered}`} /></div>
+                  {t.wilson_low != null && <p className="mt-1 text-xs text-ink-3">Нижняя граница доли верных {pct(t.wilson_low)}</p>}
                 </li>
               ))}
             </ul>

@@ -20,3 +20,4 @@ class VerifiableCredential(Base):
     credential_json = Column(JSONB, nullable=False)
     proof_value    = Column(String(200), nullable=False)
     issued_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    revoked_at     = Column(DateTime(timezone=True), nullable=True)

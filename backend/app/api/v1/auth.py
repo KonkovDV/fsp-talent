@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
@@ -27,6 +27,7 @@ from app.core.security import (
     decode_refresh_token,
     epochs_match,
     hash_password,
+    next_refresh_nonce,
     verify_password,
 )
 from app.models import Employer, Participant
@@ -65,12 +66,52 @@ class VerificationSent(BaseModel):
     resend_after_seconds: int = 60
 
 
-def _tokens(subject: str, role: str, epoch: int = 0) -> TokenOut:
+def _tokens(subject: str, role: str, epoch: int = 0, nonce: int = 0) -> TokenOut:
     return TokenOut(
         access_token=create_access_token(subject, role, epoch),
-        refresh_token=create_refresh_token(subject, role, epoch),
+        refresh_token=create_refresh_token(subject, role, epoch, nonce),
         role=role,
     )
+
+
+def _account_tokens(account, role: str) -> TokenOut:
+    return _tokens(
+        str(account.id), role, int(account.token_epoch or 0), int(account.refresh_nonce or 0),
+    )
+
+
+REFRESH_COOKIE = "fsp_refresh"
+
+
+def attach_refresh(response: Response, token: str) -> None:
+    """The refresh token lives in an HttpOnly cookie. JavaScript does not receive it."""
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/api/v1/auth",
+    )
+
+
+def browser_tokens(tokens: TokenOut) -> TokenOut:
+    return tokens.model_copy(update={"refresh_token": ""})
+
+
+def deliver(response: Response, tokens: TokenOut) -> TokenOut:
+    attach_refresh(response, tokens.refresh_token)
+    return browser_tokens(tokens)
+
+
+def presented_refresh(body: str | None, cookie: str | None) -> str | None:
+    """An API client may send the token. The browser sends only the cookie."""
+    text = (body or "").strip()
+    if text:
+        return text
+    baked = (cookie or "").strip()
+    return baked or None
 
 
 async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
@@ -193,7 +234,7 @@ class VerifyIn(BaseModel):
 
 
 @router.post("/verify-email", response_model=TokenOut)
-async def verify_email(body: VerifyIn, db: AsyncSession = Depends(get_db)):
+async def verify_email(body: VerifyIn, response: Response, db: AsyncSession = Depends(get_db)):
     if body.token:
         row = await consume_token(db, body.token)
     else:
@@ -210,7 +251,7 @@ async def verify_email(body: VerifyIn, db: AsyncSession = Depends(get_db)):
             # Only confirmed accounts enter the employer search index.
             await rebuild_profile(db, account)
     await db.commit()
-    return _tokens(str(account.id), row.subject_type, int(account.token_epoch or 0))
+    return deliver(response, _account_tokens(account, row.subject_type))
 
 
 class ResendIn(BaseModel):
@@ -242,17 +283,19 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         raise ApiError(401, "invalid_credentials")
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
-    return _tokens(str(account.id), role, int(account.token_epoch or 0))
+    return _account_tokens(account, role)
 
 
 @router.post("/participant/token", response_model=TokenOut)
-async def login_participant(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    return await _login(db, "participant", form)
+async def login_participant(response: Response, form: OAuth2PasswordRequestForm = Depends(),
+                            db: AsyncSession = Depends(get_db)):
+    return deliver(response, await _login(db, "participant", form))
 
 
 @router.post("/employer/token", response_model=TokenOut)
-async def login_employer(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    return await _login(db, "employer", form)
+async def login_employer(response: Response, form: OAuth2PasswordRequestForm = Depends(),
+                         db: AsyncSession = Depends(get_db)):
+    return deliver(response, await _login(db, "employer", form))
 
 
 # ── password reset ──────────────────────────────────────────────────────────
@@ -282,7 +325,7 @@ class ResetIn(BaseModel):
 
 
 @router.post("/password/reset", response_model=TokenOut)
-async def reset_password(body: ResetIn, db: AsyncSession = Depends(get_db)):
+async def reset_password(body: ResetIn, response: Response, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
     await _limit("reset", email, limit=10)
     row = await consume_code(db, email, body.code, "reset", body.role)
@@ -292,13 +335,13 @@ async def reset_password(body: ResetIn, db: AsyncSession = Depends(get_db)):
     account.password_hash = _password_hash(body.new_password)
     account.token_epoch = int(account.token_epoch or 0) + 1
     await db.commit()
-    return _tokens(str(account.id), body.role, int(account.token_epoch))
+    return deliver(response, _account_tokens(account, body.role))
 
 
 # ── tokens ──────────────────────────────────────────────────────────────────
 
 class RefreshIn(BaseModel):
-    refresh_token: str = Field(min_length=10)
+    refresh_token: str | None = None
 
 
 def account_can_refresh(account) -> bool:
@@ -307,10 +350,14 @@ def account_can_refresh(account) -> bool:
 
 
 @router.post("/refresh", response_model=TokenOut)
-async def refresh(body: RefreshIn, db: AsyncSession = Depends(get_db)):
-    """Обновить access-токен. Удалённый или отсутствующий аккаунт токен не продлевает."""
+async def refresh(response: Response, request: Request, body: RefreshIn | None = None,
+                  db: AsyncSession = Depends(get_db)):
+    """Обновить access-токен. Браузер присылает HttpOnly-cookie, клиент API — тело запроса."""
+    raw = presented_refresh(None if body is None else body.refresh_token, request.cookies.get(REFRESH_COOKIE))
+    if not raw:
+        raise ApiError(401, "unauthorized")
     try:
-        payload = decode_refresh_token(body.refresh_token)
+        payload = decode_refresh_token(raw)
     except ValueError as e:
         raise ApiError(401, "unauthorized", str(e)) from e
     role = payload.get("role")
@@ -318,12 +365,47 @@ async def refresh(body: RefreshIn, db: AsyncSession = Depends(get_db)):
     account = None
     if model is not None:
         try:
-            account = await db.get(model, uuid.UUID(payload["sub"]))
+            account = await db.get(model, uuid.UUID(payload["sub"]), with_for_update=True)
         except ValueError:
             account = None
     if not account_can_refresh(account) or not epochs_match(payload.get("ep"), account.token_epoch):
         raise ApiError(401, "unauthorized")
-    return _tokens(payload["sub"], role, int(account.token_epoch or 0))
+    nxt = next_refresh_nonce(payload.get("rn"), int(account.refresh_nonce or 0))
+    if nxt is None:
+        raise ApiError(401, "unauthorized")
+    account.refresh_nonce = nxt
+    return deliver(response, _tokens(payload["sub"], role, int(account.token_epoch or 0), nxt))
+
+
+@router.post("/logout")
+async def logout(response: Response, request: Request, db: AsyncSession = Depends(get_db)):
+    """Сбросить refresh-cookie и погасить текущее поколение refresh на сервере.
+
+    Access-токен в браузере гасит сам клиент. Украденный refresh того же поколения
+    после выхода больше не обменивается.
+    """
+    raw = presented_refresh(None, request.cookies.get(REFRESH_COOKIE))
+    if raw:
+        try:
+            payload = decode_refresh_token(raw)
+        except ValueError:
+            payload = None
+        role = payload.get("role") if payload else None
+        model = Participant if role == "participant" else Employer if role == "employer" else None
+        if payload and model is not None:
+            try:
+                account = await db.get(model, uuid.UUID(payload["sub"]))
+            except ValueError:
+                account = None
+            if (
+                account is not None
+                and epochs_match(payload.get("ep"), account.token_epoch)
+                and next_refresh_nonce(payload.get("rn"), int(account.refresh_nonce or 0)) is not None
+            ):
+                account.refresh_nonce = int(account.refresh_nonce or 0) + 1
+                await db.commit()
+    response.delete_cookie(REFRESH_COOKIE, path="/api/v1/auth")
+    return {"status": "signed_out"}
 
 
 @router.get("/me")
@@ -371,7 +453,7 @@ async def fsp_signin_authorize(request: Request):
 
 
 @router.post("/fsp/callback")
-async def fsp_signin_callback(body: FspSignInCallback, db: AsyncSession = Depends(get_db)):
+async def fsp_signin_callback(body: FspSignInCallback, response: Response, db: AsyncSession = Depends(get_db)):
     """Exchange the code. A linked account signs in; a new person must accept the consents first."""
     try:
         fsp_id = await fsp_identity.finish_signin(body.code, body.state)
@@ -379,7 +461,8 @@ async def fsp_signin_callback(body: FspSignInCallback, db: AsyncSession = Depend
         raise ApiError(400, "fsp_invalid", "Вход через ФСП ID не подтверждён, начните вход заново") from e
     account = await _linked(db, fsp_id)
     if account is not None:
-        return {"status": "signed_in", **_tokens(str(account.id), "participant").model_dump()}
+        tokens = deliver(response, _account_tokens(account, "participant"))
+        return {"status": "signed_in", **tokens.model_dump()}
     data = await _registry(fsp_id)
     # The registry data is shown so the person sees whose account is about to be created; nothing is stored yet.
     return {"status": "needs_consent", "ticket": await fsp_identity.issue_ticket(fsp_id),
@@ -388,7 +471,8 @@ async def fsp_signin_callback(body: FspSignInCallback, db: AsyncSession = Depend
 
 
 @router.post("/fsp/signup", response_model=TokenOut)
-async def fsp_signin_signup(body: FspSignUpIn, request: Request, db: AsyncSession = Depends(get_db)):
+async def fsp_signin_signup(body: FspSignUpIn, request: Request, response: Response,
+                            db: AsyncSession = Depends(get_db)):
     """Create the account from the FSP registry after the required consents (152-FZ art. 9).
 
     FSP ID is the identity provider: the account works without an email and a password. The person can add
@@ -413,4 +497,4 @@ async def fsp_signin_signup(body: FspSignUpIn, request: Request, db: AsyncSessio
             await give_consent(db, "participant", account.id, kind, request)
         await rebuild_profile(db, account)
         await db.commit()
-    return _tokens(str(account.id), "participant")
+    return deliver(response, _account_tokens(account, "participant"))

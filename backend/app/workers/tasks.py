@@ -12,10 +12,13 @@ _REBUILD_LOCK_PREFIX = "rebuild_lock:"
 
 
 def run_async(coro):
+    from app.core.rls import bypass_rls, reset_rls
     loop = asyncio.new_event_loop()
+    scope = bypass_rls()
     try:
         return loop.run_until_complete(coro)
     finally:
+        reset_rls(scope)
         loop.close()
 
 

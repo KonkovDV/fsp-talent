@@ -110,6 +110,8 @@ DEMO_VACANCIES = [
 
 async def main() -> None:
     _refuse_production()
+    from app.core.rls import bypass_rls
+    bypass_rls()
     adapter = MockFSPAdapter()
     async with AsyncSessionLocal() as db:
         password_hash = hash_password(DEMO_PASSWORD)

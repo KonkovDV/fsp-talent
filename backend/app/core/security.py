@@ -43,11 +43,25 @@ def create_access_token(subject: str, role: str, epoch: int = 0) -> str:
     )
 
 
-def create_refresh_token(subject: str, role: str, epoch: int = 0) -> str:
+def create_refresh_token(subject: str, role: str, epoch: int = 0, nonce: int = 0) -> str:
     return create_token(
-        {"sub": subject, "role": role, "type": "refresh", "ep": int(epoch)},
+        {"sub": subject, "role": role, "type": "refresh", "ep": int(epoch), "rn": int(nonce)},
         settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60,
     )
+
+
+def next_refresh_nonce(token_nonce: int | None, account_nonce: int) -> int | None:
+    """The next refresh generation, or None when this token is no longer the current one.
+
+    A token issued before generations existed is accepted once, and only while the account is still
+    on generation 0. After that exchange the old token dies.
+    """
+    current = int(account_nonce or 0)
+    if token_nonce is None:
+        return current + 1 if current == 0 else None
+    if int(token_nonce) != current:
+        return None
+    return current + 1
 
 
 def decode_token(token: str) -> dict:

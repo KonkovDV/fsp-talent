@@ -80,7 +80,7 @@ export default function PublicProfile() {
               <h2 className="section-title flex items-center gap-2"><Shield size={18} className="text-accent" aria-hidden />Проверяемые удостоверения</h2>
               <p className="mt-1 text-sm text-ink-2">Каждый результат подписан по стандарту W3C Verifiable Credentials 2.0. Попробуйте изменить место — проверка подписи не пройдёт.</p>
               <ul className="mt-4 divide-y divide-line">
-                {creds.map((item: { id: string; valid: boolean; credential: { credentialSubject?: { achievement?: Achievement } } }) => {
+                {creds.map((item: { id: string; valid: boolean; revoked?: boolean; credential: { credentialSubject?: { achievement?: Achievement } } }) => {
                   const a = item.credential.credentialSubject?.achievement
                   return (
                     <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -88,7 +88,7 @@ export default function PublicProfile() {
                         <p className="text-sm font-medium text-ink">{a?.eventName ?? item.id}</p>
                         <p className="text-xs text-ink-2">{a?.place != null && `${a.place} место из ${a.totalParticipants}`}{a?.rankEquivalent ? `, ${a.rankEquivalent}` : ''}{a?.teamSize && a.teamSize > 1 ? `, команда из ${a.teamSize}` : ''}</p>
                       </div>
-                      <span className={item.valid ? 'badge-ok' : 'badge-warn'}>{item.valid ? 'подпись верна' : 'подпись не сходится'}</span>
+                      <span className={item.revoked ? 'badge-warn' : item.valid ? 'badge-ok' : 'badge-warn'}>{item.revoked ? 'отозвано' : item.valid ? 'подпись верна' : 'подпись не сходится'}</span>
                     </li>
                   )
                 })}

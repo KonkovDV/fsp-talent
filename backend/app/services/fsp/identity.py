@@ -119,6 +119,9 @@ class KeycloakFspIdProvider:
     def __init__(self, http: httpx.AsyncClient | None = None):
         self._http = http
         self.issuer = settings.FSP_ID_ISSUER.rstrip("/")
+        # The browser follows FSP_ID_ISSUER. The API fetches tokens from the in-network address
+        # when the public host is not reachable from the container.
+        self.backend = (settings.FSP_ID_BACKEND_ISSUER or settings.FSP_ID_ISSUER).rstrip("/")
 
     def redirect_uri(self, path: str = CALLBACK_PATH) -> str:
         return settings.PUBLIC_BASE_URL.rstrip("/") + path
@@ -137,14 +140,14 @@ class KeycloakFspIdProvider:
     async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str:
         client = await self._client()
         try:
-            token = await client.post(f"{self.issuer}/protocol/openid-connect/token", data={
+            token = await client.post(f"{self.backend}/protocol/openid-connect/token", data={
                 "grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri(path),
                 "client_id": settings.FSP_ID_CLIENT_ID, "client_secret": settings.FSP_ID_CLIENT_SECRET,
                 "code_verifier": verifier,
             })
             if token.status_code != 200 or "id_token" not in token.json():
                 raise FspIdError("token")
-            keys = await client.get(f"{self.issuer}/protocol/openid-connect/certs")
+            keys = await client.get(f"{self.backend}/protocol/openid-connect/certs")
             keys.raise_for_status()
             jwks = keys.json()
         except (httpx.HTTPError, ValueError) as e:

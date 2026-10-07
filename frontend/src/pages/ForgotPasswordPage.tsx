@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault(); setError(''); setBusy(true)
     try {
       const { data } = await resetPassword({ email, role, code, new_password: password })
-      setAuth(data.access_token, data.refresh_token, role)
+      setAuth(data.access_token, role)
       navigate(role === 'employer' ? '/employer' : '/candidate', { replace: true })
     } catch (err) { setError(apiError(err, 'Код не подошёл')) } finally { setBusy(false) }
   }

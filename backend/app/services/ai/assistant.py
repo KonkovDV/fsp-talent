@@ -187,6 +187,25 @@ def extract_resume_fields(text: str) -> dict:
     }
 
 
+def has_identity(text: str) -> bool:
+    """True when the text carries an email, a phone, Telegram or a personal name."""
+    return bool(_EMAIL.search(text) or _PHONE.search(text) or _TELEGRAM.search(text) or _full_name(text))
+
+
+def for_model(text: str) -> str:
+    """The model sees skills, not the name, the email, the phone or Telegram.
+
+    The candidate still sees those fields: they are extracted from the original text and confirmed by hand.
+    """
+    redacted = _EMAIL.sub("[email]", text)
+    redacted = _PHONE.sub("[phone]", redacted)
+    redacted = _TELEGRAM.sub("[telegram]", redacted)
+    name = _full_name(text)
+    if name:
+        redacted = redacted.replace(name["value"], "[name]")
+    return redacted
+
+
 def parse_query(q: str) -> dict:
     low = q.lower()
     return {
@@ -212,7 +231,7 @@ async def _llm_skills(text: str) -> list[dict]:
             {
                 "messages": [
                     {"role": "system", "content": _RESUME_PROMPT},
-                    {"role": "user", "content": text[:8000]},
+                    {"role": "user", "content": for_model(text)[:8000]},
                 ],
                 "temperature": 0.1,
             }
@@ -231,7 +250,7 @@ async def parse_resume(text: str) -> dict:
     llm_used, rejected = False, 0
     if settings.AI_ENABLED and settings.GIGACHAT_CREDENTIALS:
         try:
-            for item in await _llm_skills(text):
+            for item in await _llm_skills(for_model(text)):
                 name, quote = normalize_skill(str(item.get("skill", ""))), str(item.get("quote", ""))
                 if name and quote and is_grounded(quote, text):
                     found.setdefault(name, {"name": name, "source_quote": quote, "source": "llm"})

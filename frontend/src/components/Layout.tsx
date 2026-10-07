@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { LogOut, Moon, Sun } from 'lucide-react'
+import { signOut } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useTheme } from '../lib/theme'
 import { Brand } from './Brand'
@@ -40,14 +41,17 @@ export function SiteFooter() {
     <footer className="border-t border-line">
       <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-ink-3 sm:px-6">
         <p>ФСП Талант — прототип для Федерации спортивного программирования, ЛЦТ 2026. Демо-данные вымышлены.</p>
-        <p>Контакты кандидата открываются только после его согласия. <Link to="/legal" className="underline hover:text-ink">Документы и согласия</Link></p>
+        <p>Контакты кандидата открываются только после его согласия. <Link to="/legal" className="underline hover:text-ink">Документы и согласия</Link>
+          {' · '}<Link to="/method" className="underline hover:text-ink">Как устроен тест</Link>
+          {' · '}<Link to="/badge" className="underline hover:text-ink">Проверка удостоверения</Link>
+          {' · '}<Link to="/jury" className="underline hover:text-ink">Режим жюри</Link></p>
       </div>
     </footer>
   )
 }
 
 export default function Layout() {
-  const { userRole, logout } = useAuthStore()
+  const { userRole } = useAuthStore()
   const navigate = useNavigate()
   const links = userRole === 'participant' ? CANDIDATE_LINKS : EMPLOYER_LINKS
   const roleLabel = userRole === 'participant' ? 'Кандидат' : 'Работодатель'
@@ -62,7 +66,7 @@ export default function Layout() {
             <span className="mr-2 hidden text-xs text-ink-3 sm:inline">{roleLabel}</span>
             <NotificationBell />
             <ThemeToggle />
-            <button onClick={() => { logout(); navigate('/') }} className="btn-nav gap-1.5 text-xs">
+            <button onClick={() => { void signOut().then(() => navigate('/')) }} className="btn-nav gap-1.5 text-xs">
               <LogOut size={15} aria-hidden /> Выйти
             </button>
           </div>

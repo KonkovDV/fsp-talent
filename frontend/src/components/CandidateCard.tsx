@@ -22,7 +22,7 @@ export interface CandidateCardData {
     plus: string[]
     minus: string[]
     info: string[]
-    reasons?: { code: string; text: string; tone: string }[]
+    reasons?: { code: string; text: string; tone: string; source?: string | null }[]
     factors: { key: string; label: string; weight: number; value: number | null }[]
   }
   disciplines: {
@@ -54,6 +54,11 @@ const REASON_RU: Record<string, string> = {
   OTHER_ROLE: 'Другая специализация',
   UNTESTED: 'Тест не сдан',
   INDUSTRY: 'Сфера',
+  PAY_FIT: 'Вилка сходится',
+  PAY_LOW: 'Вилка ниже',
+  PAY_GAP: 'Вилка не сходится',
+  SALARY_HISTORY: 'Отказ из-за вилки',
+  CONGESTION: 'Много приглашений',
 }
 
 interface Props {
@@ -63,7 +68,7 @@ interface Props {
   /** «Дать задание»: a task addressed to this candidate only. */
   onTask?: (id: string) => void
   onShortlist?: (id: string, on: boolean) => void
-  /** Side-by-side comparison of up to three cards from the same list. */
+  /** Side-by-side comparison of up to four cards from the same list. */
   compare?: { on: boolean; full: boolean; toggle: () => void }
 }
 
@@ -158,7 +163,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
         <div className="flex flex-wrap gap-2">
           {compare && (
             <button type="button" onClick={compare.toggle} aria-pressed={compare.on} disabled={!compare.on && compare.full}
-              title={!compare.on && compare.full ? 'Сравнивать можно до трёх кандидатов' : undefined}
+              title={!compare.on && compare.full ? 'Сравнивать можно до четырёх кандидатов' : undefined}
               className={`btn-secondary btn-sm ${compare.on ? 'border-accent text-accent' : ''}`}>
               <Columns3 size={14} aria-hidden />
               {compare.on ? 'В сравнении' : 'Сравнить'}
@@ -183,7 +188,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
               {!!card.match.reasons?.length && (
                 <ul className="mb-2 flex flex-wrap gap-1.5">
                   {card.match.reasons.map(r => (
-                    <li key={`${r.code}-${r.text}`} className={r.tone === 'minus' ? 'badge-warn' : r.tone === 'plus' ? 'badge-ok' : 'badge-vc'}>{REASON_RU[r.code] ?? r.code}</li>
+                    <li key={`${r.code}-${r.text}`} className={r.tone === 'minus' ? 'badge-warn' : r.tone === 'plus' ? 'badge-ok' : 'badge-vc'}>{REASON_RU[r.code] ?? r.code}{r.source ? ` · ${r.source}` : ''}</li>
                   ))}
                 </ul>
               )}

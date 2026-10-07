@@ -1,0 +1,4 @@
+email,role,display_name,company,grade
+fsp001@demo.talent,participant,Алексей Иванов,,middle
+nofsp@demo.talent,participant,Ирина Смирнова,,middle
+hr@sibcode.demo,employer,,Сибирский код,

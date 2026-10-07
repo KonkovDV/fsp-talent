@@ -82,6 +82,11 @@ jobs:
         run: cd backend && python -m app.validation.assessment --n 300 --seed 7 --check
       - name: Validate ranking
         run: cd backend && python -m app.validation.matching --check
+      - name: Validate the jury profile pack
+        run: |
+          cd backend
+          python -m app.validation.jury_pack app/validation/resources/jury_profiles.json
+          python -m app.validation.jury_pack app/validation/resources/jury_profiles.csv
       # Unit tests never touch a database. These steps catch a broken migration chain, an
       # unimportable module and a dead API path, which all reached main before.
       - name: Apply migrations
@@ -108,6 +113,52 @@ jobs:
       - run: cd frontend && npm audit --omit=dev --audit-level=high
       - run: cd frontend && npm run type-check
       - run: cd frontend && npm run build
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: CycloneDX SBOM from the Python lockfile
+        run: |
+          python -m pip install -U pip "cyclonedx-bom==7.2.1"
+          cd backend
+          cyclonedx-py requirements requirements.lock --output-reproducible --output-format JSON --output-file sbom.cdx.json
+          python -c "import json; d=json.load(open('sbom.cdx.json')); assert d['bomFormat']=='CycloneDX' and d['components']"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: backend/sbom.cdx.json
+
+  sign-sbom:
+    needs: sbom
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sbom-backend
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the SBOM with keyless cosign
+        run: cosign sign-blob --yes --output-signature sbom.cdx.json.sig --output-certificate sbom.cdx.json.pem sbom.cdx.json
+      - name: Check the signature
+        run: >
+          cosign verify-blob
+          --certificate sbom.cdx.json.pem
+          --signature sbom.cdx.json.sig
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          --certificate-identity-regexp "https://github.com/.+/.github/workflows/ci.yml@.+"
+          sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend-signed
+          path: |
+            sbom.cdx.json
+            sbom.cdx.json.sig
+            sbom.cdx.json.pem
 
   # The jury's path, word for word: docs/INSTALL.md on a clean machine, then the API check with codes from Mailpit.
   compose-e2e:

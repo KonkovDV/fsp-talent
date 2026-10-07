@@ -15,12 +15,14 @@ from app.services.assessment import (
     RETAKE_INTERVAL_DAYS,
     Attempt,
     decide_grade,
+    note_pace,
     passed_target,
     recommended_grade,
     retake_available_at,
 )
 from app.services.categorization import assign_category
 from app.services.item_monitor import KeyStats, calibrate_offset, leave_family_out
+from app.services.psychometrics import bank_curve, summarize_exposure
 
 NOW = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
 
@@ -94,7 +96,7 @@ def test_random_guessing_does_not_pass():
     assert sum(passed) <= 2
 
 
-def test_express_stops_at_six_items_and_does_not_confirm_a_grade():
+def test_express_stops_on_its_count_and_does_not_confirm_a_grade():
     state = cat.State(spec="backend", target="middle")
     assert cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS).done is False
     for _ in range(cat.EXPRESS_ITEMS):
@@ -105,6 +107,29 @@ def test_express_stops_at_six_items_and_does_not_confirm_a_grade():
     assert decision.applied is False and decision.assessed_grade is None and decision.locked_until is None
     assert assessment.is_trial({"mode": "express"})
     assert assessment.is_trial({}) is False
+
+
+def test_glr_is_positive_for_a_strong_pattern_and_negative_for_a_weak_one():
+    strong = cat.State(spec="backend", target="middle")
+    weak = cat.State(spec="backend", target="middle")
+    for _ in range(12):
+        strong.responses.append(cat.Response(1.4, -0.5, 0.02, True))
+        weak.responses.append(cat.Response(1.4, -0.5, 0.02, False))
+    above, below = cat._glr_bounds()
+    assert cat.glr_log_lambda(strong, cat.CUTS["middle"]) > above
+    assert cat.glr_log_lambda(weak, cat.CUTS["middle"]) < below
+    assert cat.sprt_log_lambda(strong, cat.CUTS["middle"]) > 0
+    assert cat.sprt_log_lambda(weak, cat.CUTS["middle"]) < 0
+
+
+def test_person_fit_flags_answers_the_estimate_cannot_explain():
+    from app.services.person_fit import LZ_FLAG, person_fit
+    unexpected = [cat.Response(1.4, -2.0, 0.02, False) for _ in range(12)]
+    expected = [cat.Response(1.4, -1.0, 0.02, True) for _ in range(12)]
+    lz_bad, star_bad = person_fit(unexpected, 1.0)
+    _, star_ok = person_fit(expected, 1.0)
+    assert lz_bad < LZ_FLAG and star_bad < LZ_FLAG
+    assert star_ok > star_bad
 
 
 def test_a_weak_topic_is_visible_to_the_floor():
@@ -322,3 +347,118 @@ def test_survey_specialization_decides_the_role():
     category = assign_category(["Python", "Go", "FastAPI"], [], specialization="security")
     assert category["primary_role"] == "security"
     assert any("опроса" in line for line in category["explanation"])
+
+
+def test_region_label_is_not_a_selector_input_and_does_not_split_equal_sessions():
+    import inspect
+
+    from app.services.cat import choose
+    from app.validation.assessment import Session, region_exposure
+
+    assert "region" not in inspect.signature(choose).parameters
+    sessions = [Session("backend", "middle", 0.0, "middle", True, None, 1, ["same"]) for _ in range(80)]
+    assert region_exposure(sessions, 7) == [1.0, 1.0, 1.0, 1.0]
+    assert region_exposure(sessions, 7) == region_exposure(sessions, 7)
+
+
+def test_grade_matrix_and_overlap_use_the_hidden_ability():
+    from app.validation.assessment import Session, grade_matrix, item_overlap
+    one = Session("backend", "middle", 0.0, "middle", True, None, 8, ["k1", "k2"])
+    other = Session("backend", "junior", -1.2, None, False, None, 8, ["k2", "k3"])
+    grid = grade_matrix([one, other])
+    assert sum(sum(row) for row in grid) == 2
+    assert 0.0 < item_overlap([one, other]) < 1.0
+
+
+def test_family_cusum_watches_share_and_time_and_does_not_grade():
+    from app.services.assessment import note_family_cusum
+
+    flags = {}
+    for _ in range(4):
+        flags = note_family_cusum(flags, "py_eval", correct=True, elapsed=40.0, kind="code")
+    assert "family_cusum_review" not in flags
+    flags = note_family_cusum(flags, "py_eval", correct=True, elapsed=40.0, kind="code")
+    assert flags["family_cusum_review"] == "py_eval"
+    wrong = {}
+    for _ in range(6):
+        wrong = note_family_cusum(wrong, "py_eval", correct=False, elapsed=40.0, kind="code")
+    assert "family_cusum_review" not in wrong
+    fast = {}
+    for _ in range(2):
+        fast = note_family_cusum(fast, "py_eval", correct=True, elapsed=1.0, kind="code")
+    assert "family_cusum_review" not in fast
+    fast = note_family_cusum(fast, "py_eval", correct=True, elapsed=1.0, kind="code")
+    assert fast["family_cusum_review"] == "py_eval"
+    assert fast["family_pace"]["py_eval"]["time_cusum"] > fast["family_pace"]["py_eval"]["share_cusum"]
+
+
+def test_fast_correct_answers_roll_up_by_family():
+    flags = {}
+    for _ in range(2):
+        flags = note_pace(flags, "py_eval", correct=True, elapsed=1.0, kind="code")
+    assert flags["fast_correct"] == 2 and "pace_review" not in flags
+    flags = note_pace(flags, "py_eval", correct=True, elapsed=1.0, kind="code")
+    assert flags["pace_review"] == "py_eval" and flags["family_pace"]["py_eval"]["fast"] == 3
+    other = note_pace({}, "sql_query", correct=True, elapsed=30.0, kind="code")
+    assert other["family_pace"]["sql_query"]["fast"] == 0 and "fast_correct" not in other
+
+
+def test_bank_curve_has_information_at_every_cut():
+    report = bank_curve("backend")
+    assert report["randomesque"] == cat.RANDOMESQUE
+    assert {row["grade"] for row in report["cuts"]} == set(cat.CUTS)
+    assert all(row["information"] > 0 and row["se_after_12"] < 1 for row in report["cuts"])
+    exposed = summarize_exposure([
+        ("py_eval", 3, 40, 1.5, "active"),
+        ("py_eval", 4, 10, 0.2, "quarantined"),
+        ("sql_query", 3, 50, 0.0, "active"),
+    ])
+    assert exposed["answers"] == 100 and exposed["max_share"] == 0.5
+    py = next(row for row in exposed["families"] if row["family_id"] == "py_eval")
+    assert py["title"].startswith("Python") and py["quarantined"] == 1 and py["cusum"] == 1.7
+
+
+def test_isomorphs_share_the_parent_and_differ_in_wording():
+    import uuid
+
+    from app.items.hierarchy import parent
+    from app.services.assessment import answer_holds, answer_mac, scored_answer
+
+    fam = FAMILIES["py_eval"]
+    left = fam.generate(random.Random(1), 3, "backend")
+    right = fam.generate(random.Random(2), 3, "backend")
+    assert left.code != right.code
+    assert parent(fam, 3) == (fam.a, LEVEL_B[3])
+    report = bank_curve("backend")
+    shown = next(row for row in report["parents"] if row["family_id"] == "py_eval")
+    assert shown["a"] == fam.a
+    assert [step["b"] for step in shown["levels"]] == [LEVEL_B[level] for level in fam.levels]
+
+    session_id = uuid.uuid4()
+    options = ["1", "2", "3", "4"]
+    mac = answer_mac(session_id, 1, 2, options)
+    assert answer_holds(mac, session_id, 1, 2, options)
+    assert answer_holds(None, session_id, 1, 0, options)
+    assert not answer_holds(mac, session_id, 1, 0, options)
+    assert scored_answer(True, True, False) == (True, False)
+    assert scored_answer(False, True, False) == (None, True)
+
+
+def test_sympson_hetter_skips_an_overexposed_key():
+    from app.items import Family
+
+    def _unused(rng, level, spec):
+        raise AssertionError
+
+    first = Family("hot", "Hot", "python", "code", frozenset({"backend"}), (), _unused)
+    second = Family("cold", "Cold", "python", "code", frozenset({"backend"}), (), _unused)
+    window = [cat.Choice(first, 3, 1.0, 0.0, 0.25, 2.0), cat.Choice(second, 3, 1.0, 0.0, 0.25, 1.0)]
+
+    class AlwaysHigh(random.Random):
+        def random(self):
+            return 0.99
+
+    picked = cat.sympson_hetter(window, AlwaysHigh(), {"hot:3": 1.0})
+    assert picked.family.id == "cold"
+    assert cat.sympson_hetter(window, random.Random(1), {}) in window
+    assert cat.EXPRESS_ITEMS == 15 and cat.EXPRESS_MINUTES == 5 and cat.EXPRESS_ITEM_S * cat.EXPRESS_ITEMS == 300

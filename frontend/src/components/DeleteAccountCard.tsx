@@ -1,18 +1,16 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { apiError, deleteMyAccount } from '../api/client'
-import { useAuthStore } from '../store/authStore'
+import { apiError, deleteMyAccount, signOut } from '../api/client'
 
 /** 152-FZ, art. 21: the person can erase the account. Typing the word protects against a stray click. */
 export default function DeleteAccountCard() {
   const [open, setOpen] = useState(false)
   const [word, setWord] = useState('')
-  const logout = useAuthStore(s => s.logout)
   const navigate = useNavigate()
   const erase = useMutation({
     mutationFn: () => deleteMyAccount(word).then(r => r.data),
-    onSuccess: () => { logout(); navigate('/', { replace: true }) },
+    onSuccess: () => { void signOut().then(() => navigate('/', { replace: true })) },
   })
   return (
     <div className="card space-y-3">

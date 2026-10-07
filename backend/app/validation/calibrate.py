@@ -20,6 +20,8 @@ from app.services.item_monitor import calibrate_offset
 
 
 async def main(min_n: int) -> None:
+    from app.core.rls import bypass_rls
+    bypass_rls()
     async with AsyncSessionLocal() as db:
         sessions = list(await db.scalars(select(TestSession).where(
             TestSession.engine == "cat_v2", TestSession.status == "completed")))

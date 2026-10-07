@@ -78,6 +78,31 @@ def test_password_reset_epoch_rejects_the_old_token():
     assert not epochs_match(0, 1)
 
 
+def test_the_browser_does_not_receive_the_refresh_token_in_the_body():
+    from app.api.v1.auth import REFRESH_COOKIE, TokenOut, browser_tokens, presented_refresh
+
+    issued = TokenOut(access_token="access", refresh_token="refresh-secret", role="participant")
+    shown = browser_tokens(issued)
+    assert shown.refresh_token == "" and issued.refresh_token == "refresh-secret"
+    assert REFRESH_COOKIE == "fsp_refresh"
+    assert presented_refresh(None, "from-cookie") == "from-cookie"
+    assert presented_refresh("from-body", "from-cookie") == "from-body"
+    assert presented_refresh("  ", None) is None
+
+
+def test_refresh_rotation_kills_the_presented_token():
+    from app.core.security import decode_refresh_token, next_refresh_nonce
+
+    assert next_refresh_nonce(None, 0) == 1
+    assert next_refresh_nonce(None, 1) is None
+    assert next_refresh_nonce(0, 0) == 1
+    assert next_refresh_nonce(0, 1) is None
+    assert next_refresh_nonce(2, 2) == 3
+    issued = create_refresh_token("person-1", "participant", epoch=4, nonce=2)
+    assert decode_refresh_token(issued)["rn"] == 2
+    assert decode_refresh_token(issued)["ep"] == 4
+
+
 def test_refresh_stops_when_the_account_is_gone():
     from types import SimpleNamespace
 
@@ -125,6 +150,16 @@ def test_offer_terms_stay_immutable_and_one_pending_pair_is_unique():
     assert "PUT" not in methods and "PATCH" not in methods
     migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0002_integrity.py"
     assert "uq_offers_pending_pair" in migration.read_text(encoding="utf-8")
+
+
+def test_app_connections_leave_the_superuser_role():
+    from pathlib import Path
+
+    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0029_app_role.py"
+    text = migration.read_text(encoding="utf-8")
+    assert "CREATE ROLE fsp_app NOLOGIN NOSUPERUSER NOBYPASSRLS" in text
+    engine = Path(__file__).resolve().parents[2] / "app" / "core" / "database.py"
+    assert "SET SESSION AUTHORIZATION fsp_app" in engine.read_text(encoding="utf-8")
 
 
 def test_settings_secret_is_the_signing_key():

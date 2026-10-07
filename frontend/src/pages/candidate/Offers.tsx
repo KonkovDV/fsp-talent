@@ -18,7 +18,7 @@ const STATUS: Record<string, [string, string]> = {
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 const REASONS: [string, string][] = [
-  ['', 'Причина не обязательна'],
+  ['', 'Выберите причину'],
   ['salary', 'Зарплата'],
   ['format', 'Формат работы'],
   ['stack', 'Стек'],
@@ -114,10 +114,10 @@ export default function CandidateOffers() {
                   <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
                   <label className="text-sm text-ink-2">Причина отказа
                     <select value={reason} onChange={e => setReason(e.target.value)} className="select ml-2" aria-label="Причина отказа">
-                      {REASONS.map(([value, label]) => <option key={value || 'none'} value={value}>{label}</option>)}
+                      {REASONS.map(([value, label]) => <option key={value || 'none'} value={value} disabled={value === ''}>{label}</option>)}
                     </select>
                   </label>
-                  <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending} className="btn-secondary">Отклонить</button>
+                  <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending || !reason} className="btn-secondary">Отклонить</button>
                 </div>
               )}
             </li>

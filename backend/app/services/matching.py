@@ -10,6 +10,8 @@ The same pure function ranks candidates in the API and in the offline evaluation
 """
 from __future__ import annotations
 
+import math
+import statistics
 from dataclasses import dataclass, field
 
 from app.services.survey import SPECIALIZATIONS
@@ -64,6 +66,22 @@ ROLE_NEIGHBOURS = {
     "data": {"backend", "ml", "devops"},
 }
 FSP_FULL_LCB = 0.6     # LCB at which the FSP factor saturates
+# Pending invitations a candidate may hold before the list steps them down. The step is small
+# and capped, so a strong fit is not buried by a busy inbox.
+OPEN_INVITE_FREE = 2
+CONGESTION_STEP = 0.02
+CONGESTION_CAP = 0.10
+# One earlier refusal over pay lowers P(accept). Three is the cap, so a long history cannot zero it.
+SALARY_REFUSAL_FACTOR = 0.85
+SALARY_REFUSAL_CAP = 3
+REASON_SOURCE = {
+    "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "UNTESTED": "тест",
+    "FSP_BONUS": "ФСП", "FSP_NEUTRAL": "ФСП",
+    "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
+    "RELATED_SKILL": "заявлено",
+    "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
+    "CONGESTION": "очередь",
+}
 
 
 @dataclass(frozen=True)
@@ -74,6 +92,8 @@ class NeedSpec:
     nice: tuple[str, ...] = ()            # nice to have: half weight
     industry: str | None = None
     text: bool = False                    # a free-text query was given
+    salary_from: int | None = None        # gross, optional; with the candidate's wish it is P(accept)
+    salary_to: int | None = None
 
 
 @dataclass
@@ -87,6 +107,13 @@ class CandidateFacts:
     fsp_lcb: float | None = None          # None: no FSP history
     industry: str | None = None
     text_rank: float = 0.0                # 0..1 lexical relevance, normalised inside the pool
+    salary_from: int | None = None        # gross wish; None: the candidate did not name one
+    salary_to: int | None = None
+    test_se: float | None = None          # posterior SE; when set, the test factor uses θ̂ − 1.64·SE
+    test_correct: int | None = None       # right answers in the confirming session
+    test_n: int | None = None             # answers in that session; with test_correct, Wilson enters the rank
+    open_invites: int = 0                 # pending invitations; above the free allowance the card steps down
+    salary_refusals: int = 0              # earlier declines whose reason was the pay band
 
 
 @dataclass(frozen=True)
@@ -116,6 +143,33 @@ class MatchResult:
     # so the score is the strength of the confirmed profile (test, FSP) and the UI says so.
     basis: str = "fit"
     reasons: list[Reason] = field(default_factory=list)
+
+
+def reason_source(code: str) -> str | None:
+    return REASON_SOURCE.get(code)
+
+
+def wilson_lower(successes: int, n: int, z: float = 1.96) -> float | None:
+    """Lower end of the Wilson interval for a count of successes.
+
+    The test factor uses it when the session recorded how many answers were right. The probit
+    bound θ̂ − z·SE is still applied when the posterior SE is known; the factor keeps the lower
+    of the two. Topic shares on the result screen use the same interval and do not order the list.
+    """
+    if n <= 0:
+        return None
+    p = successes / n
+    z2 = z * z
+    centre = p + z2 / (2 * n)
+    margin = z * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))
+    return max(0.0, (centre - margin) / (1 + z2 / n))
+
+
+def pass_lower_bound(p: float, z: float = 1.64) -> float:
+    """P(θ ≥ cut) evaluated at θ̂ − z·SE. The SE cancels, so only the point probability is needed."""
+    p = min(max(p, 1e-6), 1.0 - 1e-6)
+    law = statistics.NormalDist()
+    return law.cdf(law.inv_cdf(p) - z)
 
 
 def _note(bucket: list[str], reasons: list[Reason], tone: str, code: str, text: str) -> None:
@@ -201,8 +255,21 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
 
     if use_test:
         if c.test_p is not None and (need.role is None or c.test_spec in (None, need.role)):
-            values["test"] = c.test_p
-            _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
+            shown = c.test_p
+            wilson = wilson_lower(c.test_correct, c.test_n) if c.test_correct is not None and c.test_n else None
+            if c.test_se is not None and c.test_se > 0:
+                shown = pass_lower_bound(c.test_p)
+            if wilson is not None and shown != c.test_p:
+                shown = min(shown, wilson)
+            elif wilson is not None:
+                shown = wilson
+            if shown != c.test_p:
+                _note(plus, reasons, "plus", "TEST_SCORE",
+                      f"Тест: нижняя граница уровня {round(shown * 100)} % "
+                      f"(точечная оценка {round(c.test_p * 100)} %)")
+            else:
+                _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
+            values["test"] = shown
         else:
             values["test"] = UNTESTED
             if not any("тестом не подтверждён" in line for line in info):
@@ -244,10 +311,84 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
     if fit is None:
         # Nothing to match against (an empty search): rank by how well the profile is confirmed.
-        return MatchResult(round(evidence or 0.0, 4), factors, plus, minus, info, "evidence", reasons)
-    # Evidence moves the score by less than 0.01, so it reorders only candidates the need fits equally.
-    total = fit + (0.009 * evidence if evidence is not None else 0.0)
-    return MatchResult(round(total, 4), factors, plus, minus, info, "fit", reasons)
+        employer, basis = evidence or 0.0, "evidence"
+    else:
+        # Evidence moves the score by less than 0.01, so it reorders only candidates the need fits equally.
+        employer, basis = fit + (0.009 * evidence if evidence is not None else 0.0), "fit"
+    accept = accept_probability(need.salary_from, need.salary_to, c.salary_from, c.salary_to)
+    if accept is not None and c.salary_refusals > 0:
+        accept *= SALARY_REFUSAL_FACTOR ** min(c.salary_refusals, SALARY_REFUSAL_CAP)
+        _note(info, reasons, "info", "SALARY_HISTORY", "Раньше отказ был из-за вилки")
+    total = employer
+    if accept is not None:
+        # Reciprocal score: harmonic mean of "the employer would invite" and "the candidate would accept".
+        # Absent on either side, the factor is omitted and the ranking stays the employer-only score.
+        total = _harmonic(employer, accept)
+        floor = c.salary_from if c.salary_from is not None else c.salary_to
+        ceiling = need.salary_to if need.salary_to is not None else need.salary_from
+        if accept >= 1.0:
+            _note(plus, reasons, "plus", "PAY_FIT", "Вилка покрывает ожидание кандидата")
+        elif floor and ceiling:
+            short = round(100 * (floor - ceiling) / floor)
+            _note(minus if accept < 0.5 else info, reasons, "minus" if accept < 0.5 else "info",
+                  "PAY_GAP" if accept < 0.5 else "PAY_LOW",
+                  f"Вилка ниже ожидания примерно на {short} %")
+    if c.open_invites > OPEN_INVITE_FREE:
+        penalty = min(CONGESTION_CAP, CONGESTION_STEP * (c.open_invites - OPEN_INVITE_FREE))
+        total = max(0.0, total - penalty)
+        _note(info, reasons, "info", "CONGESTION",
+              f"Открытых приглашений уже {c.open_invites}: карточка чуть ниже")
+    return MatchResult(round(total, 4), factors, plus, minus, info, basis, reasons)
+
+
+def accept_probability(offer_from: int | None, offer_to: int | None,
+                       want_from: int | None, want_to: int | None) -> float | None:
+    """Chance the candidate accepts this gross band. None when either side named no number.
+
+    The candidate's floor is the start of the wish. The employer's ceiling is what they can pay.
+    The ceiling covering the floor is 1. A shortfall fades to 0 at 40 % under the floor.
+    An offer that sits entirely above the wish is 1: more money is not a reason to refuse.
+    """
+    if offer_from is None and offer_to is None:
+        return None
+    if want_from is None and want_to is None:
+        return None
+    ceiling = offer_to if offer_to is not None else offer_from
+    floor = want_from if want_from is not None else want_to
+    if ceiling is None or floor is None or floor <= 0 or ceiling < 0:
+        return None
+    if ceiling >= floor:
+        return 1.0
+    return max(0.0, 1.0 - ((floor - ceiling) / floor) / 0.40)
+
+
+def _harmonic(left: float, right: float) -> float:
+    """Harmonic mean. A zero on either side is a zero: one side unwilling ends the match."""
+    left = min(1.0, max(0.0, left))
+    right = min(1.0, max(0.0, right))
+    if left <= 0.0 or right <= 0.0:
+        return 0.0
+    return 2.0 * left * right / (left + right)
+
+
+def pay_counterfactual(need: NeedSpec, people: list[CandidateFacts]) -> dict | None:
+    """How many named wishes the current ceiling covers, and how many a 15 % higher ceiling would.
+
+    Fewer than five named wishes is not a hint: the count would be a handful of people.
+    """
+    ceiling = need.salary_to if need.salary_to is not None else need.salary_from
+    if ceiling is None or ceiling <= 0:
+        return None
+    known = [c for c in people if accept_probability(need.salary_from, ceiling, c.salary_from, c.salary_to) is not None]
+    if len(known) < 5:
+        return None
+    covered = sum(accept_probability(need.salary_from, ceiling, c.salary_from, c.salary_to) == 1.0 for c in known)
+    proposed = int(round(ceiling * 1.15 / 5000.0) * 5000)
+    if proposed <= ceiling:
+        proposed = ceiling + 5000
+    raised = sum(accept_probability(need.salary_from, proposed, c.salary_from, c.salary_to) == 1.0 for c in known)
+    return {"known": len(known), "covered": covered, "proposed_to": proposed,
+            "covered_if_raised": raised, "gained": max(0, raised - covered)}
 
 
 def _mean(factors: list[Factor]) -> float | None:
@@ -269,11 +410,30 @@ def category_percentile(value: float, others: list[float]) -> int | None:
     return round(100 * below / len(others))
 
 
+def skill_counterfactual(need: NeedSpec, people: list[CandidateFacts]) -> dict | None:
+    """The required skill that, dropped alone, would complete coverage for the most people.
+
+    Counts only candidates who already have every other required skill. Fewer than five people,
+    or a need with a single required skill, has no hint.
+    """
+    required = list(dict.fromkeys(need.skills))
+    if len(required) < 2 or len(people) < 5:
+        return None
+    best_skill, best_gain = required[0], 0
+    for skill in required:
+        gained = sum(1 for person in people if [s for s in required if s not in person.skills] == [skill])
+        if gained > best_gain:
+            best_skill, best_gain = skill, gained
+    if best_gain < 1:
+        return None
+    return {"skill": best_skill, "gained": best_gain, "pool": len(people)}
+
+
 def anonymous_compare(cards: list[dict], ids: list[str]) -> list[dict]:
-    """Up to three cards from the current shortlist, without name, contacts or FSP id."""
+    """Up to four cards from the current list, without name, contacts or FSP id."""
     by_id = {c.get("candidate_id"): c for c in cards}
     rows = []
-    for cid in ids[:3]:
+    for cid in ids[:4]:
         card = by_id.get(cid)
         if not isinstance(card, dict):
             continue

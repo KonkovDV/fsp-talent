@@ -1,0 +1,8 @@
+{
+  "note": "Публичные страницы открываются без аккаунта. Это третья сторона просмотра, отдельной роли входа нет.",
+  "profiles": [
+    {"email": "fsp001@demo.talent", "role": "participant", "display_name": "Алексей Иванов", "grade": "middle"},
+    {"email": "nofsp@demo.talent", "role": "participant", "display_name": "Ирина Смирнова", "grade": "middle"},
+    {"email": "hr@sibcode.demo", "role": "employer", "company": "Сибирский код"}
+  ]
+}

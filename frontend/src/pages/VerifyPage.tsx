@@ -25,8 +25,8 @@ export default function VerifyPage() {
     return () => clearTimeout(t)
   }, [cooldown])
 
-  const finish = (data: { access_token: string; refresh_token: string; role: Role }) => {
-    setAuth(data.access_token, data.refresh_token, data.role)
+  const finish = (data: { access_token: string; role: Role }) => {
+    setAuth(data.access_token, data.role)
     navigate(data.role === 'employer' ? '/employer' : '/candidate?welcome=1', { replace: true })
   }
 

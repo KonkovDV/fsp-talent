@@ -27,6 +27,9 @@ import FspCallback from './pages/candidate/FspCallback'
 import CandidateTasks from './pages/candidate/Tasks'
 import EmployerTasks from './pages/employer/Tasks'
 import FspSignInCallback from './pages/FspSignInCallback'
+import MethodPage from './pages/MethodPage'
+import BadgePage from './pages/BadgePage'
+import JuryPage from './pages/JuryPage'
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'participant' | 'employer' }) {
   const { token, userRole } = useAuthStore()
@@ -45,6 +48,9 @@ export default function App() {
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/forgot" element={<ForgotPasswordPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/method" element={<MethodPage />} />
+        <Route path="/jury" element={<JuryPage />} />
+        <Route path="/badge" element={<BadgePage />} />
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
         <Route path="/fsp-id/authorize" element={<FspIdDemoPage />} />
