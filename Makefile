@@ -1,5 +1,5 @@
 # Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
-.PHONY: help demo up down reset seed logs test lint check validate evaluate load docs-pdf
+.PHONY: help demo up down reset seed logs test lint check validate evaluate load docs-pdf docs-pitch
 
 help:
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск)"
@@ -15,6 +15,7 @@ help:
 	@echo "make check     — сквозная проверка API на запущенном стенде"
 	@echo "make load      — 40 пользователей одновременно в течение минуты"
 	@echo "make docs-pdf  — собрать docs/FSP_Talent_documentation.pdf (нужны Python, Node.js и Chromium)"
+	@echo "make docs-pitch — собрать питч: docs/pitch.html, pitch.pptx и pitch.pdf"
 
 demo:
 	@test -f .env || cp .env.example .env
@@ -65,3 +66,8 @@ load:
 docs-pdf:
 	test -d docs/tools/node_modules/mermaid || npm install --prefix docs/tools --no-save mermaid@11
 	python3 docs/tools/build_pdf.py
+
+docs-pitch:
+	test -d docs/tools/node_modules/pptxgenjs || npm install --prefix docs/tools --no-save pptxgenjs@4
+	node docs/tools/build_pitch.mjs
+	python3 docs/tools/build_pdf.py --pitch
