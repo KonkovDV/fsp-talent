@@ -17,6 +17,7 @@ Policy (TZ section 2, "Категория и грейд", and the Q&A with ФС�
     session counts as an attempt, otherwise the items could be previewed for free. A failed test at G does
     not burn the lower grade: a test at a lower grade is available at once (see retake_available_at).
   * A jury express session (flags mode "express") confirms nothing, starts no pause and stays out of search.
+  * With DEMO_MODE the accounts jury1..jury10@demo.talent skip the pauses and attempt limits (jury_unlimited).
 """
 from __future__ import annotations
 
@@ -135,6 +136,17 @@ class GradeDecision:
 def is_trial(flags: dict | None) -> bool:
     """A jury express session. It does not confirm a grade, start a pause or enter search."""
     return (flags or {}).get("mode") == "express"
+
+
+JURY_EMAILS = frozenset(f"jury{n}@demo.talent" for n in range(1, 11))
+
+
+def jury_unlimited(email: str | None) -> bool:
+    """Demo stand only: the jury accounts jury1..jury10 start a full test without pauses or attempt limits.
+
+    The result is an ordinary one: it confirms the grade and enters the category and search.
+    """
+    return bool(settings.DEMO_MODE) and (email or "").strip().lower() in JURY_EMAILS
 
 
 def trial_decision() -> GradeDecision:

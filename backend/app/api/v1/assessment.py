@@ -53,6 +53,7 @@ from app.services.assessment import (
     family_title,
     get_active_session,
     item_token,
+    jury_unlimited,
     session_items,
     start_session,
 )
@@ -339,9 +340,11 @@ async def _start_test(body: StartIn, current: dict, db: AsyncSession) -> Session
     express = body.mode == "express"
     if express and not settings.DEMO_MODE:
         raise ApiError(404, "not_found", "Пробный тест включён только на демонстрационном стенде")
-    if not express and await too_many(f"assessment_start:{participant_id}", limit=3, window_seconds=3600):
+    unlimited = jury_unlimited(participant.email)
+    if not express and not unlimited and \
+            await too_many(f"assessment_start:{participant_id}", limit=3, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Не больше трёх попыток в час")
-    if not express:
+    if not express and not unlimited:
         locked = await check_cooldown(db, participant_id, spec)
         conf = await confirmation(db, participant_id, spec)
         if locked and conf and GRADE_ORDER.index(body.target_grade) > GRADE_ORDER.index(conf.grade):
@@ -451,6 +454,7 @@ async def session_history(limit: int = Query(20, ge=1, le=100), offset: int = Qu
         "target_grade": s.target_grade, "grade_assigned": s.grade_assigned, "score": s.score,
         "p_pass": s.p_pass, "items_count": s.items_count, "stop_reason": s.stop_reason,
         "vacancy_test": bool((s.flags or {}).get("vacancy_id")),
+        "trial": (s.flags or {}).get("mode") == "express",
         "recommended_grade": (s.flags or {}).get("recommended_grade"),
         "started_at": s.started_at.isoformat(),
         "completed_at": s.completed_at.isoformat() if s.completed_at else None,

@@ -287,6 +287,7 @@ def main():
     check_revoke_contacts(offer["id"], employer_token, participant_token)
     check_erasure(employer_token)
     check_assessment()
+    check_jury_accounts()
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
 
 
@@ -501,6 +502,26 @@ def _right_answer(session_id, item):
         options = row["options"] if isinstance(row["options"], list) else _json.loads(row["options"])
         return {"answer_text": options[row["correct_index"]]}
     return {"answer_index": row["correct_index"]}
+
+
+def check_jury_accounts():
+    """Demo stand: a jury account fills the survey and restarts the full test without pauses or limits."""
+    status, blueprint = call("GET", "/assessment/blueprint")
+    if not (status == 200 and blueprint.get("express")):
+        print("JURY SKIPPED (DEMO_MODE off)")
+        return
+    token = _login("jury2@demo.talent")
+    status, saved = call("PUT", "/candidates/me/survey", {"specialization": "backend", "declared_grade": "middle"},
+                         token=token)
+    assert status == 200, saved
+    status, missing = call("PUT", "/candidates/me/survey", {"specialization": "backend"}, token=token)
+    assert status == 422, missing
+    for attempt in range(4):
+        status, state = call("POST", "/assessment/start", {"target_grade": "middle"}, token=token)
+        assert status == 201, (attempt, state)
+        status, dropped = call("POST", f"/assessment/{state['session_id']}/abandon", token=token)
+        assert status == 200, dropped
+    print("JURY OK four full starts in a row")
 
 
 def check_assessment():
