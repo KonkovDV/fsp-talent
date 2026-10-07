@@ -40,20 +40,22 @@ export default function RegisterPage() {
   const pf = useForm<ParticipantForm>({ resolver: zodResolver(participantSchema), defaultValues: { is_adult: false, age_15_17: false } })
   const ef = useForm<EmployerForm>({ resolver: zodResolver(employerSchema) })
 
-  const done = (email: string) => navigate(`/verify?email=${encodeURIComponent(email)}&role=${role}`)
+  // demo_code comes only from a demo stand without mail; it travels in history state, not in the address.
+  const done = (email: string, demoCode?: string | null) =>
+    navigate(`/verify?email=${encodeURIComponent(email)}&role=${role}`, { state: { demoCode: demoCode ?? null } })
   const fail = (e: unknown) => {
     if (apiErrorCode(e) === 'email_taken') setError('Аккаунт с таким email уже есть. Войдите или сбросьте пароль.')
     else setError(apiError(e, 'Не удалось зарегистрироваться'))
   }
   const onParticipant = async (data: ParticipantForm) => {
     setError('')
-    try { await registerParticipant({ ...data, consents }); done(data.email) } catch (e) { fail(e) }
+    try { const r = await registerParticipant({ ...data, consents }); done(data.email, r.data?.demo_code) } catch (e) { fail(e) }
   }
   const onEmployer = async (data: EmployerForm) => {
     setError('')
     try {
-      await registerEmployer({ ...data, inn: data.inn || null, website: data.website || null, consents })
-      done(data.email)
+      const r = await registerEmployer({ ...data, inn: data.inn || null, website: data.website || null, consents })
+      done(data.email, r.data?.demo_code)
     } catch (e) { fail(e) }
   }
   const submitting = pf.formState.isSubmitting || ef.formState.isSubmitting

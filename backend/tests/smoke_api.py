@@ -16,6 +16,10 @@ BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
 # The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
 MAIL_DIR = os.environ.get("MAIL_FILE_DIR", "/tmp/fsp-talent-mail")
 MAILPIT = os.environ.get("MAILPIT_URL", "").rstrip("/")
+# SMOKE_MAIL=demo: a public demo stand without a mailbox we can read; the confirmation code comes in the
+# registration answer (DEMO_MODE and DEMO_SHOW_CODE on the stand), steps that need other letters are skipped.
+DEMO_MAIL = os.environ.get("SMOKE_MAIL", "") == "demo"
+DEMO_CODES = {}
 SUBJECT_PURPOSE = {"Код подтверждения": "verify", "Сброс пароля": "reset",
                    "Согласие законного представителя": "guardian"}
 EMPLOYER = {"username": "hr@sibcode.demo", "password": "demo12345"}
@@ -38,7 +42,10 @@ def call(method, path, body=None, token=None, form=None):
     try:
         with urllib.request.urlopen(req) as response:
             raw = response.read().decode()
-            return response.status, json.loads(raw) if raw else None
+            payload = json.loads(raw) if raw else None
+            if isinstance(payload, dict) and payload.get("demo_code"):
+                DEMO_CODES[payload["email"]] = payload["demo_code"]
+            return response.status, payload
     except urllib.error.HTTPError as error:
         raw = error.read().decode()
         try:
@@ -65,6 +72,9 @@ def _mailpit_letter(email, purpose):
 
 
 def last_letter(email, purpose="verify", timeout=10.0):
+    if DEMO_MAIL:
+        assert purpose == "verify" and email in DEMO_CODES, f"stand did not return demo_code for {email}"
+        return {"to": email, "purpose": purpose, "code": DEMO_CODES[email], "token": None}
     deadline = time.time() + timeout
     while time.time() < deadline:
         if MAILPIT:
@@ -113,8 +123,9 @@ def check_registration():
         assert status == 400 and wrong["error"]["code"] == "verification_invalid", wrong
     status, tokens = call("POST", "/auth/verify-email", {"email": email, "code": letter["code"]})
     assert status == 200 and tokens["role"] == "participant", tokens
-    status, again = call("POST", "/auth/verify-email", {"token": letter["token"]})
-    assert status == 400 and again["error"]["code"] == "verification_invalid", again
+    if letter["token"]:
+        status, again = call("POST", "/auth/verify-email", {"token": letter["token"]})
+        assert status == 400 and again["error"]["code"] == "verification_invalid", again
     status, taken = call("POST", "/auth/participant/register", {**body, "consents": REQUIRED_CANDIDATE_CONSENTS})
     assert status == 409 and taken["error"]["code"] == "email_taken", taken
     status, login = call("POST", "/auth/participant/token", form={"username": email, "password": "smoke-pass-1"})
@@ -141,6 +152,9 @@ def check_registration():
         assert me["has_fsp"] and me["display_name"] == "Смоук Тест", me
     status, reset = call("POST", "/auth/password/forgot", {"email": email, "role": "participant"})
     assert status == 202, reset
+    if DEMO_MAIL:
+        print("REGISTRATION OK by demo code; password reset letter skipped: no mailbox on the stand")
+        return
     code = last_letter(email, "reset")["code"]
     status, changed = call("POST", "/auth/password/reset",
                            {"email": email, "role": "participant", "code": code, "new_password": "smoke-pass-2"})
@@ -587,6 +601,9 @@ def check_minor():
     guardian = f"parent-{int(time.time() * 1000)}@example.com"
     status, asked = call("POST", "/candidates/me/guardian", {"guardian_email": guardian}, token=token)
     assert status == 200, asked
+    if DEMO_MAIL:
+        print("MINOR OK hidden until consent; guardian letter skipped: no mailbox on the stand")
+        return
     letter = last_letter(guardian, "guardian")
     status, bad = call("POST", "/public/guardian-consent", {"token": letter["token"][:-4] + "0000"})
     assert status == 404, bad
