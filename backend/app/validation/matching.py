@@ -56,7 +56,8 @@ def _grade(theta: float) -> str:
     return g
 
 
-def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026) -> dict:
+def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
+                 overclaim: float | None = None) -> dict:
     rng = random.Random(seed)
     candidates = []
     for i in range(n_candidates):
@@ -76,8 +77,12 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026) -
         true_grade = _grade(theta)
         gi = GRADES.index(true_grade)
         r = rng.random()
-        declared_grade = (GRADES[min(gi + 1, len(GRADES) - 1)] if r < 0.30
-                          else GRADES[max(gi - 1, 0)] if r < 0.40 else true_grade)
+        if overclaim is None:
+            declared_grade = (GRADES[min(gi + 1, len(GRADES) - 1)] if r < 0.30
+                              else GRADES[max(gi - 1, 0)] if r < 0.40 else true_grade)
+        else:
+            # The sweep names only the share who claim one step up. Everyone else states the true grade.
+            declared_grade = GRADES[min(gi + 1, len(GRADES) - 1)] if r < overclaim else true_grade
         tested = rng.random() < 0.45
         grade, source, test_p = declared_grade, "declared", None
         if tested:
@@ -698,6 +703,21 @@ def _kappa_from_sheets(path_a: str, path_b: str) -> float:
     return quadratic_weighted_kappa([left[i] for i in ids], [right[i] for i in ids])
 
 
+def _print_overclaim(args: argparse.Namespace) -> None:
+    rates = [float(part) for part in args.overclaim.split(",") if part.strip()]
+    print(f"Доля заявивших грейд на ступень выше настоящего. Зерно {args.seed}, "
+          f"{args.candidates} кандидатов, {args.needs} потребностей. Остальные заявляют истинный грейд.")
+    print("| Доля | nDCG модели | nDCG по резюме | Спирмен модели | Спирмен по резюме | "
+          "Завышенный грейд в топ-10, модель | Завышенный грейд в топ-10, по резюме |")
+    print("|---|---|---|---|---|---|---|")
+    for rate in rates:
+        dataset = make_dataset(args.candidates, args.needs, args.seed, overclaim=rate)
+        rows = {row.method: row for row in evaluate(dataset, args.seed)}
+        full, resume = rows["full"], rows["keyword"]
+        print(f"| {rate:.0%} | {full.ndcg10:.3f} | {resume.ndcg10:.3f} | {_num(full.rho)} | {_num(resume.rho)} | "
+              f"{full.overrated:.1%} | {resume.overrated:.1%} |")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--candidates", type=int, default=800)
@@ -717,6 +737,8 @@ def main() -> None:
     parser.add_argument("--merge-raters", nargs=2, metavar=("A", "B"),
                         help="floor of the mean of two sheets, written as JSONL for --pairs")
     parser.add_argument("--merged", help="where --merge-raters writes the JSONL")
+    parser.add_argument("--overclaim", default="",
+                        help="comma-separated shares who declare one grade too high; print the curve and exit")
     args = parser.parse_args()
     if args.kappa:
         value = _kappa_from_sheets(args.kappa[0], args.kappa[1])
@@ -737,6 +759,9 @@ def main() -> None:
         return
     if args.tier_delta:
         _print_tier_sweep(args)
+        return
+    if args.overclaim:
+        _print_overclaim(args)
         return
     if args.blind_export:
         dataset = make_dataset(args.candidates, args.needs, args.seed)

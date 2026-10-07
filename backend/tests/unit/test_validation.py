@@ -1,14 +1,15 @@
 """The simulation runs end to end and its headline numbers stay inside agreed bounds."""
 import random
 
+from app.models.assessment import GRADE_ORDER
 from app.services.matching import score
 from app.services.search.pipeline import order_pool
-from app.validation.assessment import run
-from app.validation.matching import _facts, _spec, make_dataset, rank
+from app.validation.assessment import Truth, run, simulate_path
+from app.validation.matching import _facts, _spec, make_dataset, rank, sha256
 
 
 def test_assessment_validation_bounds():
-    r = run(n=250, seed=3)
+    r = run(n=250, seed=3, extras=False)
     assert r.clean.accuracy_clear > 0.80        # clear cases (> 0.5 from the cut) are classified right
     assert r.clean.false_pass < 0.15            # overclaimers rarely pass
     assert r.clean.false_recommend < 0.04
@@ -41,3 +42,20 @@ def test_matching_rank_follows_the_product_order(monkeypatch):
         ids, scores, {}, best, cold, tiers=tiers, confirmed=confirmed, fits=fits)
     bare = [cid for cid, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
     assert rank(dataset, need, "no_quota", random.Random(0)) == bare
+
+
+def test_the_grade_path_stops_within_four_sessions():
+    truth = Truth.draw(random.Random(1))
+    high = simulate_path(2.5, "backend", "junior", truth, random.Random(2), None)
+    low = simulate_path(-3.0, "backend", "lead", truth, random.Random(3), None)
+    grade, sessions, _items = high
+    assert sessions <= 4 and grade in GRADE_ORDER
+    grade, sessions, _items = low
+    assert sessions <= 4
+    assert grade is None or GRADE_ORDER.index(grade) <= GRADE_ORDER.index("junior")
+
+
+def test_overclaim_zero_states_the_true_grade_and_the_default_dataset_is_unchanged():
+    honest = make_dataset(30, 4, seed=5, overclaim=0.0)
+    assert all(c["observed"]["grade"] == c["truth"]["grade"] for c in honest["candidates"])
+    assert sha256(make_dataset(40, 6, seed=9)) == sha256(make_dataset(40, 6, seed=9, overclaim=None))

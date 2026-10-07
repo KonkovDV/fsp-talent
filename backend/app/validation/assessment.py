@@ -29,10 +29,22 @@ import sys
 from dataclasses import dataclass, field
 
 from app.items import CHOICE_C, LEVEL_B, TYPED_C
-from app.items.registry import FAMILIES, typed_share
+from app.items.registry import FAMILIES, families_for, typed_share
 from app.models.assessment import GRADE_ORDER
 from app.services import cat as cat_module
-from app.services.cat import CUTS, MAX_ITEMS, Response, State, choose, decide, evaluate, item_key, p3, posterior
+from app.services.cat import (
+    CUTS,
+    MAX_ITEMS,
+    Response,
+    State,
+    choose,
+    decide,
+    evaluate,
+    item_key,
+    p3,
+    posterior,
+    prev_grade,
+)
 from app.services.item_monitor import KeyStats, calibrate_offset, leave_family_out
 
 # Who sits the published exam: every specialization, including data engineering.
@@ -100,11 +112,26 @@ def choices_only():
         _TYPED = True
 
 
+def _p4(theta: float, a: float, b: float, c: float, d: float) -> float:
+    return c + (d - c) / (1.0 + math.exp(-a * (theta - b)))
+
+
+def _instance_key(family_id: str, level: int, item) -> tuple:
+    """Family, level and the generated parameters.
+
+    The query text alone is not enough: two SQL items can share a query and differ by the table.
+    A concept item is the same instance when its static key (or the wording) matches.
+    """
+    return (family_id, level, item.static_key or item.stem, item.code)
+
+
 def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.Random,
                 leaked_family: str | None = None, blocked: set[str] | None = None,
                 guesser: bool = False, offsets: dict[str, float] | None = None,
                 attack: str | None = None, collision: dict[str, float] | None = None,
-                exposure: dict[str, float] | None = None) -> Session:
+                exposure: dict[str, float] | None = None,
+                misspec: tuple[float, float] | None = None,
+                known: set[tuple] | None = None, remember: set[tuple] | None = None) -> Session:
     state = State(spec=spec, target=target)
     keys: list[str] = []
     answers = []
@@ -116,7 +143,18 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         key = item_key(ch.family, ch.level)
         typed = _TYPED and rng.random() < typed_share(ch.family.id, ch.level)
         c = TYPED_C if typed else CHOICE_C
+        item = None
+        if known is not None or remember is not None:
+            try:
+                item = ch.family.generate(rng, ch.level, spec)
+            except LookupError:
+                item = None
+        seen = _instance_key(ch.family.id, ch.level, item) if item is not None else None
+        if remember is not None and seen is not None:
+            remember.add(seen)
         if attack == "fixed":
+            correct = True
+        elif known is not None and seen is not None and seen in known:
             correct = True
         elif attack == "transfer":
             correct = rng.random() < (collision or {}).get(ch.family.id, 0.0)
@@ -124,6 +162,13 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
             correct = rng.random() < c
         elif leaked_family and ch.family.id == leaked_family:
             correct = True
+        elif misspec is not None:
+            sigma_a, sigma_b = misspec
+            a_star = ch.a * math.exp(rng.gauss(0.0, sigma_a))
+            b_star = ch.b + rng.gauss(0.0, sigma_b)
+            d_star = 0.95
+            c_star = min(c + rng.uniform(0.0, 0.1), d_star - 0.01)
+            correct = rng.random() < _p4(theta, a_star, b_star, c_star, d_star)
         else:
             p_true = p3(theta, ch.a * truth.a_mult[key], LEVEL_B[ch.level] + truth.offsets[key], c)
             correct = rng.random() < p_true
@@ -182,7 +227,8 @@ def population(n: int, rng: random.Random) -> list[Person]:
 
 def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: float = 0.0,
            blocked: set[str] | None = None, offsets: dict[str, float] | None = None,
-           stream: int | None = None) -> tuple[CohortReport, list[Session]]:
+           stream: int | None = None, misspec: tuple[float, float] | None = None,
+           ) -> tuple[CohortReport, list[Session]]:
     """`stream` gives every person an own random stream: two designs then differ only by the design
     (the same people leak, the same answers fall the same way until the item sequences part)."""
     sessions = []
@@ -194,7 +240,7 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
         # The live bank starts Sympson–Hetter after the same warm-up the selector uses.
         rates = {key: count / index for key, count in seen.items()} if index >= 20 else None
         session = run_session(theta, spec, target, truth, rng, leaked, blocked, offsets=offsets,
-                              exposure=rates)
+                              exposure=rates, misspec=misspec)
         seen.update(set(session.keys))
         sessions.append(session)
     n = len(sessions)
@@ -309,9 +355,12 @@ class Retest:
     own_overlap: float = 0.0   # share of the second test's item keys the same person already saw in the first
 
 
-def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float]) -> Retest:
-    pairs = [(theta, target, run_session(theta, spec, target, truth, rng, offsets=offsets),
-              run_session(theta, spec, target, truth, rng, offsets=offsets)) for theta, spec, target in people]
+def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float],
+           misspec: tuple[float, float] | None = None) -> Retest:
+    pairs = [(theta, target,
+              run_session(theta, spec, target, truth, rng, offsets=offsets, misspec=misspec),
+              run_session(theta, spec, target, truth, rng, offsets=offsets, misspec=misspec))
+             for theta, spec, target in people]
     agree = [a.passed == b.passed for _, _, a, b in pairs]
     p1 = statistics.mean(a.passed for _, _, a, _ in pairs)
     p2 = statistics.mean(b.passed for _, _, _, b in pairs)
@@ -383,6 +432,10 @@ class Report:
     grade_matrix: list[list[int]]
     overlap: float
     region_peaks: list[float]
+    path: PathStudy | None = None
+    misspec: list[MisspecRow] = field(default_factory=list)
+    fixed_form: FixedForm | None = None
+    stolen: StolenSessions | None = None
 
 
 def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
@@ -536,7 +589,223 @@ def _guessers(truth: Truth, rng: random.Random) -> float:
     return sum(s.passed for s in guess) / len(guess)
 
 
-def run(n: int = 3000, seed: int = 7) -> Report:
+@dataclass
+class PathStudy:
+    """The grade a person ends with after the product's own sequence of tests, not after one session."""
+    n: int
+    exact: float
+    within_one: float
+    over: float
+    under: float
+    unconfirmed: float
+    mean_sessions: float
+    mean_items: float
+    again_exact: float
+    again_within: float
+    again_over: float
+    again_under: float
+    again_unconfirmed: float
+    again_sessions: float
+    again_items: float
+    kappa: float
+    weighted_kappa: float
+    matrix: list[list[int]]
+
+
+@dataclass
+class MisspecRow:
+    sigma_a: float
+    sigma_b: float
+    accuracy_clear: float
+    false_pass: float
+    kappa: float
+
+
+@dataclass
+class FixedForm:
+    items: int
+    people: int
+    median_r: float
+    good_share: float
+
+
+@dataclass
+class StolenSessions:
+    n: int
+    honest: float
+    stolen: float
+    fixed: float
+
+
+def simulate_path(theta: float, spec: str, declared: str, truth: Truth, rng: random.Random,
+                  offsets: dict[str, float] | None = None):
+    """One person, the product rules.
+
+    A failed test does not burn the step down: up to two grades lower. A confident pass
+    (the session recommends the next grade) earns one separate test one step higher.
+    A confirmed grade is never replaced by a lower one. The result is the last confirmed
+    grade, or nothing.
+    """
+    confirmed: str | None = None
+    target = declared
+    downs = 0
+    climbed = False
+    sessions = items = 0
+    for _ in range(4):
+        session = run_session(theta, spec, target, truth, rng, offsets=offsets)
+        sessions += 1
+        items += session.n
+        if session.passed:
+            confirmed = target
+            if session.recommended and not climbed:
+                climbed = True
+                target = session.recommended
+                continue
+            break
+        if confirmed is not None or downs >= 2:
+            break
+        lower = prev_grade(target)
+        if lower is None:
+            break
+        downs += 1
+        target = lower
+    return confirmed, sessions, items
+
+
+def _cohen(xs: list[str | None], ys: list[str | None]) -> float:
+    labels: list[str | None] = [*GRADE_ORDER, None]
+    index = {g: i for i, g in enumerate(labels)}
+    k = len(labels)
+    n = len(xs)
+    if n == 0:
+        return 1.0
+    obs = [[0] * k for _ in range(k)]
+    for a, b in zip(xs, ys, strict=True):
+        obs[index[a]][index[b]] += 1
+    po = sum(obs[i][i] for i in range(k)) / n
+    row = [sum(obs[i]) for i in range(k)]
+    col = [sum(obs[i][j] for i in range(k)) for j in range(k)]
+    pe = sum(row[i] * col[i] for i in range(k)) / (n * n)
+    return (po - pe) / (1.0 - pe) if pe < 1 else 1.0
+
+
+def _path_shares(rows: list[tuple[float, str | None]]) -> tuple[float, float, float, float, float]:
+    n = max(1, len(rows))
+    exact = within = over = under = bare = 0
+    for theta, grade in rows:
+        truth_g = true_grade(theta)
+        ti = GRADE_ORDER.index(truth_g) if truth_g in GRADE_ORDER else None
+        ei = GRADE_ORDER.index(grade) if grade in GRADE_ORDER else None
+        if grade is None:
+            bare += 1
+        if grade == truth_g:
+            exact += 1
+        if (ti is None and ei is None) or (ti is not None and ei is not None and abs(ti - ei) <= 1):
+            within += 1
+        if ei is not None and (ti is None or ei > ti):
+            over += 1
+        if ei is not None and ti is not None and ei < ti:
+            under += 1
+    return exact / n, within / n, over / n, under / n, bare / n
+
+
+def study_paths(people: list[Person], truth: Truth, rng: random.Random,
+                offsets: dict[str, float] | None) -> PathStudy:
+    first = [simulate_path(theta, spec, declared, truth, rng, offsets) for theta, spec, declared in people]
+    second = [simulate_path(theta, spec, declared, truth, rng, offsets) for theta, spec, declared in people]
+    left = [(theta, grade) for (theta, _, _), (grade, _, _) in zip(people, first, strict=True)]
+    right = [(theta, grade) for (theta, _, _), (grade, _, _) in zip(people, second, strict=True)]
+    exact, within, over, under, bare = _path_shares(left)
+    again = _path_shares(right)
+    matrix_sessions = []
+    for (theta, _, _), (grade, _, _) in zip(people, first, strict=True):
+        matrix_sessions.append(Session("", "", theta, grade, grade is not None, None, 0, []))
+    return PathStudy(
+        n=len(people), exact=exact, within_one=within, over=over, under=under, unconfirmed=bare,
+        mean_sessions=statistics.mean(s for _, s, _ in first),
+        mean_items=statistics.mean(items for _, _, items in first),
+        again_exact=again[0], again_within=again[1], again_over=again[2], again_under=again[3],
+        again_unconfirmed=again[4],
+        again_sessions=statistics.mean(s for _, s, _ in second),
+        again_items=statistics.mean(items for _, _, items in second),
+        kappa=_cohen([g for g, _, _ in first], [g for g, _, _ in second]),
+        weighted_kappa=_quadratic_kappa([g for g, _, _ in first], [g for g, _, _ in second]),
+        matrix=grade_matrix(matrix_sessions),
+    )
+
+
+MISSPEC = ((0.15, 0.15), (0.30, 0.30), (0.50, 0.50))
+
+
+def study_misspec(people: list[Person], truth: Truth, offsets: dict[str, float] | None,
+                  seed: int) -> list[MisspecRow]:
+    """Answers from a 4PL the scorer does not know. Scoring still uses the nominal 3PL."""
+    rows = []
+    half = people[:max(300, len(people) // 2)]
+    for index, (sigma_a, sigma_b) in enumerate(MISSPEC):
+        rng = random.Random(seed + 50 + index)
+        report, _ = cohort(people, truth, rng, offsets=offsets, misspec=(sigma_a, sigma_b))
+        again = retest(half, truth, random.Random(seed + 70 + index), offsets or {}, misspec=(sigma_a, sigma_b))
+        rows.append(MisspecRow(sigma_a, sigma_b, report.accuracy_clear, report.false_pass, again.kappa))
+    return rows
+
+
+def fixed_form(spec: str = "backend", people: int = 3000, items: int = 40, seed: int = 7) -> FixedForm:
+    """Corrected item-total correlation on one fixed form. Ability is N(0, 1), wider than an adaptive test."""
+    slots: list[tuple] = []
+    for fam in families_for(spec):
+        for level in fam.levels:
+            if fam.available(spec, level):
+                slots.append((fam, level))
+    form = []
+    cursor = 0
+    while len(form) < items and slots:
+        form.append(slots[cursor % len(slots)])
+        cursor += 1
+    prepared = []
+    for fam, level in form:
+        draw = random.Random(f"{fam.id}:{level}:{len(prepared)}").random()
+        c = TYPED_C if draw < typed_share(fam.id, level) else CHOICE_C
+        prepared.append((fam.a, LEVEL_B[level], c))
+    rng = random.Random(seed)
+    columns = [[] for _ in prepared]
+    for _ in range(people):
+        theta = rng.gauss(0.0, 1.0)
+        for index, (a, b, c) in enumerate(prepared):
+            columns[index].append(1.0 if rng.random() < p3(theta, a, b, c) else 0.0)
+    rs = []
+    for index, column in enumerate(columns):
+        rest = [sum(row) - column[person] for person, row in enumerate(zip(*columns, strict=True))]
+        rs.append(_pearson(column, rest))
+    return FixedForm(items=len(form), people=people, median_r=statistics.median(rs) if rs else 0.0,
+                     good_share=sum(r >= 0.20 for r in rs) / max(1, len(rs)))
+
+
+def stolen_sessions(truth: Truth, offsets: dict[str, float] | None, seed: int,
+                    n: int = 80, stolen: int = 20) -> StolenSessions:
+    """A junior sits middle after seeing 20 other middle sessions. A repeated instance is answered right."""
+    rng = random.Random(seed)
+    donors = population(stolen, random.Random(seed + 3))
+    weak = []
+    for _ in range(n):
+        theta = rng.uniform(CUTS["junior"], CUTS["middle"])
+        weak.append((theta, rng.choice(SPECS), "middle"))
+    honest = stolen_pass = fixed = 0
+    for index, (theta, spec, target) in enumerate(weak):
+        memory: set[tuple] = set()
+        donor_rng = random.Random(seed + 1000 + index)
+        for donor_theta, donor_spec, _ in donors:
+            run_session(donor_theta, donor_spec, "middle", truth, donor_rng, offsets=offsets, remember=memory)
+        attack_rng = random.Random(seed + 5000 + index)
+        honest += run_session(theta, spec, target, truth, random.Random(seed + 7000 + index),
+                              offsets=offsets).passed
+        stolen_pass += run_session(theta, spec, target, truth, attack_rng, offsets=offsets, known=memory).passed
+        fixed += run_session(theta, spec, target, truth, random.Random(seed + 9000 + index),
+                             offsets=offsets, attack="fixed").passed
+    return StolenSessions(n=n, honest=honest / n, stolen=stolen_pass / n, fixed=fixed / n)
+
+
+def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
     rng = random.Random(seed)
     truth = Truth.draw(rng)
     people = population(n, random.Random(seed + 1))
@@ -598,6 +867,10 @@ def run(n: int = 3000, seed: int = 7) -> Report:
         rudner_accuracy=rudner_acc, rudner_consistency=rudner_cons, posterior_accuracy=posterior_acc,
         grade_matrix=matrix, overlap=overlap, region_peaks=region_peaks,
         ladder={g: (len(v), statistics.mean(v)) for g, v in ladder.items()},
+        path=study_paths(people, truth, random.Random(seed + 11), offsets) if extras else None,
+        misspec=study_misspec(people, truth, offsets, seed) if extras else [],
+        fixed_form=fixed_form(seed=seed) if extras else None,
+        stolen=stolen_sessions(truth, offsets, seed + 31) if extras else None,
     )
 
 
@@ -615,7 +888,11 @@ CHECKS = {
     "transfer_pass ≤ 0.02": lambda r: r.transfer_pass <= 0.02,
     # Quarantine must not make leaked keys pay off more: same people, same streams, with and without it.
     "quarantine false_pass ≤ no monitoring": lambda r: r.monitored.false_pass <= r.leak.false_pass,
+    "path overgrade ≤ 0.05": lambda r: r.path is not None and r.path.over <= 0.05,
 }
+
+# The nine bars that already guarded the clean scenario. The stopping-rule grid may not add the path bar.
+CORE_CHECKS = {name: fn for name, fn in list(CHECKS.items())[:9]}
 
 
 def _row(name: str, r: CohortReport) -> str:
@@ -723,7 +1000,134 @@ def markdown(r: Report, n: int, seed: int) -> str:
         *[f"| {MATRIX_LABELS[i]} | {r.ladder[g][0]} | {r.ladder[g][1]:.1%} |"
           for i, g in enumerate(("below", *GRADE_ORDER)) if g in r.ladder],
         "",
+        *_path_lines(r),
+        *_misspec_lines(r),
+        *_form_lines(r),
+        *_stolen_lines(r),
     ])
+
+
+def _path_lines(r: Report) -> list[str]:
+    path = r.path
+    if path is None:
+        return []
+    def _row(name: str, exact: float, within: float, over: float, under: float, bare: float,
+             sessions: float, items: float) -> str:
+        return (f"| {name} | {exact:.1%} | {within:.1%} | {over:.1%} | {under:.1%} | {bare:.1%} | "
+                f"{sessions:.2f} | {items:.1f} |")
+
+    return [
+        "После пути. Заявленный грейд, затем правила продукта: не сдал — до двух шагов вниз, попытка не сгорает; "
+        "сдал и сессия рекомендует ступень выше — один отдельный тест на неё. Итог — последний подтверждённый "
+        "грейд или «не подтверждён». Точный грейд считает «нет грейда» совпадением, если способность ниже стажёра. "
+        "±1 включает точные. Завышение — подтверждённый грейд выше истинного.",
+        "",
+        "| Путь | Точный грейд | ±1 | Завышение | Занижение | Не подтверждён | Сессий | Заданий |",
+        "|---|---|---|---|---|---|---|---|",
+        _row("Первый", path.exact, path.within_one, path.over, path.under, path.unconfirmed,
+             path.mean_sessions, path.mean_items),
+        _row("Повторный", path.again_exact, path.again_within, path.again_over, path.again_under,
+             path.again_unconfirmed, path.again_sessions, path.again_items),
+        "",
+        f"Согласованность двух путей: каппа Коэна итогового грейда {path.kappa:.2f}, "
+        f"взвешенная каппа {path.weighted_kappa:.2f}.",
+        "",
+        "Матрица «истинный грейд по θ × итоговый грейд после пути».",
+        "",
+        "| Истинный \\ итоговый | " + " | ".join(MATRIX_LABELS) + " |",
+        "|" + "---|" * (len(MATRIX_LABELS) + 1),
+        *[f"| {MATRIX_LABELS[i]} | " + " | ".join(str(cell) for cell in row) + " |"
+          for i, row in enumerate(path.matrix)],
+        "",
+    ]
+
+
+def _misspec_lines(r: Report) -> list[str]:
+    if not r.misspec:
+        return []
+    lines = [
+        "Ошибка модели. Ответ рисуется четырёхпараметрической кривой, которую оценщик не знает: "
+        "a умножается на exp(N(0, σ_a)), b сдвигается на N(0, σ_b), c растёт на U(0, 0,1), верхняя асимптота 0,95. "
+        "Оценщик по-прежнему считает номинальной трёхпараметрической моделью.",
+        "",
+        "| σ_a | σ_b | Точность вне ±0,5 от порога | Ложно сдали | Каппа повтора |",
+        "|---|---|---|---|---|",
+    ]
+    for row in r.misspec:
+        lines.append(f"| {row.sigma_a:.2f} | {row.sigma_b:.2f} | {row.accuracy_clear:.1%} | "
+                     f"{row.false_pass:.1%} | {row.kappa:.2f} |")
+    lines.append("")
+    return lines
+
+
+def _form_lines(r: Report) -> list[str]:
+    form = r.fixed_form
+    if form is None:
+        return []
+    adaptive = r.discrimination["typed"].median_r
+    return [
+        f"Фиксированная форма: {form.items} заданий всех уровней специализации backend, {form.people} человек, "
+        f"θ ~ N(0, 1). Скорректированная корреляция задания с суммой остальных: медиана {form.median_r:.2f}, "
+        f"доля r ≥ 0,2 — {form.good_share:.0%}. В адаптивном тесте медиана r для вводимого ответа — {adaptive:.2f}: "
+        "у задания видят узкий диапазон способностей, поэтому r ниже.",
+        "",
+    ]
+
+
+def _stolen_lines(r: Report) -> list[str]:
+    stolen = r.stolen
+    if stolen is None:
+        return []
+    return [
+        f"Атака «20 сессий»: {stolen.n} человек с истинным грейдом на ступень ниже middle сдают тест на middle. "
+        f"Честная сдача {stolen.honest:.1%}, после 20 чужих сессий на middle {stolen.stolen:.1%} "
+        f"(верный ответ только если совпали семейство, уровень и параметры экземпляра), "
+        f"фиксированный банк {stolen.fixed:.1%}.",
+        "",
+    ]
+
+
+def _apply_stop(max_items: int, alpha: float, beta: float, delta: float) -> None:
+    global MAX_ITEMS
+    cat_module.MAX_ITEMS = max_items
+    cat_module.GLR_ALPHA = alpha
+    cat_module.GLR_BETA = beta
+    cat_module.GLR_DELTA = delta
+    MAX_ITEMS = max_items
+
+
+def stopping_grid(n: int, seed: int) -> None:
+    """Print the stopping-rule grid. Product constants stay as they were when this returns."""
+    saved = (cat_module.MAX_ITEMS, cat_module.GLR_ALPHA, cat_module.GLR_BETA, cat_module.GLR_DELTA)
+    print(f"Перебор остановки: {n} кандидатов, seed {seed}. "
+          "Принять клетку можно только при каппе ≥ 0,52, средней длине ≤ 16,5 и всех 9 проверках.")
+    print("| MAX_ITEMS | α = β | δ | Каппа | Точность вне ±0,5 | Ложно сдали | Средняя длина | 9 проверок | Принять |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    accepted = False
+    try:
+        for max_items in (20, 24):
+            for alpha in (0.10, 0.05):
+                for delta in (0.25, 0.35):
+                    _apply_stop(max_items, alpha, alpha, delta)
+                    try:
+                        report = run(n, seed, extras=False)
+                    except LookupError as exc:
+                        print(f"| {max_items} | {alpha:.2f} | {delta:.2f} | — | — | — | — | нет | нет |")
+                        print(f"  не посчитано: {exc}")
+                        continue
+                    nine = all(fn(report) for fn in CORE_CHECKS.values())
+                    accept = report.retest.kappa >= 0.52 and report.clean.mean_len <= 16.5 and nine
+                    accepted = accepted or accept
+                    print(f"| {max_items} | {alpha:.2f} | {delta:.2f} | {report.retest.kappa:.2f} | "
+                          f"{report.clean.accuracy_clear:.1%} | {report.clean.false_pass:.1%} | "
+                          f"{report.clean.mean_len:.1f} | {'да' if nine else 'нет'} | "
+                          f"{'да' if accept else 'нет'} |")
+    finally:
+        _apply_stop(*saved)
+    if accepted:
+        print("Есть клетка, которая проходит порог. Настройки в коде всё равно не переписаны этой командой.")
+    else:
+        print("Ни одна клетка не прошла порог. Настройки продукта не менялись.")
 
 
 def main() -> None:
@@ -732,7 +1136,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--md", type=str, default=None, help="write the markdown table to this file")
     parser.add_argument("--check", action="store_true", help="fail when the clean scenario breaks CHECKS")
+    parser.add_argument("--grid", action="store_true",
+                        help="stopping-rule grid; does not change product constants")
     args = parser.parse_args()
+    if args.grid:
+        stopping_grid(args.n, args.seed)
+        return
     report = run(args.n, args.seed)
     text = markdown(report, args.n, args.seed)
     print(text)
