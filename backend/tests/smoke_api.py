@@ -193,6 +193,9 @@ def main():
     status, employer = call("POST", "/auth/employer/token", form=EMPLOYER)
     assert status == 200, employer
     employer_token = employer["access_token"]
+    status, bank = call("GET", "/search/bank", token=employer_token)
+    assert status == 200 and bank["cells"], bank
+    assert all(c["candidates"] is None or c["candidates"] >= bank["min_cell"] for c in bank["cells"]), bank
     status, participant = call("POST", "/auth/participant/token", form=CANDIDATE)
     assert status == 200, participant
     participant_token = participant["access_token"]

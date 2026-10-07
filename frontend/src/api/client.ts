@@ -119,6 +119,7 @@ export const updateVisibility = (is_visible: boolean) =>
   api.patch('/candidates/me/visibility', { is_visible })
 
 export const searchCandidates = (params: object) => api.get('/search/candidates', { params })
+export const searchBank = () => api.get('/search/bank')
 export const parseQuery = (q: string) => api.post('/ai/parse-query', { q })
 export const parseResume = (text: string) => api.post('/ai/parse-resume', { text })
 

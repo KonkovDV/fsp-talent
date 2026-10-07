@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
@@ -204,12 +205,14 @@ export default function EmployerNeeds() {
 
               {matches.data?.recommended_categories?.length > 0 && (
                 <div className="panel-quiet mt-5 text-sm">
-                  <p className="text-ink-2">Где искать: самые сильные совпадения в категориях</p>
+                  <p className="text-ink-2">Где искать: самые сильные совпадения в категориях. Ссылка открывает поиск с фильтрами.</p>
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {matches.data.recommended_categories.map((c: { role: string; grade: string; candidates: number; best: number }) => (
-                      <li key={`${c.role}-${c.grade}`} className="rounded-md bg-panel px-3 py-1.5 ring-1 ring-line">
-                        <span className="font-medium text-ink">{ROLE_RU[c.role] ?? c.role} {c.grade}</span>
-                        <span className="text-ink-3"> — {c.candidates} канд., лучшее {Math.round(c.best * 100)}</span>
+                      <li key={`${c.role}-${c.grade}`}>
+                        <Link to={`/employer/search?role=${c.role}&grade=${c.grade}`} className="inline-block rounded-md bg-panel px-3 py-1.5 ring-1 ring-line hover:ring-accent">
+                          <span className="font-medium text-accent">{ROLE_RU[c.role] ?? c.role}, {gradeRu(c.grade)}</span>
+                          <span className="text-ink-3"> — {c.candidates} канд., лучшее совпадение {Math.round(c.best * 100)}</span>
+                        </Link>
                       </li>
                     ))}
                   </ul>

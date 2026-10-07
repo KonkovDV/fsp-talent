@@ -127,6 +127,41 @@ def _safe_uuid(s: object) -> uuid.UUID | None:
         return None
 
 
+BANK_MIN = 5   # a cell with fewer people is hidden, so a count cannot point at one person
+
+
+def bank_cells(rows: list[tuple[str | None, str | None, int, int]], min_n: int = BANK_MIN) -> list[dict]:
+    """Rows (role, grade, people, tested) -> visible cells of the role × grade showcase."""
+    cells = []
+    for role, grade, people, tested in rows:
+        if not role or not grade:
+            continue
+        hidden = people < min_n
+        cells.append({"role": role, "grade": grade, "hidden": hidden,
+                      "candidates": None if hidden else people, "tested": None if hidden else tested})
+    return cells
+
+
+async def bank_grid(db: AsyncSession) -> dict:
+    """The candidate bank by specialization and grade: who is in search and how many confirmed the grade by test.
+
+    Same visibility as the search itself: hidden profiles and minors without the guardian's consent are out.
+    """
+    cutoff = adult_cutoff()
+    adult = or_(
+        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
+        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
+    )
+    PSI = ProfileSearchIndex
+    tested = func.count(Participant.assessed_grade).filter(PSI.grade == Participant.assessed_grade)
+    rows = (await db.execute(
+        select(PSI.role, PSI.grade, func.count(), tested)
+        .join(Participant, Participant.id == PSI.participant_id)
+        .where(Participant.is_visible.is_(True), or_(adult, Participant.minor_consent_given.is_(True)))
+        .group_by(PSI.role, PSI.grade))).all()
+    return {"min_cell": BANK_MIN, "cells": bank_cells([tuple(r) for r in rows])}
+
+
 async def search_candidates(
     db: AsyncSession,
     role: str | None = None,

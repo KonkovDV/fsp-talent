@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { Search as SearchIcon, Sparkles } from 'lucide-react'
 import { apiError, parseQuery, searchCandidates } from '../../api/client'
 import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
+import BankGrid from '../../components/BankGrid'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
@@ -17,9 +19,11 @@ type Params = Record<string, string | boolean | undefined>
 
 /** Free search over the anonymous base. The explainable score orders the list; filters narrow it. */
 export default function EmployerSearch() {
+  // A cell of the bank showcase or a «Где искать» chip opens the search with ?role=…&grade=…
+  const [url] = useSearchParams()
   const [q, setQ] = useState('')
-  const [role, setRole] = useState('')
-  const [grade, setGrade] = useState('')
+  const [role, setRole] = useState(url.get('role') ?? '')
+  const [grade, setGrade] = useState(url.get('grade') ?? '')
   const [discipline, setDiscipline] = useState('')
   const [minRank, setMinRank] = useState('')
   const [skills, setSkills] = useState('')
@@ -37,7 +41,12 @@ export default function EmployerSearch() {
     has_fsp: hasFsp || undefined, work_goal: internship ? 'internship' : undefined,
   }
   // Filters edit a draft; the list on screen changes only on «Найти» and stays visible while the new one loads.
-  const [submitted, setSubmitted] = useState<Params>({})
+  const [submitted, setSubmitted] = useState<Params>({ role: url.get('role') || undefined, grade: url.get('grade') || undefined })
+  useEffect(() => {
+    const r = url.get('role') ?? '', g = url.get('grade') ?? ''
+    setRole(r); setGrade(g)
+    setSubmitted(prev => ({ ...prev, role: r || undefined, grade: g || undefined }))
+  }, [url])
   const { data, isFetching, isLoading, isError, error } = useQuery({
     queryKey: ['search', submitted],
     queryFn: () => searchCandidates(submitted).then(r => r.data),
@@ -80,6 +89,11 @@ export default function EmployerSearch() {
           {EXAMPLES.map((ex, i) => <span key={ex}>{i > 0 && ', '}<button type="button" className="text-accent hover:underline" onClick={() => setQ(ex)}>{ex}</button></span>)}
         </p>
       )}
+
+      <details className="mt-4" open={!url.get('role') && window.matchMedia('(min-width: 1024px)').matches}>
+        <summary className="cursor-pointer text-sm font-medium text-accent">Банк кандидатов по специализациям и грейдам</summary>
+        <BankGrid />
+      </details>
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[260px_1fr]">
         <button type="button" onClick={() => setShowFilters(v => !v)} aria-expanded={showFilters} className="btn-secondary lg:hidden">
@@ -127,7 +141,7 @@ export default function EmployerSearch() {
                   {data.recommended_categories.map((c: { role: string; grade: string; candidates: number }) => (
                     <button key={`${c.role}-${c.grade}`} className="chip-default hover:border-accent hover:text-accent"
                       onClick={() => { setRole(c.role ?? ''); setGrade(c.grade ?? ''); setSubmitted({ ...params, role: c.role, grade: c.grade }) }}>
-                      {ROLE_RU[c.role] ?? c.role} {c.grade} <span className="num text-ink-3">{c.candidates}</span>
+                      {ROLE_RU[c.role] ?? c.role}, {gradeRu(c.grade)} <span className="num text-ink-3">{c.candidates}</span>
                     </button>
                   ))}
                 </p>
