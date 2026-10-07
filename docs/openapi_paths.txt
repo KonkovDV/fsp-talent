@@ -17,6 +17,7 @@
 /api/v1/auth/fsp/authorize
 /api/v1/auth/fsp/callback
 /api/v1/auth/fsp/signup
+/api/v1/auth/logout
 /api/v1/auth/me
 /api/v1/auth/participant/register
 /api/v1/auth/participant/token
@@ -26,6 +27,7 @@
 /api/v1/auth/resend-verification
 /api/v1/auth/verify-email
 /api/v1/candidates/me
+/api/v1/candidates/me/credentials/{credential_id}/revoke
 /api/v1/candidates/me/fsp/authorize
 /api/v1/candidates/me/fsp/callback
 /api/v1/candidates/me/offers
@@ -34,6 +36,7 @@
 /api/v1/candidates/me/profile
 /api/v1/candidates/me/profile.pdf
 /api/v1/candidates/me/results
+/api/v1/candidates/me/results/{result_id}/presentation
 /api/v1/candidates/me/resume
 /api/v1/candidates/me/survey
 /api/v1/candidates/me/visibility
@@ -62,10 +65,12 @@
 /api/v1/offers/{offer_id}/messages
 /api/v1/offers/{offer_id}/withdraw
 /api/v1/public/assessment/items
+/api/v1/public/assessment/psychometrics
 /api/v1/public/candidates/{participant_id}
 /api/v1/public/candidates/{participant_id}/profile.pdf
 /api/v1/public/credentials/verify
 /api/v1/public/credentials/verify/{credential_id}
+/api/v1/public/credentials/{credential_id}/status
 /api/v1/public/credentials/{participant_id}
 /api/v1/public/issuer
 /api/v1/public/leaderboard

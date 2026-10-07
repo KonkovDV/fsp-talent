@@ -3,6 +3,7 @@ import uuid
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from fastapi import Response
 
 from app.api.errors import ApiError
 from app.api.v1 import auth
@@ -92,7 +93,8 @@ async def test_code_issued_for_linking_is_refused_at_signin(redis):
 async def test_existing_linked_account_signs_in(redis):
     q, code = await _code_for("FSP2005")
     account = Participant(id=uuid.uuid4(), fsp_id="FSP2005")
-    out = await auth.fsp_signin_callback(auth.FspSignInCallback(code=code, state=q["state"]), db=FakeDb(account))
+    out = await auth.fsp_signin_callback(auth.FspSignInCallback(code=code, state=q["state"]),
+                                         response=Response(), db=FakeDb(account))
     assert out["status"] == "signed_in"
     payload = decode_token(out["access_token"])
     assert payload["sub"] == str(account.id) and payload["role"] == "participant"
@@ -100,12 +102,14 @@ async def test_existing_linked_account_signs_in(redis):
 
 async def test_new_person_must_accept_consents_before_an_account_exists(redis, monkeypatch):
     q, code = await _code_for("FSP2007")
-    out = await auth.fsp_signin_callback(auth.FspSignInCallback(code=code, state=q["state"]), db=FakeDb(None))
+    out = await auth.fsp_signin_callback(auth.FspSignInCallback(code=code, state=q["state"]),
+                                         response=Response(), db=FakeDb(None))
     assert out["status"] == "needs_consent" and "access_token" not in out
     ticket = out["ticket"]
     # Without the required consents nothing is created, and the ticket is not spent.
     with pytest.raises(ApiError) as err:
-        await auth.fsp_signin_signup(auth.FspSignUpIn(ticket=ticket, consents=["terms"]), request=None, db=None)
+        await auth.fsp_signin_signup(auth.FspSignUpIn(ticket=ticket, consents=["terms"]),
+                                     request=None, response=Response(), db=None)
     assert err.value.code == "consent_required"
     assert f"fspid:ticket:{ticket}" in redis.data
     assert await identity.take_ticket(ticket) == "FSP2007"
@@ -118,5 +122,5 @@ async def test_ticket_is_single_use(redis):
         await identity.take_ticket(ticket)
     with pytest.raises(ApiError) as err:
         await auth.fsp_signin_signup(auth.FspSignUpIn(ticket=ticket, consents=["terms", "pd_candidate"]),
-                                     request=None, db=None)
+                                     request=None, response=Response(), db=None)
     assert err.value.code == "fsp_ticket_invalid"
