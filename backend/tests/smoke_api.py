@@ -291,6 +291,7 @@ def main():
     check_erasure(employer_token)
     check_assessment()
     check_jury_accounts()
+    check_idor(employer_token, participant_token)
     print("SMOKE OK", contacts["display_name"], "|", card["why"][0])
 
 
@@ -505,6 +506,66 @@ def _right_answer(session_id, item):
         options = row["options"] if isinstance(row["options"], list) else _json.loads(row["options"])
         return {"answer_text": options[row["correct_index"]]}
     return {"answer_index": row["correct_index"]}
+
+
+def _ids(payload, key="id"):
+    rows = payload.get("items", payload) if isinstance(payload, dict) else payload
+    return [str(r[key]) for r in rows or [] if isinstance(r, dict) and r.get(key)]
+
+
+# Public by design: a published card, a credential check, a vacancy page and applying to it.
+IDOR_PUBLIC = ("/api/v1/public/", "/api/v1/vacancies/{vacancy_id}", "/api/v1/vacancies/{vacancy_id}/apply")
+
+
+def check_idor(owner_employer, owner_candidate):
+    """Every route with an object id from app.routes: another employer and another candidate get no 2xx."""
+    owned: dict[str, list[str]] = {}
+
+    def collect(param, path, token, key="id"):
+        status, body = call("GET", path, token=token)
+        if status == 200:
+            owned.setdefault(param, []).extend(_ids(body, key)[:2])
+
+    collect("need_id", "/needs", owner_employer)
+    collect("offer_id", "/offers/", owner_employer)
+    collect("task_id", "/tasks/", owner_employer)
+    collect("vacancy_id", "/vacancies/mine", owner_employer)
+    collect("application_id", "/vacancies/applications", owner_employer)
+    collect("offer_id", "/candidates/me/offers", owner_candidate)
+    collect("session_id", "/assessment/history", owner_candidate, "session_id")
+    collect("result_id", "/candidates/me/results", owner_candidate)
+    collect("notification_id", "/notifications", owner_candidate)
+    for task_id in owned.get("task_id", []):
+        collect("submission_id", f"/tasks/{task_id}/submissions", owner_employer)
+    other_employer = call("POST", "/auth/employer/token",
+                          form={"username": "hr@cloudwhale.demo", "password": "demo12345"})[1]["access_token"]
+    other_candidate = _login("nofsp@demo.talent")
+    root = BASE.rsplit("/api/v1", 1)[0]
+    with urllib.request.urlopen(root + "/openapi.json") as response:
+        spec = json.loads(response.read().decode())
+    checked = 0
+    leaks = []
+    for path, methods in spec["paths"].items():
+        params = re.findall(r"{([a-z_]+)}", path)
+        if not params or path.startswith(IDOR_PUBLIC[0]) or path in IDOR_PUBLIC[1:]:
+            continue
+        target = next((p for p in params if p in owned), None)
+        if target is None:
+            continue
+        for value in owned[target]:
+            concrete = path
+            for p in params:
+                concrete = concrete.replace("{" + p + "}", value if p == target else
+                                            ("1" if p == "version" else "00000000-0000-0000-0000-000000000001"))
+            for method in methods:
+                for token in (other_employer, other_candidate):
+                    status, _ = call(method.upper(), concrete[len("/api/v1"):], {}, token=token)
+                    checked += 1
+                    if 200 <= status < 300:
+                        leaks.append((method.upper(), concrete, status))
+    assert not leaks, leaks
+    assert checked >= 40, checked
+    print("IDOR OK", checked, "requests with foreign ids, no 2xx:", ", ".join(sorted(owned)))
 
 
 def check_jury_accounts():
