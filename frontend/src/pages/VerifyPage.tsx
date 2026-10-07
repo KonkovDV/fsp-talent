@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { apiError, resendVerification, verifyEmail, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
@@ -13,6 +13,9 @@ export default function VerifyPage() {
   const token = params.get('token')
   const navigate = useNavigate()
   const setAuth = useAuthStore(s => s.setAuth)
+  const location = useLocation()
+  const [resentCode, setDemoCode] = useState<string | null>(null)
+  const demoCode = resentCode ?? (location.state as { demoCode?: string } | null)?.demoCode ?? null
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -49,7 +52,11 @@ export default function VerifyPage() {
   }
   const resend = async () => {
     setError('')
-    try { await resendVerification(email, role); setCooldown(60) }
+    try {
+      const r = await resendVerification(email, role)
+      if (r.data?.demo_code) setDemoCode(r.data.demo_code)
+      setCooldown(60)
+    }
     catch (err) { setError(apiError(err)) }
   }
 
@@ -59,6 +66,11 @@ export default function VerifyPage() {
       aside={<Link to={`/login?role=${role}`} className="hover:text-accent">Ко входу</Link>}>
       <div className="flex items-center gap-3 pb-5"><MailCheck className="text-accent" size={22} aria-hidden />
         <span className="text-sm text-ink-2">Шесть цифр из письма</span></div>
+      {demoCode && (
+        <p className="notice-info mb-4" role="status">
+          <span>Демо-стенд: письма отсюда не уходят. Ваш код — <b className="font-mono tracking-widest">{demoCode}</b></span>
+        </p>
+      )}
       {token && busy ? <p className="text-sm text-ink-2">Проверяем ссылку…</p> : (
         <>
           <form onSubmit={submit} className="space-y-3">

@@ -64,6 +64,8 @@ class VerificationSent(BaseModel):
     role: Role
     expires_in_minutes: int
     resend_after_seconds: int = 60
+    # Only on a demo stand with DEMO_MODE and DEMO_SHOW_CODE: letters do not leave the stand.
+    demo_code: str | None = None
 
 
 def _tokens(subject: str, role: str, epoch: int = 0, nonce: int = 0) -> TokenOut:
@@ -140,7 +142,9 @@ async def _send_verification(db: AsyncSession, role: str, account, email: str) -
     code, token = await issue_code(db, role, account.id, email, "verify")
     await db.commit()
     await send_code(email, role, "verify", code, token)
-    return VerificationSent(email=email, role=role, expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
+    shown = code if settings.DEMO_MODE and settings.DEMO_SHOW_CODE else None
+    return VerificationSent(email=email, role=role, expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES,
+                            demo_code=shown)
 
 
 # ── registration ────────────────────────────────────────────────────────────
@@ -269,9 +273,12 @@ async def resend_verification(body: ResendIn, db: AsyncSession = Depends(get_db)
     email = normalize_email(body.email)
     await check_resend_allowed(email, "verify")
     account = await _account(db, body.role, email)
+    answer = {"status": "verification_sent", "email": email, "role": body.role, "resend_after_seconds": 60}
     if account is not None and account.email_verified_at is None:
-        await _send_verification(db, body.role, account, email)
-    return {"status": "verification_sent", "email": email, "role": body.role, "resend_after_seconds": 60}
+        sent = await _send_verification(db, body.role, account, email)
+        if sent.demo_code:
+            answer["demo_code"] = sent.demo_code
+    return answer
 
 
 # ── login ───────────────────────────────────────────────────────────────────
