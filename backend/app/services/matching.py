@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, replace
 from app.services.survey import SPECIALIZATIONS
 
 GRADES = ("intern", "junior", "middle", "senior", "lead")
+GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "мидл", "senior": "сеньор", "lead": "лид"}
 
 # Fit to the need (skills, grade, role) decides who belongs in the list. Evidence (test and FSP) decides
 # the order inside the category: it is added with EVIDENCE_WEIGHT, scaled by how close the candidate is to the
@@ -44,7 +45,7 @@ DECLARED_GRADE = 0.85
 SKILL_GATE = 0.5
 LABELS = {
     "skills": "Навыки", "grade": "Грейд", "test": "Тест", "role": "Специализация",
-    "fsp": "ФСП", "text": "Запрос", "industry": "Сфера",
+    "fsp": "ФСП", "text": "Запрос", "industry": "Предметная область",
 }
 TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
 RELATED_CREDIT = 0.3
@@ -271,15 +272,15 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         values["grade"] = base * (1.0 if assessed or not use_test else DECLARED_GRADE)
         if gap == 0:
             tail = " подтверждён тестом" if assessed else " указан кандидатом, тестом не подтверждён"
-            text = f"Грейд {c.grade}{tail}"
+            text = f"Грейд «{GRADE_RU[c.grade]}»{tail}"
             if assessed:
                 _note(plus, reasons, "plus", "CATEGORY_MATCH", text)
             else:
                 _note(info, reasons, "info", "GRADE_DECLARED", text)
         elif gap > 0:
-            _note(info, reasons, "info", "GRADE_ABOVE", f"Грейд выше запрошенного: {c.grade}")
+            _note(info, reasons, "info", "GRADE_ABOVE", f"Грейд выше запрошенного: {GRADE_RU[c.grade]}")
         else:
-            _note(minus, reasons, "minus", "GRADE_BELOW", f"Грейд ниже запрошенного: {c.grade}")
+            _note(minus, reasons, "minus", "GRADE_BELOW", f"Грейд ниже запрошенного: {GRADE_RU[c.grade]}")
 
     if use_test:
         if c.test_p is not None and (need.role is None or c.test_spec in (None, need.role)):
@@ -334,7 +335,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     if need.industry and need.industry != "any":
         values["industry"] = 1.0 if c.industry in (need.industry, "any") else 0.0
         if values["industry"] == 1.0 and c.industry == need.industry:
-            _note(plus, reasons, "plus", "INDUSTRY", "Интересна ваша сфера")
+            _note(plus, reasons, "plus", "INDUSTRY", "Интересна ваша предметная область")
 
     factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
     fit = _mean([f for f in factors if f.key in FIT_KEYS])

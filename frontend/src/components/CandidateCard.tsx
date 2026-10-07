@@ -54,7 +54,7 @@ const REASON_RU: Record<string, string> = {
   GRADE_BELOW: 'Грейд ниже',
   OTHER_ROLE: 'Другая специализация',
   UNTESTED: 'Тест не пройден',
-  INDUSTRY: 'Сфера',
+  INDUSTRY: 'Предметная область',
   PAY_FIT: 'Вилка сходится',
   PAY_LOW: 'Вилка ниже',
   PAY_GAP: 'Вилка не сходится',
