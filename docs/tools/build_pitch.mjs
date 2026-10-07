@@ -30,15 +30,15 @@ const slides = [
       ['Ответ', 'Грейд даёт только адаптивный тест специализации. Результаты ФСП — отдельная подтверждённая ось, без неё человек не теряет место.'],
       ['Механика', 'Работодатель описывает потребность, получает подборку с разбором каждого места и приглашает первым, сразу с вилкой.'],
     ] },
-  { kind: 'shot', kicker: 'ПУТЬ ЗА ТРИ МИНУТЫ', title: 'Опрос, пробный тест, категория', img: 'assets/pitch-trial.png',
+  { kind: 'shot', kicker: 'ПУТЬ ЗА ТРИ МИНУТЫ', title: 'Опрос, пробный тест, категория', img: 'assets/pitch-trial.png', alt: 'Пробный тест: шкала уверенности и нейтральный итог',
     side: ['Кандидат выбирает специализацию и грейд, стаж только подсказывает.', 'Пробный тест: 15 заданий за 5 минут и нейтральный итог с вероятностью уровня.', 'Аккаунты jury1…jury10 проходят полный тест без пауз.'] },
-  { kind: 'shot', kicker: 'МЕХАНИКА КОНТАКТА', title: 'Приглашение с вилкой, контакты после согласия', img: 'assets/pitch-offers.png',
+  { kind: 'shot', kicker: 'МЕХАНИКА КОНТАКТА', title: 'Приглашение с вилкой, контакты после согласия', img: 'assets/pitch-offers.png', alt: 'Приглашение с вилкой: имя и контакты открываются после согласия',
     side: ['Карточки анонимны: имя и контакты открываются, только когда кандидат принял приглашение.', 'Не больше 50 приглашений в день от компании, срок ответа 14 дней.', 'После отказа та же компания ждёт 30 дней. Кандидат может закрыть контакты для одной компании.'] },
   { kind: 'stats', kicker: 'ТЕСТ', title: 'Выученный ответ не подходит', cmd: A,
     cells: [['0 %', 'сдают с ключом от другого экземпляра того же семейства'], ['100 %', 'сдали бы с ключом фиксированного банка вопросов'], ['18,2 → 13,2 %', 'ложные сдачи при утечке у 30 %: карантин ключей на тех же людях']] },
   { kind: 'stats', kicker: 'ТОЧНОСТЬ И УСТОЙЧИВОСТЬ', title: 'Решение о грейде держится', cmd: A,
     cells: [['91,5 %', 'верных решений вдали от границы грейда, 2000 кандидатов'], ['0,47', 'каппа Коэна повторной сдачи с новыми заданиями'], ['6,4 · 70,5 · 99,2 %', 'сдают тест на middle настоящие junior, middle и senior']] },
-  { kind: 'shot', kicker: 'ПОДБОР', title: 'Место в списке можно разобрать', img: 'assets/pitch-card.png', cmd: M,
+  { kind: 'shot', kicker: 'ПОДБОР', title: 'Место в списке можно разобрать', img: 'assets/pitch-card.png', alt: 'Карточка подборки: вклад теста и результатов ФСП в баллах', cmd: M,
     side: ['Внутри категории выше тот, у кого сильнее тест и ФСП: вклад виден в баллах.', 'Спирмен порядка со скрытой силой: 0,240 против 0,011 у сортировки по резюме.', 'Завышенный грейд в первой десятке: 19,9 % против 28,1 %.'] },
   { kind: 'stats', kicker: 'ОСЬ ФСП', title: 'Соревнования не поднимают грейд, а уточняют порядок', cmd: 'cd backend && python -m pytest tests/unit/test_fsp_axis_example.py',
     cells: [['0,02', 'нижняя граница оси после 20 участий в нижней половине протокола'], ['0,52', 'нижняя граница после двух побед'], ['0', 'штрафа без истории ФСП: ось выпадает из оценки']] },
@@ -62,7 +62,7 @@ function htmlSlide(s, i) {
   if (s.kind === 'text') body = s.items.map(([k, v]) => `<div class="card"><b>${esc(k)}.</b> ${esc(v)}</div>`).join('')
   if (s.kind === 'end') body = '<ul>' + s.items.map(v => `<li>${esc(v)}</li>`).join('') + '</ul>'
   if (s.kind === 'stats') body = '<div class="grid">' + s.cells.map(([n, t]) => `<div class="card"><div class="num">${esc(n)}</div><p>${esc(t)}</p></div>`).join('') + '</div>'
-  if (s.kind === 'shot') body = `<div class="shot"><img src="${s.img}" alt=""><ul>${s.side.map(v => `<li>${esc(v)}</li>`).join('')}</ul></div>`
+  if (s.kind === 'shot') body = `<div class="shot"><img src="${s.img}" alt="${esc(s.alt)}"><ul>${s.side.map(v => `<li>${esc(v)}</li>`).join('')}</ul></div>`
   const cmd = s.cmd ? `<p class="cmd">${esc(s.cmd)}</p>` : ''
   return `<section class="${dark ? 'dark' : 'light'}"><div class="bar"></div><div class="red"></div><div class="pad${s.kind === 'cover' ? ' cover' : ''}">${head}${body}${cmd}</div><div class="page">${i + 1} / ${slides.length}</div></section>`
 }
@@ -96,7 +96,8 @@ writeFileSync(join(docs, 'pitch.html'), html)
 const pres = new PptxGenJS()
 pres.defineLayout({ name: 'PITCH', width: 13.333, height: 7.5 })
 pres.layout = 'PITCH'
-pres.author = 'ФСП Талант'
+pres.author = 'Konkov Dmitrij'
+pres.company = 'ФСП Талант'
 pres.title = 'ФСП Талант — обратный найм'
 pres.subject = 'Десять слайдов для жюри ЛЦТ 2026'
 const T = { fontFace: 'Arial', margin: 0 }
@@ -124,7 +125,7 @@ slides.forEach((s, i) => {
     slide.addText(t, { ...T, x: x + 0.25, y: 3.35, w: 3.45, h: 1.7, fontSize: 16, color: ink, valign: 'top' })
   })
   if (s.kind === 'shot') {
-    slide.addImage({ path: join(docs, s.img), x: 0.55, y: 1.75, w: 7.6, h: 4.75 })
+    slide.addImage({ path: join(docs, s.img), altText: s.alt, x: 0.55, y: 1.75, w: 7.6, h: 4.75 })
     slide.addText(s.side.map(v => ({ text: v, options: { bullet: true, breakLine: true } })), { ...T, x: 8.45, y: 1.75, w: 4.4, h: 4.75, fontSize: 16, color: ink, valign: 'top', paraSpaceAfter: 10 })
   }
   if (s.cmd) slide.addText(s.cmd, { ...T, x: 0.55, y: 6.85, w: 11, h: 0.3, fontSize: 11, fontFace: 'Courier New', color: muted })
