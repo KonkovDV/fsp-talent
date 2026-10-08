@@ -14,6 +14,7 @@ from app.services.ai.embedder import embed, profile_text
 from app.services.categorization import DISCIPLINE_LABELS, assign_category
 from app.services.fsp.mock import FSPParticipant, RegistryRank, choose_registry_ranks, get_fsp_adapter
 from app.services.scoring.engine import compute_discipline_score
+from app.services.search.cache import bump_bank_epoch
 from app.services.vc.issuer import issue_achievement_credential
 
 
@@ -181,3 +182,4 @@ async def rebuild_profile(db: AsyncSession, p: Participant, ranks: list[Registry
         else:
             db.add(ProfileEmbedding(participant_id=p.id, embedding=vec, model_version=settings.EMBEDDING_MODEL))
     await db.flush()
+    await bump_bank_epoch()

@@ -29,6 +29,7 @@ from app.models import (
     TaskSubmission,
 )
 from app.services.identity import active_consent
+from app.services.search.cache import bump_bank_epoch
 
 RETENTION_AFTER_WITHDRAWAL = timedelta(days=30)
 
@@ -75,6 +76,7 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
     participant.employer_task_at = None
     db.add(ConsentLog(participant_id=pid, event_type="erased", actor_id=pid, meta={"reason": reason}))
     await db.flush()
+    await bump_bank_epoch()
 
 
 async def due_for_erasure(db: AsyncSession, now: datetime | None = None) -> list[uuid.UUID]:

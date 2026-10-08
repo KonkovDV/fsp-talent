@@ -334,6 +334,8 @@ async def sync_extra(n: int) -> None:
                 participant.is_visible = False
                 participant.job_search = "not_looking"
         await db.commit()
+        from app.services.search.cache import bump_bank_epoch
+        await bump_bank_epoch()
         visible = await db.scalar(select(func.count()).select_from(Participant).where(
             Participant.email.like("extra%@load.talent"), Participant.is_visible.is_(True),
             Participant.job_search != "not_looking"))

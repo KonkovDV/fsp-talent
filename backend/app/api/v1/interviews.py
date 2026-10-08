@@ -22,6 +22,7 @@ from app.models import Employer, InterviewSlot, Offer, Participant
 from app.models.interview import FORMATS, OUTCOMES
 from app.services.interviews import MSK, calendar_text, moscow_start, slot_view
 from app.services.notify import Outbox, notify
+from app.services.search.cache import bump_bank_epoch
 
 router = APIRouter(prefix="/offers", tags=["interviews"])
 
@@ -173,4 +174,5 @@ async def set_outcome(offer_id: uuid.UUID, body: OutcomeIn, current: dict = Depe
     chosen.outcome = body.outcome
     chosen.outcome_at = datetime.now(UTC)
     await db.commit()
+    await bump_bank_epoch()
     return {"outcome": chosen.outcome}

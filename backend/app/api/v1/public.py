@@ -17,6 +17,7 @@ from app.services.categorization import DISCIPLINE_LABELS
 from app.services.guardian import token_participant, token_valid
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
+from app.services.search.cache import bump_bank_epoch
 from app.services.skills import skill_line
 from app.services.survey import SPECIALIZATIONS
 from app.services.vc.issuer import issuer_document, verify_credential
@@ -317,4 +318,5 @@ async def guardian_consent(body: GuardianConsentIn, db: AsyncSession = Depends(g
         db.add(ConsentLog(participant_id=p.id, event_type="guardian_consent", actor_id=p.id,
                           meta={"by": "guardian", "guardian_email": p.guardian_email}))
         await db.commit()
+        await bump_bank_epoch()
     return {"ok": True, "display_name": p.display_name}

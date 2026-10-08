@@ -1,5 +1,5 @@
 """Synthetic load profiles are not people and do not depend on the database."""
-from app.api.v1.needs import cached_page
+from app.services.search.cache import slice_ranked
 from seed.generate_seed import extra_email, extra_spec, showcase_adds
 
 
@@ -15,11 +15,11 @@ def test_extra_profile_has_no_personal_data_and_is_stable():
 
 
 def test_cached_shortlist_returns_a_stored_page_only():
-    stored = {"pages": {"40:20": [{"n": 1}]}, "total": 1000}
-    page = cached_page(stored, 40, 20)
-    assert page is not None and page["items"] == [{"n": 1}] and page["total"] == 1000
-    assert "pages" not in page
-    assert cached_page(stored, 0, 20) is None
+    stored = {"ranked": [{"n": i} for i in range(60)], "total": 1000, "complete": False}
+    page = slice_ranked(stored, 40, 20)
+    assert page is not None and page["items"] == [{"n": i} for i in range(40, 60)] and page["total"] == 1000
+    assert "ranked" not in page
+    assert slice_ranked(stored, 200, 20) is None
 
 
 def test_showcase_fills_six_rows_and_one_edge_cell():
