@@ -4,7 +4,15 @@ import random
 from app.models.assessment import GRADE_ORDER
 from app.services.matching import score
 from app.services.search.pipeline import order_pool
-from app.validation.assessment import Truth, run, simulate_path
+from app.validation.assessment import Session as SimSession
+from app.validation.assessment import (
+    Truth,
+    _decision_consistency,
+    multiclass_rudner,
+    reliability_curve,
+    run,
+    simulate_path,
+)
 from app.validation.matching import _facts, _spec, make_dataset, rank, sha256
 
 
@@ -42,6 +50,17 @@ def test_matching_rank_follows_the_product_order(monkeypatch):
         ids, scores, {}, best, cold, tiers=tiers, confirmed=confirmed, fits=fits)
     bare = [cid for cid, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
     assert rank(dataset, need, "no_quota", random.Random(0)) == bare
+
+
+def test_decision_consistency_follows_the_pass_rule():
+    sure = SimSession("backend", "middle", 2.0, "middle", True, None, 12, [],
+                      theta_hat=2.0, se=0.4, p_pass=0.99)
+    weak = SimSession("backend", "middle", -0.4, None, False, None, 12, [],
+                      theta_hat=-0.4, se=0.4, p_pass=0.2)
+    assert _decision_consistency([sure]) > 0.9
+    assert multiclass_rudner([sure]) > 0.5
+    ece, rows = reliability_curve([sure, weak])
+    assert len(rows) == 10 and 0 <= ece <= 1
 
 
 def test_the_grade_path_stops_within_four_sessions():

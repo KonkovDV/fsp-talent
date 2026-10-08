@@ -106,6 +106,10 @@ export default function MethodPage() {
                 </li>
               ))}
             </ul>
+            <p className="mt-4 text-sm text-ink-2">
+              Согласованность без порога 0,75 — 79 %. По правилу «сдавать от 75 %» модель предсказывает 76,1 %,
+              повтор даёт 73,6 %. Обе цифры печатает команда каппы.
+            </p>
           </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Информация у порога уровня</h2>

@@ -35,6 +35,7 @@ from app.services import cat as cat_module
 from app.services.cat import (
     CUTS,
     MAX_ITEMS,
+    PASS_P,
     Response,
     State,
     choose,
@@ -353,6 +354,7 @@ class Retest:
     theta_r: float             # correlation of the two ability estimates
     weighted_kappa: float      # quadratic weighted kappa of the two earned grades
     own_overlap: float = 0.0   # share of the second test's item keys the same person already saw in the first
+    decision_consistency: float = 0.0  # predicted repeat agreement at the product's 0.75 rule
 
 
 def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float],
@@ -368,6 +370,7 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
     clear = [ok for (theta, target, _, _), ok in zip(pairs, agree, strict=True) if abs(theta - CUTS[target]) > 0.5]
     return Retest(
         pairs=len(pairs), agreement=po, kappa=(po - pe) / (1 - pe) if pe < 1 else 1.0,
+        decision_consistency=_decision_consistency([a for _, _, a, _ in pairs]),
         agreement_clear=statistics.mean(clear) if clear else 1.0,
         same_grade=statistics.mean(a.earned == b.earned for _, _, a, b in pairs),
         theta_r=_pearson([a.theta_hat for _, _, a, _ in pairs], [b.theta_hat for _, _, _, b in pairs]),
@@ -436,6 +439,9 @@ class Report:
     misspec: list[MisspecRow] = field(default_factory=list)
     fixed_form: FixedForm | None = None
     stolen: StolenSessions | None = None
+    multiclass_accuracy: float = 0.0
+    ece: float = 0.0
+    reliability: list[tuple[int, float, float]] = field(default_factory=list)
 
 
 def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
@@ -581,6 +587,75 @@ def rudner(sessions: list[Session]) -> tuple[float, float, float]:
         posterior.append(s.p_pass if s.passed else 1.0 - s.p_pass)
     n = max(1, len(sessions))
     return sum(rudner_acc) / n, sum(consistency) / n, sum(posterior) / n
+
+
+def _inv_phi(p: float) -> float:
+    """Inverse of the standard normal cdf. Eight Newton steps are exact for the pass threshold."""
+    z = 0.0
+    for _ in range(8):
+        density = math.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi)
+        z -= (_phi(z) - p) / density
+    return z
+
+
+# The product passes when θ̂ ≥ cut + z·SE. At PASS_P = 0.75, z = 0.6745.
+_Z_PASS = _inv_phi(PASS_P)
+
+
+def _decision_consistency(sessions: list[Session]) -> float:
+    """P(the same pass/fail on an independent repeat), using the product's threshold, not the cut itself."""
+    if not sessions:
+        return 0.0
+    total = 0.0
+    for s in sessions:
+        se = max(s.se, 1e-3)
+        threshold = CUTS[s.target] + _Z_PASS * se
+        q = _phi((s.theta_hat - threshold) / (math.sqrt(2.0) * se))
+        total += q if s.passed else 1.0 - q
+    return total / len(sessions)
+
+
+def _class_edges() -> list[float]:
+    return [-math.inf, *(CUTS[g] for g in GRADE_ORDER), math.inf]
+
+
+def multiclass_rudner(sessions: list[Session]) -> float:
+    """Mean probability of the true grade class under N(θ̂, SE²). Six classes, from below intern to lead."""
+    if not sessions:
+        return 0.0
+    edges = _class_edges()
+    total = 0.0
+    for s in sessions:
+        se = max(s.se, 1e-3)
+        truth_g = true_grade(s.theta)
+        k = 0 if truth_g is None else GRADE_ORDER.index(truth_g) + 1
+        total += _phi((edges[k + 1] - s.theta_hat) / se) - _phi((edges[k] - s.theta_hat) / se)
+    return total / len(sessions)
+
+
+def reliability_curve(sessions: list[Session]) -> tuple[float, list[tuple[int, float, float]]]:
+    """Ten bins of p_pass. ECE is the weighted gap between the stated probability and θ ≥ cut."""
+    counts = [0] * 10
+    stated = [0.0] * 10
+    observed = [0.0] * 10
+    for s in sessions:
+        p = min(1.0, max(0.0, s.p_pass))
+        bin_index = min(9, int(p * 10))
+        counts[bin_index] += 1
+        stated[bin_index] += p
+        observed[bin_index] += 1.0 if s.theta >= CUTS[s.target] else 0.0
+    rows: list[tuple[int, float, float]] = []
+    ece = 0.0
+    n = max(1, len(sessions))
+    for i in range(10):
+        if counts[i] == 0:
+            rows.append((0, 0.0, 0.0))
+            continue
+        mean_p = stated[i] / counts[i]
+        rate = observed[i] / counts[i]
+        rows.append((counts[i], mean_p, rate))
+        ece += counts[i] / n * abs(mean_p - rate)
+    return ece, rows
 
 
 def _guessers(truth: Truth, rng: random.Random) -> float:
@@ -844,6 +919,8 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
     mae_before, mae_after = _discrimination_mae(clean_sessions, truth)
     topic_acc, topic_fp = _topic_floor_effect(clean_sessions)
     rudner_acc, rudner_cons, posterior_acc = rudner(clean_sessions)
+    multiclass = multiclass_rudner(clean_sessions)
+    ece, reliability = reliability_curve(clean_sessions)
     matrix = grade_matrix(clean_sessions)
     overlap = item_overlap(clean_sessions)
     region_peaks = region_exposure(clean_sessions, seed + 17)
@@ -865,6 +942,7 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
         mae_a_before=mae_before, mae_a_after=mae_after,
         topic_false_pass=topic_fp, topic_accuracy=topic_acc,
         rudner_accuracy=rudner_acc, rudner_consistency=rudner_cons, posterior_accuracy=posterior_acc,
+        multiclass_accuracy=multiclass, ece=ece, reliability=reliability,
         grade_matrix=matrix, overlap=overlap, region_peaks=region_peaks,
         ladder={g: (len(v), statistics.mean(v)) for g, v in ladder.items()},
         path=study_paths(people, truth, random.Random(seed + 11), offsets) if extras else None,
@@ -921,6 +999,26 @@ def _region_line(r: Report) -> str:
     )
 
 
+def _reliability_lines(r: Report) -> list[str]:
+    if not r.reliability:
+        return []
+    lines = [
+        "",
+        f"Калибровка вероятности уровня. ECE = {r.ece:.3f}. "
+        "В корзине — средняя p_pass и доля тех, у кого θ не ниже порога заявленного грейда.",
+        "",
+        "| p_pass | Людей | Средняя p_pass | Доля θ ≥ порога |",
+        "|---|---|---|---|",
+    ]
+    for i, (count, mean_p, rate) in enumerate(r.reliability):
+        if count == 0:
+            lines.append(f"| {i / 10:.1f}–{(i + 1) / 10:.1f} | 0 | — | — |")
+        else:
+            lines.append(f"| {i / 10:.1f}–{(i + 1) / 10:.1f} | {count} | {mean_p:.1%} | {rate:.1%} |")
+    lines.append("")
+    return lines
+
+
 def markdown(r: Report, n: int, seed: int) -> str:
     return "\n".join([
         f"Симуляция: {n} кандидатов на сценарий, seed {seed}. Команда: "
@@ -972,8 +1070,12 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"- Если слабая тема блокирует сдачу: точность {r.topic_accuracy:.1%}, ложные сдачи {r.topic_false_pass:.1%} "
         f"(в продукте порог по теме не включён, пока сравнение не подтвердит его).",
         f"- Точность классификации по Руднеру у порога заявленного грейда: {r.rudner_accuracy:.1%}, "
-        f"согласованность {r.rudner_consistency:.1%}. Вероятность принятого решения по апостериорному "
-        f"распределению: {r.posterior_accuracy:.1%}.",
+        f"согласованность без учёта порога 0,75: {r.rudner_consistency:.1%}. "
+        f"С учётом порога предсказано {r.retest.decision_consistency:.1%}, "
+        f"на повторе измерено {r.retest.agreement:.1%}. "
+        f"Многоклассовая точность по Руднеру: {r.multiclass_accuracy:.1%}. "
+        f"Вероятность принятого решения по апостериорному распределению: {r.posterior_accuracy:.1%}.",
+        *_reliability_lines(r),
         f"- Перекрытие заданий: в среднем другой кандидат этой же симуляции видел {r.overlap:.1%} "
         f"заданий данного кандидата. Максимальная экспозиция ключа — в таблице выше.",
         f"- Два теста одного кандидата: во втором в среднем {r.retest.own_overlap:.1%} заданий совпадают "
