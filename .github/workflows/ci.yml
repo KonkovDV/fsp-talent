@@ -75,6 +75,10 @@ jobs:
           cd backend
           pytest tests/unit/ -q --cov=app --cov-report=xml --cov-report=json --cov-fail-under=65
           python tests/coverage_lines.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: backend/coverage.json
       - name: Dependency audit
         # Tokens are signed with PyJWT; nothing is ignored. pip itself is upgraded first.
         run: |
@@ -168,6 +172,7 @@ jobs:
 
   # The jury's path, word for word: docs/INSTALL.md on a clean machine, then the API check with codes from Mailpit.
   compose-e2e:
+    needs: [test-backend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -181,6 +186,16 @@ jobs:
           curl -fsS http://localhost/openapi.json | python3 -c "import json,sys; print(len(json.load(sys.stdin)['paths']), 'paths')"
       - name: make check (registration, FSP ID, test, search, invitation, contacts)
         run: make check
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-unit
+          path: backend/coverage-unit-artifact
+      - name: Integration tests and combined coverage
+        run: |
+          mv backend/coverage-unit-artifact/coverage.json backend/coverage-unit.json
+          docker compose exec -T -w /app backend python -m pytest tests/integration -q --cov=app --cov-report=json
+          docker compose cp backend:/app/coverage.json backend/coverage-integration.json
+          python3 backend/tests/integration_coverage.py
       - uses: actions/setup-node@v4
         with: {node-version: '20'}
       - name: Browser journey
