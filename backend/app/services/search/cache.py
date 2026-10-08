@@ -14,7 +14,7 @@ from app.core.redis_client import get_redis
 EPOCH_KEY = "search-bank-epoch"
 TTL_S = 300
 # Bump when the ranking rule changes, so a cached order from the previous rule is not served.
-RANK_VERSION = 2
+RANK_VERSION = 3
 # Matches allows offset <= 200 and limit <= 50. One stored ranking covers every page.
 WINDOW = 250
 _COMPANY_KEYS = ("shortlisted", "invited", "contacts_closed")

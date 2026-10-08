@@ -9,6 +9,8 @@ When a discipline is selected, the quality signal is that discipline only.
 Without the filter, a need with a profile discipline reads that discipline in full and the others at half:
 a security need ranks a security result above a robotics one. Roles with no profile discipline
 keep the best result across disciplines. Competition status is not part of this choice.
+The «Запрос» factor is only the words and the meaning of the query. The test and the FSP axis
+do not enter it.
 """
 from __future__ import annotations
 
@@ -123,6 +125,38 @@ def _rrf(ranked_ids: list) -> dict:
     return {pid: 1.0 / (RRF_K + i + 1) for i, pid in enumerate(ranked_ids)}
 
 
+def _rrf_ties(ordered_ids: list, scores: dict | None = None) -> dict:
+    """Same reciprocal weight for equal scores. Without scores, position is the rank."""
+    if not scores:
+        return _rrf(ordered_ids)
+    out: dict = {}
+    rank = 0
+    previous = None
+    for index, pid in enumerate(ordered_ids):
+        value = scores.get(pid)
+        if previous is None or value != previous:
+            rank = index
+            previous = value
+        out[pid] = 1.0 / (RRF_K + rank + 1)
+    return out
+
+
+def fuse_text(lex_order: list, dense_order: list | None = None, lex_scores: dict | None = None) -> dict:
+    """Reciprocal rank of the wording and, when present, the meaning of the query.
+
+    A discipline score and a test result are not arguments: growing either one cannot
+    change this map, so the «Запрос» factor cannot smuggle them in. Equal word scores
+    share a rank, so the factor does not depend on the candidate id.
+    """
+    fused: dict = {}
+    for pid, weight in _rrf_ties(list(lex_order), lex_scores).items():
+        fused[pid] = fused.get(pid, 0.0) + weight
+    if dense_order:
+        for pid, weight in _rrf(list(dense_order)).items():
+            fused[pid] = fused.get(pid, 0.0) + weight
+    return fused
+
+
 def _skill_or_tsquery(names: list[str]) -> str | None:
     """Quote skill names so to_tsquery accepts C++, C# and Node.js.
 
@@ -228,11 +262,6 @@ async def search_candidates(
         wanted |= {e.skill for e in extract_skills(q)}
     wanted_list = sorted(wanted)
 
-    score_q = select(DisciplineScore.participant_id, func.max(DisciplineScore.lcb).label("max_lcb"))
-    if discipline:
-        score_q = score_q.where(DisciplineScore.discipline == discipline)
-    max_lcb = score_q.group_by(DisciplineScore.participant_id).subquery()
-
     PSI = ProfileSearchIndex
 
     tsq = None
@@ -263,9 +292,8 @@ async def search_candidates(
         and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
         and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
     )
-    stmt = (select(Participant.id, func.coalesce(max_lcb.c.max_lcb, 0.0).label("max_lcb"), lex)
+    stmt = (select(Participant.id, lex)
             .join(PSI, PSI.participant_id == Participant.id)
-            .outerjoin(max_lcb, max_lcb.c.participant_id == Participant.id)
             .where(_in_search(adult)))
     if since := created_after(datetime.now(UTC), fresh_days):
         stmt = stmt.where(Participant.created_at >= since)
@@ -291,55 +319,76 @@ async def search_candidates(
         stmt = stmt.where(Participant.id.in_(sub))
     if tsq is not None:
         stmt = stmt.where(PSI.skills_tsv.op("@@")(tsq))
-    stmt = stmt.order_by(lex.desc(), max_lcb.c.max_lcb.desc().nulls_last()).limit(POOL_LIMIT)
+    stmt = stmt.order_by(lex.desc(), Participant.id).limit(POOL_LIMIT)
     rows = (await db.execute(stmt)).all()
 
     ids_set: set[uuid.UUID] = {r.id for r in rows}
-    best = {r.id: r.max_lcb for r in rows}
-    fused: dict[uuid.UUID, float] = {pid: 0.0 for pid in ids_set}
-
-    rankings: list[list] = [sorted(ids_set, key=lambda i: -best[i])]
-    if rows:
-        rankings.append([r.id for r in rows])
+    lex_of = {r.id: float(r.lex or 0.0) for r in rows}
+    lex_order = sorted(lex_of, key=lambda i: (-lex_of[i], str(i)))
 
     dense_hit: set = set()
+    dense_order: list = []
     if q and embeddings_enabled():
         vec = await embed(q)
         if vec is not None:
-            dense = list(await db.scalars(
+            dense_order = list(await db.scalars(
                 select(ProfileEmbedding.participant_id)
                 .join(Participant, Participant.id == ProfileEmbedding.participant_id)
                 .where(_in_search(adult))
                 .order_by(ProfileEmbedding.embedding.cosine_distance(vec))
                 .limit(DENSE_POOL)
             ))
-            rankings.append(dense)
-            dense_hit = set(dense[:20])
-            for pid in dense:
-                if pid not in ids_set:
-                    ids_set.add(pid)
-                    fused[pid] = 0.0
-                    best.setdefault(pid, 0.0)
+            dense_hit = set(dense_order[:20])
+            ids_set.update(dense_order)
 
-    # TZ: inside a category, better test results rank higher. theta is on one IRT scale for every
-    # session, so the best completed result is comparable across candidates. Only the primary test of the
-    # specialization counts: a test built from a vacancy is practice and does not move the candidate.
-    # A jury trial stores an ability estimate for the candidate's own screen and must not move the ranking.
+    by_discipline: dict[uuid.UUID, dict[str, float]] = {}
+    if ids_set:
+        for pid, disc, value in await db.execute(
+                select(DisciplineScore.participant_id, DisciplineScore.discipline, DisciplineScore.lcb).where(
+                    DisciplineScore.participant_id.in_(list(ids_set)))):
+            by_discipline.setdefault(pid, {})[disc] = float(value or 0.0)
+
+    need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
+    if q:
+        need = NeedSpec(
+            role=need.role, grade=need.grade, skills=need.skills, nice=need.nice,
+            industry=need.industry, text=True, salary_from=need.salary_from, salary_to=need.salary_to)
+
+    def _need_lcb(pid: uuid.UUID) -> float:
+        return lcb_for_need(need.role, by_discipline.get(pid, {}), discipline)[0]
+
+    best = {pid: _need_lcb(pid) for pid in ids_set}
+    # Words and meaning only. The test and the FSP axis stay out of the «Запрос» factor.
+    text_fused = fuse_text(lex_order, dense_order or None, lex_of)
+
+    # Sort ties still see the test and the discipline rule. The FSP list uses the need's
+    # discipline, not the highest result in any sport.
+    fused: dict[uuid.UUID, float] = {pid: 0.0 for pid in ids_set}
+    sort_rankings: list[list] = [
+        sorted(ids_set, key=lambda i: (-best[i], str(i))),
+        lex_order,
+    ]
+    if dense_order:
+        sort_rankings.append(dense_order)
+
+    # theta is on one IRT scale, so the best completed primary test is comparable.
+    # A vacancy test is practice. A jury trial must not move the ranking.
     not_trial = or_(TestSession.flags["mode"].astext.is_(None), TestSession.flags["mode"].astext != "express")
-    test_theta: dict[uuid.UUID, float] = {
-        pid: theta for pid, theta in await db.execute(
-            select(TestSession.participant_id, func.max(TestSession.irt_theta))
-            .where(TestSession.participant_id.in_(list(ids_set)), TestSession.status == "completed",
-                   TestSession.irt_theta.is_not(None), not_trial, ~TestSession.flags.has_key("vacancy_id"))
-            .group_by(TestSession.participant_id))
-    }
-    if test_theta:
-        rankings.append(sorted(test_theta, key=lambda i: -test_theta[i]))
+    if ids_set:
+        test_theta: dict[uuid.UUID, float] = {
+            pid: theta for pid, theta in await db.execute(
+                select(TestSession.participant_id, func.max(TestSession.irt_theta))
+                .where(TestSession.participant_id.in_(list(ids_set)), TestSession.status == "completed",
+                       TestSession.irt_theta.is_not(None), not_trial, ~TestSession.flags.has_key("vacancy_id"))
+                .group_by(TestSession.participant_id))
+        }
+        if test_theta:
+            sort_rankings.append(sorted(test_theta, key=lambda i: -test_theta[i]))
 
-    for ranking in rankings:
-        for pid, s in _rrf(ranking).items():
+    for ranking in sort_rankings:
+        for pid, weight in _rrf(ranking).items():
             if pid in fused:
-                fused[pid] += s
+                fused[pid] += weight
 
     all_ids = list(ids_set)
     have: dict[uuid.UUID, set[str]] = {}
@@ -349,8 +398,8 @@ async def search_candidates(
                     Skill.participant_id.in_(all_ids), Skill.confirmed.is_(True), Skill.name.in_(wanted))):
             have.setdefault(pid, set()).add(name)
 
-    need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
-    matches = await score_pool(db, all_ids, need, fused, discipline, employer_id)
+    matches = await score_pool(
+        db, all_ids, need, text_fused, discipline, employer_id, by_discipline=by_discipline)
     facts = [matches[i].facts for i in all_ids if matches[i].facts]
     pay_hint = pay_counterfactual(need, facts)
     skill_hint = skill_counterfactual(need, facts)
@@ -388,7 +437,11 @@ async def search_candidates(
             })
         return {**header, "items": items}
     ordered = ordered[offset:offset + limit]
-    cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
+    chosen = {
+        pid: (matches[pid].facts.fsp_lcb, matches[pid].facts.fsp_kind, matches[pid].facts.fsp_discipline)
+        for pid in ordered if matches.get(pid) and matches[pid].facts
+    }
+    cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline, chosen)
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
         card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
@@ -432,9 +485,10 @@ async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: lis
     return {pid: outcome for pid, (outcome, _) in found.items()}
 
 
-async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
-                     discipline: str | None = None, employer_id: uuid.UUID | None = None) -> dict[uuid.UUID, PoolMatch]:
-    """Load the facts the factor score needs for every candidate of the pool, in four queries."""
+async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, text_fused: dict[uuid.UUID, float],
+                     discipline: str | None = None, employer_id: uuid.UUID | None = None,
+                     by_discipline: dict[uuid.UUID, dict[str, float]] | None = None) -> dict[uuid.UUID, PoolMatch]:
+    """Load the facts the factor score needs. ``text_fused`` is words and meaning only."""
     if not ids:
         return {}
     names = set(need.skills) | set(need.nice)
@@ -450,11 +504,12 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
     people = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ids)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ids)))}
-    by_discipline: dict[uuid.UUID, dict[str, float]] = {}
-    for pid, disc, value in await db.execute(
-            select(DisciplineScore.participant_id, DisciplineScore.discipline, DisciplineScore.lcb).where(
-                DisciplineScore.participant_id.in_(ids))):
-        by_discipline.setdefault(pid, {})[disc] = float(value or 0.0)
+    if by_discipline is None:
+        by_discipline = {}
+        for pid, disc, value in await db.execute(
+                select(DisciplineScore.participant_id, DisciplineScore.discipline, DisciplineScore.lcb).where(
+                    DisciplineScore.participant_id.in_(ids))):
+            by_discipline.setdefault(pid, {})[disc] = float(value or 0.0)
     confs = {(c.participant_id, c.specialization): c for c in await db.scalars(
         select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ids)))}
     pending = {pid: n for pid, n in await db.execute(
@@ -475,7 +530,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
         for sid, n, correct in await db.execute(counts_query, {"ids": session_ids}):
             counts[sid] = (int(correct or 0), int(n or 0))
     interviews = await _interview_outcomes(db, employer_id, ids) if employer_id else {}
-    top = max(fused.values(), default=0.0) or 1.0
+    top = max(text_fused.values(), default=0.0) or 1.0
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
         p, cat = people.get(pid), cats.get(pid)
@@ -493,7 +548,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             test_spec=conf.specialization if conf else None,
             fsp_lcb=fsp_lcb, fsp_kind=fsp_kind, fsp_discipline=fsp_discipline,
             industry=p.industry if p else None,
-            text_rank=fused.get(pid, 0.0) / top,
+            text_rank=text_fused.get(pid, 0.0) / top,
             salary_from=p.salary_from_gross if p else None, salary_to=p.salary_to_gross if p else None,
             test_se=conf.se if conf and conf.se else None,
             test_correct=counts.get(conf.session_id, (None, None))[0] if conf and conf.session_id else None,
@@ -539,7 +594,8 @@ async def _category_percentiles(db, cats: dict) -> dict:
     return out
 
 
-async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) -> list[dict]:
+async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
+                       fsp_choice: dict | None = None) -> list[dict]:
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ordered)))}
@@ -586,11 +642,23 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
         if cat and cat.grade_source == "assessed":
             why.append(f"Грейд {cat.grade} подтверждён тестом")
         if disciplines:
-            top = next((d for d in disciplines if d["discipline"] == discipline_filter), disciplines[0])
+            picked = (fsp_choice or {}).get(pid)
+            if discipline_filter:
+                top = next((d for d in disciplines if d["discipline"] == discipline_filter), disciplines[0])
+                shown, weight_note = top["lcb"], ""
+            elif picked and picked[2]:
+                top = next((d for d in disciplines if d["discipline"] == picked[2]), disciplines[0])
+                shown = picked[0] if picked[0] is not None else top["lcb"]
+                weight_note = " (учтено с весом 0,5)" if picked[1] == "other" else ""
+            else:
+                top = disciplines[0]
+                shown, weight_note = top["lcb"], ""
             if top["best_rank"]:
                 why.append(f"Присвоенный разряд {top['best_rank']} ({top['label']})")
-            why.append(f"Подтверждено ФСП: нижняя граница уровня {top['lcb']:.2f}, "
-                       f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
+            shown_text = f"{float(shown):.2f}".replace(".", ",")
+            why.append(
+                f"Подтверждено ФСП: {top['label']}, нижняя граница {shown_text}{weight_note}, "
+                f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
         if pid in dense_hit:
             why.append("Смысловое совпадение с запросом")
         if p.practice_at is not None and p.practice_topic:
