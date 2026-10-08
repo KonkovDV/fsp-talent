@@ -48,13 +48,43 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-_OPEN = ("/api/v1/auth", "/api/v1/public", "/api/v1/fsp-id-demo", "/health", "/docs", "/openapi.json")
+# Paths that run before a session exists. A signed-in request is never on this list: the bearer is read first.
+# /api/v1/auth is not a prefix. /auth/me, /auth/me/export and /auth/password/change keep the caller's scope.
+_BYPASS_EXACT = {
+    "/health",
+    "/openapi.json",
+    "/api/v1/auth/participant/register",
+    "/api/v1/auth/employer/register",
+    "/api/v1/auth/verify-email",
+    "/api/v1/auth/resend-verification",
+    "/api/v1/auth/participant/token",
+    "/api/v1/auth/employer/token",
+    "/api/v1/auth/password/forgot",
+    "/api/v1/auth/password/reset",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/logout",
+    "/api/v1/auth/fsp/authorize",
+    "/api/v1/auth/fsp/callback",
+    "/api/v1/auth/fsp/signup",
+}
+
+
+def _open_path(path: str) -> bool:
+    if path in _BYPASS_EXACT:
+        return True
+    if path == "/api/v1/public" or path.startswith("/api/v1/public/"):
+        return True
+    if path == "/api/v1/fsp-id-demo" or path.startswith("/api/v1/fsp-id-demo/"):
+        return True
+    if path == "/docs" or path.startswith("/docs/"):
+        return True
+    if path == "/redoc" or path.startswith("/redoc/"):
+        return True
+    return False
 
 
 def _rls_token(request: Request):
     path = request.url.path
-    if path.startswith(_OPEN) or path in _OPEN:
-        return set_rls(bypass=True)
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
         try:
@@ -65,6 +95,8 @@ def _rls_token(request: Request):
             return set_rls(participant_id=str(payload.get("sub") or ""))
         if payload and payload.get("role") == "employer":
             return set_rls(employer_id=str(payload.get("sub") or ""))
+    if _open_path(path):
+        return set_rls(bypass=True)
     return set_rls()
 
 

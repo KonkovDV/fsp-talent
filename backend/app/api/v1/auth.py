@@ -106,6 +106,25 @@ def _account_tokens(account, role: str) -> TokenOut:
 
 
 REFRESH_COOKIE = "fsp_refresh"
+FSP_SIGNIN_COOKIE = "fsp_signin"
+FSP_SIGNIN_PATH = "/api/v1/auth/fsp"
+
+
+def attach_signin_binder(response: Response, binder: str) -> None:
+    """Binds the FSP ID login to the browser that started it. JavaScript cannot read the cookie."""
+    response.set_cookie(
+        key=FSP_SIGNIN_COOKIE,
+        value=binder,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=fsp_identity.STATE_TTL_S,
+        path=FSP_SIGNIN_PATH,
+    )
+
+
+def clear_signin_binder(response: Response) -> None:
+    response.delete_cookie(FSP_SIGNIN_COOKIE, path=FSP_SIGNIN_PATH)
 
 
 def attach_refresh(response: Response, token: str) -> None:
@@ -574,18 +593,24 @@ async def _linked(db: AsyncSession, fsp_id: str) -> Participant | None:
 
 
 @router.post("/fsp/authorize")
-async def fsp_signin_authorize(request: Request):
+async def fsp_signin_authorize(request: Request, response: Response):
     """Start signing in by FSP ID: the address of the provider's login page. No platform session needed."""
     await _limit("fsp-signin", _client_ip(request), limit=20)
     started = await fsp_identity.start_signin()
+    attach_signin_binder(response, started.binder)
     return {"authorize_url": started.authorize_url, "provider": fsp_identity.get_fsp_id_provider().name}
 
 
 @router.post("/fsp/callback")
-async def fsp_signin_callback(body: FspSignInCallback, response: Response, db: AsyncSession = Depends(get_db)):
-    """Exchange the code. A linked account signs in; a new person must accept the consents first."""
+async def fsp_signin_callback(body: FspSignInCallback, request: Request, response: Response,
+                              db: AsyncSession = Depends(get_db)):
+    """Exchange the code. A linked account signs in; a new person must accept the consents first.
+
+    The cookie set at authorize must come back. A link opened in another browser is refused.
+    """
+    clear_signin_binder(response)
     try:
-        fsp_id = await fsp_identity.finish_signin(body.code, body.state)
+        fsp_id = await fsp_identity.finish_signin(body.code, body.state, binder=request.cookies.get(FSP_SIGNIN_COOKIE))
     except fsp_identity.FspIdError as e:
         raise ApiError(400, "fsp_invalid", "Вход через ФСП ID не подтверждён, начните вход заново") from e
     account = await _linked(db, fsp_id)
