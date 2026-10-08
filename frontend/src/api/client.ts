@@ -43,25 +43,81 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+let inflight: Promise<string | null> | null = null
+let renewTimer: ReturnType<typeof setTimeout> | undefined
+
+function tokenExpiry(token: string): number | null {
+  try {
+    const exp = JSON.parse(atob(token.split('.')[1]))['exp']
+    return typeof exp === 'number' ? exp : null
+  } catch {
+    return null
+  }
+}
+
+/** One refresh for every caller. Parallel 401s share it; a failure logs out once. */
+export function renewAccess(): Promise<string | null> {
+  if (!inflight) {
+    inflight = api.post('/auth/refresh', {})
+      .then(response => {
+        const token = response.data?.access_token as string | undefined
+        const role = useAuthStore.getState().userRole
+        if (token && role) {
+          useAuthStore.getState().setAuth(token, role)
+          return token
+        }
+        useAuthStore.getState().logout()
+        return null
+      })
+      .catch(() => {
+        useAuthStore.getState().logout()
+        return null
+      })
+      .finally(() => { setTimeout(() => { inflight = null }, 0) })
+  }
+  return inflight
+}
+
+function armRenew(token: string | null) {
+  if (renewTimer) clearTimeout(renewTimer)
+  const exp = token ? tokenExpiry(token) : null
+  if (!exp) return
+  const wait = exp * 1000 - 60_000 - Date.now()
+  renewTimer = setTimeout(() => { void renewAccess() }, Math.max(0, wait))
+}
+
+/** Refresh shortly before the access token expires, and when the jury comes back to the tab. */
+export function installSessionRenew() {
+  armRenew(useAuthStore.getState().token)
+  useAuthStore.subscribe((state, previous) => {
+    if (state.token !== previous.token) armRenew(state.token)
+  })
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    const token = useAuthStore.getState().token
+    const exp = token ? tokenExpiry(token) : null
+    if (exp !== null && exp * 1000 - Date.now() < 120_000) void renewAccess()
+  })
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const url = String(error.config?.url ?? '')
     const config = error.config as ({ _retried?: boolean } & NonNullable<typeof error.config>) | undefined
+    if (error.response?.status === 429) {
+      const header = Number(error.response.headers?.['retry-after'])
+      const seconds = Number.isFinite(header) && header > 0 ? header : 60
+      window.dispatchEvent(new CustomEvent('fsp-rate-limit', { detail: seconds }))
+    }
     // A failed login is also 401. Reloading /login would wipe the error on the form.
     if (error.response?.status === 401 && config && !url.includes('/auth/') && !config._retried) {
       config._retried = true
-      try {
-        const renewed = await api.post('/auth/refresh', {})
-        const token = renewed.data?.access_token as string | undefined
-        const role = useAuthStore.getState().userRole
-        if (token && role) {
-          useAuthStore.getState().setAuth(token, role)
-          config.headers.Authorization = `Bearer ${token}`
-          return api(config)
-        }
-      } catch { /* the cookie is missing or already used */ }
-      useAuthStore.getState().logout()
+      const token = await renewAccess()
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+        return api(config)
+      }
       if (window.location.pathname !== '/login') window.location.href = '/login'
     }
     return Promise.reject(error)

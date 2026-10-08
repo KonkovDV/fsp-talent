@@ -7,6 +7,7 @@ interface AuthFields {
   token: string | null
   userRole: Role | null
   userId: string | null
+  needsRenew: boolean
 }
 
 interface AuthState extends AuthFields {
@@ -14,7 +15,7 @@ interface AuthState extends AuthFields {
   logout: () => void
 }
 
-const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null }
+const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null, needsRenew: false }
 
 function parseJwtPayload(token: string): Record<string, unknown> {
   try {
@@ -39,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
       ...SIGNED_OUT,
       setAuth: (token, role) => {
         const payload = parseJwtPayload(token)
-        set({ token, userRole: role, userId: String(payload['sub'] ?? '') })
+        set({ token, userRole: role, userId: String(payload['sub'] ?? ''), needsRenew: false })
       },
       logout: () => set(SIGNED_OUT),
     }),
@@ -49,18 +50,29 @@ export const useAuthStore = create<AuthState>()(
       // The refresh token is an HttpOnly cookie, so a copy in this store is dropped.
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<AuthFields> & { refreshToken?: string | null }
-        if (isTokenExpired(saved.token ?? null)) return { ...current, ...SIGNED_OUT }
+        if (isTokenExpired(saved.token ?? null)) {
+          // The access token died. The refresh cookie may still be alive, so keep the role and renew once.
+          if (!saved.userRole) return { ...current, ...SIGNED_OUT }
+          return {
+            ...current,
+            token: null,
+            userRole: saved.userRole,
+            userId: saved.userId ?? null,
+            needsRenew: true,
+          }
+        }
         return {
           ...current,
           token: saved.token ?? null,
           userRole: saved.userRole ?? null,
           userId: saved.userId ?? null,
+          needsRenew: false,
         }
       },
       // merge only fixes the in-memory state. Writing it back through the store's own action also
       // wipes the stale tokens from localStorage.
       onRehydrateStorage: () => (state) => {
-        if (state && !state.token) state.logout()
+        if (state && !state.token && !state.needsRenew) state.logout()
       },
     },
   ),
