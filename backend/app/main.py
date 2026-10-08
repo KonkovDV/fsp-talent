@@ -23,6 +23,8 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             "SECRET_KEY is a published placeholder and SECRET_KEY_FILE is not writable. "
             "Set a private value in .env: python -c \"import secrets; print(secrets.token_hex(32))\"")
+    if not settings.DEMO_MODE and not settings.COOKIE_SECURE:
+        logger.warning("COOKIE_SECURE is off while DEMO_MODE is off. The refresh cookie will travel without Secure.")
     logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")
     yield
     logger.info("Shutting down")

@@ -16,6 +16,19 @@ class RateLimitUnavailable(RuntimeError):
     """Redis did not answer a limit that is not allowed to fail open."""
 
 
+async def current_attempts(bucket: str, *, fail_closed: bool = False) -> int:
+    """How many attempts are already in the window. Does not count this request."""
+    try:
+        redis = await get_redis()
+        raw = await redis.get(bucket)
+        return int(raw or 0)
+    except Exception as e:
+        logger.warning("Rate limit unavailable for %s", bucket, exc_info=True)
+        if fail_closed:
+            raise RateLimitUnavailable(bucket) from e
+        return 0
+
+
 async def too_many(bucket: str, limit: int = 5, window_seconds: int = 60, *, fail_closed: bool = False) -> bool:
     """Increment a fixed-window counter and return True when the limit is exceeded.
 

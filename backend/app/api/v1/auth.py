@@ -444,6 +444,12 @@ async def refresh(response: Response, request: Request, body: RefreshIn | None =
         raise ApiError(401, "unauthorized")
     nxt = next_refresh_nonce(payload.get("rn"), int(account.refresh_nonce or 0))
     if nxt is None:
+        # A repeated older refresh is treated as theft: the whole generation dies, including a token
+        # that was still current. Commit before the 401, or the request rollback would undo the bump.
+        presented = payload.get("rn")
+        if presented is not None and int(presented) < int(account.refresh_nonce or 0):
+            account.token_epoch = int(account.token_epoch or 0) + 1
+            await db.commit()
         raise ApiError(401, "unauthorized")
     account.refresh_nonce = nxt
     return deliver(response, _tokens(payload["sub"], role, int(account.token_epoch or 0), nxt))
@@ -556,6 +562,10 @@ class FspSignUpIn(BaseModel):
 
 
 def _client_ip(request: Request) -> str:
+    """The address nginx put in X-Real-IP. The first X-Forwarded-For hop is the client's own header."""
+    real = (request.headers.get("x-real-ip") or "").strip()
+    if real:
+        return real
     return request.client.host if request.client else "unknown"
 
 

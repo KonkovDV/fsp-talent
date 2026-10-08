@@ -33,7 +33,7 @@ def _digest(value: str) -> str:
 def client_fingerprint(request: Request | None) -> tuple[str | None, str | None]:
     if request is None:
         return None, None
-    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+    ip = (request.headers.get("x-real-ip") or "").strip() or (
         request.client.host if request.client else "")
     ua = (request.headers.get("user-agent") or "")[:300] or None
     return (_digest(f"ip:{ip}") if ip else None), ua

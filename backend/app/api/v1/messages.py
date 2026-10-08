@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_any_auth
 from app.api.errors import ApiError
 from app.core.database import get_db
-from app.core.ratelimit import too_many
+from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.models import Employer, Offer, OfferMessage
 from app.services.notify import Outbox, notify
 
@@ -80,8 +80,12 @@ async def post_message(offer_id: uuid.UUID, body: MessageIn, current: dict = Dep
     text = body.body.strip()
     if not text:
         raise ApiError(422, "validation_error", "Пустое сообщение")
-    if await too_many(f"messages:{side}:{current['sub']}", limit=MESSAGES_PER_HOUR, window_seconds=3600):
-        raise ApiError(429, "rate_limited", "Слишком много сообщений, подождите")
+    try:
+        if await too_many(f"messages:{side}:{current['sub']}", limit=MESSAGES_PER_HOUR, window_seconds=3600,
+                          fail_closed=True):
+            raise ApiError(429, "rate_limited", "Слишком много сообщений, подождите")
+    except RateLimitUnavailable as e:
+        raise ApiError(503, "unavailable", "Лимит сообщений сейчас недоступен") from e
     message = OfferMessage(offer_id=offer.id, author_role=side, body=text, created_at=datetime.now(UTC))
     db.add(message)
     outbox = Outbox()
