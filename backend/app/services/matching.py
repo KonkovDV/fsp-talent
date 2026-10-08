@@ -83,6 +83,28 @@ ROLE_NEIGHBOURS = {
     "qa": {"backend", "fullstack"}, "analyst": {"backend", "ml", "data"},
     "data": {"backend", "ml", "devops"},
 }
+
+
+def category_band(role: str | None, grade: str | None,
+                  need_role: str | None, need_grade: str | None) -> int:
+    """0 exact category, 1 one step away or a neighbour at the exact grade, 2 the rest.
+
+    The band is the category the employer sees. A competition result does not move it.
+    The product order does not use this; the measurement does.
+    """
+    if not need_role or not need_grade or not role or not grade:
+        return 2
+    if grade not in GRADES or need_grade not in GRADES:
+        return 2
+    gap = abs(GRADES.index(grade) - GRADES.index(need_grade))
+    if role == need_role and gap == 0:
+        return 0
+    neighbour = role in ROLE_NEIGHBOURS.get(need_role, set())
+    if (role == need_role and gap == 1) or (neighbour and gap == 0):
+        return 1
+    return 2
+
+
 FSP_FULL_LCB = 0.6     # LCB at which the FSP factor saturates
 # Pending invitations a candidate may hold before the list steps them down. The step is small
 # and capped, so a strong fit is not buried by a busy inbox.
