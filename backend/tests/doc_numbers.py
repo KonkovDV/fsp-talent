@@ -83,7 +83,24 @@ def require(text: str, needle: str, where: str) -> None:
         raise SystemExit(f"{where} не содержит «{needle}»")
 
 
+# These sentences described the product before the profile-discipline weight. The code now uses it.
+STALE_DISCIPLINE = (
+    "Отдельного веса 0,5",
+    "пониженным весом не считается",
+)
+
+
+def forbid_stale_discipline_claims() -> None:
+    paths = [README, *sorted((ROOT / "docs").glob("*.md"))]
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        for phrase in STALE_DISCIPLINE:
+            if phrase in text:
+                raise SystemExit(f"{path.relative_to(ROOT)} содержит устаревшую фразу «{phrase}»")
+
+
 def main() -> None:
+    forbid_stale_discipline_claims()
     count = collected_tests()
     total, services, api = coverage_parts()
     digest, precision = matching_report()
