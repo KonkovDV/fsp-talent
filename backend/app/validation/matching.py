@@ -35,7 +35,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from app.services import matching as matching_service
-from app.services.matching import GRADES, ROLE_NEIGHBOURS, CandidateFacts, NeedSpec, score
+from app.services.matching import GRADES, ROLE_NEIGHBOURS, CandidateFacts, NeedSpec, category_band, score
 from app.services.search.pipeline import order_pool
 from app.services.skills import ROLES, TAXONOMY
 
@@ -204,6 +204,10 @@ def _spec(n: dict) -> NeedSpec:
                     industry=n.get("industry"))
 
 
+# score: the product order. category_first is a measurement only; main() sets it from --order.
+ORDER_MODEL = "score"
+
+
 def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str]:
     cands = dataset["candidates"]
     if method == "random":
@@ -243,9 +247,13 @@ def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str
             cold.add(cid)
     if method == "no_quota":
         return [cid for cid, _ in sorted(scores.items(), key=lambda t: (-t[1], t[0]))]
+    bands = None
+    if ORDER_MODEL == "category_first":
+        bands = {c["id"]: category_band(c["observed"]["role"], c["observed"]["grade"], need["role"], need["grade"])
+                 for c in cands}
     if not matching_service.USE_FIT_TIERS:
-        return order_pool(ids, scores, {}, best, cold)
-    return order_pool(ids, scores, {}, best, cold, tiers=tiers, confirmed=confirmed, fits=fits)
+        return order_pool(ids, scores, {}, best, cold, bands=bands)
+    return order_pool(ids, scores, {}, best, cold, tiers=tiers, confirmed=confirmed, fits=fits, bands=bands)
 
 
 def ndcg(ranked: list[str], labels: dict[str, int], k: int = 10) -> float:
@@ -727,6 +735,8 @@ def main() -> None:
     parser.add_argument("--needs", type=int, default=80)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--seeds", type=int, default=3, help="repeat on this many consecutive seeds (0: skip)")
+    parser.add_argument("--order", choices=("score", "category_first"), default="score",
+                        help="category_first measures a band before the score; it does not change the product")
     parser.add_argument("--export", help="write the generated dataset (with labels) to this JSON file")
     parser.add_argument("--import", dest="imported", help="evaluate a labelled dataset in the same JSON format")
     parser.add_argument("--pairs", help="JSONL of jury pairs: need, candidate, label 0..3")
@@ -743,6 +753,8 @@ def main() -> None:
     parser.add_argument("--overclaim", default="",
                         help="comma-separated shares who declare one grade too high; print the curve and exit")
     args = parser.parse_args()
+    global ORDER_MODEL
+    ORDER_MODEL = args.order
     if args.kappa:
         value = _kappa_from_sheets(args.kappa[0], args.kappa[1])
         print(f"взвешенная каппа {value:.2f} на парах из двух файлов")

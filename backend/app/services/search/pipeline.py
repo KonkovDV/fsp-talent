@@ -48,7 +48,8 @@ logger = logging.getLogger(__name__)
 
 
 def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | None = None,
-               tiers: dict | None = None, confirmed: dict | None = None, fits: dict | None = None) -> list:
+               tiers: dict | None = None, confirmed: dict | None = None, fits: dict | None = None,
+               bands: dict | None = None) -> list:
     """Rank the whole pool, then the caller slices a page. A later page cannot reorder an earlier one.
 
     With tiers, the key is (−tier, −confirmed grade, −score, −fit, id): the fit decides the tier,
@@ -58,7 +59,11 @@ def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | Non
     gives its last seat to the next cold candidate of the same tier, when that candidate's score
     is within 0.08. A cold candidate who already earned a seat stays there.
     """
-    if tiers is None:
+    if bands is not None:
+        # Category first, then the same key as the product order. A later class cannot pass an earlier one.
+        ranked = sorted(ids, key=lambda i: (
+            bands.get(i, 2), -scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
+    elif tiers is None:
         ranked = sorted(ids, key=lambda i: (-scores[i], -fused.get(i, 0.0), -best.get(i, 0.0), str(i)))
     else:
         ranked = sorted(ids, key=lambda i: (
@@ -80,6 +85,8 @@ def order_pool(ids: list, scores: dict, fused: dict, best: dict, cold: set | Non
             if guest not in cold or scores.get(guest, 0.0) < host - band:
                 continue
             if tiers is not None and tiers.get(guest, 0) != tiers.get(out[end - 1], 0):
+                continue
+            if bands is not None and bands.get(guest, 2) != bands.get(out[end - 1], 2):
                 continue
             out[end - 1], out[j] = guest, out[end - 1]
             break
