@@ -56,6 +56,11 @@ const OUTCOME_TEXT: Record<string, string> = {
 }
 const pct = (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`)
 
+function previousGrade(grade: string): string | null {
+  const i = GRADES.indexOf(grade as (typeof GRADES)[number])
+  return i > 0 ? GRADES[i - 1] : null
+}
+
 function useCountdown(item: Item | null) {
   const [left, setLeft] = useState(0)
   useEffect(() => {
@@ -317,6 +322,14 @@ export default function CandidateAssessment() {
                 <div>
                   <p className="section-title">Уровень «{gradeRu(state.target_grade)}» не подтверждён</p>
                   <p className="text-sm text-ink-2">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
+                  {!result.vacancy_test && previousGrade(state.target_grade) && (
+                    <button type="button" className="link mt-2 text-left text-sm" onClick={() => {
+                      levelTouched.current = true
+                      setTarget(previousGrade(state.target_grade)!)
+                      setState(null)
+                      setShowReview(false)
+                    }}>Что дальше: тест на ступень ниже без паузы</button>
+                  )}
                 </div>
               </>
             )}
