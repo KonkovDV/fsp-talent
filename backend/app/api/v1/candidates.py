@@ -44,7 +44,7 @@ from app.services.mail import send_mail
 from app.services.market import quartiles, salary_band
 from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
-from app.services.pdf_profile import extract_pdf_text, profile_lines, render_profile_pdf
+from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
@@ -644,7 +644,7 @@ async def fsp_callback(body: FspCallbackIn, current: dict = Depends(get_current_
 async def upload_resume(file: UploadFile = File(...), current: dict = Depends(get_current_participant)):
     """Read a PDF resume. The file is not stored; only the extracted text is parsed."""
     _pid(current)
-    data = await file.read()
+    data = await file.read(MAX_PDF_BYTES + 1)
     try:
         text = extract_pdf_text(data)
     except ValueError as e:

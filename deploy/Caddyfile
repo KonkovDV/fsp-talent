@@ -14,6 +14,9 @@
 
 	@api path /api/* /health /docs /docs/* /openapi.json
 	handle @api {
+		request_body {
+			max_size 6MB
+		}
 		reverse_proxy backend:8000 {
 			transport http {
 				read_timeout 120s
