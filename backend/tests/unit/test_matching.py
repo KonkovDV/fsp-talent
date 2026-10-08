@@ -21,10 +21,12 @@ from app.validation.matching import (
     load_pairs,
     make_dataset,
     merge_rater_labels,
+    paired_report,
     quadratic_weighted_kappa,
     rank,
     relevance,
     sha256,
+    sign_permutation,
     write_blind_sheet,
 )
 
@@ -506,6 +508,15 @@ def test_missing_fsp_does_not_change_the_fit_tier():
     assert without.fit == with_fsp.fit
     assert without.tier == with_fsp.tier
     assert without.score <= with_fsp.score
+
+
+def test_sign_permutation_is_certain_only_for_a_zero_gap():
+    quiet, _, _, certain = sign_permutation([0.2, -0.2, 0.1, -0.1], seed=1, rounds=300)
+    assert abs(quiet) < 1e-12 and certain == 1.0
+    mean, low, _, rare = sign_permutation([0.04] * 30, seed=2, rounds=400)
+    assert mean == 0.04 and low > 0 and rare < 0.05
+    text = paired_report([1], 40, 6)
+    assert "Δ nDCG@10" in text and "нуль релевантных" in text
 
 
 def test_compare_keeps_four_cards():

@@ -342,6 +342,107 @@ def below_need_share(ranked: list[str], need: dict, by_id: dict[str, dict], k: i
     return sum(1 for cid in top if GRADES.index(by_id[cid]["truth"]["grade"]) < need_i) / max(1, len(top))
 
 
+PAIRED = (
+    ("keyword", "по резюме"),
+    ("no_test", "без теста"),
+    ("no_fsp", "без оси ФСП"),
+    ("no_evidence", "без доказательств"),
+)
+
+
+def sign_permutation(deltas: list[float], seed: int = 11, rounds: int = 10000) -> tuple[float, float, float, float]:
+    """Mean difference, its 95 % bootstrap interval, and the two-sided sign-flip p-value."""
+    if not deltas:
+        return (float("nan"), float("nan"), float("nan"), float("nan"))
+    mean = statistics.mean(deltas)
+    rng = random.Random(seed)
+    n = len(deltas)
+    boot = sorted(statistics.mean(rng.choices(deltas, k=n)) for _ in range(rounds))
+    low = boot[int(0.025 * rounds)]
+    high = boot[int(0.975 * rounds) - 1]
+    observed = abs(mean)
+    hits = sum(
+        abs(statistics.mean(delta if rng.randrange(2) else -delta for delta in deltas)) >= observed
+        for _ in range(rounds)
+    )
+    return mean, low, high, hits / rounds
+
+
+def _relevant(labels: dict[str, int]) -> int:
+    return sum(1 for value in labels.values() if value >= 2)
+
+
+def _at_k(ranked: list[str], labels: dict[str, int], k: int) -> float:
+    if k <= 0:
+        return 0.0
+    return sum(1 for cid in ranked[:k] if labels.get(cid, 0) >= 2) / k
+
+
+def paired_curves(dataset: dict) -> dict:
+    """Per-need nDCG and within-category Spearman for the full model and the four comparisons.
+
+    Needs with no relevant candidate stay out of the means. Their count is reported on its own.
+    """
+    rng = random.Random(0)
+    labelled = [n for n in dataset["needs"] if _relevant(dataset["labels"][n["id"]]) > 0]
+    by_id = {c["id"]: c for c in dataset["candidates"]}
+    methods = ("full", *(key for key, _ in PAIRED))
+    ndcg_by = {method: [] for method in methods}
+    rho_by = {method: [] for method in methods}
+    capped: list[float] = []
+    r_precision: list[float] = []
+    for need in labelled:
+        labels = dataset["labels"][need["id"]]
+        relevant = _relevant(labels)
+        for method in methods:
+            ranked = rank(dataset, need, method, rng)
+            ndcg_by[method].append(ndcg(ranked, labels))
+            rho = category_spearman(ranked, need, by_id)
+            if rho is not None:
+                rho_by[method].append(rho)
+            if method == "full":
+                capped.append(_at_k(ranked, labels, min(10, relevant)))
+                r_precision.append(_at_k(ranked, labels, relevant))
+    zeros = len(dataset["needs"]) - len(labelled)
+    return {
+        "ndcg": ndcg_by, "rho": rho_by, "zeros": zeros, "needs": len(dataset["needs"]),
+        "p_capped": statistics.mean(capped) if capped else float("nan"),
+        "r_precision": statistics.mean(r_precision) if r_precision else float("nan"),
+    }
+
+
+def paired_report(seeds: list[int], n_candidates: int, n_needs: int) -> str:
+    """Full model minus each comparison, on the public seeds. The relevance label is not changed."""
+    lines = [
+        "Парное сравнение: полная модель минус строка, по потребностям. "
+        "95 % ДИ — бутстреп среднего, 10 000 повторов. p — доля перестановок знака с не меньшим модулем.",
+        "",
+        "| Зерно | Сравнение | Δ nDCG@10 | 95 % ДИ | p | Δ Спирмен |",
+        "|---|---|---|---|---|---|",
+    ]
+    for seed in seeds:
+        curves = paired_curves(make_dataset(n_candidates, n_needs, seed))
+        for key, title in PAIRED:
+            delta = [a - b for a, b in zip(curves["ndcg"]["full"], curves["ndcg"][key], strict=True)]
+            mean, low, high, p_value = sign_permutation(delta, seed=seed)
+            full_rho = curves["rho"]["full"]
+            other_rho = curves["rho"][key]
+            if full_rho and len(full_rho) == len(other_rho):
+                rho_delta = statistics.mean(a - b for a, b in zip(full_rho, other_rho, strict=True))
+                rho_cell = f"{rho_delta:+.4f}"
+            else:
+                rho_cell = "—"
+            lines.append(
+                f"| {seed} | {title} | {mean:+.4f} | {low:+.4f}…{high:+.4f} | {p_value:.4f} | {rho_cell} |"
+            )
+        lines.append(
+            f"| {seed} | нуль релевантных | {curves['zeros']} из {curves['needs']} | "
+            f"P@min(10, R) {curves['p_capped']:.3f} | R-precision {curves['r_precision']:.3f} | |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tuple[float, float]:
     """95 % percentile interval of the mean, resampling needs with replacement."""
     if not values:
@@ -811,6 +912,10 @@ def main() -> None:
             table, _ = seeds_table([args.seed + i for i in range(args.seeds)], args.candidates, args.needs)
             print()
             print(table)
+        seed_list = [args.seed + i for i in range(args.seeds)] if args.seeds else [args.seed]
+        if seed_list and not args.imported:
+            print()
+            print(paired_report(seed_list, args.candidates, args.needs))
     print("sha256", sha256(dataset))
     if args.check:
         failed = checks_ok(rows, synthetic)
