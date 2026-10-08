@@ -255,7 +255,7 @@ flowchart LR
 | [docs/SOLUTION.md](docs/SOLUTION.md) | Сопроводительная документация по разделу 3.4 ТЗ: архитектура, механики, валидация, интеграция, API, библиотеки |
 | [docs/FSP_Talent_documentation.pdf](docs/FSP_Talent_documentation.pdf) | Вся документация одним PDF (п. 5.2 ТЗ) |
 | [docs/INSTALL.md](docs/INSTALL.md) | Сборка, развёртывание и локальный запуск, частые проблемы, сценарий на три минуты |
-| [docs/pitch.pdf](docs/pitch.pdf) | Десять слайдов для жюри со скриншотами, у каждой цифры команда. Те же слайды — [pitch.pptx](docs/pitch.pptx), собираются `node docs/tools/build_pitch.mjs` и `python3 docs/tools/build_pdf.py --pitch` |
+| [docs/pitch.pdf](docs/pitch.pdf) | Презентация для жюри: обязательные слайды шаблона ЛЦТ и слайды решения, у каждой цифры команда. Файл [pitch.pptx](docs/pitch.pptx) собирают `node docs/tools/build_pitch.mjs` и `python3 docs/tools/build_pitch_template.py`, PDF сохраняется из PowerPoint |
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Каждое требование ТЗ и ответы постановщика на Q&A: где увидеть и где в коде |
 | [docs/VALIDATION_ASSESSMENT.md](docs/VALIDATION_ASSESSMENT.md) | Проверка теста на грейд |
 | [docs/VALIDATION_MATCHING.md](docs/VALIDATION_MATCHING.md) | Проверка подбора |

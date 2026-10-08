@@ -33,5 +33,6 @@ sbom.cdx.json
 deploy/backups/
 dump.rdb
 docs/tools/node_modules/
+docs/assets/pitch-slides/
 frontend/test-results/
 frontend/playwright-report/
