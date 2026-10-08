@@ -104,8 +104,9 @@ def calibrate_discrimination(rows: list[tuple[float, float, float, bool]], a0: f
                              prior_sd: float = 0.35) -> float:
     """MAP of item discrimination on the log scale. rows: (theta, b, c, correct).
 
-    The ability in each row is the leave-family-out posterior, which is the E-step. This Newton
-    step is the M-step of MML-EM with a normal prior on log a around log(a0).
+    Each row plugs in a point estimate of ability (leave-family-out θ̂), not a posterior
+    over θ. This is a Newton step on that fixed θ̂, with a normal prior on log a around
+    log(a0). It is not an M-step of marginal maximum likelihood.
     """
     from app.services.cat import p3
 

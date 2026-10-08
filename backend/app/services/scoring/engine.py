@@ -24,7 +24,8 @@ Per discipline (empirical-Bayes shrinkage to the population prior):
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
   lcb   = mu - sigma                               ranking key (conservative)
 
-A plain participation scores 0, so it never lifts the mean. Team results reduce evidence
+A plain participation scores 0. It does not lift the mean, and because a zero still
+enters the count it can lower the lower bound. Team results reduce evidence
 weight (wider sigma) instead of lowering the level; the team contribution is not separated (Q&A).
 The score composition is unchanged in v3.2.0. The rank is not computed here: it is a registry fact
 (discipline, rank, assignment date, order number) stored beside the score and it still does not enter it.
