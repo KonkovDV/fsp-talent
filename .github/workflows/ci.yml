@@ -75,6 +75,8 @@ jobs:
           cd backend
           pytest tests/unit/ -q --cov=app --cov-report=xml --cov-report=json --cov-fail-under=65
           python tests/coverage_lines.py
+      - name: Published numbers match the run
+        run: cd backend && python tests/doc_numbers.py
       - name: Dependency audit
         # Tokens are signed with PyJWT; nothing is ignored. pip itself is upgraded first.
         run: |
