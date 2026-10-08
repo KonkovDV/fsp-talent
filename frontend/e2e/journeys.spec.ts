@@ -239,6 +239,107 @@ async function passTrial(page: Page) {
   await expect(page.getByText('не подтверждается').first()).toBeVisible()
 }
 
+async function registerCandidate(page: Page, email: string, name: string) {
+  await page.goto('/register')
+  await page.locator('#display_name').fill(name)
+  await page.locator('#email').fill(email)
+  await page.locator('#password').fill(PASSWORD)
+  await page.getByRole('checkbox', { name: /Мне исполнилось 18 лет/ }).check()
+  for (const box of await page.getByTestId(/consent-/).all()) await box.check()
+  await page.getByRole('button', { name: 'Получить код на email' }).click()
+  await expect(page.getByRole('heading', { name: 'Подтвердите email' })).toBeVisible()
+  await page.getByLabel('Код из письма').fill(await confirmationCode(email))
+  await page.getByRole('button', { name: 'Подтвердить' }).click()
+  await expect(page).toHaveURL(/\/candidate/)
+  await page.getByLabel('Специализация').selectOption('backend')
+  await page.getByLabel('Грейд', { exact: true }).selectOption('junior')
+  await page.getByRole('button', { name: 'Сохранить опрос' }).click()
+  await expect(page.getByRole('region', { name: 'Категория' })).toContainText('Backend')
+}
+
+test('кандидат откликается на вакансию, работодатель видит контакты и меняет статус', async ({ page }) => {
+  const email = `e2e-apply-${Date.now()}@demo.talent`
+  const name = 'Пётр Отклик'
+  const vacancy = 'Стажёр backend'
+  await registerCandidate(page, email, name)
+
+  await page.goto('/candidate/vacancies')
+  const card = page.locator('li.card', { has: page.getByRole('heading', { name: vacancy }) })
+  await card.getByRole('button', { name: 'Откликнуться' }).click()
+  await expect(card.getByRole('button', { name: 'Отклик отправлен' })).toBeVisible()
+  await page.reload()
+  const mine = page.locator('section', { has: page.getByRole('heading', { name: 'Мои отклики' }) })
+  await expect(mine).toContainText('отправлен')
+
+  await page.getByRole('button', { name: 'Выйти' }).click()
+  await page.goto('/login?role=employer')
+  await page.locator('#username').fill('hr@sibcode.demo')
+  await page.locator('#password').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page).toHaveURL(/\/employer/)
+  await page.goto('/employer/vacancies')
+  const row = page.getByRole('row', { name: new RegExp(vacancy) }).first()
+  await row.getByRole('button', { name: 'Показать контакты' }).click()
+  await expect(row).toContainText(email)
+  await expect(row).toContainText(name)
+  await row.getByLabel(`Статус отклика ${vacancy}`).selectOption({ label: 'смотрим' })
+
+  await page.getByRole('button', { name: 'Выйти' }).click()
+  await loginCandidate(page, email)
+  await page.goto('/candidate/vacancies')
+  await expect(page.locator('section', { has: page.getByRole('heading', { name: 'Мои отклики' }) })).toContainText('смотрят')
+})
+
+test('вход через ФСП ID показывает результаты, а карточку работодателю — нет', async ({ page }) => {
+  await page.goto('/login')
+  await page.getByTestId('fsp-signin').click()
+  await expect(page).toHaveURL(/\/fsp-id\/authorize/)
+  await page.getByLabel('ФСП ID').fill('FSP2077')
+  await page.getByLabel('Пароль').fill('test')
+  await page.getByRole('button', { name: 'Войти и разрешить' }).click()
+  await expect(page).toHaveURL(/\/auth\/fsp-callback|\/candidate/)
+  const create = page.getByRole('button', { name: 'Создать аккаунт и войти' })
+  const home = page.getByRole('link', { name: 'Результаты ФСП' })
+  await expect(create.or(home)).toBeVisible()
+  if (await create.isVisible()) {
+    for (const box of await page.getByTestId(/consent-/).all()) await box.check()
+    await create.click()
+  }
+  await expect(page).toHaveURL(/\/candidate/)
+  const candidateId = (await session(page))?.userId
+  expect(candidateId).toBeTruthy()
+
+  await page.goto('/candidate/results')
+  await expect(page.getByRole('heading', { name: 'Результаты ФСП' })).toBeVisible()
+  await expect(page.getByText(/робототехника/)).toBeVisible()
+
+  await page.goto('/candidate')
+  await expect(page.getByText('работодатели увидят карточку только после согласия представителя')).toBeVisible()
+  const survey = page.getByLabel('Специализация')
+  if (await survey.isVisible()) {
+    await survey.selectOption('embedded')
+    await page.getByLabel('Грейд', { exact: true }).selectOption('junior')
+    await page.getByRole('button', { name: 'Сохранить опрос' }).click()
+    await expect(page.getByRole('region', { name: 'Категория' })).toBeVisible()
+  }
+  await expect(page.getByText('работодатели увидят карточку только после согласия представителя')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Выйти' }).click()
+  await page.goto('/login?role=employer')
+  // hr@sibcode.demo is already signed in five times in this file. The sixth try in a minute is rejected.
+  await page.locator('#username').fill('hr@robotech.demo')
+  await page.locator('#password').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page).toHaveURL(/\/employer/)
+  const token = (await session(page))?.token
+  const found = await page.request.get('/api/v1/search/candidates?discipline=robotics&has_fsp=true&limit=50', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(found.ok(), await found.text()).toBeTruthy()
+  const body = await found.json() as { total: number; items: { candidate_id: string }[] }
+  expect(body.items.map(item => item.candidate_id)).not.toContain(candidateId)
+})
+
 test('член жюри jury2 проходит пробный тест сразу после jury1', async ({ page }) => {
   await loginCandidate(page, 'jury1@demo.talent')
   await passTrial(page)
