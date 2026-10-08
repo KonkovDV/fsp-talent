@@ -42,6 +42,10 @@ from app.services.skills import ROLES, TAXONOMY
 CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
 TESTABLE = {"Python", "SQL", "JavaScript", "Algorithms", "Networking", "Web Security", "Machine Learning", "C"}
 INDUSTRIES = ("fintech", "ecommerce", "gamedev", "edtech", "govtech", "telecom", "industry", "any")
+# Настройка: тест 101..105, подбор 3001..3005.
+# Отложенные, один прогон после фиксации кода: тест 201..205, подбор 4001..4005.
+# Публичные 7 и 2026..2028 только печатают итог, на них ничего не подбирается.
+HOLDOUT_SEEDS = (4001, 4002, 4003, 4004, 4005)
 
 
 def _pool(role: str) -> list[str]:
@@ -729,12 +733,99 @@ def _print_overclaim(args: argparse.Namespace) -> None:
               f"{full.overrated:.1%} | {resume.overrated:.1%} |")
 
 
+def seed_list(raw: str, start: int) -> list[int]:
+    text = str(raw)
+    if "," in text:
+        return [int(part) for part in text.split(",") if part.strip()]
+    count = int(text)
+    return [start + i for i in range(count)] if count else []
+
+
+def with_fsp_events(dataset: dict, seed: int) -> dict:
+    """Replace the formula LCB with the production engine on fsp_axis.history().
+
+    The random stream is not the one that built the people, so the public dataset without this
+    step keeps its hash.
+    """
+    from app.services.scoring.engine import lcb_star
+    from app.validation.fsp_axis import REF, history
+
+    rng = random.Random(seed + 7919)
+    for person in dataset["candidates"]:
+        events = history(rng, float(person["truth"]["theta"]))
+        if not events:
+            person["observed"]["fsp_lcb"] = None
+        else:
+            person["observed"]["fsp_lcb"] = lcb_star(events, REF)["lcb"]
+    return dataset
+
+
+def _full_curves(dataset: dict) -> tuple[list[float], list[float | None]]:
+    needs = [n for n in dataset["needs"] if any(v >= 2 for v in dataset["labels"][n["id"]].values())]
+    by_id = {c["id"]: c for c in dataset["candidates"]}
+    ndcg_values: list[float] = []
+    rho_values: list[float | None] = []
+    rng = random.Random(0)
+    for need in needs:
+        ranked = rank(dataset, need, "full", rng)
+        ndcg_values.append(ndcg(ranked, dataset["labels"][need["id"]]))
+        rho_values.append(category_spearman(ranked, need, by_id))
+    return ndcg_values, rho_values
+
+
+def _paired_bounds(deltas: list[float], seed: int = 11, rounds: int = 10000) -> tuple[float, float, float]:
+    if not deltas:
+        return float("nan"), float("nan"), float("nan")
+    mean = statistics.mean(deltas)
+    rng = random.Random(seed)
+    n = len(deltas)
+    means = sorted(statistics.mean(rng.choices(deltas, k=n)) for _ in range(rounds))
+    return mean, means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
+
+
+def _print_holdout(seeds: list[int], n_candidates: int, n_needs: int) -> None:
+    """Before/after on holdout seeds. Before is the old average of test and FSP; after only lifts."""
+    print("Отложенные зёрна, LCB из событий движка. Новое минус старое. Порядок «до» — среднее факторов.")
+    print("| Зерно | Δ nDCG@10 | Δ Спирмен в категории |")
+    print("|---|---|---|")
+    nd_all: list[float] = []
+    rho_all: list[float] = []
+    for seed in seeds:
+        dataset = with_fsp_events(make_dataset(n_candidates, n_needs, seed), seed)
+        matching_service.FSP_LIFT = "mean"
+        old_nd, old_rho = _full_curves(dataset)
+        matching_service.FSP_LIFT = "boost"
+        new_nd, new_rho = _full_curves(dataset)
+        nd_delta = [b - a for a, b in zip(old_nd, new_nd, strict=True)]
+        rho_delta = [b - a for a, b, in zip(old_rho, new_rho, strict=True) if a is not None and b is not None]
+        nd_all.extend(nd_delta)
+        rho_all.extend(rho_delta)
+        rho_mean = statistics.mean(rho_delta) if rho_delta else float("nan")
+        print(f"| {seed} | {statistics.mean(nd_delta):+.4f} | {rho_mean:+.4f} |")
+    matching_service.FSP_LIFT = "boost"
+    nd_mean, nd_low, nd_high = _paired_bounds(nd_all)
+    rho_mean = statistics.mean(rho_all) if rho_all else float("nan")
+    print(f"nDCG@10: {nd_mean:+.4f}, 95 % ДИ [{nd_low:+.4f}; {nd_high:+.4f}]")
+    print(f"Спирмен в категории: {rho_mean:+.4f}")
+    nd_ok = nd_low >= -0.005
+    rho_ok = rho_mean >= -0.01
+    print(f"нижняя граница nDCG ≥ −0,005: {'да' if nd_ok else 'нет'}")
+    print(f"Спирмен ≥ −0,01: {'да' if rho_ok else 'нет'}")
+    if not (nd_ok and rho_ok):
+        raise SystemExit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--candidates", type=int, default=800)
     parser.add_argument("--needs", type=int, default=80)
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--seeds", type=int, default=3, help="repeat on this many consecutive seeds (0: skip)")
+    parser.add_argument("--seeds", default="3",
+                        help="how many consecutive seeds, or a comma-separated list")
+    parser.add_argument("--fsp-events", action="store_true",
+                        help="LCB from the scoring engine on contest histories; the public hash is without this")
+    parser.add_argument("--holdout", action="store_true",
+                        help="before/after on the holdout seeds, with contest histories")
     parser.add_argument("--order", choices=("score", "category_first"), default="score",
                         help="category_first measures a band before the score; it does not change the product")
     parser.add_argument("--export", help="write the generated dataset (with labels) to this JSON file")
@@ -778,6 +869,10 @@ def main() -> None:
     if args.overclaim:
         _print_overclaim(args)
         return
+    if args.holdout or (args.fsp_events and "," in str(args.seeds)):
+        seeds = list(HOLDOUT_SEEDS) if args.holdout else seed_list(args.seeds, args.seed)
+        _print_holdout(seeds, args.candidates, args.needs)
+        return
     if args.blind_export:
         dataset = make_dataset(args.candidates, args.needs, args.seed)
         count = write_blind_sheet(dataset, args.blind_export, args.per_need, random.Random(args.seed + 1))
@@ -793,6 +888,8 @@ def main() -> None:
             dataset = json.load(fh)
     else:
         dataset = make_dataset(args.candidates, args.needs, args.seed)
+        if args.fsp_events:
+            dataset = with_fsp_events(dataset, args.seed)
     if args.export:
         with open(args.export, "w", encoding="utf-8") as fh:
             json.dump(dataset, fh, ensure_ascii=False)
@@ -807,8 +904,9 @@ def main() -> None:
         rater_seed = (args.seed or 0) + 1
         print(f"слепая разметка против оракула: каппа Коэна {blind_kappa(dataset, rater_seed):.2f} "
               f"(зерно разметчика {rater_seed}, набор размечен по скрытой правде и это зерно не видит)")
-        if args.seeds and not args.imported:
-            table, _ = seeds_table([args.seed + i for i in range(args.seeds)], args.candidates, args.needs)
+        seeds = seed_list(args.seeds, args.seed)
+        if seeds and not args.imported and not args.fsp_events:
+            table, _ = seeds_table(seeds, args.candidates, args.needs)
             print()
             print(table)
     print("sha256", sha256(dataset))

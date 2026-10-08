@@ -47,6 +47,11 @@ from app.services.cat import (
 )
 from app.services.item_monitor import KeyStats, calibrate_offset, leave_family_out
 
+# Настройка: тест 101..105, подбор 3001..3005.
+# Отложенные, один прогон после фиксации кода: тест 201..205, подбор 4001..4005.
+# Публичные 7 и 2026..2028 только печатают итог, на них ничего не подбирается.
+HOLDOUT_SEEDS = (201, 202, 203, 204, 205)
+
 # Who sits the published exam: every specialization, including data engineering.
 SPECS = ("backend", "fullstack", "frontend", "mobile", "ml", "devops", "security", "embedded", "qa", "analyst", "data")
 MAIN_FAMILY = {"backend": "py_eval", "fullstack": "js_eval", "frontend": "js_eval", "mobile": "js_eval",
