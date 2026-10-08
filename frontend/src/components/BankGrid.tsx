@@ -12,32 +12,43 @@ export default function BankGrid() {
   if (isLoading || !data) return null
   const at = (role: string, grade: string) => data.cells.find(c => c.role === role && c.grade === grade)
   const roles = Object.keys(ROLE_RU).filter(r => data.cells.some(c => c.role === r))
+  const max = Math.max(1, ...data.cells.map(c => (c.hidden ? 0 : c.candidates ?? 0)))
+  // Four steps of the accent; the darkest carries accent-ink text, the rest ink: both ≥ 4.5:1 in either theme.
+  const tone = (n: number) => { const r = n / max; return r > 0.75 ? 0.85 : r > 0.45 ? 0.45 : r > 0.2 ? 0.25 : 0.1 }
   return (
     <section aria-labelledby="bank-title" className="card mt-4">
-      <h2 id="bank-title" className="section-title">Банк кандидатов</h2>
-      <p className="mt-1 text-sm text-ink-2">Сколько людей в поиске по специализации и грейду, в скобках — из них грейд подтверждён тестом. Ячейка открывает поиск с этими фильтрами. Меньше {data.min_cell} человек не показываем.</p>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[34rem] border-collapse text-sm">
+      <div className="card-head">
+        <h2 id="bank-title" className="section-title">Банк кандидатов</h2>
+        <p className="flex items-center gap-1.5 text-2xs text-ink-3" aria-hidden>
+          меньше<span className="flex gap-0.5">{[0.1, 0.25, 0.45, 0.85].map(a => <span key={a} className="h-3 w-4 rounded-sm" style={{ background: `rgb(var(--accent) / ${a})` }} />)}</span>больше
+        </p>
+      </div>
+      <p className="mt-1 max-w-[72ch] text-sm text-ink-2">Сколько людей в поиске по специализации и грейду, в скобках — из них грейд подтверждён тестом. Ячейка открывает поиск с этими фильтрами. Меньше {data.min_cell} человек не показываем.</p>
+      <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Банк кандидатов по специализациям и грейдам">
+        <table className="w-full min-w-[36rem] table-fixed border-separate border-spacing-1 text-sm">
           <thead>
             <tr>
-              <th scope="col" className="py-2 pr-3 text-left font-medium text-ink-2">Специализация</th>
-              {GRADES.map(g => <th key={g} scope="col" className="px-2 py-2 text-left font-medium text-ink-2">{gradeRu(g)}</th>)}
+              <th scope="col" className="w-[30%] pb-1 pr-3 text-left text-xs font-medium text-ink-3">Специализация</th>
+              {GRADES.map(g => <th key={g} scope="col" className="pb-1 text-center text-xs font-medium text-ink-3">{gradeRu(g)}</th>)}
             </tr>
           </thead>
           <tbody>
             {roles.map(role => (
-              <tr key={role} className="border-t border-line">
-                <th scope="row" className="py-1.5 pr-3 text-left font-normal text-ink">{ROLE_RU[role]}</th>
+              <tr key={role}>
+                <th scope="row" className="truncate pr-3 text-left font-medium text-ink">{ROLE_RU[role]}</th>
                 {GRADES.map(grade => {
                   const c = at(role, grade)
+                  const a = c && !c.hidden ? tone(c.candidates ?? 0) : 0
                   return (
-                    <td key={grade} className="px-1 py-1">
-                      {!c ? <span className="px-2 text-ink-3">—</span>
-                        : c.hidden ? <span className="px-2 text-ink-3" title={`Меньше ${data.min_cell} человек`}>&lt; {data.min_cell}</span>
+                    <td key={grade} className="h-11 p-0">
+                      {!c ? <span className="flex h-full items-center justify-center rounded-md bg-sunken text-ink-3">—</span>
+                        : c.hidden ? <span className="flex h-full items-center justify-center rounded-md bg-sunken text-xs text-ink-3" title={`Меньше ${data.min_cell} человек`}>&lt; {data.min_cell}</span>
                           : (
-                            <Link to={`/employer/search?role=${role}&grade=${grade}`} className="num inline-flex min-h-6 items-center rounded-md px-2 py-1 text-accent hover:bg-sunken"
+                            <Link to={`/employer/search?role=${role}&grade=${grade}`}
+                              className={`num flex h-full items-center justify-center gap-1 rounded-md font-display font-bold outline-offset-1 transition-[box-shadow] hover:ring-2 hover:ring-accent ${a > 0.8 ? 'text-accent-ink' : 'text-ink'}`}
+                              style={{ background: `rgb(var(--accent) / ${a})` }}
                               aria-label={`${ROLE_RU[role]}, ${gradeRu(grade)}: ${c.candidates} в поиске, ${c.tested} с тестом`}>
-                              {c.candidates}<span className="ml-1 text-ink-3">({c.tested})</span>
+                              {c.candidates}<span className="font-sans text-xs font-normal">({c.tested})</span>
                             </Link>
                           )}
                     </td>

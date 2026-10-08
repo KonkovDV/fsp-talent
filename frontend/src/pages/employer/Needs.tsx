@@ -9,7 +9,7 @@ import CandidateCard, { type CandidateCardData } from '../../components/Candidat
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
-import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
+import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 import { ROLE_RU, gradeRu } from '../../labels'
 
 interface NeedParams {
@@ -162,7 +162,7 @@ export default function EmployerNeeds() {
               {needs.map(n => (
                 <li key={n.id}>
                   <button type="button" aria-current={n.id === selected ? 'true' : undefined} onClick={() => { setSelected(n.id); setTab('matches') }}
-                    className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${n.id === selected ? 'bg-panel ring-1 ring-line-strong' : 'hover:bg-panel'}`}>
+                    className={`relative w-full rounded-lg px-3.5 py-2.5 text-left transition-colors ${n.id === selected ? 'bg-panel shadow-xs ring-1 ring-line-strong before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-accent' : 'hover:bg-panel/70'}`}>
                     <span className="block text-sm font-medium text-ink">{n.title}</span>
                     <span className="mt-0.5 block text-xs text-ink-3">версия {n.version}, в шорт-листе {n.shortlist_count}</span>
                   </button>
@@ -209,7 +209,7 @@ export default function EmployerNeeds() {
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {matches.data.recommended_categories.map((c: { role: string; grade: string; candidates: number; best: number }) => (
                       <li key={`${c.role}-${c.grade}`}>
-                        <Link to={`/employer/search?role=${c.role}&grade=${c.grade}`} className="inline-block rounded-md bg-panel px-3 py-1.5 ring-1 ring-line hover:ring-accent">
+                        <Link to={`/employer/search?role=${c.role}&grade=${c.grade}`} className="inline-flex min-h-9 items-center gap-1 rounded-md bg-panel px-3 py-1.5 shadow-xs ring-1 ring-line-strong/70 transition-shadow hover:ring-accent">
                           <span className="font-medium text-accent">{ROLE_RU[c.role] ?? c.role}, {gradeRu(c.grade)}</span>
                           <span className="text-ink-3"> — {c.candidates} канд., лучшее совпадение {Math.round(c.best * 100)}</span>
                         </Link>
@@ -219,10 +219,10 @@ export default function EmployerNeeds() {
                 </div>
               )}
 
-              <div className="mt-6 flex gap-6 border-b border-line" role="tablist">
+              <div className="tabs mt-6" role="tablist" aria-label="Разделы потребности">
                 {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`], ['exam', 'Как проверим']] as const).map(([key, title]) => (
                   <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
-                    className={`-mb-px border-b-2 pb-3 text-sm ${tab === key ? 'border-accent font-semibold text-ink' : 'border-transparent text-ink-2 hover:text-ink'}`}>{title}</button>
+                    className="tab">{title}</button>
                 ))}
               </div>
               {sent && <p className="notice-ok mt-4" role="status">Приглашение отправлено.</p>}
@@ -244,22 +244,27 @@ export default function EmployerNeeds() {
                     <div className="card">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <p className="text-sm text-ink-2">В сравнении {picked.length} из 4{picked.length < 2 ? ': отметьте ещё одного кандидата' : ''}. Имя и контакты в сравнение не попадают.</p>
-                        <button type="button" onClick={() => setPicked([])} className="text-xs text-accent hover:underline">Очистить</button>
+                        <button type="button" onClick={() => setPicked([])} className="btn-ghost btn-sm text-accent">Очистить</button>
                       </div>
                       {compared.data && compared.data.items.length >= 2 && (
-                        <div className="mt-3 overflow-x-auto">
+                        <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="Сравнение кандидатов">
                           <table className="protocol">
-                            <thead><tr><th>Фактор</th>{compared.data.items.map(c => <th key={c.candidate_id}>{ROLE_RU[c.role] ?? c.role} {c.grade}</th>)}</tr></thead>
+                            <thead><tr><th>Фактор</th>{compared.data.items.map(c => <th key={c.candidate_id}>{ROLE_RU[c.role] ?? c.role}, {gradeRu(c.grade)}</th>)}</tr></thead>
                             <tbody>
-                              <tr><td>Совпадение</td>{compared.data.items.map(c => <td key={c.candidate_id} className="num">{Math.round((c.score ?? 0) * 100)}</td>)}</tr>
+                              <tr><td className="font-medium text-ink">Совпадение</td>{compared.data.items.map(c => <td key={c.candidate_id} className="num font-display text-lg font-bold text-ink">{Math.round((c.score ?? 0) * 100)}</td>)}</tr>
                               {(compared.data.items[0]?.factors ?? []).map(f => {
                                 const values = compared.data!.items.map(c => c.factors.find(x => x.key === f.key)?.value ?? null)
                                 const known = values.filter((v): v is number => v != null)
                                 const best = known.length > 1 && new Set(known).size > 1 ? Math.max(...known) : null
                                 return (
                                   <tr key={f.key}><td>{f.label}</td>{values.map((v, i) => (
-                                    <td key={compared.data!.items[i].candidate_id} className={`num ${v != null && v === best ? 'font-semibold text-accent' : ''}`}>
-                                      {v == null ? '—' : Math.round(v * 100)}
+                                    <td key={compared.data!.items[i].candidate_id} className={`num min-w-[7rem] ${v != null && v === best ? 'font-semibold text-accent' : 'text-ink-2'}`}>
+                                      {v == null ? <span className="text-ink-3">не учитывается</span> : (
+                                        <span className="flex items-center gap-2">
+                                          <span className="w-7 shrink-0 text-right">{Math.round(v * 100)}</span>
+                                          <span className="meter w-full max-w-[6rem]" aria-hidden><span style={{ width: `${Math.round(v * 100)}%` }} className={v === best ? '' : '!bg-ink-3'} /></span>
+                                        </span>
+                                      )}
                                     </td>
                                   ))}</tr>
                                 )
@@ -296,15 +301,15 @@ export default function EmployerNeeds() {
                     <p className="mb-4 text-sm text-ink-2">Отобрано {shortlist.data.funnel.shortlisted}, приглашено {shortlist.data.funnel.invited}, отказ {shortlist.data.funnel.rejected}.</p>
                   )}
                   {shortItems.length === 0 ? <Empty title="Шорт-лист пуст">Отмечайте кандидатов звёздочкой в подборке.</Empty> : (
-                    <div className="card overflow-x-auto p-0">
+                    <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Шорт-лист">
                       <table className="protocol">
                         <thead><tr><th>Категория</th><th className="text-right">Совпадение</th><th>Выбран по версии</th><th>Добавлен</th><th /></tr></thead>
                         <tbody>
                           {shortItems.map((r: { candidate_id: string; role: string; grade: string; score: number; picked_on_version: number; added_at: string }) => (
                             <tr key={r.candidate_id}>
-                              <td className="text-ink">{ROLE_RU[r.role] ?? r.role} {r.grade}</td>
+                              <td><CategoryPlate role={r.role} grade={r.grade} /></td>
                               <td className="num text-right font-semibold text-ink">{Math.round((r.score ?? 0) * 100)}</td>
-                              <td className="text-ink-2">v{r.picked_on_version}{r.picked_on_version !== current.version && ' (до изменения)'}</td>
+                              <td className="text-ink-2">версия {r.picked_on_version}{r.picked_on_version !== current.version && ' (до изменения)'}</td>
                               <td className="num text-ink-2">{date(r.added_at)}</td>
                               <td className="text-right"><button onClick={() => setOfferFor(r.candidate_id)} className="btn-invite-quiet btn-sm">Пригласить</button></td>
                             </tr>

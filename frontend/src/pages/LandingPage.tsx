@@ -87,8 +87,8 @@ function Showcase() {
                 const r = n / max
                 const level = n === 0 ? 0 : r > 0.75 ? 0.85 : r > 0.45 ? 0.45 : r > 0.25 ? 0.25 : 0.1
                 return (
-                  <td key={k} className={`h-9 rounded-md text-center font-display font-bold tabular-nums ${focus ? 'ring-2 ring-invite ring-offset-1 ring-offset-panel' : ''} ${level > 0.8 ? 'text-white' : 'text-ink'}`}
-                    style={{ background: n === 0 ? 'rgb(var(--sunken))' : `rgb(64 47 255 / ${level.toFixed(2)})` }}>
+                  <td key={k} className={`h-9 rounded-md text-center font-display font-bold tabular-nums ${focus ? 'ring-2 ring-invite ring-offset-1 ring-offset-panel' : ''} ${level > 0.8 ? 'text-accent-ink' : 'text-ink'}`}
+                    style={{ background: n === 0 ? 'rgb(var(--sunken))' : `rgb(var(--accent) / ${level.toFixed(2)})` }}>
                     {n === 0 ? <span className="font-sans font-normal text-ink-3">—</span> : n}
                   </td>
                 )

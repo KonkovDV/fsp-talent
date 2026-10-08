@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { apiError, getMyEmployerOffers, listNeeds, vacancyApplications } from '../../api/client'
+import BankGrid from '../../components/BankGrid'
 import { PageHeader, plural } from '../../components/ui'
 
 interface Need { id: string; title: string; version: number; shortlist_count: number }
@@ -64,17 +65,18 @@ export default function EmployerDashboard() {
       <div className="grid gap-4 md:grid-cols-3">
         {tiles.map(t => (
           <Link key={t.label} to={t.to} className="card-hover flex flex-col">
-            <span className="font-display text-4xl font-bold tabular-nums text-ink">{t.n}</span>
+            <span className="font-display text-4xl font-bold tracking-[-0.03em] tabular-nums text-ink">{t.n}</span>
             <span className="mt-1 font-medium text-ink">{t.label}</span>
             <span className="mt-2 flex-1 text-sm text-ink-2">{t.hint}</span>
             <span className="mt-4 text-sm font-medium text-accent">{t.cta}</span>
           </Link>
         ))}
       </div>
+      <BankGrid />
       {needs.length > 0 && (
         <section className="mt-10">
           <h2 className="section-title">Потребности</h2>
-          <ul className="mt-4 divide-y divide-line rounded-lg border border-line bg-panel">
+          <ul className="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line-strong/70 bg-panel shadow-xs dark:border-line">
             {needs.slice(0, 5).map(n => (
               <li key={n.id}><Link to="/employer/needs" className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-sunken/60">
                 <span className="text-ink">{n.title}</span><span className="text-sm text-ink-3">версия {n.version}, в шорт-листе {n.shortlist_count}</span>
