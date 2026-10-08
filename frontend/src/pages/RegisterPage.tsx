@@ -8,18 +8,19 @@ import { apiError, apiErrorCode, legalDocuments, registerEmployer, registerParti
 import { ConsentChecklist, requiredKinds } from '../components/LegalConsents'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
 import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
+import { passwordRule } from '../passwordRule'
 
 const participantSchema = z.object({
   display_name: z.string().min(2, 'Как к вам обращаться'),
   email: z.string().email('Проверьте email'),
-  password: z.string().min(8, 'Минимум 8 символов'),
+  password: passwordRule,
   is_adult: z.boolean(),
   age_15_17: z.boolean(),
 }).refine(v => v.is_adult || v.age_15_17, { message: 'Регистрация открыта с 15 лет', path: ['age_15_17'] })
 const employerSchema = z.object({
   company_name: z.string().min(2, 'Название компании'),
   email: z.string().email('Проверьте email'),
-  password: z.string().min(8, 'Минимум 8 символов'),
+  password: passwordRule,
   inn: z.string().regex(/^(\d{10}|\d{12})?$/, '10 или 12 цифр').optional(),
   website: z.string().optional(),
 })
@@ -79,7 +80,7 @@ export default function RegisterPage() {
             {err(pf.formState.errors.email?.message)}</div>
           <div><label className="field-label" htmlFor="password">Пароль</label>
             <input id="password" {...pf.register('password')} type="password" className="input" autoComplete="new-password" />
-            <p className="field-hint">Не короче 8 символов.</p>
+            <p className="field-hint">Не короче 8 символов, не длиннее 72 байт (кириллица: до 36 букв).</p>
             {err(pf.formState.errors.password?.message)}</div>
           <label className="flex items-start gap-2.5 text-sm text-ink">
             <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...pf.register('is_adult')} />
@@ -112,7 +113,7 @@ export default function RegisterPage() {
             {err(ef.formState.errors.email?.message)}</div>
           <div><label className="field-label" htmlFor="password">Пароль</label>
             <input id="password" {...ef.register('password')} type="password" className="input" autoComplete="new-password" />
-            <p className="field-hint">Не короче 8 символов.</p>
+            <p className="field-hint">Не короче 8 символов, не длиннее 72 байт (кириллица: до 36 букв).</p>
             {err(ef.formState.errors.password?.message)}</div>
           <div><label className="field-label" htmlFor="inn">ИНН, если есть</label>
             <input id="inn" {...ef.register('inn')} inputMode="numeric" className="input" />

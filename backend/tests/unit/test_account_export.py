@@ -27,11 +27,15 @@ def test_a_candidate_file_has_the_profile_and_not_the_password():
         email="a@b.c", display_name="Аня", region=None, phone=None, telegram=None, fsp_id=None,
         specialization="backend", declared_grade="middle", assessed_grade="middle", experience_years=3,
         salary_from_gross=200_000, salary_to_gross=240_000, is_visible=True, job_search="open",
+        birth_date=None, is_minor=False, minor_consent_given=False, guardian_email=None,
+        guardian_consent_at=None, public_profile=False, minor_now=lambda: False,
         password_hash="secret",
     )
     record = participant_record(person, [], None, [], [])
     assert record["email"] == "a@b.c"
     assert record["salary_from"] == 200_000
+    assert record["birth_date"] is None
+    assert record["is_minor"] is False
     assert "password_hash" not in record
 
 

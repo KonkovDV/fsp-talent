@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiError, forgotPassword, resetPassword, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import AuthShell from '../components/AuthShell'
+import { passwordRule } from '../passwordRule'
 
 export default function ForgotPasswordPage() {
   const [params] = useSearchParams()
@@ -46,8 +47,8 @@ export default function ForgotPasswordPage() {
               aria-label="Код из письма" className="input font-display tracking-[0.3em]" /></div>
           <div><label className="field-label" htmlFor="np">Новый пароль</label>
             <input id="np" value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete="new-password"
-              aria-label="Новый пароль" className="input" /><p className="field-hint">Не короче 8 символов.</p></div>
-          <button disabled={busy || code.length !== 6 || password.length < 8} className="btn-primary w-full py-3">Сменить пароль</button>
+              aria-label="Новый пароль" className="input" /><p className="field-hint">Не короче 8 символов, не длиннее 72 байт (кириллица: до 36 букв).</p></div>
+          <button disabled={busy || code.length !== 6 || !passwordRule.safeParse(password).success} className="btn-primary w-full py-3">Сменить пароль</button>
         </form>
       )}
       {error && <p className="notice-error mt-4" role="alert">{error}</p>}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { apiError, apiErrorCode, changePassword, downloadMyData } from '../api/client'
 import { useAuthStore } from '../store/authStore'
+import { passwordRule } from '../passwordRule'
 
 /** Download this account's own data, and replace the password without leaving the cabinet. */
 export default function AccountSecurity() {
@@ -49,7 +50,7 @@ export default function AccountSecurity() {
   })
 
   const mismatch = next !== '' && again !== '' && next !== again
-  const ready = current.length > 0 && next.length >= 8 && next === again && next !== current
+  const ready = current.length > 0 && passwordRule.safeParse(next).success && next === again && next !== current
 
   return (
     <section className="card space-y-4" aria-labelledby="account-security-title">
@@ -65,7 +66,7 @@ export default function AccountSecurity() {
         </div>
         <div>
           <label className="field-label" htmlFor="pw-next">Новый пароль</label>
-          <input id="pw-next" type="password" autoComplete="new-password" className="input" value={next} onChange={e => setNext(e.target.value)} minLength={8} />
+          <input id="pw-next" type="password" autoComplete="new-password" className="input" value={next} onChange={e => setNext(e.target.value)} />
         </div>
         <div>
           <label className="field-label" htmlFor="pw-again">Новый пароль ещё раз</label>
