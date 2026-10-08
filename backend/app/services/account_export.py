@@ -23,7 +23,8 @@ def without_secrets(value):
     return value
 
 
-def participant_record(person, skills, category, consents, offers) -> dict:
+def participant_record(person, skills, category, consents, offers,
+                      results=(), applications=(), tasks=(), access=()) -> dict:
     return {
         "kind": "participant",
         "email": person.email,
@@ -48,10 +49,14 @@ def participant_record(person, skills, category, consents, offers) -> dict:
         "skills": [{"name": skill.name, "trust_level": skill.trust_level} for skill in skills],
         "consents": [_consent(row) for row in consents],
         "offers": [_candidate_offer(offer) for offer in offers],
+        "results": [_result(row) for row in results],
+        "applications": [_application(row) for row in applications],
+        "tasks": [_task(row) for row in tasks],
+        "access": [_access(row) for row in access],
     }
 
 
-def employer_record(company, consents, vacancies, offers) -> dict:
+def employer_record(company, consents, vacancies, offers, names_ok: dict | None = None) -> dict:
     return {
         "kind": "employer",
         "email": company.email,
@@ -70,7 +75,7 @@ def employer_record(company, consents, vacancies, offers) -> dict:
             "salary_to": vacancy.salary_to_gross,
             "is_open": vacancy.is_open,
         } for vacancy in vacancies],
-        "offers": [_employer_offer(offer) for offer in offers],
+        "offers": [_employer_offer(offer, names_ok) for offer in offers],
     }
 
 
@@ -95,8 +100,46 @@ def _candidate_offer(offer) -> dict:
     }
 
 
-def _employer_offer(offer) -> dict:
-    revealed = offer.contacts_revealed_at is not None and offer.contacts_revoked_at is None
+def _result(row) -> dict:
+    return {
+        "event_name": row.event_name,
+        "discipline": row.discipline,
+        "place": row.place,
+        "event_date": row.event_date.isoformat() if row.event_date else None,
+    }
+
+
+def _application(row) -> dict:
+    vacancy = row.vacancy
+    return {
+        "vacancy": vacancy.title if vacancy is not None else None,
+        "status": row.status,
+        "created_at": _iso(row.created_at),
+    }
+
+
+def _task(row) -> dict:
+    task = row.task
+    return {
+        "title": task.title if task is not None else None,
+        "status": row.status,
+        "passed": row.passed,
+        "submitted_at": _iso(row.submitted_at),
+    }
+
+
+def _access(row) -> dict:
+    company = row.employer.company_name if row.employer is not None else None
+    return {
+        "company": company,
+        "access_type": row.access_type,
+        "at": _iso(row.timestamp),
+    }
+
+
+def _employer_offer(offer, names_ok: dict | None) -> dict:
+    allowed = True if names_ok is None else bool(names_ok.get(getattr(offer, "candidate_id", None)))
+    revealed = offer.contacts_revealed_at is not None and offer.contacts_revoked_at is None and allowed
     name = None
     if revealed and offer.candidate is not None:
         name = offer.candidate.display_name
