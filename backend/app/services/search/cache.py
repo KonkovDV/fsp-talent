@@ -75,6 +75,17 @@ async def bump_bank_epoch() -> None:
         return
 
 
+async def publish_grade(trial: bool) -> None:
+    """A finished exam changes the card. A trial does not."""
+    if not trial:
+        await bump_bank_epoch()
+
+
+async def publish_invite() -> None:
+    """An invitation changes the queue penalty on the card."""
+    await bump_bank_epoch()
+
+
 async def read_ranked(redis, key: str) -> dict | None:
     raw = await redis.get(key)
     if not raw:
