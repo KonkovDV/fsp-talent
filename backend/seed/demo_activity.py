@@ -199,6 +199,36 @@ async def _offers(db, now: datetime) -> int:
     return made
 
 
+async def restore_pending_invites(db) -> int:
+    """Put the seed invitations for the show accounts back to «ожидает».
+
+    An accepted or declined row is reopened. A missing row is created once.
+    """
+    employers = {e.email: e for e in await db.scalars(select(Employer))}
+    restored = 0
+    for fsp_id, email, role, (lo, hi), days in DEMO_INVITES:
+        cand = await db.scalar(select(Participant).where(Participant.fsp_id == fsp_id))
+        employer = employers.get(email)
+        if cand is None or employer is None:
+            continue
+        offer = await db.scalar(select(Offer).where(
+            Offer.employer_id == employer.id, Offer.candidate_id == cand.id, Offer.role == role))
+        if offer is None:
+            created = datetime.now(UTC) - timedelta(days=days, hours=3)
+            db.add(Offer(employer_id=employer.id, candidate_id=cand.id, salary_from_gross=lo,
+                         salary_to_gross=hi, role=role, work_format="hybrid", contact_method=email,
+                         message="Видели ваш протокол ФСП. Расскажем о команде на коротком созвоне.",
+                         status="pending", created_at=created, expires_at=created + timedelta(days=14)))
+        else:
+            offer.status = "pending"
+            offer.contacts_revealed_at = None
+            offer.contacts_revoked_at = None
+            offer.responded_at = None
+            offer.decline_reason = None
+        restored += 1
+    return restored
+
+
 async def _applications(db, now: datetime) -> int:
     vacancies = list(await db.scalars(select(Vacancy).where(Vacancy.is_open.is_(True)).order_by(Vacancy.title)))
     outbox = Outbox()

@@ -29,22 +29,31 @@ def should_pause(distinct_candidates: int, complaints: int, invitations: int) ->
     return lower is not None and lower >= MIN_LCB
 
 
+def complaints_that_count(emails: list[str | None]) -> list[str]:
+    """Drop complaints from demo accounts. On a real stand every complaint counts."""
+    from app.core.demo_guard import is_protected
+
+    return [email for email in emails if email and not is_protected(email)]
+
+
 async def refresh_hold(db, employer_id: uuid.UUID) -> bool:
     """Set the hold if the rule is met. A hold that is already set stays until release."""
-    from app.models import Complaint, Employer, Offer, Vacancy
+    from app.models import Complaint, Employer, Offer, Participant, Vacancy
 
     since = datetime.now(UTC) - timedelta(days=WINDOW_DAYS)
     rows = (await db.execute(
-        select(Complaint.participant_id)
+        select(Participant.email)
+        .select_from(Complaint)
+        .join(Participant, Participant.id == Complaint.participant_id)
         .outerjoin(Offer, Complaint.offer_id == Offer.id)
         .outerjoin(Vacancy, Complaint.vacancy_id == Vacancy.id)
         .where(Complaint.created_at >= since,
                or_(Offer.employer_id == employer_id, Vacancy.employer_id == employer_id))
     )).all()
-    people = {row[0] for row in rows}
+    counted = complaints_that_count([row[0] for row in rows])
     invitations = await db.scalar(select(func.count()).select_from(Offer).where(
         Offer.employer_id == employer_id, Offer.created_at >= since)) or 0
-    if not should_pause(len(people), len(rows), int(invitations)):
+    if not should_pause(len(set(counted)), len(counted), int(invitations)):
         return False
     employer = await db.get(Employer, employer_id)
     if employer is None:

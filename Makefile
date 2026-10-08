@@ -1,5 +1,5 @@
 # Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
-.PHONY: help demo up down reset seed logs test lint check validate evaluate load docs-pdf docs-pitch
+.PHONY: help demo up down reset seed demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
 
 help:
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск)"
@@ -7,6 +7,7 @@ help:
 	@echo "make down      — остановить, данные сохраняются"
 	@echo "make reset     — остановить и удалить данные (база, ключи)"
 	@echo "make seed      — загрузить демо-данные ещё раз (повтор безопасен)"
+	@echo "make demo-reset — вернуть пароли и показ жюри (только при DEMO_MODE)"
 	@echo "make logs      — журнал API"
 	@echo "make test      — юнит-тесты внутри контейнера"
 	@echo "make lint      — проверка стиля Python"
@@ -37,6 +38,9 @@ reset:
 
 seed:
 	docker compose exec -T -u appuser backend python -m seed.generate_seed
+
+demo-reset:
+	docker compose exec -T -u appuser backend python -m seed.reset_demo
 
 logs:
 	docker compose logs -f backend
