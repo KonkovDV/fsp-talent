@@ -207,6 +207,7 @@ async def search_candidates(
     work_goal: str | None = None,
     need: NeedSpec | None = None,
     employer_id: uuid.UUID | None = None,
+    build_cards: bool = True,
 ) -> dict:
     wanted = {n for s in (skills or []) if (n := normalize_skill(s))}
     if q:
@@ -354,6 +355,24 @@ async def search_candidates(
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
+    header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
+              "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint}
+    if not build_cards:
+        # The cache keeps the order and the scores. Cards for one page are built later.
+        items = []
+        for pid in ordered[:limit]:
+            m = matches[pid]
+            items.append({
+                "candidate_id": str(pid),
+                "have": sorted(have.get(pid, ())),
+                "skill_evidence": dict(m.facts.skills) if m.facts else {},
+                "match": {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
+                          "reasons": [{"code": r.code, "text": r.text, "tone": r.tone,
+                                       "source": reason_source(r.code), "points": r.points} for r in m.reasons],
+                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
+                                      for f in m.factors]},
+            })
+        return {**header, "items": items}
     ordered = ordered[offset:offset + limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
     for card in cards:

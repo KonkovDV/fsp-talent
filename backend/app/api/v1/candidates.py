@@ -47,6 +47,7 @@ from app.services.pdf_profile import extract_pdf_text, profile_lines, render_pro
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
+from app.services.search.cache import bump_bank_epoch
 from app.services.search.pipeline import _bucket
 from app.services.skills import (
     SkillDraft,
@@ -320,6 +321,7 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
         _log_privacy(db, p, "is_visible", body.is_visible)
     p.is_visible = body.is_visible
     await db.commit()
+    await bump_bank_epoch()
     return {"is_visible": p.is_visible, "discoverable": p.discoverable}
 
 

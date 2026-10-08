@@ -134,7 +134,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | Ось ФСП, Спирмен со скрытой силой на трёх зёрнах: LCB, среднее место, число строк | 0,707 ± 0,011, 0,681 ± 0,014 и 0,127 ± 0,033 | `python -m app.validation.fsp_axis --seeds 3` |
 | Ферма из 40 онлайн-участий и две победы, LCB | 0,01 и 0,54 | та же |
 | 40 пользователей одновременно: ошибок, p95 поиска | 0, 69 мс | `make load` |
-| Подборка на 10 000 профилях, 2 процесса API, p95 | 1120 мс | `make load-big` |
+| Подборка на 10 000 профилях, 2 процесса API, p95 | 360 мс | `python tests/load_api.py --scenario shortlist --seconds 60 --reuse`, банк 10 000 |
 | Юнит-тесты (в CI, со всеми компиляторами) | 671 | `python -m pytest tests/unit --collect-only -q` |
 | Покрытие приложения, сервисы и API | 66,69 %, 71 % и 41 % | `python -m pytest tests/unit -q --cov=app --cov-report=json --cov-fail-under=65` и `python tests/coverage_lines.py` |
 | Тесты интерфейса | 11 | `npm test` в `frontend/` |
