@@ -326,7 +326,7 @@ def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: s
         state.keys_used.add(it.item_key)
         if it.is_correct is None or it.item_key in blocked or it.excluded:
             continue
-        state.responses.append(cat.Response(it.a, it.b, it.c, bool(it.is_correct)))
+        state.responses.append(cat.Response(it.a, it.b, it.c, bool(it.is_correct), it.family_id))
     return state
 
 
