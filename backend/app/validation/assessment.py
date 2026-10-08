@@ -206,7 +206,8 @@ class CohortReport:
     mean_len: float
     p90_len: float
     stopped_early: float       # share of sessions decided before MAX_ITEMS
-    max_exposure: float        # highest share of sessions that served one item key
+    max_exposure: float        # highest share of sessions that served one item key, over every specialization
+    spec_max_exposure: float   # the same share inside one specialization, the highest of the eleven
     concept_share: float
     exact_grade: float         # earned grade equals the true grade (None counts)
     within_one: float          # earned grade is at most one step from the truth
@@ -274,6 +275,7 @@ def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: f
         p90_len=lengths[int(0.9 * (len(lengths) - 1))],
         stopped_early=sum(s.n < MAX_ITEMS for s in sessions) / n,
         max_exposure=max(exposure.values()) / n,
+        spec_max_exposure=_spec_max(sessions),
         concept_share=concept / sum(lengths),
         exact_grade=exact / n, within_one=within / n, overgrade=over / n,
     ), sessions
@@ -436,6 +438,8 @@ class Report:
     misspec: list[MisspecRow] = field(default_factory=list)
     fixed_form: FixedForm | None = None
     stolen: StolenSessions | None = None
+    spec_rows: list[tuple[str, float, str, int]] = field(default_factory=list)
+    overlap_spec: float = 0.0
 
 
 def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
@@ -525,6 +529,45 @@ def grade_matrix(sessions: list[Session]) -> list[list[int]]:
         col = index[session.earned or "ниже"]
         grid[row][col] += 1
     return grid
+
+
+def _by_spec(sessions: list[Session]) -> dict[str, list[Session]]:
+    grouped: dict[str, list[Session]] = {}
+    for session in sessions:
+        grouped.setdefault(session.spec, []).append(session)
+    return grouped
+
+
+def spec_exposure(sessions: list[Session]) -> list[tuple[str, float, str, int]]:
+    """Max key share inside each specialization: (spec, share, key, people)."""
+    rows = []
+    for spec, group in sorted(_by_spec(sessions).items()):
+        counts = collections.Counter(key for session in group for key in set(session.keys))
+        key, count = counts.most_common(1)[0]
+        rows.append((spec, count / len(group), key, len(group)))
+    return rows
+
+
+def _spec_max(sessions: list[Session]) -> float:
+    rows = spec_exposure(sessions)
+    return max((share for _, share, _, _ in rows), default=0.0)
+
+
+def overlap_within_spec(sessions: list[Session]) -> float:
+    """Mean, over sessions, of how often another session of the same specialization saw the same key."""
+    total = used = 0.0
+    for group in _by_spec(sessions).values():
+        n = len(group)
+        if n < 2:
+            continue
+        freq = collections.Counter(key for session in group for key in set(session.keys))
+        for session in group:
+            keys = set(session.keys)
+            if not keys:
+                continue
+            total += sum(freq[key] - 1 for key in keys) / (len(keys) * (n - 1))
+            used += 1
+    return total / used if used else 0.0
 
 
 def region_exposure(sessions: list[Session], seed: int) -> list[float]:
@@ -867,6 +910,8 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
         rudner_accuracy=rudner_acc, rudner_consistency=rudner_cons, posterior_accuracy=posterior_acc,
         grade_matrix=matrix, overlap=overlap, region_peaks=region_peaks,
         ladder={g: (len(v), statistics.mean(v)) for g, v in ladder.items()},
+        spec_rows=spec_exposure(clean_sessions),
+        overlap_spec=overlap_within_spec(clean_sessions),
         path=study_paths(people, truth, random.Random(seed + 11), offsets) if extras else None,
         misspec=study_misspec(people, truth, offsets, seed) if extras else [],
         fixed_form=fixed_form(seed=seed) if extras else None,
@@ -898,7 +943,8 @@ CORE_CHECKS = {name: fn for name, fn in list(CHECKS.items())[:9]}
 def _row(name: str, r: CohortReport) -> str:
     return (f"| {name} | {r.accuracy:.1%} | {r.accuracy_clear:.1%} | {r.sensitivity:.1%} | "
             f"{r.false_pass:.1%} | {r.false_recommend:.1%} | "
-            f"{r.mean_len:.1f} / {r.p90_len} | {r.stopped_early:.0%} | {r.max_exposure:.0%} | {r.concept_share:.0%} |")
+            f"{r.mean_len:.1f} / {r.p90_len} | {r.stopped_early:.0%} | {r.max_exposure:.0%} | "
+            f"{r.spec_max_exposure:.0%} | {r.concept_share:.0%} |")
 
 
 def _retest_row(name: str, r: Retest) -> str:
@@ -921,6 +967,22 @@ def _region_line(r: Report) -> str:
     )
 
 
+def _spec_lines(r: Report) -> list[str]:
+    if not r.spec_rows:
+        return []
+    lines = [
+        "Экспозиция ключа внутри специализации, сценарий «без утечки». Знаменатель — сессии этой специализации, "
+        f"не все сразу. Перекрытие внутри специализации {r.overlap_spec:.1%}.",
+        "",
+        "| Специализация | Людей | Макс. доля ключа | Ключ |",
+        "|---|---|---|---|",
+    ]
+    for spec, share, key, people in r.spec_rows:
+        lines.append(f"| {spec} | {people} | {share:.0%} | {key} |")
+    lines.append("")
+    return lines
+
+
 def markdown(r: Report, n: int, seed: int) -> str:
     return "\n".join([
         f"Симуляция: {n} кандидатов на сценарий, seed {seed}. Команда: "
@@ -929,13 +991,15 @@ def markdown(r: Report, n: int, seed: int) -> str:
         "",
         "| Сценарий | Точность «сдал/не сдал» | Точность вне ±0,5 от порога | Сдали из тех, кто на уровне | "
         "Ложно сдали | Ложная рекомендация теста выше | "
-        "Заданий: среднее / 90 % | Решено до лимита | Макс. экспозиция ключа | Доля концептуальных |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "Заданий: среднее / 90 % | Решено до лимита | Экспозиция по всем | "
+        "В специализации (макс. по 11) | Доля концептуальных |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
         _row("Без утечки", r.clean),
         _row("Без утечки, все задания с вариантами", r.choices),
         _row("Утечка у 30 %, без мониторинга", r.leak),
         _row("Утечка у 30 %, ключи на карантине", r.monitored),
         "",
+        *_spec_lines(r),
         f"Повторный тест: {r.retest.pairs} кандидатов проходят тест дважды, задания каждый раз новые.",
         "",
         "| Формат | Тот же итог «сдал/не сдал» | Каппа Коэна | То же вне ±0,5 от порога | Тот же грейд | "
