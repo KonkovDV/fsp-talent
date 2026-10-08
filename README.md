@@ -138,7 +138,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | Юнит-тесты (в CI, со всеми компиляторами) | 671 | `python -m pytest tests/unit --collect-only -q` |
 | Покрытие приложения, сервисы и API | 66,69 %, 71 % и 41 % | `python -m pytest tests/unit -q --cov=app --cov-report=json --cov-fail-under=65` и `python tests/coverage_lines.py` |
 | Тесты интерфейса | 11 | `npm test` в `frontend/` |
-| Сквозные сценарии в браузере | 4 | `npx playwright test --list` в `frontend/` |
+| Сквозные сценарии в браузере | 6 | `npx playwright test --list` в `frontend/` |
 
 Методика и полные таблицы: [проверка теста](docs/VALIDATION_ASSESSMENT.md), [проверка подбора](docs/VALIDATION_MATCHING.md), [ось ФСП](docs/FSP_INTEGRATION.md#4-как-результат-становится-доказательством), [нагрузка](docs/LOAD_TEST.md). Жюри может проверить подбор на своей разметке: `python -m app.validation.matching --import pairs.json`.
 
