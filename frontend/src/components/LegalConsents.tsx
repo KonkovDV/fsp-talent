@@ -11,13 +11,13 @@ export function LegalDocModal({ kind, onClose }: { kind: string; onClose: () => 
   })
   return (
     <Modal titleId="legal-title" onClose={onClose}>
-      <div className="flex max-h-[85dvh] w-full flex-col rounded-xl border border-line bg-panel shadow-pop">
+      <div className="flex max-h-[85dvh] w-full flex-col rounded-2xl border border-line bg-panel shadow-pop">
         <div className="flex items-start justify-between gap-4 border-b border-line p-5">
           <div>
             <h2 id="legal-title" className="font-display text-lg font-bold text-ink">{data?.title ?? 'Документ'}</h2>
             {data && <p className="font-mono text-xs text-ink-3">версия {data.version}, SHA-256 {data.sha256.slice(0, 12)}…</p>}
           </div>
-          <button onClick={onClose} aria-label="Закрыть" className="btn-ghost h-8 w-8 p-0"><X size={18} /></button>
+          <button onClick={onClose} aria-label="Закрыть" className="btn-icon"><X size={18} /></button>
         </div>
         <div className="overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-relaxed text-ink">
           {isLoading ? 'Загрузка…' : data?.body_md.replace(/^# .*\n+/, '').replace(/\*\*/g, '')}

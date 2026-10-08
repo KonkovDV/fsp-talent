@@ -87,7 +87,7 @@ test('кандидат проходит регистрацию и пробный
 
   await page.getByLabel('Специализация').selectOption('backend')
   await page.getByLabel('Предметная область').selectOption({ index: 1 })
-  await page.getByLabel('Грейд').selectOption('middle')
+  await page.getByLabel('Грейд', { exact: true }).selectOption('middle')
   await page.getByLabel('Ожидания по зарплате, от').fill('200000')
   await page.getByRole('button', { name: 'Сохранить опрос' }).click()
   await expect(page.getByRole('region', { name: 'Категория' })).toContainText('Backend')
@@ -218,7 +218,7 @@ async function passTrial(page: Page) {
   }
   if (await survey.isVisible() && !(await trial.isVisible())) {
     await survey.selectOption('backend')
-    await page.getByLabel('Грейд').selectOption('junior')
+    await page.getByLabel('Грейд', { exact: true }).selectOption('junior')
     await page.getByRole('button', { name: 'Сохранить опрос' }).click()
   }
   const running = page.getByTestId('assessment-item')

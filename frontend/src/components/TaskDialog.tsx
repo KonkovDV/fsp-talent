@@ -61,7 +61,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
 
   return (
     <Modal titleId="task-title" onClose={onClose} sheet>
-      <form onSubmit={submit} className="w-full animate-rise rounded-t-xl border border-line bg-panel p-6 shadow-pop sm:rounded-xl">
+      <form onSubmit={submit} className="w-full rounded-t-2xl border border-line bg-panel p-6 shadow-pop sm:rounded-2xl sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="task-title" className="font-display text-lg font-bold text-ink">{candidateId ? 'Задание кандидату' : 'Новое задание'}</h2>
@@ -71,7 +71,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
                 : 'Увидят все кандидаты выбранной специализации. Эталон ответа кандидат не видит, пока не ответит.'}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="btn-ghost h-8 w-8 p-0" aria-label="Закрыть"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="btn-icon" aria-label="Закрыть"><X size={18} /></button>
         </div>
         <div className="mt-5 max-h-[62dvh] space-y-4 overflow-y-auto pr-1">
           <div><label className="field-label" htmlFor="t-title">Название</label>

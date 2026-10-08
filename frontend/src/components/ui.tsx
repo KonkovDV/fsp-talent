@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import { ROLE_RU, gradeRu } from '../labels'
 
 export function PageHeader({ title, lead, actions }: { title: string; lead?: ReactNode; actions?: ReactNode }) {
@@ -21,7 +22,7 @@ export function Meter({ value, label, muted, ariaLabel }: { value: number | null
         aria-valuemin={0} aria-valuemax={100} aria-label={label ?? ariaLabel}>
         {value !== null && <span style={{ width: `${pct}%` }} className={muted ? '!bg-ink-3' : ''} />}
       </div>
-      {label && <p className={`mt-1 truncate text-[11px] ${value === null ? 'text-ink-3 line-through' : 'text-ink-3'}`}>{label}</p>}
+      {label && <p className={`mt-1.5 truncate text-[11px] leading-4 ${value === null ? 'text-ink-3 line-through' : 'text-ink-3'}`}>{label}</p>}
     </div>
   )
 }
@@ -31,11 +32,14 @@ export function CategoryPlate({ role, grade, source, size = 'md' }: {
   role: string | null | undefined; grade: string | null | undefined; source?: string | null; size?: 'md' | 'lg'
 }) {
   const confirmed = source === 'assessed'
+  const pad = size === 'lg' ? 'px-3 py-1.5' : 'px-2.5 py-1'
   return (
-    <span className={`inline-flex items-stretch overflow-hidden rounded-md ring-1 ring-inset ${confirmed ? 'ring-accent' : 'ring-line-strong'} ${size === 'lg' ? 'text-base' : 'text-xs'}`}>
-      <span className={`px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-medium text-ink`}>{ROLE_RU[role ?? ''] ?? role ?? 'роль не задана'}</span>
-      <span className={`flex items-center whitespace-nowrap px-2.5 ${size === 'lg' ? 'py-1.5' : 'py-1'} font-display font-bold ${confirmed ? 'bg-accent text-accent-ink' : 'bg-sunken text-ink-2'}`}>
+    <span className={`inline-flex items-stretch overflow-hidden rounded-md bg-panel ring-1 ring-inset ${confirmed ? 'ring-accent' : 'ring-line-strong'} ${size === 'lg' ? 'text-base' : 'text-xs'}`}
+      title={confirmed ? 'Грейд подтверждён тестом' : undefined}>
+      <span className={`${pad} font-medium text-ink`}>{ROLE_RU[role ?? ''] ?? role ?? 'роль не задана'}</span>
+      <span className={`flex items-center gap-1 whitespace-nowrap ${pad} font-display font-bold ${confirmed ? 'bg-accent text-accent-ink' : 'border-l border-dashed border-line-strong bg-sunken text-ink-2'}`}>
         {grade ? gradeRu(grade) : '—'}
+        {confirmed && <Check size={size === 'lg' ? 15 : 12} strokeWidth={3} aria-hidden />}
       </span>
     </span>
   )
@@ -54,10 +58,11 @@ export function RankBadge({ rank }: { rank: string | null | undefined }) {
   return <span className={cls} title="Разряд-эквивалент по результатам ФСП">{rank}</span>
 }
 
-export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
+export function Empty({ title, children, action, icon }: { title: string; children?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
   return (
     <div className="empty">
-      <p className="font-medium text-ink">{title}</p>
+      {icon && <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-full bg-accent-soft text-accent" aria-hidden>{icon}</div>}
+      <p className="font-display text-sm font-bold text-ink">{title}</p>
       {children && <div className="mx-auto mt-1 max-w-prose">{children}</div>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
