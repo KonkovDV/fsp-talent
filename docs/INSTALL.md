@@ -19,6 +19,8 @@
 
 Подходит Linux, macOS (Intel и Apple Silicon) и Windows 10/11 с Docker Desktop на WSL 2. Python и Node.js на машине не нужны: всё собирается внутри контейнеров.
 
+На встрече 6 октября машину проверки описали так: около 32–64 ГБ памяти, порядка 8 ядер, без видеокарты. Нашему стенду хватает обычной машины. После срока сдачи смотрят дату коммитов. Идею решения не меняют, упавший контейнер можно поднять снова.
+
 ## 2. Получить код
 
 ```bash
@@ -47,7 +49,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 `make demo` выполняет те же три шага:
 
 1. Создаёт `.env` из `.env.example`, если файла ещё нет. Править его не нужно. Ключ подписи токенов контейнер сам создаст при первом старте и сохранит в томе `vc_keys`.
-2. Собирает образы, поднимает контейнеры и ждёт, пока контейнеры с проверкой здоровья (база, backend, worker, beat, frontend, Mailpit) станут `healthy`. Миграции базы применяются при старте backend.
+2. Собирает образы, поднимает контейнеры и ждёт, пока база, backend, worker, beat и frontend станут `healthy`. Миграции базы применяются при старте backend.
 3. Загружает демо-данные. Повторный запуск безопасен: уже загруженное не дублируется.
 
 В конце команда печатает адреса и демо-входы.
@@ -62,7 +64,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | http://localhost/health | `{"status":"ok",...}` |
 | http://localhost:8025 | Mailpit: письма с кодами подтверждения и уведомлениями |
 
-Команда `docker compose ps` должна показать девять контейнеров в состоянии `running`. У всех, кроме `redis` и `nginx`, дополнительно стоит `healthy`.
+Команда `docker compose ps` должна показать восемь контейнеров в состоянии `running`: nginx, frontend, backend, worker, beat, postgres, redis и mailpit. Проверка здоровья есть у базы, backend, worker, beat и frontend. У redis, Mailpit и nginx её нет. Keycloak стартует отдельно, с профилем `fsp-id`.
 
 Сквозная проверка API на запущенном стенде:
 

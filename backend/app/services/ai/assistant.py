@@ -1,6 +1,8 @@
-"""AI assistant (advisor only). Deterministic extraction is always the baseline; an LLM may
-propose extra skills, but each must normalize to the taxonomy and quote the source text
-verbatim, otherwise it is dropped. The candidate confirms every skill before it is used.
+"""Advisor only. Rules extract skills first. A model may propose more, but each proposal
+must match the skill list and quote the resume verbatim, or it is dropped. The candidate
+confirms every skill. The written answer allows cloud models, including foreign ones, and
+prefers open weights. This module calls GigaChat with the name, mail and phone already
+removed: the check machine has no GPU, and the test never asks a model for a grade.
 """
 from __future__ import annotations
 
