@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { Brand } from './Brand'
-import { MobileMenu, SiteFooter, ThemeToggle, type NavItem } from './Layout'
+import { MobileMenu, SiteFooter, ThemeToggle, type NavItem } from './chrome'
 
 const PUBLIC_LINKS: NavItem[] = [
   { to: '/method', label: 'Как устроен тест' },

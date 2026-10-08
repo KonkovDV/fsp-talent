@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Brand, BrandMark } from './Brand'
-import { ThemeToggle } from './Layout'
+import { ThemeToggle } from './chrome'
 import RussiaNetwork from './RussiaNetwork'
 
 /** Frame for sign-in, sign-up and email confirmation: one narrow column, brand on top, nothing else to read. */

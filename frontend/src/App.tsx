@@ -1,38 +1,64 @@
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
-import Layout from './components/Layout'
-import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import VerifyPage from './pages/VerifyPage'
-import GuardianPage from './pages/GuardianPage'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import CandidateDashboard from './pages/candidate/Dashboard'
-import CandidateProfile from './pages/candidate/Profile'
-import CandidateResults from './pages/candidate/Results'
-import CandidateOffers from './pages/candidate/Offers'
-import EmployerDashboard from './pages/employer/Dashboard'
-import EmployerSearch from './pages/employer/Search'
-import EmployerNeeds from './pages/employer/Needs'
-import EmployerOffers from './pages/employer/Offers'
-import EmployerVacancies from './pages/employer/Vacancies'
-import EmployerCompany from './pages/employer/Company'
-import CandidateVacancies from './pages/candidate/Vacancies'
-import CandidateAssessment from './pages/candidate/Assessment'
-import LeaderboardPage from './pages/LeaderboardPage'
-import PublicProfile from './pages/PublicProfile'
-import NotFoundPage from './pages/NotFoundPage'
-import LegalPage from './pages/LegalPage'
-import FspIdDemoPage from './pages/FspIdDemoPage'
-import FspCallback from './pages/candidate/FspCallback'
-import CandidateTasks from './pages/candidate/Tasks'
-import EmployerTasks from './pages/employer/Tasks'
-import FspSignInCallback from './pages/FspSignInCallback'
-import MethodPage from './pages/MethodPage'
-import BadgePage from './pages/BadgePage'
-import JuryPage from './pages/JuryPage'
+import { Skeleton } from './components/ui'
 
-function ProtectedRoute({ children, role }: { children: React.ReactNode; role: 'participant' | 'employer' }) {
+function RouteFallback() {
+  return (
+    <div className="mx-auto min-h-[70vh] w-full max-w-5xl px-4 py-8">
+      <p className="sr-only" role="status">Загрузка</p>
+      <Skeleton className="h-64" />
+    </div>
+  )
+}
+
+function page(loader: () => Promise<{ default: ComponentType }>) {
+  const Page = lazy(loader)
+  return function LazyPage() {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <Page />
+      </Suspense>
+    )
+  }
+}
+
+const QueryShell = page(() => import('./QueryShell'))
+const Layout = page(() => import('./components/Layout'))
+const LandingPage = page(() => import('./pages/LandingPage'))
+const LoginPage = page(() => import('./pages/LoginPage'))
+const RegisterPage = page(() => import('./pages/RegisterPage'))
+const VerifyPage = page(() => import('./pages/VerifyPage'))
+const GuardianPage = page(() => import('./pages/GuardianPage'))
+const ForgotPasswordPage = page(() => import('./pages/ForgotPasswordPage'))
+const LeaderboardPage = page(() => import('./pages/LeaderboardPage'))
+const PublicProfile = page(() => import('./pages/PublicProfile'))
+const NotFoundPage = page(() => import('./pages/NotFoundPage'))
+const LegalPage = page(() => import('./pages/LegalPage'))
+const FspIdDemoPage = page(() => import('./pages/FspIdDemoPage'))
+const FspSignInCallback = page(() => import('./pages/FspSignInCallback'))
+const MethodPage = page(() => import('./pages/MethodPage'))
+const BadgePage = page(() => import('./pages/BadgePage'))
+const JuryPage = page(() => import('./pages/JuryPage'))
+
+const CandidateDashboard = page(() => import('./pages/candidate/Dashboard'))
+const CandidateProfile = page(() => import('./pages/candidate/Profile'))
+const CandidateResults = page(() => import('./pages/candidate/Results'))
+const CandidateOffers = page(() => import('./pages/candidate/Offers'))
+const CandidateVacancies = page(() => import('./pages/candidate/Vacancies'))
+const CandidateAssessment = page(() => import('./pages/candidate/Assessment'))
+const CandidateTasks = page(() => import('./pages/candidate/Tasks'))
+const FspCallback = page(() => import('./pages/candidate/FspCallback'))
+
+const EmployerDashboard = page(() => import('./pages/employer/Dashboard'))
+const EmployerSearch = page(() => import('./pages/employer/Search'))
+const EmployerNeeds = page(() => import('./pages/employer/Needs'))
+const EmployerOffers = page(() => import('./pages/employer/Offers'))
+const EmployerVacancies = page(() => import('./pages/employer/Vacancies'))
+const EmployerCompany = page(() => import('./pages/employer/Company'))
+const EmployerTasks = page(() => import('./pages/employer/Tasks'))
+
+function ProtectedRoute({ children, role }: { children: ReactNode; role: 'participant' | 'employer' }) {
   const { token, userRole } = useAuthStore()
   if (!token) return <Navigate to="/login" replace />
   if (userRole !== role) return <Navigate to="/" replace />
@@ -44,6 +70,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route element={<QueryShell />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify" element={<VerifyPage />} />
@@ -58,7 +85,6 @@ export default function App() {
         <Route path="/fsp-id/authorize" element={<FspIdDemoPage />} />
         <Route path="/auth/fsp-callback" element={<FspSignInCallback />} />
 
-        {/* Candidate area */}
         <Route path="/candidate" element={<ProtectedRoute role="participant"><Layout /></ProtectedRoute>}>
           <Route index element={<CandidateDashboard />} />
           <Route path="profile" element={<CandidateProfile />} />
@@ -70,7 +96,6 @@ export default function App() {
           <Route path="fsp-callback" element={<FspCallback />} />
         </Route>
 
-        {/* Employer area */}
         <Route path="/employer" element={<ProtectedRoute role="employer"><Layout /></ProtectedRoute>}>
           <Route index element={<EmployerDashboard />} />
           <Route path="needs" element={<EmployerNeeds />} />
@@ -82,6 +107,7 @@ export default function App() {
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   )
