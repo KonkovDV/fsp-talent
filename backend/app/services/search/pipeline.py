@@ -25,6 +25,7 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.fsp.mock import STATUS_LABELS
 from app.services.matching import (
     RELATED,
     CandidateFacts,
@@ -37,13 +38,7 @@ from app.services.matching import (
 )
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
-from app.services.scoring.engine import (
-    RANK_ORDER,
-    RESULT_CLASS_LABELS,
-    STATUS_LABELS,
-    percentile,
-    result_class,
-)
+from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import card_signal
@@ -550,14 +545,16 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
             disciplines.append({"discipline": ds.discipline,
                                 "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
                                 "score": ds.score, "lcb": ds.lcb, "confidence": ds.confidence,
-                                "best_rank": ds.best_rank, "events_count": ds.events_count,
-                                "evidence": evidence})
+                                "best_rank": ds.best_rank,
+                                "rank_assigned_at": ds.rank_assigned_at.isoformat() if ds.rank_assigned_at else None,
+                                "rank_order_ref": ds.rank_order_ref,
+                                "events_count": ds.events_count, "evidence": evidence})
         if cat and cat.grade_source == "assessed":
             why.append(f"Грейд {cat.grade} подтверждён тестом")
         if disciplines:
             top = next((d for d in disciplines if d["discipline"] == discipline_filter), disciplines[0])
             if top["best_rank"]:
-                why.append(f"Разряд-эквивалент {top['best_rank']} ({top['label']})")
+                why.append(f"Присвоенный разряд {top['best_rank']} ({top['label']})")
             why.append(f"Подтверждено ФСП: нижняя граница уровня {top['lcb']:.2f}, "
                        f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
         if pid in dense_hit:

@@ -62,7 +62,10 @@ def profile_lines(name: str | None, role: str | None, grade: str | None,
         lines.append("Навыки: " + ", ".join(skills))
     for row in disciplines:
         rank = row.get("rank") or "—"
-        lines.append(f"{row['label']}: нижняя граница {row['lcb']:.2f}, разряд {rank}")
+        assigned = row.get("rank_assigned_at")
+        order = row.get("rank_order_ref")
+        extra = f", присвоен {assigned}, {order}" if assigned or order else ""
+        lines.append(f"{row['label']}: нижняя граница {row['lcb']:.2f}, присвоенный разряд {rank}{extra}")
     lines.append("")
     lines.append("Контакты в этот файл не входят.")
     return lines

@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ExternalLink } from 'lucide-react'
 import { apiError, getMyResults, presentResult } from '../../api/client'
-import { Empty, PageHeader, RankBadge, Skeleton, date } from '../../components/ui'
+import { DISC_RU } from '../../labels'
+import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 
 interface Row {
-  id: string; event_name: string; discipline_label: string; status_label: string; place: number
-  total_participants: number; rank_equivalent: string | null; is_team: boolean; team_size: number
+  id: string; event_name: string; discipline: string; discipline_label: string; status_label: string; place: number
+  total_participants: number; is_team: boolean; team_size: number
   event_date: string; protocol_url: string | null; ekp_number?: string | null
 }
 
@@ -33,7 +34,7 @@ export default function CandidateResults() {
   return (
     <div>
       <PageHeader title="Результаты ФСП"
-        lead="Места из официальных протоколов. Каждый результат подписан удостоверением, работодатель видит год, уровень соревнования и процентиль без названия события." />
+        lead="Места из официальных протоколов. Разряд присвоен по дисциплине и приходит из реестра, а не за одно соревнование. Работодатель видит год, уровень соревнования и процентиль без названия события." />
       {isLoading && <Skeleton className="h-64" />}
       {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить протоколы')}</p>}
       {cardError && <p className="notice-error mb-4" role="alert">{cardError}</p>}
@@ -44,7 +45,7 @@ export default function CandidateResults() {
         <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица результатов">
           <table className="protocol">
             <thead><tr>
-              <th className="w-20 text-right">Место</th><th>Соревнование</th><th>Дисциплина</th><th>Разряд</th><th className="text-right">Дата</th>
+              <th className="w-20 text-right">Место</th><th>Соревнование</th><th>Дисциплина</th><th className="text-right">Дата</th>
             </tr></thead>
             <tbody>
               {rows.map(r => (
@@ -55,8 +56,7 @@ export default function CandidateResults() {
                     <button type="button" className="mt-0.5 inline-flex min-h-6 items-center text-xs font-medium text-accent underline" disabled={busy === r.id} onClick={() => openCard(r.id)}>Краткое удостоверение</button>
                     <p className="text-xs text-ink-3">{r.status_label}{r.is_team ? `, команда из ${r.team_size}` : ''}{r.ekp_number ? `. ${r.ekp_number.startsWith('ЕКП-демо') ? 'Демо-номер календаря' : 'Номер в календаре ЕКП'}: ${r.ekp_number}` : ''}</p>
                   </td>
-                  <td className="text-ink-2">{r.discipline_label}</td>
-                  <td><RankBadge rank={r.rank_equivalent} /></td>
+                  <td className="text-ink-2">{DISC_RU[r.discipline] ?? r.discipline_label}</td>
                   <td className="num whitespace-nowrap text-right text-ink-2">
                     {date(r.event_date)}
                     {r.protocol_url && <a href={r.protocol_url} target="_blank" rel="noreferrer" className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded text-accent hover:bg-accent-soft" aria-label="Протокол"><ExternalLink size={14} aria-hidden /></a>}

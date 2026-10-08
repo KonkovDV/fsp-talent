@@ -10,7 +10,6 @@ from app.services.scoring.engine import (
     months_between,
     percentile,
     rank_at_least,
-    rank_equivalent,
     result_class,
 )
 
@@ -55,12 +54,6 @@ def test_empty_history_is_the_prior():
     assert score["score"] == pytest.approx(0.30, abs=1e-4)
     assert score["confidence"] == 0
     assert score["events_count"] == 0
-
-
-def test_rank_ladder_and_small_field_downgrade():
-    assert rank_equivalent("russia_championship", 1, 100) == "МС"
-    assert rank_equivalent("russia_championship", 1, 4) == "I"
-    assert rank_equivalent("regional", 1, 40) == "II"
 
 
 # ---------------------------------------------------------------------------
@@ -149,19 +142,19 @@ def test_rank_at_least_ordering():
     assert rank_at_least("МС", "МС")
     assert rank_at_least("МС", "КМС")
     assert rank_at_least("МС", "I")
-    assert rank_at_least("МС", "юн")
+    assert rank_at_least("МС", "III юн.")
     # КМС не бьёт МС
     assert rank_at_least("КМС", "КМС")
     assert rank_at_least("КМС", "I")
     assert not rank_at_least("КМС", "МС")
-    # I сильнее II/III/юн, слабее МС/КМС
+    # I сильнее II/III и юношеских, слабее МС/КМС
     assert rank_at_least("I", "I")
     assert not rank_at_least("I", "КМС")
-    # юн — слабейший именованный ранг
-    assert rank_at_least("юн", "юн")
-    assert not rank_at_least("юн", "III")
-    # None — безранговый результат, не удовлетворяет никакому minimum
-    assert not rank_at_least(None, "юн")
+    # III юн. — слабейший именованный ранг
+    assert rank_at_least("III юн.", "III юн.")
+    assert not rank_at_least("III юн.", "III")
+    # None — без разряда, не удовлетворяет никакому minimum
+    assert not rank_at_least(None, "III юн.")
     assert not rank_at_least(None, "МС")
 
 
@@ -185,90 +178,9 @@ def test_months_between_non_negative_and_monotone():
     assert two_years > one_year
 
 
-# ---------------------------------------------------------------------------
-# New: rank_equivalent -- full EVSK_LADDER branch coverage
-# ---------------------------------------------------------------------------
-
-def test_rank_equivalent_world():
-    assert rank_equivalent("world", 1, 100) == "МС"
-    assert rank_equivalent("world", 8, 100) == "МС"
-    assert rank_equivalent("world", 9, 100) == "КМС"
-    assert rank_equivalent("world", 16, 100) == "КМС"
-    assert rank_equivalent("world", 17, 100) == "I"
-    assert rank_equivalent("world", 32, 100) == "I"
-    # За порогом последнего порога → None
-    assert rank_equivalent("world", 33, 100) is None
-    # Малая выборка: МС/КМС требуют не менее 6 участников
-    assert rank_equivalent("world", 1, 5) == "I"   # понижено с МС
-    assert rank_equivalent("world", 9, 5) == "I"   # понижено с КМС
-
-
-def test_rank_equivalent_russia_cup():
-    # Лестница: 1 → МС, 2–3 → КМС, 4–8 → I, 9–16 → II, 17–32 → III.
-    assert rank_equivalent("russia_cup", 1, 50) == "МС"
-    assert rank_equivalent("russia_cup", 2, 50) == "КМС"
-    assert rank_equivalent("russia_cup", 3, 50) == "КМС"
-    assert rank_equivalent("russia_cup", 4, 50) == "I"
-    assert rank_equivalent("russia_cup", 8, 50) == "I"
-    assert rank_equivalent("russia_cup", 9, 50) == "II"
-    assert rank_equivalent("russia_cup", 16, 50) == "II"
-    assert rank_equivalent("russia_cup", 17, 50) == "III"
-    assert rank_equivalent("russia_cup", 32, 50) == "III"
-    assert rank_equivalent("russia_cup", 33, 50) is None
-
-
-def test_rank_equivalent_all_russian_and_youth():
-    # all_russian и russia_youth с одинаковыми порогами
-    for status in ("all_russian", "russia_youth"):
-        assert rank_equivalent(status, 1, 30) == "КМС"
-        assert rank_equivalent(status, 4, 30) == "I"
-        assert rank_equivalent(status, 9, 30) == "II"
-        assert rank_equivalent(status, 17, 30) == "III"
-        assert rank_equivalent(status, 33, 30) is None
-
-
-def test_rank_equivalent_federal_district():
-    assert rank_equivalent("federal_district", 1, 30) == "I"
-    assert rank_equivalent("federal_district", 3, 30) == "I"
-    assert rank_equivalent("federal_district", 4, 30) == "II"
-    assert rank_equivalent("federal_district", 8, 30) == "II"
-    assert rank_equivalent("federal_district", 9, 30) == "III"
-    assert rank_equivalent("federal_district", 16, 30) == "III"
-    assert rank_equivalent("federal_district", 17, 30) is None
-
-
-def test_rank_equivalent_other():
-    assert rank_equivalent("other", 1, 10) == "III"
-    assert rank_equivalent("other", 3, 10) == "III"
-    assert rank_equivalent("other", 4, 10) == "юн"
-    assert rank_equivalent("other", 8, 10) == "юн"
-    assert rank_equivalent("other", 9, 10) is None
-    # Неизвестный статус → пороги как у "other"
-    assert rank_equivalent("unknown_status", 1, 10) == "III"
-
-
-# ---------------------------------------------------------------------------
-# New: DisciplineResult fields -- best_rank and top_event_ids
-# ---------------------------------------------------------------------------
-
-def test_best_rank_picks_strongest_across_events():
-    """Поле best_rank выбирает минимальный индекс в RANK_ORDER (сильнейший ранг) по всем событиям."""
-    ref = date(2026, 10, 1)
-    events = [
-        ev(1, 100, "russia_championship", when=ref),               # МС
-        {**ev(5, 100, "regional", when=ref), "id": "reg-5"},       # III
-        {**ev(2, 100, "federal_district", when=ref), "id": "fd-2"}, # II
-    ]
-    result = compute_discipline_score(events, reference_date=ref)
-    assert result["best_rank"] == "МС"
-    assert result["events_count"] == 3
-    assert result["team_events_count"] == 0
-
-
-def test_best_rank_is_none_when_all_places_are_below_thresholds():
-    # place=9 в "other" — за порогом 8 (юн), возвращает None
-    result = compute_discipline_score([ev(9, 10, "other")])
-    assert result["best_rank"] is None
+def test_the_score_does_not_carry_a_rank():
+    result = compute_discipline_score([ev(1, 100, "russia_championship")])
+    assert "best_rank" not in result
 
 
 def test_top_event_ids_returns_at_most_three_by_descending_quality_weight():

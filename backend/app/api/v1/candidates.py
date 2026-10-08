@@ -35,7 +35,7 @@ from app.services.ai.assistant import parse_resume
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp import identity as fsp_identity
-from app.services.fsp.mock import get_fsp_adapter
+from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
 from app.services.growth import growth_gaps, next_grade
 from app.services.guardian import guardian_token
@@ -47,7 +47,6 @@ from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
-from app.services.scoring.engine import STATUS_LABELS, rank_equivalent
 from app.services.search.pipeline import _bucket
 from app.services.skills import (
     SkillDraft,
@@ -72,6 +71,16 @@ def _skill_view(s: Skill) -> dict:
             "confirmed": s.confirmed,
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "confirmed_at": s.confirmed_at.isoformat() if s.confirmed_at else None}
+
+
+def discipline_score_view(ds) -> dict:
+    return {
+        "discipline": ds.discipline, "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
+        "score": ds.score, "sigma": ds.sigma, "lcb": ds.lcb, "confidence": ds.confidence,
+        "best_rank": ds.best_rank,
+        "rank_assigned_at": ds.rank_assigned_at.isoformat() if ds.rank_assigned_at else None,
+        "rank_order_ref": ds.rank_order_ref, "events_count": ds.events_count,
+    }
 
 
 def _pid(current: dict) -> uuid.UUID:
@@ -123,12 +132,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "stack": cat.stack if cat else [],
         "explanation": cat.explanation if cat else [],
         "skills": [_skill_view(s) for s in p.skills],
-        "discipline_scores": [
-            {"discipline": ds.discipline, "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
-             "score": ds.score, "sigma": ds.sigma, "lcb": ds.lcb, "confidence": ds.confidence,
-             "best_rank": ds.best_rank, "events_count": ds.events_count}
-            for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)
-        ],
+        "discipline_scores": [discipline_score_view(ds) for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)],
         "results_count": len(p.results),
     }
 
@@ -364,7 +368,6 @@ async def get_my_results(
         "competition_status": r.competition_status,
         "status_label": STATUS_LABELS.get(r.competition_status, r.competition_status),
         "place": r.place, "total_participants": r.total_participants,
-        "rank_equivalent": rank_equivalent(r.competition_status, r.place, r.total_participants),
         "is_team": r.is_team, "team_size": r.team_size, "event_date": r.event_date.isoformat(),
         "protocol_url": r.protocol_url, "trust_level": r.trust_level,
         "ekp_number": (r.raw_data or {}).get("ekp_number"),
@@ -665,7 +668,9 @@ async def _profile_pdf(db: AsyncSession, participant: Participant, named: bool) 
         SPECIALIZATIONS.get(category.primary_role, category.primary_role) if category else None,
         category.grade if category else participant.assessed_grade,
         skills,
-        [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank}
+        [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank,
+          "rank_assigned_at": s.rank_assigned_at.isoformat() if s.rank_assigned_at else None,
+          "rank_order_ref": s.rank_order_ref}
          for s in scores],
     )
     return render_profile_pdf(lines)
