@@ -31,7 +31,8 @@ const slides = [
       ['Проблема', 'Работодатель видит заявленный грейд и список технологий. Сортировка по резюме ставит в первую десятку 28 % людей с завышенным грейдом.'],
       ['Ответ', 'Грейд даёт только адаптивный тест специализации. Результаты ФСП — отдельная подтверждённая ось, без неё человек не теряет место.'],
       ['Механика', 'Работодатель описывает потребность, получает подборку с разбором каждого места и приглашает первым, сразу с вилкой.'],
-    ] },
+    ],
+    flow: ['Потребность', 'Подборка с разбором места', 'Приглашение с вилкой', 'Согласие', 'Контакты'] },
   { kind: 'shot', kicker: 'ПУТЬ КАНДИДАТА', title: 'Опрос, пробный тест, категория', img: 'assets/pitch-trial.png', alt: 'Пробный тест: шкала уверенности и нейтральный итог',
     notes: 'Пробный тест: 15 заданий за 5 минут, итог с вероятностью, грейд не ставится. Ключ чужого экземпляра сдаёт 0 %.',
     side: ['Кандидат выбирает специализацию и грейд, стаж только подсказывает.', 'Пробный тест: 15 заданий за 5 минут, нейтральный итог с вероятностью уровня.', 'Полный тест подтверждает грейд. Не сдали — ступень ниже доступна сразу.'] },
@@ -74,7 +75,13 @@ function htmlSlide(s) {
   const dark = s.kind === 'end'
   const head = `<div class="kicker">${esc(s.kicker)}</div><h1>${esc(s.title)}</h1>`
   let body = ''
-  if (s.kind === 'text') body = s.items.map(([k, v]) => `<div class="card"><b>${esc(k)}.</b> ${esc(v)}</div>`).join('')
+  if (s.kind === 'text') {
+    body = s.items.map(([k, v]) => `<div class="card"><b>${esc(k)}.</b> ${esc(v)}</div>`).join('')
+    if (s.flow) {
+      body += '<div class="flow">' + s.flow.map((step, i) =>
+        `${i ? '<span class="arrow">→</span>' : ''}<div class="step">${esc(step)}</div>`).join('') + '</div>'
+    }
+  }
   if (s.kind === 'end') body = '<ul>' + s.items.map(v => `<li>${esc(v)}</li>`).join('') + '</ul>'
   if (s.kind === 'stats') body = '<div class="grid">' + s.cells.map(([n, t]) => `<div class="card"><div class="num">${esc(n)}</div><p>${esc(t)}</p></div>`).join('') + '</div>'
   if (s.kind === 'shot') body = `<div class="shot"><img src="${s.img}" alt="${esc(s.alt)}"><ul>${s.side.map(v => `<li>${esc(v)}</li>`).join('')}</ul></div>`
@@ -94,6 +101,11 @@ const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>
   h1 { font-size: 32px; line-height: 1.15; margin: 0.08in 0 0.18in; }
   .kicker { color: #${accent}; font-size: 13px; letter-spacing: 0.08em; } .dark .kicker { color: #C8C9CA; }
   .card { background: #fff; border-radius: 8px; padding: 0.16in 0.24in; margin: 0.1in 0; font-size: 18px; }
+  .pad:has(.flow) .card { margin: 0.05in 0; padding: 0.1in 0.18in; font-size: 16px; }
+  .pad:has(.flow) h1 { margin-bottom: 0.08in; }
+  .flow { display: flex; align-items: stretch; gap: 0.06in; margin-top: 0.42in; }
+  .flow .step { flex: 1; background: #fff; border-radius: 8px; padding: 0.22in 0.08in; min-height: 1.05in; font-size: 16px; text-align: center; display: flex; align-items: center; justify-content: center; }
+  .flow .arrow { color: #${accent}; font-size: 20px; align-self: center; }
   .num { color: #${accent}; font-size: 32px; font-weight: 700; }
   .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.18in; margin-top: 0.25in; } .grid p { font-size: 16px; }
   .shot { display: grid; grid-template-columns: 7.6in 1fr; gap: 0.28in; align-items: start; }
