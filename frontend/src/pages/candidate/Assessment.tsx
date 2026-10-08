@@ -86,6 +86,9 @@ export default function CandidateAssessment() {
   const [typed, setTyped] = useState('')
   const [error, setError] = useState('')
   const [showReview, setShowReview] = useState(false)
+  // Take the server's open session once. A later "back to tests" or "try the grade below"
+  // clears local state on purpose and must not be overwritten by the same response.
+  const adoptedActive = useRef(false)
 
   const { data: profile } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
   const { data: blueprint } = useQuery({ queryKey: ['blueprint'], queryFn: () => assessmentBlueprint().then(r => r.data) })
@@ -93,7 +96,12 @@ export default function CandidateAssessment() {
   const { data: active } = useQuery({
     queryKey: ['assessmentActive'], queryFn: () => activeAssessment().then(r => r.data).catch(() => null), retry: false,
   })
-  useEffect(() => { if (active && !state) setState(active) }, [active, state])
+  useEffect(() => {
+    if (active && !state && !adoptedActive.current) {
+      adoptedActive.current = true
+      setState(active)
+    }
+  }, [active, state])
   // Preselect a sensible level so «Начать тест» is never a dead button: the declared grade, else the category grade.
   useEffect(() => {
     if (!profile || levelTouched.current) return
