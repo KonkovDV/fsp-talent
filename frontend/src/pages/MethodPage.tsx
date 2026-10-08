@@ -4,6 +4,7 @@ import { itemPsychometrics } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import { PageHeader, Skeleton } from '../components/ui'
 import { GRADE_RU, ROLE_RU } from '../labels'
+import { FIGURES, SIMULATION_KEY_SHARE, shareLabel } from '../methodFigures'
 
 interface Cut { grade: string; cut: number; information: number; se_after_12: number | null }
 interface Point { theta: number; information: number }
@@ -11,17 +12,9 @@ interface FamilyRow { family_id: string; title: string; answers: number; cusum: 
 interface ParentLevel { level: number; b: number }
 interface ParentRow { family_id: string; title: string; a: number; levels: ParentLevel[] }
 interface Report {
-  spec: string; randomesque: number; answers: number; max_share: number
+  spec: string; randomesque: number; answers: number; max_share: number; exposure_target: number
   cuts: Cut[]; curve: Point[]; families: FamilyRow[]; parents: ParentRow[]
 }
-
-const FIGURES: [string, string, string][] = [
-  ['91,5 %', 'верных решений вдали от границы грейда, 2000 кандидатов', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
-  ['0,47', 'каппа Коэна повторного теста с новыми заданиями', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
-  ['0,22', 'медиана r, различающая сила вводимого ответа', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
-  ['0 %', 'случайное угадывание проходит тест', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
-  ['65,1 %', 'точный итоговый грейд после пути по правилам продукта; в пределах ступени 98,6 %', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
-]
 
 function InfoCurve({ curve, cuts }: { curve: Point[]; cuts: Cut[] }) {
   const w = 640
@@ -45,30 +38,67 @@ function InfoCurve({ curve, cuts }: { curve: Point[]; cuts: Cut[] }) {
   )
 }
 
-function ExposureCurve({ families, answers }: { families: FamilyRow[]; answers: number }) {
+function ExposureBars({ families, answers, target }: { families: FamilyRow[]; answers: number; target: number }) {
   const w = 640
-  const h = 160
+  const h = 176
   const padX = 16
-  const padY = 16
-  const rows = families.filter(f => f.answers > 0)
+  const padY = 12
+  const rows = families
+    .filter(row => row.answers > 0)
+    .sort((a, b) => b.answers - a.answers || a.family_id.localeCompare(b.family_id))
   if (answers === 0 || rows.length === 0) {
     return (
-      <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-36 w-full" role="img" aria-label="Показов ещё нет">
-        <line x1={padX} x2={w - padX} y1={h / 2} y2={h / 2} stroke="rgb(var(--ink-3))" strokeWidth="1.5" />
-        <text x={w / 2} y={h / 2 - 12} textAnchor="middle" fill="rgb(var(--ink-2))" fontSize="14">Показов ещё нет</text>
-      </svg>
+      <>
+        <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-36 w-full" role="img" aria-label="Показов ещё нет">
+          <line x1={padX} x2={w - padX} y1={h / 2} y2={h / 2} stroke="rgb(var(--ink-3))" strokeWidth="1.5" />
+          <text x={w / 2} y={h / 2 - 12} textAnchor="middle" fill="rgb(var(--ink-2))" fontSize="14">Показов ещё нет</text>
+        </svg>
+        <p className="mt-2 text-sm text-ink-2">
+          На этом стенде ответы ещё не копились. В симуляции 2000 кандидатов максимальная доля одного ключа — {SIMULATION_KEY_SHARE}.
+        </p>
+      </>
     )
   }
-  const peak = Math.max(...rows.map(row => row.answers))
-  const x = (i: number) => padX + (rows.length === 1 ? 0 : (i / (rows.length - 1)) * (w - padX * 2))
-  const y = (n: number) => h - padY - (n / peak) * (h - padY * 2)
-  const d = rows.map((row, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(row.answers).toFixed(1)}`).join(' ')
+  const shares = rows.map(row => row.answers / answers)
+  const ceiling = Math.max(target, ...shares)
+  const plotTop = padY + 18
+  const plotBottom = h - padY
+  const yOf = (share: number) => plotBottom - (share / ceiling) * (plotBottom - plotTop)
+  const gap = 6
+  const barW = (w - padX * 2 - gap * (rows.length - 1)) / rows.length
+  const top = shareLabel(shares[0])
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-40 w-full" role="img"
-      aria-label={`Доля показов по ${rows.length} семействам, всего ответов ${answers}`}>
-      <line x1={padX} x2={w - padX} y1={h - padY} y2={h - padY} stroke="rgb(var(--ink-3))" strokeWidth="1" />
-      <path d={d} fill="none" stroke="rgb(var(--accent))" strokeWidth="2.5" strokeLinejoin="round" />
-    </svg>
+    <>
+      <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-44 w-full" role="img"
+        aria-label={`Показы по семействам, максимум ${top}`}>
+        <line x1={padX} x2={w - padX} y1={plotBottom} y2={plotBottom} stroke="rgb(var(--ink-3))" strokeWidth="1" />
+        <line x1={padX} x2={w - padX} y1={yOf(target)} y2={yOf(target)}
+          stroke="rgb(var(--ink-2))" strokeWidth="1.5" strokeDasharray="4 4" />
+        {rows.map((row, i) => {
+          const x = padX + i * (barW + gap)
+          const y = yOf(shares[i])
+          return (
+            <g key={row.family_id}>
+              <rect data-family={row.family_id} data-answers={row.answers} x={x} y={y} width={barW} height={plotBottom - y}
+                fill="rgb(var(--accent))" rx="2" />
+              {i < 3 && barW >= 56 && (
+                <text x={x + barW / 2} y={y - 4} textAnchor="middle" fill="rgb(var(--ink))" fontSize="12">
+                  {shareLabel(shares[i])}
+                </text>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+      <p className="mt-2 text-sm font-medium text-ink">
+        {rows.slice(0, 3).map(row => shareLabel(row.answers / answers)).join(' · ')}
+      </p>
+      <p className="mt-1 text-sm text-ink-2">
+        Максимальная доля показов одного семейства: {top} на стенде; в симуляции 2000 кандидатов — {SIMULATION_KEY_SHARE}.
+        Числа в задании каждый раз другие, поэтому частое семейство не выдаёт ответ.
+        Пунктир — целевая доля одного ключа {target.toFixed(2).replace('.', ',')}.
+      </p>
+    </>
   )
 }
 
@@ -163,16 +193,13 @@ export default function MethodPage() {
           </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Показы по семействам</h2>
-            <ExposureCurve families={data.families} answers={data.answers} />
-            {data.answers === 0 ? (
-              <p className="mt-2 text-sm text-ink-2">На этом стенде ответы ещё не копились. Максимальная доля одного задания на симуляции опубликована в отчёте проверки теста.</p>
-            ) : (
+            <ExposureBars families={data.families} answers={data.answers} target={data.exposure_target} />
+            {data.answers > 0 && (
               <>
-                <p className="mt-1 text-sm text-ink-2">
-                  Всего ответов {data.answers}. Самое частое задание — {Math.round(data.max_share * 1000) / 10} % показов.
-                  Сумма CUSUM — накопленный избыток верных ответов над моделью; карантин по-прежнему решается по каждому ключу.
+                <p className="mt-1 text-xs text-ink-3">
+                  Всего ответов {data.answers}. Сумма CUSUM — накопленный избыток верных ответов над моделью; карантин по-прежнему решается по каждому ключу.
                 </p>
-                <div className="mt-4 overflow-x-auto rounded-lg" tabIndex={0} role="region" aria-label="Таблица показов по семействам">
+                <div className="mt-4 w-0 min-w-full overflow-x-auto rounded-lg" tabIndex={0} role="region" aria-label="Таблица показов по семействам">
                   <table className="protocol">
                     <thead>
                       <tr>
@@ -188,7 +215,7 @@ export default function MethodPage() {
                         <tr key={f.family_id}>
                           <td>{f.title}</td>
                           <td className="text-right num">{f.answers}</td>
-                          <td className="text-right num">{Math.round(f.max_share * 1000) / 10} %</td>
+                          <td className="text-right num">{shareLabel(f.max_share)}</td>
                           <td className="text-right num">{f.cusum.toFixed(2)}</td>
                           <td className="text-right num">{f.quarantined}</td>
                         </tr>

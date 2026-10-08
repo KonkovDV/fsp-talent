@@ -418,6 +418,7 @@ def test_bank_curve_has_information_at_every_cut():
         ("sql_query", 3, 50, 0.0, "active"),
     ])
     assert exposed["answers"] == 100 and exposed["max_share"] == 0.5
+    assert exposed["exposure_target"] == cat.EXPOSURE_TARGET == 0.40
     py = next(row for row in exposed["families"] if row["family_id"] == "py_eval")
     assert py["title"].startswith("Python") and py["quarantined"] == 1 and py["cusum"] == 1.7
 
