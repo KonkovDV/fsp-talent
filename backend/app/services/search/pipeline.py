@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, bindparam, func, literal, or_, select, text, tuple_
+from sqlalchemy import and_, bindparam, exists, func, literal, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,18 +163,27 @@ def created_after(now: datetime, fresh_days: int | None) -> datetime | None:
 
 
 def _in_search(adult):
-    """Who an employer may see: the card is published, age allows it, and the person is not «не ищу»."""
+    """Who an employer may see: the card is published, age allows it, the person is not «не ищу»,
+    and the grade was chosen in the survey or confirmed by the test.
+
+    The showcase uses this same predicate, so a profile that only has FSP protocols is not counted.
+    """
+    graded = exists(select(CategoryAssignment.id).where(
+        CategoryAssignment.participant_id == Participant.id,
+        CategoryAssignment.grade_source.in_(("declared", "assessed")),
+    ))
     return and_(
         Participant.is_visible.is_(True),
         Participant.job_search != "not_looking",
         or_(adult, Participant.minor_consent_given.is_(True)),
+        graded,
     )
 
 
 async def bank_grid(db: AsyncSession) -> dict:
     """The candidate bank by specialization and grade: who is in search and how many confirmed the grade by test.
 
-    Same visibility as the search itself: hidden profiles and minors without the guardian's consent are out.
+    Same visibility as the search itself, including the survey-or-test grade inside ``_in_search``.
     """
     cutoff = adult_cutoff()
     adult = or_(

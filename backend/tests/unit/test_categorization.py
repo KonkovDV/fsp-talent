@@ -1,5 +1,6 @@
 from app.services.categorization import (
     GRADES,
+    UNCHOSEN_ROLE,
     _ru_word,
     assign_category,
     grade_from_experience,
@@ -13,7 +14,8 @@ def test_skills_outrank_discipline_and_declaration_outranks_experience():
     by_skills = assign_category(["Python", "FastAPI"], [{"discipline": "security", "lcb": 0.9}])
     assert by_skills["primary_role"] == "backend"
     by_discipline = assign_category([], [{"discipline": "security", "lcb": 0.5}, {"discipline": "bas", "lcb": 0.1}])
-    assert by_discipline["primary_role"] == "security"
+    assert by_discipline["primary_role"] == UNCHOSEN_ROLE
+    assert by_discipline["primary_role"] != "security"
     declared = assign_category(["Python", "Go"], [], experience_years=6, declared_grade="junior")
     assert declared["grade"] == "junior" and declared["grade_source"] == "declared"
     # Experience is only a hint: without a chosen grade the card is not raised to senior by years.
@@ -26,7 +28,8 @@ def test_skills_outrank_discipline_and_declaration_outranks_experience():
     assert any("6 подтверждённых навыков" in line for line in many["explanation"])
     assert any("5 лет" in line for line in many["explanation"])
     unknown = assign_category([], [])
-    assert unknown["primary_role"] == "fullstack"
+    assert unknown["primary_role"] == UNCHOSEN_ROLE
+    assert any("пройдите опрос" in line for line in unknown["explanation"])
     assert unknown["grade_source"] == "default"
     # Contest LCB never becomes an HR grade, including a near-certain top result.
     rookie = assign_category(["Python", "FastAPI"], [{"discipline": "algorithmic", "lcb": 0.95}], experience_years=1)
@@ -127,6 +130,15 @@ def test_rules_version_is_present():
     result = assign_category([], [])
     assert result["rules_version"] == RULES_VERSION
     assert result["rules_version"].startswith("v")
+
+
+def test_an_fsp_discipline_does_not_assign_backend():
+    """Without a survey, algorithmic protocols must not become the backend specialization."""
+    algorithmic = assign_category([], [{"discipline": "algorithmic", "lcb": 0.99}])
+    assert algorithmic["primary_role"] != "backend"
+    assert algorithmic["primary_role"] == UNCHOSEN_ROLE
+    assert any("пройдите опрос" in line for line in algorithmic["explanation"])
+    assert not any("дисциплине ФСП" in line for line in algorithmic["explanation"])
 
 
 def test_survey_specialization_of_a_tester_is_kept():
