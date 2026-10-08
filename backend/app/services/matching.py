@@ -14,6 +14,7 @@ import math
 import statistics
 from dataclasses import dataclass, field, replace
 
+from app.services.categorization import DISCIPLINE_LABELS
 from app.services.survey import SPECIALIZATIONS
 
 GRADES = ("intern", "junior", "middle", "senior", "lead")
@@ -97,6 +98,7 @@ INTERVIEW_FACTOR = {"passed": 1.10, "failed": 0.85, "no_show": 0.70}
 REASON_SOURCE = {
     "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "UNTESTED": "тест",
     "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП",
+    "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП",
     "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
     "RELATED_SKILL": "заявлено",
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
@@ -128,6 +130,8 @@ class CandidateFacts:
     test_p: float | None = None           # P(level) of the confirmation for this specialization
     test_spec: str | None = None
     fsp_lcb: float | None = None          # None: no FSP history
+    fsp_kind: str | None = None           # profile | other | None (plain line, or no history)
+    fsp_discipline: str | None = None     # discipline code behind fsp_lcb, for the card line
     industry: str | None = None
     text_rank: float = 0.0                # 0..1 lexical relevance, normalised inside the pool
     salary_from: int | None = None        # gross wish; None: the candidate did not name one
@@ -218,7 +222,8 @@ def _note(bucket: list[str], reasons: list[Reason], tone: str, code: str, text: 
     reasons.append(Reason(code, text, tone))
 
 
-EVIDENCE_REASONS = {"test": ("TEST_SCORE", "UNTESTED"), "fsp": ("FSP_BONUS", "FSP_SCORE")}
+EVIDENCE_REASONS = {"test": ("TEST_SCORE", "UNTESTED"),
+                    "fsp": ("FSP_BONUS", "FSP_SCORE", "FSP_RELEVANT", "FSP_OTHER")}
 
 
 def _with_points(reasons: list[Reason], factors: list[Factor], scale: float) -> list[Reason]:
@@ -354,7 +359,14 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             _note(info, reasons, "info", "FSP_NEUTRAL", "Нет истории ФСП — ось не учитывается и не штрафует")
         else:
             values["fsp"] = min(1.0, max(0.0, c.fsp_lcb / FSP_FULL_LCB))
-            if values["fsp"] >= 0.5:
+            if c.fsp_kind == "profile":
+                label = DISCIPLINE_LABELS.get(c.fsp_discipline or "", c.fsp_discipline or "")
+                tone, bucket = ("plus", plus) if values["fsp"] >= 0.5 else ("info", info)
+                _note(bucket, reasons, tone, "FSP_RELEVANT", f"Результат в профильной дисциплине: {label}")
+            elif c.fsp_kind == "other":
+                _note(info, reasons, "info", "FSP_OTHER",
+                      "Результаты ФСП в другой дисциплине учтены с весом 0,5")
+            elif values["fsp"] >= 0.5:
                 _note(plus, reasons, "plus", "FSP_BONUS",
                       f"Подтверждённый уровень ФСП (нижняя граница {c.fsp_lcb:.2f})")
             else:
