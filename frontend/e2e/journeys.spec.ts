@@ -326,7 +326,8 @@ test('вход через ФСП ID показывает результаты, �
 
   await page.getByRole('button', { name: 'Выйти' }).click()
   await page.goto('/login?role=employer')
-  await page.locator('#username').fill('hr@sibcode.demo')
+  // hr@sibcode.demo is already signed in five times in this file. The sixth try in a minute is rejected.
+  await page.locator('#username').fill('hr@robotech.demo')
   await page.locator('#password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Войти', exact: true }).click()
   await expect(page).toHaveURL(/\/employer/)
