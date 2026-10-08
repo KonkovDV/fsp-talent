@@ -287,18 +287,63 @@ async def item_health(db: AsyncSession = Depends(get_db)):
     } for r in rows]
 
 
+_PSYCHOMETRICS_TTL = 300
+_PSYCHOMETRICS_KEY = "method:psychometrics:v2:"
+
+
+def _without_keys(payload: dict) -> dict:
+    """The method page publishes parameters and counts. A stem or an answer key must not ride along."""
+    forbidden = {"item_key", "stem", "answer", "right_answer", "answer_text"}
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            found = forbidden & node.keys()
+            if found:
+                raise RuntimeError(f"сводка методики содержит {sorted(found)}")
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload)
+    return payload
+
+
 @router.get("/assessment/psychometrics")
-async def psychometrics(spec: str = "backend", db: AsyncSession = Depends(get_db)):
-    """Information at the grade cuts and exposure by family. No stems and no answer keys."""
+async def psychometrics(response: Response, spec: str = "backend", db: AsyncSession = Depends(get_db)):
+    """Information at the grade cuts and exposure by family. No stems and no answer keys.
+
+    The body is cached for five minutes: the curve does not depend on live answers, and the
+    exposure counts move slowly. Cache-Control lets a browser keep the same copy.
+    """
+    from app.core.redis_client import get_redis
     from app.items.registry import BLUEPRINTS
     from app.models.assessment import ItemStat
     from app.services.psychometrics import bank_curve, summarize_exposure
 
     if spec not in BLUEPRINTS:
         raise HTTPException(400, "Неизвестная специализация")
+    response.headers["Cache-Control"] = "public, max-age=300"
+    key = _PSYCHOMETRICS_KEY + spec
+    redis = None
+    try:
+        redis = await get_redis()
+        cached = await redis.get(key)
+    except Exception:
+        cached = None
+    if cached:
+        return json.loads(cached)
     rows = list(await db.execute(
         select(ItemStat.family_id, ItemStat.level, ItemStat.n, ItemStat.cusum, ItemStat.status)))
-    return {**bank_curve(spec), **summarize_exposure([(f, lvl, n, c, s) for f, lvl, n, c, s in rows])}
+    payload = _without_keys({**bank_curve(spec), **summarize_exposure(
+        [(f, lvl, n, c, s) for f, lvl, n, c, s in rows])})
+    if redis is not None:
+        try:
+            await redis.set(key, json.dumps(payload, ensure_ascii=False), ex=_PSYCHOMETRICS_TTL)
+        except Exception:
+            pass
+    return payload
 
 
 class GuardianConsentIn(BaseModel):

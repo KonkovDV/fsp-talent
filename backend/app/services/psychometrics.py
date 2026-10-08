@@ -12,6 +12,8 @@ from app.services.cat import CUTS, RANDOMESQUE, info3
 
 # Twelve items is inside the real test (8–20) and long enough for the SE illustration.
 ILLUSTRATIVE_ITEMS = 12
+# −3…3 inclusive. 41 points is a step of 0.15, dense enough to draw the curve.
+CURVE_POINTS = 41
 
 
 def bank_curve(spec: str) -> dict:
@@ -19,9 +21,10 @@ def bank_curve(spec: str) -> dict:
     if spec not in BLUEPRINTS:
         raise ValueError(spec)
     families = families_for(spec)
+    step = 6.0 / (CURVE_POINTS - 1)
     curve = []
-    for i in range(25):
-        theta = round(-3.0 + i * 0.25, 2)
+    for i in range(CURVE_POINTS):
+        theta = round(-3.0 + i * step, 2)
         curve.append({"theta": theta, "information": round(_best(spec, families, theta), 3)})
     cuts = []
     for grade, cut in CUTS.items():

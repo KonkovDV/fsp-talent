@@ -15,6 +15,63 @@ interface Report {
   cuts: Cut[]; curve: Point[]; families: FamilyRow[]; parents: ParentRow[]
 }
 
+const FIGURES: [string, string, string][] = [
+  ['91,5 %', 'верных решений вдали от границы грейда, 2000 кандидатов', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
+  ['0,47', 'каппа Коэна повторного теста с новыми заданиями', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
+  ['0,22', 'медиана r, различающая сила вводимого ответа', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
+  ['0 %', 'случайное угадывание проходит тест', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
+  ['65,1 %', 'точный итоговый грейд после пути по правилам продукта; в пределах ступени 98,6 %', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
+]
+
+function InfoCurve({ curve, cuts }: { curve: Point[]; cuts: Cut[] }) {
+  const w = 640
+  const h = 180
+  const padX = 16
+  const padY = 12
+  const peak = Math.max(0.001, ...curve.map(p => p.information))
+  const x = (theta: number) => padX + ((theta + 3) / 6) * (w - padX * 2)
+  const y = (info: number) => h - padY - (info / peak) * (h - padY * 2)
+  const d = curve.map((p, i) => `${i ? 'L' : 'M'}${x(p.theta).toFixed(1)},${y(p.information).toFixed(1)}`).join(' ')
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-44 w-full" role="img"
+      aria-label={`Кривая информации от −3 до 3, максимум ${peak.toFixed(2)}. Вертикальные линии — пороги грейдов.`}>
+      <line x1={padX} x2={w - padX} y1={h - padY} y2={h - padY} stroke="rgb(var(--ink-3))" strokeWidth="1" />
+      {cuts.map(cut => (
+        <line key={cut.grade} x1={x(cut.cut)} x2={x(cut.cut)} y1={padY} y2={h - padY}
+          stroke="rgb(var(--ink-3))" strokeDasharray="3 3" />
+      ))}
+      <path d={d} fill="none" stroke="rgb(var(--accent))" strokeWidth="2.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ExposureCurve({ families, answers }: { families: FamilyRow[]; answers: number }) {
+  const w = 640
+  const h = 160
+  const padX = 16
+  const padY = 16
+  const rows = families.filter(f => f.answers > 0)
+  if (answers === 0 || rows.length === 0) {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-36 w-full" role="img" aria-label="Показов ещё нет">
+        <line x1={padX} x2={w - padX} y1={h / 2} y2={h / 2} stroke="rgb(var(--ink-3))" strokeWidth="1.5" />
+        <text x={w / 2} y={h / 2 - 12} textAnchor="middle" fill="rgb(var(--ink-2))" fontSize="14">Показов ещё нет</text>
+      </svg>
+    )
+  }
+  const peak = Math.max(...rows.map(row => row.answers))
+  const x = (i: number) => padX + (rows.length === 1 ? 0 : (i / (rows.length - 1)) * (w - padX * 2))
+  const y = (n: number) => h - padY - (n / peak) * (h - padY * 2)
+  const d = rows.map((row, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(row.answers).toFixed(1)}`).join(' ')
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-40 w-full" role="img"
+      aria-label={`Доля показов по ${rows.length} семействам, всего ответов ${answers}`}>
+      <line x1={padX} x2={w - padX} y1={h - padY} y2={h - padY} stroke="rgb(var(--ink-3))" strokeWidth="1" />
+      <path d={d} fill="none" stroke="rgb(var(--accent))" strokeWidth="2.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /** Open view of the item bank: information at the cuts, exposure, no answer keys. */
 export default function MethodPage() {
   const [spec, setSpec] = useState('backend')
@@ -22,7 +79,6 @@ export default function MethodPage() {
     queryKey: ['psychometrics', spec],
     queryFn: () => itemPsychometrics(spec).then(r => r.data),
   })
-  const peak = Math.max(0.001, ...(data?.curve.map(p => p.information) ?? [1]))
   return (
     <PublicShell>
       <PageHeader
@@ -38,6 +94,19 @@ export default function MethodPage() {
       {isError && <p className="text-sm text-ink-2">Сводка банка сейчас недоступна.</p>}
       {data && (
         <div className="space-y-6">
+          <section className="card p-5">
+            <h2 className="font-display text-lg font-bold text-ink">Цифры проверки</h2>
+            <p className="mt-1 text-sm text-ink-2">Каждая цифра печатается своей командой из каталога репозитория. Это тот же прогон, что в README.</p>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+              {FIGURES.map(([value, text, command]) => (
+                <li key={value} className="rounded-lg border border-line bg-sunken/40 p-3">
+                  <p className="font-display text-2xl font-bold text-accent">{value}</p>
+                  <p className="mt-1 text-sm text-ink">{text}</p>
+                  <p className="mt-2 break-all font-mono text-xs text-ink-3">{command}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Информация у порога уровня</h2>
             <p className="mt-1 text-sm text-ink-2">
@@ -80,13 +149,9 @@ export default function MethodPage() {
           </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Кривая информации</h2>
-            <p className="mt-1 text-sm text-ink-2">Лучшее задание специализации на каждом участке шкалы θ.</p>
-            <div className="mt-4 flex h-28 items-end gap-1" aria-hidden>
-              {data.curve.map(point => (
-                <div key={point.theta} className="min-w-0 flex-1 rounded-sm bg-accent" style={{ height: `${Math.max(4, (point.information / peak) * 100)}%` }} />
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-ink-3">От θ = −3 до θ = 3, шаг 0,25.</p>
+            <p className="mt-1 text-sm text-ink-2">Лучшее задание специализации на каждом участке шкалы θ. Пунктир — порог грейда.</p>
+            <InfoCurve curve={data.curve} cuts={data.cuts} />
+            <p className="mt-2 text-xs text-ink-3">41 точка, от θ = −3 до θ = 3, шаг 0,15.</p>
           </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Справедливость показа</h2>
@@ -98,6 +163,7 @@ export default function MethodPage() {
           </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Показы по семействам</h2>
+            <ExposureCurve families={data.families} answers={data.answers} />
             {data.answers === 0 ? (
               <p className="mt-2 text-sm text-ink-2">На этом стенде ответы ещё не копились. Максимальная доля одного задания на симуляции опубликована в отчёте проверки теста.</p>
             ) : (

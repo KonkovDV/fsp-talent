@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import collections
+import json
 import random
 from datetime import UTC, datetime, timedelta
 
@@ -406,6 +407,9 @@ def test_fast_correct_answers_roll_up_by_family():
 def test_bank_curve_has_information_at_every_cut():
     report = bank_curve("backend")
     assert report["randomesque"] == cat.RANDOMESQUE
+    assert len(report["curve"]) == 41
+    assert report["curve"][0]["theta"] == -3.0 and report["curve"][-1]["theta"] == 3.0
+    assert "item_key" not in json.dumps(report)
     assert {row["grade"] for row in report["cuts"]} == set(cat.CUTS)
     assert all(row["information"] > 0 and row["se_after_12"] < 1 for row in report["cuts"])
     exposed = summarize_exposure([
