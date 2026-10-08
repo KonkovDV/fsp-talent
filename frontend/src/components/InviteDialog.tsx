@@ -38,13 +38,13 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
 
   return (
     <Modal titleId="invite-title" onClose={onClose} sheet>
-      <form onSubmit={submit} className="w-full animate-rise rounded-t-xl border border-line bg-panel p-6 shadow-pop sm:rounded-xl">
+      <form onSubmit={submit} className="w-full rounded-t-2xl border border-line border-t-[3px] border-t-invite bg-panel p-6 shadow-pop sm:rounded-2xl sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="invite-title" className="font-display text-lg font-bold text-ink">Приглашение кандидату</h2>
             <p className="mt-1 text-sm text-ink-2">Кандидат увидит компанию, должность и зарплату. Его контакты откроются, если он примет приглашение.</p>
           </div>
-          <button type="button" onClick={onClose} className="btn-ghost h-8 w-8 p-0" aria-label="Закрыть"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="btn-icon" aria-label="Закрыть"><X size={18} /></button>
         </div>
         <div className="mt-5 space-y-4">
           <div><label className="field-label" htmlFor="inv-role">Должность</label>

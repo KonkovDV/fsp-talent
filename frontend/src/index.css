@@ -10,60 +10,74 @@ details:not([open]) > :not(summary) {
   display: none;
 }
 
-/* ФСП Талант — design system v4 «Протокол».
+/* ФСП Талант — design system v5 «Протокол».
    The product turns results into a ranked list, so the interface borrows the language of a competition protocol:
-   places, ranks, tabular numbers, hairline rules. Colours are RGB triplets so Tailwind can apply opacity. */
+   start numbers, places, tabular numbers, hairline rules. Colours are RGB triplets so Tailwind can apply opacity. */
 
 @layer base {
   /* Colours from the FSP brandbook (fsp-russia.ru/press/brandbook): #402FFF, #EC1D35, #EDEDED, #C8C9CA, #1B1C21.
-     Shades around them are tuned for WCAG AA: text tokens are ≥ 4.5:1 on the surfaces they sit on. */
+     Shades around them are tuned for WCAG 2.2 AA: text tokens are ≥ 4.5:1 on every surface they sit on,
+     field borders ≥ 3:1 against the panel. */
   :root, [data-theme='light'] {
-    --paper: 237 237 237;       /* #EDEDED brand light gray */
-    --panel: 255 255 255;
-    --sunken: 245 245 246;
+    --paper: 237 237 237;       /* #EDEDED brand light gray: the page */
+    --panel: 255 255 255;       /* cards */
+    --sunken: 245 245 247;      /* wells inside cards, table heads */
     --ink: 27 28 33;            /* #1B1C21 brand dark */
-    --ink-2: 74 76 85;
-    --ink-3: 99 101 110;
-    --line: 220 220 223;
-    --line-strong: 200 201 202; /* #C8C9CA brand gray */
-    --accent: 64 47 255;        /* #402FFF brand: actions, links, focus */
+    --ink-2: 72 74 83;
+    --ink-3: 96 98 107;
+    --line: 222 222 226;        /* hairlines between rows */
+    --line-strong: 200 201 202; /* #C8C9CA brand gray: card outlines */
+    --field: 134 136 146;       /* input borders, 3.5:1 on the panel */
+    --accent: 64 47 255;        /* #402FFF brand: actions, links, focus, confirmed grade */
+    --accent-hover: 50 34 232;
     --accent-soft: 236 234 255;
     --accent-ink: 255 255 255;
     --invite: 217 23 47;        /* brand red #EC1D35, one step darker so white text passes AA: the invitation only */
-    --invite-soft: 253 232 234;
+    --invite-soft: 254 240 241;
     --invite-ink: 255 255 255;
+    --danger: 176 58 0;         /* errors and destructive actions: burnt orange, never mistaken for the invitation */
+    --danger-soft: 255 239 230;
     --ok: 14 122 78;
     --ok-soft: 227 245 236;
-    --warn: 161 92 0;
+    --warn: 150 86 0;
     --warn-soft: 253 242 222;
-    --medal: 138 90 0;          /* gold: sport ranks only; AA on its soft background */
+    --medal: 138 90 0;          /* gold: sport ranks only */
     --medal-soft: 252 243 220;
-    --brand-red: 236 29 53;     /* #EC1D35 exact, for the stripe and the mark */
+    --brand-red: 236 29 53;     /* #EC1D35 exact, for the stripe and the map */
+    --shadow-rgb: 27 28 33;
+    --elev-1: 0 1px 0 rgb(27 28 33 / 0.03), 0 1px 3px rgb(27 28 33 / 0.05);
+    --elev-2: 0 1px 0 rgb(27 28 33 / 0.04), 0 10px 30px -12px rgb(27 28 33 / 0.22);
     color-scheme: light;
   }
 
   [data-theme='dark'] {
-    --paper: 18 19 23;
+    --paper: 16 17 21;
     --panel: 27 28 33;          /* #1B1C21 */
-    --sunken: 22 23 27;
+    --sunken: 22 23 28;
     --ink: 237 237 237;         /* #EDEDED */
-    --ink-2: 180 181 188;
-    --ink-3: 138 140 149;
-    --line: 44 45 53;
-    --line-strong: 67 69 79;
-    --accent: 138 127 255;
-    --accent-soft: 38 33 79;
-    --accent-ink: 18 19 23;
-    --invite: 255 90 107;
-    --invite-soft: 64 20 28;
-    --invite-ink: 18 19 23;
+    --ink-2: 184 185 192;
+    --ink-3: 152 154 164;
+    --line: 46 47 56;
+    --line-strong: 66 68 78;
+    --field: 112 114 126;
+    --accent: 150 140 255;
+    --accent-hover: 172 164 255;
+    --accent-soft: 40 35 86;
+    --accent-ink: 16 17 21;
+    --invite: 255 92 110;
+    --invite-soft: 66 20 30;
+    --invite-ink: 16 17 21;
+    --danger: 255 146 92;
+    --danger-soft: 60 30 14;
     --ok: 72 199 138;
     --ok-soft: 14 46 36;
     --warn: 240 180 70;
     --warn-soft: 52 38 12;
     --medal: 240 190 70;
     --medal-soft: 50 40 12;
-    --brand-red: 255 90 107;
+    --brand-red: 255 92 110;
+    --elev-1: 0 0 0 transparent;
+    --elev-2: 0 16px 40px -16px rgb(0 0 0 / 0.7);
     color-scheme: dark;
   }
 
@@ -72,63 +86,79 @@ details:not([open]) > :not(summary) {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     font-feature-settings: 'tnum' 0;
+    -webkit-tap-highlight-color: transparent;
   }
   body { @apply bg-paper text-ink; min-height: 100dvh; }
   h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
   /* Grid children may shrink below their content: long titles truncate instead of widening the page on phones. */
   .grid > * { min-width: 0; }
-  :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; border-radius: 4px; }
-  ::selection { background: rgb(var(--accent) / 0.18); }
+  :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: rgb(var(--accent) / 0.2); }
+  a { text-underline-offset: 3px; }
+  input[type='checkbox'], input[type='radio'] { accent-color: rgb(var(--accent)); width: 1.05rem; height: 1.05rem; }
 
   .skip-link {
     @apply sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:px-4 focus:py-2
-           focus:rounded focus:bg-accent focus:text-accent-ink;
+           focus:rounded-md focus:bg-accent focus:text-accent-ink;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer components {
-  /* Buttons. One primary per screen; the red one is only for sending an invitation. */
+  /* Buttons. One primary per screen; the red one is only for sending an invitation. Heights: 40 px, small 32 px. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold
-           transition-colors duration-150 select-none disabled:opacity-45 disabled:pointer-events-none;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold leading-5
+           transition-[background-color,border-color,color,box-shadow,transform] duration-150 select-none
+           active:translate-y-px disabled:opacity-45 disabled:pointer-events-none;
   }
-  .btn-primary { @apply btn bg-accent text-accent-ink hover:bg-accent/90; }
-  .btn-invite, .btn-danger { @apply btn bg-invite text-invite-ink hover:bg-invite/90; }
-  .btn-secondary { @apply btn border border-line-strong bg-panel text-ink hover:border-accent hover:text-accent; }
-  .btn-ghost { @apply btn px-3 text-ink-2 hover:text-ink hover:bg-sunken; }
-  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .btn-primary { @apply btn bg-accent text-accent-ink hover:bg-accent-hover; }
+  .btn-invite { @apply btn bg-invite text-invite-ink hover:bg-invite/90; }
+  .btn-danger { @apply btn bg-danger text-white hover:bg-danger/90 dark:text-paper; }
+  .btn-secondary { @apply btn border border-line-strong bg-panel text-ink shadow-xs hover:border-accent/60 hover:text-accent; }
+  .btn-ghost { @apply btn px-3 text-ink-2 hover:bg-sunken hover:text-ink; }
+  .btn-sm { @apply min-h-8 px-3 py-1 text-xs; }
   .btn-secondary-white { @apply btn border border-white/60 text-white hover:bg-white/10; }
-  .btn-nav { @apply btn px-2.5 py-1.5 text-ink-2 hover:text-ink hover:bg-sunken; }
+  .btn-nav { @apply btn min-h-9 px-2.5 py-1.5 font-medium text-ink-2 hover:bg-sunken hover:text-ink; }
+  .btn-icon { @apply btn-nav h-9 w-9 p-0; }
 
-  /* Panels. Hairline border, no drop shadow: content is the hierarchy. */
-  .card { @apply rounded-lg border border-line bg-panel p-5 sm:p-6; }
-  .card-hover { @apply card transition-colors hover:border-line-strong; }
+  /* Panels. Hairline outline and a barely-there lift in the light theme; content is the hierarchy. */
+  .card { @apply rounded-xl border border-line-strong/70 bg-panel p-5 shadow-xs sm:p-6 dark:border-line; }
+  .card-hover { @apply card transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-lift; }
   .card-interactive { @apply card-hover cursor-pointer; }
   .card-fsp, .card-fsp-red, .card-fsp-gold { @apply card; }
   .panel-quiet { @apply rounded-lg bg-sunken p-4; }
+  /* Card heading row: title on the left, one quiet link or count on the right. */
+  .card-head { @apply flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1; }
+  .link { @apply font-medium text-accent underline-offset-4 hover:underline; }
 
-  .page-head { @apply flex flex-wrap items-end justify-between gap-4 pb-6; }
-  .page-title { @apply font-display text-2xl font-bold tracking-[-0.02em] text-ink sm:text-3xl; }
-  .page-lead { @apply mt-1.5 max-w-prose text-sm text-ink-2; }
-  .section-title { @apply font-display text-base font-bold tracking-tight text-ink; }
+  .page-head { @apply flex flex-wrap items-end justify-between gap-4 pb-7; }
+  .page-title { @apply font-display text-[1.75rem] font-bold leading-tight tracking-[-0.03em] text-ink sm:text-[2.125rem]; }
+  .page-lead { @apply mt-2 max-w-[64ch] text-[0.9375rem] leading-relaxed text-ink-2; }
+  .section-title { @apply font-display text-base font-bold tracking-[-0.01em] text-ink; }
 
   /* Inputs */
   .input {
-    @apply w-full rounded-md border border-line-strong bg-panel px-3.5 py-2.5 text-sm text-ink
-           placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none
-           focus:ring-2 focus:ring-accent/20;
+    @apply min-h-10 w-full rounded-md border border-field/60 bg-panel px-3.5 py-2 text-sm text-ink
+           placeholder:text-ink-3 transition-[border-color,box-shadow] hover:border-field
+           focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/20
+           disabled:cursor-not-allowed disabled:bg-sunken disabled:text-ink-3
+           aria-[invalid=true]:border-danger;
   }
-  .select { @apply input appearance-none pr-9 cursor-pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23707891' stroke-width='1.6'%3E%3Cpath d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  textarea.input { @apply leading-relaxed; }
+  .select { @apply input appearance-none pr-9 cursor-pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23868892' stroke-width='1.8'%3E%3Cpath d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
   .field-label { @apply mb-1.5 block text-xs font-medium text-ink-2; }
-  .field-hint { @apply mt-1 text-xs text-ink-3; }
-  .field-error { @apply mt-1 text-xs text-invite; }
+  .field-hint { @apply mt-1.5 text-xs text-ink-3; }
+  .field-error { @apply mt-1.5 text-xs font-medium text-danger; }
 
-  /* Grade plates: a category is specialization × grade, shown like a bib number. */
-  .badge { @apply inline-flex items-center gap-1 rounded px-2 py-0.5 text-2xs font-semibold; }
+  /* Grade plates: a category is specialization × grade, shown like a start number. */
+  .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-2 py-0.5 text-2xs font-semibold; }
   .badge-junior { @apply badge bg-sunken text-ink-2 ring-1 ring-inset ring-line-strong; }
   .badge-middle { @apply badge bg-accent-soft text-accent ring-1 ring-inset ring-accent/25; }
   .badge-senior { @apply badge bg-accent text-accent-ink; }
@@ -136,51 +166,66 @@ details:not([open]) > :not(summary) {
   .badge-brand { @apply badge bg-accent-soft text-accent; }
   .badge-ok { @apply badge bg-ok-soft text-ok; }
   .badge-warn { @apply badge bg-warn-soft text-warn; }
+  .badge-danger { @apply badge bg-danger-soft text-danger; }
+  .badge-invite { @apply badge bg-invite-soft text-invite; }
   .badge-mc { @apply badge bg-medal text-white dark:text-paper; }
   .badge-kmc { @apply badge bg-medal-soft text-medal ring-1 ring-inset ring-medal/40; }
-  .badge-vc { @apply badge bg-sunken text-ink-2; }
+  .badge-vc { @apply badge bg-sunken text-ink-2 ring-1 ring-inset ring-line; }
+  /* Counter on a heading or a nav item. */
+  .count { @apply inline-flex min-w-[1.375rem] items-center justify-center rounded-full bg-accent px-1.5 font-sans text-2xs font-semibold leading-[1.375rem] text-accent-ink tabular-nums; }
+  .count-invite { @apply count bg-invite text-invite-ink; }
 
   .chip { @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium; }
-  .chip-default { @apply chip border-line bg-panel text-ink-2; }
-  .chip-active { @apply chip border-accent/40 bg-accent-soft text-accent; }
-  .chip-missing { @apply chip border-dashed border-invite/50 text-invite; }
+  .chip-default { @apply chip border-line-strong/80 bg-panel text-ink-2; }
+  .chip-active { @apply chip border-accent/35 bg-accent-soft text-accent; }
+  .chip-missing { @apply chip border-dashed border-danger/50 text-danger; }
+
+  /* Tabs: underline on the active one; used with role="tab". */
+  .tabs { @apply flex gap-1 overflow-x-auto border-b border-line; scrollbar-width: none; }
+  .tab {
+    @apply relative -mb-px inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent
+           px-3 text-sm text-ink-2 transition-colors hover:text-ink;
+  }
+  .tab[aria-selected='true'], .tab.active { @apply border-accent font-semibold text-ink; }
 
   /* Protocol table: places, tabular numbers, hairline rows. */
   .protocol { @apply w-full border-collapse text-sm; }
   /* :where keeps these at zero specificity, so a utility like text-right on a cell still wins. */
-  :where(.protocol) th { @apply border-b border-line-strong px-3 py-2 text-left text-xs font-medium text-ink-3; }
+  :where(.protocol) th { @apply border-b border-line-strong bg-sunken/70 px-3 py-2.5 text-left text-xs font-medium text-ink-3; }
   :where(.protocol) td { @apply border-b border-line px-3 py-3 align-middle; }
   :where(.protocol) tr:last-child td { @apply border-b-0; }
+  :where(.protocol) tbody tr { @apply transition-colors hover:bg-sunken/60; }
   .place { @apply font-display text-lg font-bold tabular-nums text-ink; font-feature-settings: 'tnum' 1; }
   .num { font-variant-numeric: tabular-nums; }
 
-  .meter { @apply relative h-1.5 overflow-hidden rounded-full bg-sunken; }
+  .meter { @apply relative h-1.5 overflow-hidden rounded-full bg-ink/[0.07] dark:bg-white/[0.08]; }
   .meter > span { @apply absolute inset-y-0 left-0 rounded-full bg-accent origin-left animate-fill; }
 
-  .skeleton { @apply relative overflow-hidden rounded-lg bg-sunken; }
+  .skeleton { @apply relative overflow-hidden rounded-xl bg-ink/[0.06] dark:bg-white/[0.05]; }
   .skeleton::after {
     content: ''; @apply absolute inset-0 animate-shimmer;
-    background: linear-gradient(90deg, transparent, rgb(var(--panel) / 0.7), transparent); background-size: 200% 100%;
+    background: linear-gradient(90deg, transparent, rgb(var(--panel) / 0.6), transparent); background-size: 200% 100%;
   }
 
-  .stat-card { @apply rounded-lg border border-line bg-panel p-4; }
-  .stat-card-value { @apply font-display text-2xl font-bold tabular-nums text-ink; }
+  .stat-card { @apply rounded-xl border border-line-strong/70 bg-panel p-4 shadow-xs dark:border-line; }
+  .stat-card-value { @apply font-display text-[1.75rem] font-bold leading-tight tabular-nums tracking-[-0.02em] text-ink; }
   .stat-card-label { @apply text-xs text-ink-3; }
   .stat-card-delta { @apply text-xs text-ink-2; }
 
-  .notice { @apply flex items-start gap-3 rounded-lg border px-4 py-3 text-sm; }
-  .notice-info { @apply notice border-accent/25 bg-accent-soft text-ink; }
-  .notice-ok { @apply notice border-ok/30 bg-ok-soft text-ink; }
-  .notice-error { @apply notice border-invite/30 bg-invite-soft text-ink; }
+  /* Notices: a coloured rule on the left carries the tone; the text stays ink for contrast. */
+  .notice { @apply flex items-start gap-3 rounded-lg border border-l-[3px] px-4 py-3 text-sm text-ink; }
+  .notice-info { @apply notice border-accent/25 border-l-accent bg-accent-soft; }
+  .notice-ok { @apply notice border-ok/30 border-l-ok bg-ok-soft; }
+  .notice-error { @apply notice border-danger/30 border-l-danger bg-danger-soft; }
 
-  .empty { @apply rounded-lg border border-dashed border-line-strong px-6 py-10 text-center text-sm text-ink-2; }
+  .empty { @apply rounded-xl border border-dashed border-line-strong bg-panel/40 px-6 py-10 text-center text-sm text-ink-2; }
 
   /* The brand stripe: Federation blue and red, used once at the top of every page. */
   .brand-stripe { height: 3px; background: linear-gradient(90deg, #402FFF 0 72%, #EC1D35 72% 100%); }
 
   /* Brand surface: the Federation indigo with the dot texture of the brandbook map. The same in both themes. */
   .hero-ink {
-    @apply relative isolate overflow-hidden rounded-xl text-white;
+    @apply relative isolate overflow-hidden rounded-2xl text-white;
     background-color: #402FFF;
   }
   .hero-ink::before {
@@ -191,7 +236,7 @@ details:not([open]) > :not(summary) {
             mask-image: linear-gradient(105deg, transparent 35%, #000 85%);
   }
   .hero-ink :focus-visible { outline-color: #fff; }
-  .on-hero-muted { color: rgb(255 255 255 / 0.78); }
+  .on-hero-muted { color: rgb(255 255 255 / 0.82); }
   .btn-on-hero { @apply btn bg-white text-[#2A1DD6] hover:bg-white/90; }
   .btn-on-hero-ghost { @apply btn border border-white/50 text-white hover:bg-white/10; }
   .chip-on-hero { @apply chip border-white/25 bg-white/10 text-white; }
@@ -204,12 +249,20 @@ details:not([open]) > :not(summary) {
   .modal {
     @apply m-auto max-h-[calc(100dvh-2rem)] w-[min(42rem,calc(100vw-2rem))] border-0 bg-transparent p-0 text-ink;
   }
-  .modal::backdrop { background: rgb(27 28 33 / 0.6); backdrop-filter: blur(4px); }
+  .modal[open] { animation: modal-in .18s cubic-bezier(.2,.7,.2,1); }
+  .modal::backdrop { background: rgb(27 28 33 / 0.55); backdrop-filter: blur(3px); }
   .modal-sheet {
     @apply fixed inset-x-0 bottom-0 top-auto m-0 h-fit w-full max-w-none
            sm:inset-0 sm:m-auto sm:h-fit sm:w-[min(32rem,calc(100vw-2rem))];
   }
+  .modal-sheet[open] { animation: sheet-in .22s cubic-bezier(.2,.7,.2,1); }
+  @media (min-width: 640px) { .modal-sheet[open] { animation-name: modal-in; } }
+  /* The surface inside a dialog. */
+  .dialog-panel { @apply rounded-2xl border border-line bg-panel p-6 shadow-pop; }
 }
+
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* The single orchestrated moment of the landing page: the regional network draws itself once. */
 .network-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.6s cubic-bezier(.4,.1,.2,1) .2s forwards; }
@@ -219,10 +272,13 @@ details:not([open]) > :not(summary) {
 @media (prefers-reduced-motion: reduce) {
   .network-line { stroke-dashoffset: 0; animation: none; }
   .network-node { opacity: 1; animation: none; }
+  .skeleton::after, .meter > span, .modal[open], .modal-sheet[open] { animation: none; }
 }
 
 @layer utilities {
   .tabular { font-variant-numeric: tabular-nums; }
   .text-balance { text-wrap: balance; }
   .font-display { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-feature-settings: 'zero' 0, 'calt' 0; }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 }

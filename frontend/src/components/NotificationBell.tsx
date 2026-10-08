@@ -41,7 +41,7 @@ export default function NotificationBell() {
   return (
     <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="true"
-        aria-label={unread ? `Уведомления: ${unread} новых` : 'Уведомления'} className="btn-nav relative h-9 w-9 p-0">
+        aria-label={unread ? `Уведомления: ${unread} новых` : 'Уведомления'} className="btn-icon relative">
         <Bell size={16} aria-hidden />
         {unread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-ink num">
@@ -50,7 +50,7 @@ export default function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="fixed inset-x-4 top-16 z-50 overflow-hidden sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[22rem] rounded-lg border border-line bg-panel shadow-lg shadow-ink/5" role="dialog" aria-label="Уведомления">
+        <div className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-xl border border-line bg-panel shadow-pop sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[22rem]" role="dialog" aria-label="Уведомления">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
             <p className="text-sm font-semibold text-ink">Уведомления</p>
             {unread > 0 && <button type="button" onClick={() => readAll.mutate()} className="text-xs text-accent hover:underline">Прочитать все</button>}
