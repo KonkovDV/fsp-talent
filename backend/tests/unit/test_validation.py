@@ -5,7 +5,7 @@ from app.models.assessment import GRADE_ORDER
 from app.services.matching import score
 from app.services.search.pipeline import order_pool
 from app.validation.assessment import Truth, run, simulate_path
-from app.validation.matching import _facts, _spec, make_dataset, rank, sha256
+from app.validation.matching import _facts, _spec, make_dataset, overrated_parts, overrated_share, rank, sha256
 
 
 def test_assessment_validation_bounds():
@@ -19,6 +19,14 @@ def test_assessment_validation_bounds():
 
 
 def test_matching_rank_follows_the_product_order(monkeypatch):
+    people = {
+        "a": {"observed": {"grade": "senior", "grade_source": "declared"}, "truth": {"grade": "middle"}},
+        "b": {"observed": {"grade": "senior", "grade_source": "assessed"}, "truth": {"grade": "middle"}},
+        "c": {"observed": {"grade": "middle", "grade_source": "declared"}, "truth": {"grade": "middle"}},
+    }
+    assert overrated_share(["a", "b", "c"], people, k=3) == 2 / 3
+    assert overrated_parts(["a", "b", "c"], people, k=3) == (1 / 3, 1 / 3)
+
     dataset = make_dataset(24, 1, seed=3)
     need = dataset["needs"][0]
     spec = _spec(need)

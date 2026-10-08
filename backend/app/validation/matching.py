@@ -333,6 +333,27 @@ def overrated_share(ranked: list[str], by_id: dict[str, dict], k: int = 10) -> f
     return over / max(1, len(top))
 
 
+def overrated_parts(ranked: list[str], by_id: dict[str, dict], k: int = 10) -> tuple[float, float]:
+    """The same share, split by whether the shown grade was only declared or confirmed by the test.
+
+    The two parts add up to overrated_share. The rank order is not an input this function changes.
+    """
+    top = ranked[:k]
+    declared = assessed = 0
+    for cid in top:
+        person = by_id[cid]
+        shown = GRADES.index(person["observed"]["grade"])
+        real = GRADES.index(person["truth"]["grade"])
+        if shown <= real:
+            continue
+        if person["observed"].get("grade_source") == "assessed":
+            assessed += 1
+        else:
+            declared += 1
+    n = max(1, len(top))
+    return declared / n, assessed / n
+
+
 def below_need_share(ranked: list[str], need: dict, by_id: dict[str, dict], k: int = 10) -> float:
     """The other definition: share of the top k whose real grade is below the grade the need asks for."""
     if need.get("grade") not in GRADES:
@@ -363,6 +384,8 @@ class Row:
     below_need: float | None = None       # share of the top 10 whose real grade is below the need's grade
     ndcg_ci: tuple[float, float] | None = None
     rho_ci: tuple[float, float] | None = None
+    over_declared: float | None = None    # part of overrated whose grade was only declared
+    over_assessed: float | None = None    # part of overrated whose test confirmed that grade
 
 
 METHODS = ("random", "keyword", "full", "no_quota", "no_trust", "no_test", "no_fsp", "no_evidence", "no_related")
@@ -381,6 +404,7 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
     hidden = bool(dataset["candidates"]) and "theta" in (dataset["candidates"][0].get("truth") or {})
     for method in METHODS:
         nd, pr, ap, rho, over, below = [], [], [], [], [], []
+        declared_part, assessed_part = [], []
         for need in needs:
             labels = dataset["labels"][need["id"]]
             # A jury sheet labels a handful of people. Rank those, not the rest of the bank.
@@ -394,6 +418,9 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
             ap.append(average_precision(ranked, labels))
             if hidden:
                 over.append(overrated_share(ranked, by_id))
+                declared, assessed = overrated_parts(ranked, by_id)
+                declared_part.append(declared)
+                assessed_part.append(assessed)
                 below.append(below_need_share(ranked, need, by_id))
                 r = category_spearman(ranked, need, by_id)
                 if r is not None:
@@ -401,7 +428,9 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
         rows.append(Row(method, statistics.mean(nd), statistics.mean(pr), statistics.mean(ap),
                         statistics.mean(rho) if rho else None, statistics.mean(over) if over else None,
                         statistics.mean(below) if below else None,
-                        bootstrap_ci(nd), bootstrap_ci(rho) if rho else None))
+                        bootstrap_ci(nd), bootstrap_ci(rho) if rho else None,
+                        over_declared=statistics.mean(declared_part) if declared_part else None,
+                        over_assessed=statistics.mean(assessed_part) if assessed_part else None))
     return rows
 
 
@@ -437,7 +466,8 @@ def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str,
     """The same benchmark on several seeds: mean and spread, so one lucky seed cannot carry a claim."""
     keys = ("keyword", "full", "no_test", "no_fsp", "no_evidence")
     per: dict[str, dict[str, list[float]]] = {
-        k: {"ndcg": [], "p10": [], "rho": [], "over": [], "below": []} for k in keys
+        k: {"ndcg": [], "p10": [], "rho": [], "over": [], "below": [], "declared": [], "assessed": []}
+        for k in keys
     }
     for sd in seeds:
         rows = {r.method: r for r in evaluate(make_dataset(n_candidates, n_needs, sd))}
@@ -447,6 +477,8 @@ def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str,
             per[k]["rho"].append(rows[k].rho if rows[k].rho is not None else float("nan"))
             per[k]["over"].append(rows[k].overrated or 0.0)
             per[k]["below"].append(rows[k].below_need or 0.0)
+            per[k]["declared"].append(rows[k].over_declared or 0.0)
+            per[k]["assessed"].append(rows[k].over_assessed or 0.0)
 
     def ms(xs: list[float], scale: float = 1.0, digits: int = 3) -> str:
         sd = statistics.stdev(xs) if len(xs) > 1 else 0.0
@@ -459,6 +491,19 @@ def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str,
     lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['p10'])} | {ms(per[k]['rho'])} "
               f"| {ms(per[k]['over'], 100, 1)} | {ms(per[k]['below'], 100, 1)} |"
               for k in keys]
+
+    def part(method: str, key: str) -> str:
+        return f"{statistics.mean(per[method][key]) * 100:.1f}"
+
+    full_declared = part("full", "declared")
+    full_assessed = part("full", "assessed")
+    resume_declared = part("keyword", "declared")
+    resume_assessed = part("keyword", "assessed")
+    lines += ["",
+              "Завышенный грейд в топ-10 по источнику показанного грейда, те же зерна. Порядок выдачи прежний. "
+              f"Полная модель: заявлен {full_declared} %, подтверждён тестом {full_assessed} %. "
+              f"По резюме: заявлен {resume_declared} %, подтверждён тестом {resume_assessed} %. "
+              "Сумма двух долей совпадает со столбцом «Завышенный грейд»."]
     summary = {k: {m: statistics.mean(v) for m, v in per[k].items()} for k in keys}
     return "\n".join(lines) + "\n", summary
 
