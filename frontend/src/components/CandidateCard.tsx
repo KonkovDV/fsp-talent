@@ -49,6 +49,8 @@ const REASON_RU: Record<string, string> = {
   FSP_BONUS: 'Протокол ФСП',
   FSP_SCORE: 'Результаты ФСП',
   FSP_NEUTRAL: 'Без истории ФСП',
+  FSP_RELEVANT: 'Профильная дисциплина',
+  FSP_OTHER: 'Другая дисциплина',
   RELATED_ROLE: 'Смежная специализация',
   RELATED_SKILL: 'Близкая технология',
   SKILL_COVERAGE: 'Навыки',

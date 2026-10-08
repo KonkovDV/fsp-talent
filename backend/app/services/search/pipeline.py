@@ -5,8 +5,10 @@ the best LCB and the id; a cold candidate may take the last seat of a block of t
 anonymous: no name, no FSP id, evidence shown as status + year + percentile bucket instead of
 exact event and place.
 
-When a discipline is selected, the quality signal (max LCB) is computed inside that discipline only:
-a strong algorithmic score must not lift a candidate in a security search.
+When a discipline is selected, the quality signal is that discipline only.
+Without the filter, a need with a profile discipline reads that discipline in full and the others at half:
+a security need ranks a security result above a robotics one. Roles with no profile discipline
+keep the best result across disciplines. Competition status is not part of this choice.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.fsp.mock import STATUS_LABELS
+from app.services.fsp.relevance import lcb_for_need
 from app.services.matching import (
     RELATED,
     CandidateFacts,
@@ -440,11 +443,11 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
     people = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ids)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ids)))}
-    lcb_q = select(DisciplineScore.participant_id, func.max(DisciplineScore.lcb)).where(
-        DisciplineScore.participant_id.in_(ids))
-    if discipline:
-        lcb_q = lcb_q.where(DisciplineScore.discipline == discipline)
-    lcb = dict((pid, v) for pid, v in await db.execute(lcb_q.group_by(DisciplineScore.participant_id)))
+    by_discipline: dict[uuid.UUID, dict[str, float]] = {}
+    for pid, disc, value in await db.execute(
+            select(DisciplineScore.participant_id, DisciplineScore.discipline, DisciplineScore.lcb).where(
+                DisciplineScore.participant_id.in_(ids))):
+        by_discipline.setdefault(pid, {})[disc] = float(value or 0.0)
     confs = {(c.participant_id, c.specialization): c for c in await db.scalars(
         select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ids)))}
     pending = {pid: n for pid, n in await db.execute(
@@ -472,12 +475,17 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
         spec = need.role or (p.specialization if p else None) or (cat.primary_role if cat else None)
         conf = confs.get((pid, spec)) if spec else None
         has_fsp = bool(p and p.fsp_id)
+        if has_fsp:
+            fsp_lcb, fsp_kind, fsp_discipline = lcb_for_need(need.role, by_discipline.get(pid, {}), discipline)
+        else:
+            fsp_lcb, fsp_kind, fsp_discipline = None, None, None
         facts = CandidateFacts(
             role=cat.primary_role if cat else None, grade=cat.grade if cat else None,
             grade_source=cat.grade_source if cat else None, skills=skills.get(pid, {}),
             test_p=conf.p_pass if conf and conf.p_pass is not None else (1.0 if conf else None),
             test_spec=conf.specialization if conf else None,
-            fsp_lcb=(lcb.get(pid, 0.0) if has_fsp else None), industry=p.industry if p else None,
+            fsp_lcb=fsp_lcb, fsp_kind=fsp_kind, fsp_discipline=fsp_discipline,
+            industry=p.industry if p else None,
             text_rank=fused.get(pid, 0.0) / top,
             salary_from=p.salary_from_gross if p else None, salary_to=p.salary_to_gross if p else None,
             test_se=conf.se if conf and conf.se else None,

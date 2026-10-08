@@ -13,19 +13,21 @@ from app.core.redis_client import get_redis
 
 EPOCH_KEY = "search-bank-epoch"
 TTL_S = 300
+# Bump when the ranking rule changes, so a cached order from the previous rule is not served.
+RANK_VERSION = 2
 # Matches allows offset <= 200 and limit <= 50. One stored ranking covers every page.
 WINDOW = 250
 _COMPANY_KEYS = ("shortlisted", "invited", "contacts_closed")
 
 
 def shortlist_key(need_id: object, version: int, epoch: int) -> str:
-    return f"shortlist:{need_id}:{version}:{epoch}"
+    return f"shortlist:v{RANK_VERSION}:{need_id}:{version}:{epoch}"
 
 
 def shared_key(params: dict, epoch: int) -> str:
     raw = json.dumps(params, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     digest = hashlib.sha256(raw.encode()).hexdigest()[:16]
-    return f"shortlist-shared:{digest}:{epoch}"
+    return f"shortlist-shared:v{RANK_VERSION}:{digest}:{epoch}"
 
 
 def store_payload(result: dict) -> dict:
