@@ -137,6 +137,10 @@ async def test_erasure_invalidates_tokens_and_hides_the_card():
     assert person.deleted_at is not None
     assert person.display_name is None and person.email is None
     assert person.discoverable is False
+    teen = Participant(id=uuid.uuid4(), token_epoch=0, display_name="Лена", is_minor=True,
+                       guardian_email="mom@example.test", guardian_consent_at=object())
+    await erase_participant(Db(), teen, "account_deleted")
+    assert teen.guardian_email is None and teen.guardian_consent_at is None
 
 
 def test_offer_terms_stay_immutable_and_one_pending_pair_is_unique():

@@ -44,7 +44,11 @@ export default function EmployerOffers() {
   const [params] = useSearchParams()
   const [thread, setThread] = useState<string | null>(params.get('thread'))
   const [meeting, setMeeting] = useState<string | null>(null)
-  const withdraw = useMutation({ mutationFn: withdrawOffer, onSuccess: () => qc.invalidateQueries({ queryKey: ['employerOffers'] }) })
+  const withdraw = useMutation({
+    mutationFn: withdrawOffer,
+    onSuccess: () => { setError(''); qc.invalidateQueries({ queryKey: ['employerOffers'] }) },
+    onError: e => setError(apiError(e)),
+  })
 
   const stage = (o: Offer) => (o.status === 'pending' && o.candidate_viewed_at ? 'viewed' : o.status)
   const funnel = [
@@ -111,7 +115,7 @@ export default function EmployerOffers() {
                           {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                         </button>
                       )}
-                      {o.status === 'pending' && <button onClick={() => withdraw.mutate(o.id)} className="btn-ghost btn-sm">Отозвать</button>}
+                      {o.status === 'pending' && <button onClick={() => { if (window.confirm('Отозвать приглашение? Отменить это нельзя, кандидат получит уведомление.')) withdraw.mutate(o.id) }} className="btn-ghost btn-sm">Отозвать</button>}
                     </td>
                   </tr>
                   {meeting === o.id && (

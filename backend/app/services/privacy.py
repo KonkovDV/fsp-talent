@@ -47,7 +47,8 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
     if participant.deleted_at is None:
         participant.deleted_at = now
     for field in ("display_name", "email", "password_hash", "email_verified_at", "telegram", "phone",
-                  "birth_date", "fsp_id", "fsp_linked_at", "region", "industry"):
+                  "birth_date", "fsp_id", "fsp_linked_at", "region", "industry",
+                  "guardian_email", "guardian_consent_at"):
         setattr(participant, field, None)
     participant.is_visible = False
     participant.public_profile = False

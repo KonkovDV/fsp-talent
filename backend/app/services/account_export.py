@@ -40,6 +40,12 @@ def participant_record(person, skills, category, consents, offers) -> dict:
         "salary_to": person.salary_to_gross,
         "is_visible": person.is_visible,
         "job_search": person.job_search,
+        "birth_date": _iso(person.birth_date),
+        "is_minor": person.minor_now(),
+        "minor_consent_given": person.minor_consent_given,
+        "guardian_email": person.guardian_email,
+        "guardian_consent_at": _iso(person.guardian_consent_at),
+        "public_profile": person.public_profile,
         "category": None if category is None else {
             "role": category.primary_role,
             "grade": category.grade,
