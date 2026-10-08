@@ -166,6 +166,10 @@ export default function CandidateProfile() {
                   const file = e.target.files?.[0]
                   e.target.value = ''
                   if (!file) return
+                  if (file.size > 5_000_000) {
+                    setNote('PDF до 5 МБ, до 30 страниц')
+                    return
+                  }
                   uploadResumePdf(file).then(r => {
                     setResume(r.data.text ?? '')
                     takeParsed(r.data as ResumeFound)
@@ -186,6 +190,7 @@ export default function CandidateProfile() {
                 {parsed.isPending ? 'Разбираем…' : 'Разобрать резюме'}
               </button>
               </div>
+              <p className="mt-2 text-sm text-ink-2">PDF до 5 МБ, до 30 страниц.</p>
               {found && <ResumeFields found={found} onName={value => { setDisplayName(value); setNote('Имя подставлено в контакты. Сохраните изменения.') }}
                 onPhone={value => { setPhone(value); setNote('Телефон подставлен. Сохраните изменения.') }}
                 onTelegram={value => { setTelegram(value); setNote('Telegram подставлен. Сохраните изменения.') }}

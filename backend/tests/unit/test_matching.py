@@ -469,6 +469,7 @@ def test_search_sql_skips_people_who_are_not_looking():
     sql = str(_in_search(literal(True)).compile(
         dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
     assert "job_search" in sql and "not_looking" in sql
+    assert "grade_source" in sql and "declared" in sql and "assessed" in sql
 
 
 def test_confirmed_grade_outranks_declared_grade_inside_one_tier(monkeypatch):

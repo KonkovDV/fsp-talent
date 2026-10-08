@@ -3,7 +3,8 @@ Rule-based categorization: role x grade x stack.
 
 Grade and the FSP-verified level are independent axes: grade comes from a test result when there is
 one, otherwise from the grade the candidate chose in the survey, never from experience or competition results.
-Experience only suggests which grade to choose.
+Experience only suggests which grade to choose. An FSP discipline does not choose the specialization:
+that comes from the survey, or from resume skills when the survey is still empty.
 """
 from __future__ import annotations
 
@@ -12,7 +13,9 @@ from typing import TypedDict
 from app.services.skills import ROLES, roles_for
 from app.services.survey import SPECIALIZATIONS
 
-RULES_VERSION = "v2.1.0"
+RULES_VERSION = "v2.2.0"
+# Shown until the survey picks a specialization and resume skills are too few to name one.
+UNCHOSEN_ROLE = "не выбрана"
 GRADES = ("intern", "junior", "middle", "senior", "lead")
 MIN_SKILLS_FOR_ROLE = 2
 
@@ -78,7 +81,6 @@ def assign_category(
         for r in roles_for(s):
             role_votes[r] += 1
     best_skill_role = max(ROLES, key=lambda r: (role_votes[r], -ROLES.index(r)))
-    best_disc = max(discipline_scores, key=lambda d: d["lcb"], default=None)
 
     if specialization in ROLES:
         # TZ 2.1: the survey decides the specialization; skills and FSP only explain it.
@@ -89,12 +91,9 @@ def assign_category(
         count = role_votes[role]
         skills_word = _ru_word(count, "подтверждённый навык", "подтверждённых навыка", "подтверждённых навыков")
         explanation.append(f"Роль по навыкам: {count} {skills_word} направления {SPECIALIZATIONS.get(role, role)}")
-    elif best_disc:
-        role = DISCIPLINE_ROLE_MAP.get(best_disc["discipline"], "fullstack")
-        explanation.append(f"Роль по дисциплине ФСП: {DISCIPLINE_LABELS.get(best_disc['discipline'], '')}")
     else:
-        role = "fullstack"
-        explanation.append("Роль по умолчанию: недостаточно данных")
+        role = UNCHOSEN_ROLE
+        explanation.append("Специализация не выбрана: пройдите опрос")
 
     if assessed_grade in GRADES:
         # Confirmed by a test: outranks the self-described grade and the experience estimate.

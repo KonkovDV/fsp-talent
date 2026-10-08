@@ -12,8 +12,9 @@ from app.models import Participant, Result, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, profile_text
 from app.services.categorization import DISCIPLINE_LABELS, assign_category
-from app.services.fsp.mock import FSPParticipant
-from app.services.scoring.engine import compute_discipline_score, rank_equivalent
+from app.services.fsp.mock import FSPParticipant, RegistryRank, choose_registry_ranks, get_fsp_adapter
+from app.services.scoring.engine import compute_discipline_score
+from app.services.search.cache import bump_bank_epoch
 from app.services.vc.issuer import issue_achievement_credential
 
 
@@ -78,7 +79,6 @@ async def ingest_from_fsp(
             "totalParticipants": r.total_participants,
             "teamSize": r.team_size,
             "eventDate": r.event_date.isoformat(),
-            "rankEquivalent": rank_equivalent(r.competition_status, r.place, r.total_participants),
         })
         db.add(VerifiableCredential(
             id=vc_id, participant_id=p.id, result_id=res.id,
@@ -108,7 +108,19 @@ async def append_new_results(db: AsyncSession, participant: Participant, data: F
     return len(fresh)
 
 
-async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
+async def _registry_ranks(p: Participant, ranks: list[RegistryRank] | None) -> list[RegistryRank] | None:
+    """Ranks to write. None means keep the rows already stored (the real registry was not fetched)."""
+    if ranks is not None:
+        return ranks
+    if not p.fsp_id or settings.FSP_MODE == "real":
+        return None
+    data = await get_fsp_adapter().fetch_participant(p.fsp_id)
+    if data is None:
+        return None
+    return list(data.ranks)
+
+
+async def rebuild_profile(db: AsyncSession, p: Participant, ranks: list[RegistryRank] | None = None) -> None:
     if p.birth_date is not None:
         p.is_minor = age_on(p.birth_date, date.today()) < 18
         if p.is_minor:
@@ -123,11 +135,25 @@ async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
             "id": str(r.id), "place": r.place, "total_participants": r.total_participants,
             "competition_status": r.competition_status, "team_size": r.team_size, "event_date": r.event_date,
         })
+    ranks = await _registry_ranks(p, ranks)
+    previous: dict[str, tuple] = {}
+    if ranks is None:
+        for row in await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == p.id)):
+            previous[row.discipline] = (row.best_rank, row.rank_assigned_at, row.rank_order_ref)
+    by_rank = choose_registry_ranks(ranks or [])
     await db.execute(delete(DisciplineScore).where(DisciplineScore.participant_id == p.id))
     scores = []
     for disc, events in by_disc.items():
         sd = compute_discipline_score(events)
-        db.add(DisciplineScore(participant_id=p.id, discipline=disc, **sd))
+        fact = by_rank.get(disc)
+        if fact is not None:
+            best_rank, assigned_at, order_ref = fact.rank, fact.assigned_at, fact.order_ref
+        else:
+            best_rank, assigned_at, order_ref = previous.get(disc, (None, None, None))
+        db.add(DisciplineScore(
+            participant_id=p.id, discipline=disc, best_rank=best_rank,
+            rank_assigned_at=assigned_at, rank_order_ref=order_ref, **sd,
+        ))
         scores.append({"discipline": disc, **sd})
 
     cat = assign_category(skills, scores, p.experience_years, p.declared_grade, p.assessed_grade,
@@ -156,3 +182,4 @@ async def rebuild_profile(db: AsyncSession, p: Participant) -> None:
         else:
             db.add(ProfileEmbedding(participant_id=p.id, embedding=vec, model_version=settings.EMBEDDING_MODEL))
     await db.flush()
+    await bump_bank_epoch()

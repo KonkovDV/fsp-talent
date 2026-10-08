@@ -1,7 +1,6 @@
 """Employer needs: versioned search profiles, matches with explanations, recommended categories, shortlist."""
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
@@ -19,26 +18,14 @@ from app.core.ratelimit import too_many
 from app.core.redis_client import get_redis
 from app.models import CategoryAssignment, InterviewSlot, Need, NeedShortlist, NeedVersion, Offer, Participant
 from app.services.matching import NeedSpec, anonymous_compare
-from app.services.search.pipeline import score_pool, search_candidates
+from app.services.search import cache as shortlist_cache
+from app.services.search.pipeline import _build_cards, score_pool, search_candidates
 from app.services.skills import normalize_skill
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/needs", tags=["needs"])
 Grade = Literal["intern", "junior", "middle", "senior", "lead"]
-# One shortlist per need version and bank stamp. An edit bumps need.version, so the old entry is unused.
-_MATCH_CACHE_S = 60
-
-
-def cached_page(stored: dict, offset: int, limit: int) -> dict | None:
-    """Return one stored page of a shortlist. None if this offset was not saved yet."""
-    pages = stored.get("pages") or {}
-    items = pages.get(f"{offset}:{limit}")
-    if items is None:
-        return None
-    page = {key: value for key, value in stored.items() if key != "pages"}
-    page["items"] = items
-    return page
 
 
 class NeedParams(BaseModel):
@@ -182,41 +169,126 @@ async def archive_need(need_id: uuid.UUID, current: dict = Depends(get_current_e
     return {"archived": True}
 
 
-async def _matches_cached(db: AsyncSession, need: Need, params: NeedParams, limit: int, offset: int) -> dict:
-    """Redis keeps the shortlist for 60 seconds. The key is the need, its version and the bank stamp."""
-    stamp = await db.scalar(select(func.max(Participant.updated_at)))
-    decided = await db.scalar(
-        select(func.max(InterviewSlot.outcome_at))
-        .join(Offer, Offer.id == InterviewSlot.offer_id)
-        .where(Offer.employer_id == need.employer_id))
-    bank = (stamp.isoformat() if stamp is not None else "0") + ":" + (
-        decided.isoformat() if decided is not None else "0")
-    key = f"need-matches:{need.id}:{need.version}:{bank}"
-    redis = None
-    stored: dict | None = None
+async def _redis():
     try:
-        redis = await get_redis()
-        raw = await redis.get(key)
-        if raw:
-            stored = json.loads(raw)
-            page = cached_page(stored, offset, limit)
-            if page is not None:
-                return page
+        return await get_redis()
     except Exception:
-        redis = None
-    result = await search_candidates(
-        db, skills=params.skills, q=params.q, limit=limit, offset=offset, has_fsp=params.has_fsp,
-        work_goal=params.work_goal, need=params.spec(), employer_id=need.employer_id)
+        return None
+
+
+async def _employer_met_someone(db: AsyncSession, employer_id: uuid.UUID) -> bool:
+    """An interview outcome changes this company's order, so that ranking is not shared."""
+    row = await db.scalar(
+        select(InterviewSlot.id)
+        .join(Offer, Offer.id == InterviewSlot.offer_id)
+        .where(Offer.employer_id == employer_id, InterviewSlot.outcome.is_not(None))
+        .limit(1))
+    return row is not None
+
+
+async def _cached_page(redis, key: str, offset: int, limit: int) -> dict | None:
+    if redis is None:
+        return None
+    try:
+        stored = await shortlist_cache.read_ranked(redis, key)
+    except Exception:
+        return None
+    if not stored:
+        return None
+    return shortlist_cache.slice_ranked(stored, offset, limit)
+
+
+async def _matches_cached(db: AsyncSession, need: Need, params: NeedParams, limit: int, offset: int) -> dict:
+    """One ranking per need version and bank epoch. Identical needs share the computation."""
+    redis = await _redis()
+    epoch = 0
     if redis is not None:
         try:
-            if stored is None:
-                stored = {k: v for k, v in result.items() if k != "items"}
-                stored["pages"] = {}
-            stored["pages"][f"{offset}:{limit}"] = result["items"]
-            await redis.set(key, json.dumps(stored), ex=_MATCH_CACHE_S)
+            epoch = await shortlist_cache.bank_epoch(redis)
+        except Exception:
+            redis = None
+    key = shortlist_cache.shortlist_key(need.id, need.version, epoch)
+    shared = shortlist_cache.shared_key(params.model_dump(), epoch)
+    page = await _cached_page(redis, key, offset, limit)
+    if page is not None:
+        return page
+    own = await _employer_met_someone(db, need.employer_id)
+    if not own:
+        page = await _cached_page(redis, shared, offset, limit)
+        if page is not None:
+            return page
+    if redis is not None and not own:
+        try:
+            got = await redis.set(shared + ":lock", "1", nx=True, ex=20)
+        except Exception:
+            got = True
+        if not got:
+            waited = await shortlist_cache.wait_ranked(redis, shared)
+            page = shortlist_cache.slice_ranked(waited, offset, limit) if waited else None
+            if page is not None:
+                return page
+    result = await search_candidates(
+        db, skills=params.skills, q=params.q, limit=shortlist_cache.WINDOW, offset=0, has_fsp=params.has_fsp,
+        work_goal=params.work_goal, need=params.spec(), employer_id=need.employer_id if own else None,
+        build_cards=False)
+    payload = shortlist_cache.store_payload(result)
+    if redis is not None:
+        try:
+            await shortlist_cache.write_ranked(redis, key, payload)
+            if not own:
+                await shortlist_cache.write_ranked(redis, shared, payload)
         except Exception:
             pass
-    return result
+    page = shortlist_cache.slice_ranked(payload, offset, limit)
+    if page is None:
+        page = shortlist_cache.slice_ranked({**payload, "complete": True}, offset, limit)
+    return page or {"items": []}
+
+
+async def _company_offers(db: AsyncSession, employer_id: uuid.UUID, ids: list[uuid.UUID]) -> dict[str, dict]:
+    """Invitations and closed contacts of this company only."""
+    if not ids:
+        return {}
+    found: dict[str, dict] = {}
+    rows = await db.execute(
+        select(Offer.candidate_id, Offer.status, Offer.contacts_revoked_at)
+        .where(Offer.employer_id == employer_id, Offer.candidate_id.in_(ids)))
+    for pid, status, revoked in rows:
+        key = str(pid)
+        prev = found.get(key) or {"invited": False, "contacts_closed": False}
+        found[key] = {
+            "invited": prev["invited"] or status in ("pending", "accepted"),
+            "contacts_closed": prev["contacts_closed"] or revoked is not None,
+        }
+    return found
+
+
+async def _hydrate(db: AsyncSession, page: dict) -> dict:
+    """Turn a cached ranking into cards for this page only."""
+    items = page.get("items") or []
+    if not items or "have" not in items[0]:
+        return page
+    ordered = []
+    have: dict[uuid.UUID, set[str]] = {}
+    for item in items:
+        try:
+            pid = uuid.UUID(item["candidate_id"])
+        except (ValueError, KeyError):
+            continue
+        ordered.append(pid)
+        have[pid] = set(item.get("have") or [])
+    cards = await _build_cards(db, ordered, set(page.get("query_skills") or []), have, set(), None)
+    by_id = {card["candidate_id"]: card for card in cards}
+    merged = []
+    for item in items:
+        card = by_id.get(item["candidate_id"])
+        if card is None:
+            continue
+        card["match"] = item.get("match")
+        card["skill_evidence"] = item.get("skill_evidence") or {}
+        merged.append(card)
+    page["items"] = merged
+    return page
 
 
 @router.get("/{need_id}/matches")
@@ -228,11 +300,17 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
         raise ApiError(429, "rate_limited")
     need = await _own(db, need_id, current)
     p = NeedParams(**(await _params(db, need)).params)
-    result = await _matches_cached(db, need, p, limit, offset)
+    result = await _hydrate(db, await _matches_cached(db, need, p, limit, offset))
     listed = {str(pid) for pid in await db.scalars(
         select(NeedShortlist.participant_id).where(NeedShortlist.need_id == need.id))}
+    ids = []
     for card in result["items"]:
-        card["shortlisted"] = card["candidate_id"] in listed
+        try:
+            ids.append(uuid.UUID(card["candidate_id"]))
+        except (ValueError, KeyError):
+            continue
+    offers = await _company_offers(db, need.employer_id, ids)
+    shortlist_cache.apply_company_marks(result["items"], listed, offers)
     return {**result, "need": _out(need, await _params(db, need))}
 
 

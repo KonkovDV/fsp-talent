@@ -8,7 +8,7 @@ import GuardianCard from '../../components/GuardianCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
 import { ROLE_RU, gradeRu } from '../../labels'
 
-interface Disc { discipline: string; label: string; score?: number; lcb: number; confidence: number; best_rank: string | null; events_count: number }
+interface Disc { discipline: string; label: string; score?: number; lcb: number; confidence: number; best_rank: string | null; rank_assigned_at?: string | null; rank_order_ref?: string | null; events_count: number }
 interface Offer { id: string; company: string; role: string; salary_from: number; salary_to: number; status: string }
 interface Weekly { vacancy_id: string; title: string; company: string | null; topic_label: string | null; done: boolean; is_correct: boolean | null; week_from: string }
 interface MarketCell { p25: number; median: number; p75: number; n: number }
@@ -150,7 +150,9 @@ export default function CandidateDashboard() {
                   <li key={d.discipline}>
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-ink">{d.label}</span>
-                      <span className="flex items-center gap-2"><RankBadge rank={d.best_rank} />
+                      <span className="flex items-center gap-2">
+                        <RankBadge rank={d.best_rank} assignedAt={d.rank_assigned_at} orderRef={d.rank_order_ref} />
+                        {d.best_rank && <span className="text-ink-3">Присвоенный разряд</span>}
                         <span className="num text-ink-2">{d.events_count} соревн.</span></span>
                     </div>
                     <div className="mt-2"><Meter value={Math.min(1, d.lcb / 0.6)} ariaLabel={`Уровень по результатам ФСП, ${d.label}`} /></div>

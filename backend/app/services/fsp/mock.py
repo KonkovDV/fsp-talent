@@ -20,6 +20,35 @@ GENERATED_RANGE = range(1000, 1150)
 UNCLAIMED_RANGE = range(2000, 2100)
 DEMO_SECRET = "test"
 
+# Event names. The score does not use the status; these words are only for the protocol line.
+STATUS_LABELS = {
+    "world": "Чемпионат/первенство мира",
+    "russia_championship": "Чемпионат России",
+    "russia_cup": "Кубок России",
+    "russia_youth": "Первенство России",
+    "all_russian": "Всероссийские соревнования",
+    "federal_district": "Соревнования федерального округа",
+    "regional": "Соревнования субъекта РФ",
+    "other": "Прочие соревнования",
+}
+
+# Demo registry only. The table follows order of the Ministry of Sport No. 6 (revision of 22.04.2024).
+# Reconcile it with appendix No. 77 to order No. 299 of 09.04.2026 before treating the numbers as current.
+# The cup split «МС за 1, КМС за 2–3» is the reading of an ambiguous 2024 line. Youth ranks are the only
+# outcome of events outside that table. Age must be reached before the first day of the event:
+# МС from 16, КМС from 15, I–III from 14, youth ranks from 12. МСМК is not in the sport's norms.
+_DEMO_RANK_TABLE: dict[str, list[tuple[int, str]]] = {
+    "world": [(1, "МС"), (8, "КМС")],
+    "russia_championship": [(1, "МС"), (4, "КМС"), (9, "I")],
+    "russia_cup": [(1, "МС"), (3, "КМС"), (8, "I")],
+    "russia_youth": [(1, "КМС"), (8, "I")],
+    "all_russian": [(2, "I")],
+    "federal_district": [(2, "I"), (4, "II"), (8, "III")],
+    "regional": [(2, "I"), (4, "II"), (6, "III")],
+    "other": [(1, "I юн."), (2, "II юн."), (6, "III юн.")],
+}
+_RANK_AGE = {"МС": 16, "КМС": 15, "I": 14, "II": 14, "III": 14, "I юн.": 12, "II юн.": 12, "III юн.": 12}
+
 
 @dataclass
 class FSPResult:
@@ -41,6 +70,15 @@ class FSPResult:
 
 
 @dataclass
+class RegistryRank:
+    """A rank assigned by an order, not derived from one place."""
+    discipline: str
+    rank: str
+    assigned_at: date
+    order_ref: str
+
+
+@dataclass
 class FSPParticipant:
     fsp_id: str
     display_name: str
@@ -48,6 +86,7 @@ class FSPParticipant:
     birth_date: date
     gender: str | None = None   # used only to generate demo names; the registry contract does not ask for it
     results: list[FSPResult] = field(default_factory=list)
+    ranks: list[RegistryRank] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -129,12 +168,71 @@ def _generate(fsp_id: str) -> FSPParticipant:
             regions_count=max(1, total // rng.randint(3, 6)),
             ekp_number=f"ЕКП-демо-{ev_date.year}-{n:04d}-{i}",
         ))
-    return FSPParticipant(fsp_id, f"{first} {last}", rng.choice(_REGIONS), birth, gender, results)
+    person = FSPParticipant(fsp_id, f"{first} {last}", rng.choice(_REGIONS), birth, gender, results)
+    person.ranks = demo_ranks(person)
+    return person
+
+
+def _age_on(birth: date, day: date) -> int:
+    return day.year - birth.year - ((day.month, day.day) < (birth.month, birth.day))
+
+
+def demo_rank(status: str, place: int, age: int) -> str | None:
+    """The rank a demo registry would record. None when the table or the age gives nothing."""
+    from app.services.scoring.engine import RANK_ORDER
+
+    raw = None
+    for max_place, rank in _DEMO_RANK_TABLE.get(status, ()):
+        if place <= max_place:
+            raw = rank
+            break
+    if raw is None:
+        return None
+    for candidate in RANK_ORDER[RANK_ORDER.index(raw):]:
+        if age >= _RANK_AGE[candidate]:
+            return candidate
+    return None
+
+
+def demo_ranks(person: FSPParticipant) -> list[RegistryRank]:
+    """One rank per discipline: the strongest, and the earlier order when two events tie."""
+    from app.services.scoring.engine import RANK_ORDER
+
+    chosen: dict[str, tuple[int, date, str, RegistryRank]] = {}
+    for index, row in enumerate(person.results, start=1):
+        rank = demo_rank(row.competition_status, row.place, _age_on(person.birth_date, row.event_date))
+        if rank is None:
+            continue
+        fact = RegistryRank(row.discipline, rank, row.event_date, f"Приказ-демо-{row.event_date.year}-{index}")
+        key = (RANK_ORDER.index(rank), row.event_date, row.event_id)
+        prev = chosen.get(row.discipline)
+        if prev is None or key < prev[:3]:
+            chosen[row.discipline] = (*key, fact)
+    return [item[3] for item in chosen.values()]
+
+
+def choose_registry_ranks(ranks: list[RegistryRank]) -> dict[str, RegistryRank]:
+    """Strongest rank per discipline. An earlier order wins a tie."""
+    from app.services.scoring.engine import RANK_ORDER
+
+    chosen: dict[str, RegistryRank] = {}
+    for fact in ranks:
+        if fact.rank not in RANK_ORDER:
+            continue
+        prev = chosen.get(fact.discipline)
+        if prev is None or RANK_ORDER.index(fact.rank) < RANK_ORDER.index(prev.rank) or (
+            fact.rank == prev.rank and fact.assigned_at < prev.assigned_at
+        ):
+            chosen[fact.discipline] = fact
+    return chosen
 
 
 def _status_name(status: str) -> str:
-    from app.services.scoring.engine import STATUS_LABELS
     return STATUS_LABELS[status]
+
+
+for _person in DEMO.values():
+    _person.ranks = demo_ranks(_person)
 
 
 class MockFSPAdapter:

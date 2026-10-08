@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, bindparam, func, literal, or_, select, text, tuple_
+from sqlalchemy import and_, bindparam, exists, func, literal, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.fsp.mock import STATUS_LABELS
 from app.services.matching import (
     RELATED,
     CandidateFacts,
@@ -37,13 +38,7 @@ from app.services.matching import (
 )
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
-from app.services.scoring.engine import (
-    RANK_ORDER,
-    RESULT_CLASS_LABELS,
-    STATUS_LABELS,
-    percentile,
-    result_class,
-)
+from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import card_signal
@@ -163,18 +158,27 @@ def created_after(now: datetime, fresh_days: int | None) -> datetime | None:
 
 
 def _in_search(adult):
-    """Who an employer may see: the card is published, age allows it, and the person is not «не ищу»."""
+    """Who an employer may see: the card is published, age allows it, the person is not «не ищу»,
+    and the grade was chosen in the survey or confirmed by the test.
+
+    The showcase uses this same predicate, so a profile that only has FSP protocols is not counted.
+    """
+    graded = exists(select(CategoryAssignment.id).where(
+        CategoryAssignment.participant_id == Participant.id,
+        CategoryAssignment.grade_source.in_(("declared", "assessed")),
+    ))
     return and_(
         Participant.is_visible.is_(True),
         Participant.job_search != "not_looking",
         or_(adult, Participant.minor_consent_given.is_(True)),
+        graded,
     )
 
 
 async def bank_grid(db: AsyncSession) -> dict:
     """The candidate bank by specialization and grade: who is in search and how many confirmed the grade by test.
 
-    Same visibility as the search itself: hidden profiles and minors without the guardian's consent are out.
+    Same visibility as the search itself, including the survey-or-test grade inside ``_in_search``.
     """
     cutoff = adult_cutoff()
     adult = or_(
@@ -207,6 +211,7 @@ async def search_candidates(
     work_goal: str | None = None,
     need: NeedSpec | None = None,
     employer_id: uuid.UUID | None = None,
+    build_cards: bool = True,
 ) -> dict:
     wanted = {n for s in (skills or []) if (n := normalize_skill(s))}
     if q:
@@ -354,6 +359,24 @@ async def search_candidates(
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
+    header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
+              "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint}
+    if not build_cards:
+        # The cache keeps the order and the scores. Cards for one page are built later.
+        items = []
+        for pid in ordered[:limit]:
+            m = matches[pid]
+            items.append({
+                "candidate_id": str(pid),
+                "have": sorted(have.get(pid, ())),
+                "skill_evidence": dict(m.facts.skills) if m.facts else {},
+                "match": {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
+                          "reasons": [{"code": r.code, "text": r.text, "tone": r.tone,
+                                       "source": reason_source(r.code), "points": r.points} for r in m.reasons],
+                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
+                                      for f in m.factors]},
+            })
+        return {**header, "items": items}
     ordered = ordered[offset:offset + limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
     for card in cards:
@@ -541,14 +564,16 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter) 
             disciplines.append({"discipline": ds.discipline,
                                 "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
                                 "score": ds.score, "lcb": ds.lcb, "confidence": ds.confidence,
-                                "best_rank": ds.best_rank, "events_count": ds.events_count,
-                                "evidence": evidence})
+                                "best_rank": ds.best_rank,
+                                "rank_assigned_at": ds.rank_assigned_at.isoformat() if ds.rank_assigned_at else None,
+                                "rank_order_ref": ds.rank_order_ref,
+                                "events_count": ds.events_count, "evidence": evidence})
         if cat and cat.grade_source == "assessed":
             why.append(f"Грейд {cat.grade} подтверждён тестом")
         if disciplines:
             top = next((d for d in disciplines if d["discipline"] == discipline_filter), disciplines[0])
             if top["best_rank"]:
-                why.append(f"Разряд-эквивалент {top['best_rank']} ({top['label']})")
+                why.append(f"Присвоенный разряд {top['best_rank']} ({top['label']})")
             why.append(f"Подтверждено ФСП: нижняя граница уровня {top['lcb']:.2f}, "
                        f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
         if pid in dense_hit:

@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.legal import documents, get_document
 from app.models import Consent, Participant
 from app.services.identity import give_consent, withdraw_consent
+from app.services.search.cache import bump_bank_epoch
 
 router = APIRouter(tags=["legal"])
 
@@ -99,4 +100,6 @@ async def withdraw(kind: str, request: Request, current: dict = Depends(get_any_
             effects.append("Карточка скрыта из поиска; данные будут удалены в течение 30 дней "
                            "(ч. 5 ст. 21 152-ФЗ), если их хранение не требует закон")
     await db.commit()
+    if effects:
+        await bump_bank_epoch()
     return {"kind": kind, "withdrawn": consent is not None, "effects": effects}
