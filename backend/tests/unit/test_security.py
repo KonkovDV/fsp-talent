@@ -131,11 +131,12 @@ async def test_erasure_invalidates_tokens_and_hides_the_card():
             return None
 
     person = Participant(id=uuid.uuid4(), token_epoch=2, display_name="Анна", email="a@example.test",
-                         is_visible=True)
+                         is_visible=True, guardian_email="parent@example.test")
     await erase_participant(Db(), person, "account_deleted")
     assert person.token_epoch == 3
     assert person.deleted_at is not None
     assert person.display_name is None and person.email is None
+    assert person.guardian_email is None and person.guardian_consent_at is None
     assert person.discoverable is False
 
 

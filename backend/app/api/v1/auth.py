@@ -33,7 +33,20 @@ from app.core.security import (
     next_refresh_nonce,
     verify_password,
 )
-from app.models import CategoryAssignment, Consent, Employer, Offer, Participant, Skill, Vacancy
+from app.models import (
+    AccessLog,
+    Application,
+    CategoryAssignment,
+    Consent,
+    Employer,
+    EmployerTask,
+    Offer,
+    Participant,
+    Result,
+    Skill,
+    TaskSubmission,
+    Vacancy,
+)
 from app.services.account_export import (
     employer_record,
     participant_record,
@@ -53,6 +66,7 @@ from app.services.identity import (
     normalize_email,
     send_code,
 )
+from app.services.privacy import contacts_allowed
 from app.services.profile import ingest_from_fsp, rebuild_profile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -487,7 +501,23 @@ async def export_my_data(current: dict = Depends(get_any_auth), db: AsyncSession
             Consent.subject_type == "participant", Consent.subject_id == person.id)))
         offers = list((await db.scalars(
             select(Offer).where(Offer.candidate_id == person.id).options(selectinload(Offer.employer)))).all())
-        payload = participant_record(person, skills, category, consents, offers)
+        results = list(await db.scalars(select(Result).where(Result.participant_id == person.id)))
+        applications = list((await db.scalars(
+            select(Application).where(Application.candidate_id == person.id).options(
+                selectinload(Application.vacancy)))).all())
+        submissions = list(await db.scalars(
+            select(TaskSubmission).where(TaskSubmission.participant_id == person.id)))
+        task_ids = [row.task_id for row in submissions]
+        titled = {row.id: row for row in await db.scalars(
+            select(EmployerTask).where(EmployerTask.id.in_(task_ids)))} if task_ids else {}
+        for row in submissions:
+            row.task = titled.get(row.task_id)
+        tasks = submissions
+        access = list((await db.scalars(
+            select(AccessLog).where(AccessLog.participant_id == person.id).options(
+                selectinload(AccessLog.employer)))).all())
+        payload = participant_record(
+            person, skills, category, consents, offers, results, applications, tasks, access)
         filename = "moi-dannye.json"
     elif role == "employer":
         company = await db.get(Employer, subject)
@@ -498,7 +528,11 @@ async def export_my_data(current: dict = Depends(get_any_auth), db: AsyncSession
         vacancies = list(await db.scalars(select(Vacancy).where(Vacancy.employer_id == company.id)))
         offers = list((await db.scalars(
             select(Offer).where(Offer.employer_id == company.id).options(selectinload(Offer.candidate)))).all())
-        payload = employer_record(company, consents, vacancies, offers)
+        names_ok = {}
+        for offer in offers:
+            if offer.candidate is not None:
+                names_ok[offer.candidate_id] = await contacts_allowed(db, offer.candidate)
+        payload = employer_record(company, consents, vacancies, offers, names_ok)
         filename = "dannye-kompanii.json"
     else:
         raise ApiError(401, "unauthorized")
