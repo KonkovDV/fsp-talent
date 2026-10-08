@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { BadgeCheck, FileSignature, ShieldCheck } from 'lucide-react'
-import { SiteFooter } from '../components/Layout'
+import { SiteFooter } from '../components/chrome'
 import { PublicHeader } from '../components/PublicShell'
 import RussiaNetwork from '../components/RussiaNetwork'
 import { CategoryPlate } from '../components/ui'
