@@ -224,21 +224,13 @@ export default function CandidateAssessment() {
           <div className="flex items-center justify-between text-xs text-ink-3">
             <span>Задание {item.seq}. {item.family_title.toLowerCase().startsWith(item.topic_label.toLowerCase()) ? item.family_title : `${item.topic_label}: ${item.family_title}`}</span>
             <span role="timer" aria-label={`Осталось ${Math.floor(left / 60)} мин ${left % 60} с`}
-              className={`flex items-center gap-1 font-mono ${left < 20 ? 'text-invite' : ''}`}>
-              <Clock size={12} aria-hidden />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+              className={`flex items-center gap-1 rounded-md px-2 py-1 font-mono text-sm tabular-nums ${left < 20 ? 'bg-danger-soft font-semibold text-danger' : 'bg-sunken text-ink-2'}`}>
+              <Clock size={13} aria-hidden />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
             </span>
           </div>
           {state.progress.answered >= 1 && state.progress.p_pass != null && (
-            <div>
-              <div className="mb-1 flex justify-between text-xs text-ink-3">
-                <span>Уверенность, что уровень уже ясен</span>
-                <span className="num">{pct(state.progress.p_pass)}{state.progress.se != null ? ` · θ ${state.progress.theta?.toFixed(2)} ± ${state.progress.se.toFixed(2)}` : ''}</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-sunken" role="meter" aria-valuemin={0} aria-valuemax={100}
-                aria-valuenow={Math.round(state.progress.p_pass * 100)} aria-label="Уверенность решения">
-                <div className="h-full bg-accent" style={{ width: `${Math.min(100, state.progress.p_pass * 100)}%` }} />
-              </div>
-            </div>
+            <ConfidenceScale p={state.progress.p_pass} trial={state.progress.min_items === state.progress.max_items}
+              detail={state.progress.se != null ? `θ ${state.progress.theta?.toFixed(2)} ± ${state.progress.se.toFixed(2)}` : ''} />
           )}
           <p className={`whitespace-pre-wrap text-sm leading-relaxed ${item.stem.includes(" | ") ? "font-mono" : ""}`}>{item.stem}</p>
           {item.code && (
@@ -256,8 +248,11 @@ export default function CandidateAssessment() {
             <div className="grid gap-2" role="radiogroup">
               {item.options.map(o => (
                 <button key={o.index} role="radio" aria-checked={picked === o.index} onClick={() => setPicked(o.index)}
-                  className={`text-left px-4 py-3 rounded-xl border font-mono text-sm ${picked === o.index ? 'border-accent bg-accent-soft' : 'border-border hover:border-accent/50'}`}>
-                  {o.text}
+                  className={`flex min-h-12 items-center gap-3 rounded-lg border px-4 py-3 text-left font-mono text-sm transition-colors ${picked === o.index ? 'border-accent bg-accent-soft text-ink' : 'border-line-strong bg-panel hover:border-accent/60'}`}>
+                  <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 ${picked === o.index ? 'border-accent' : 'border-field'}`} aria-hidden>
+                    {picked === o.index && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                  </span>
+                  <span className="min-w-0">{o.text}</span>
                 </button>
               ))}
             </div>
@@ -270,7 +265,7 @@ export default function CandidateAssessment() {
                 : 'Прервать тест? Попытка засчитается, пересдача — через 7 дней.'
               if (window.confirm(warning)) stop.mutate()
             }}
-              className="text-sm text-ink-3 hover:text-invite">Прервать</button>
+              className="btn-ghost btn-sm -ml-3 text-ink-3 hover:text-danger">Прервать</button>
             <button onClick={() => answer.mutate()} disabled={!ready || answer.isPending} className="btn-primary">
               {answer.isPending ? 'Проверяем…' : 'Ответить'}
             </button>
@@ -318,7 +313,7 @@ export default function CandidateAssessment() {
               </>
             ) : (
               <>
-                <XCircle className="shrink-0 text-invite" aria-hidden />
+                <XCircle className="shrink-0 text-danger" aria-hidden />
                 <div>
                   <p className="section-title">Уровень «{gradeRu(state.target_grade)}» не подтверждён</p>
                   <p className="text-sm text-ink-2">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
@@ -406,6 +401,30 @@ export default function CandidateAssessment() {
           </ul>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Confidence that the level is already clear, with the two stop lines of the adaptive test: 10 % and 90 %. */
+function ConfidenceScale({ p, detail, trial }: { p: number; detail: string; trial: boolean }) {
+  const v = Math.max(0, Math.min(100, Math.round(p * 100)))
+  return (
+    <div>
+      <div className="mb-1.5 flex flex-wrap justify-between gap-x-3 text-xs text-ink-3">
+        <span>Уверенность, что уровень уже ясен</span>
+        <span className="num"><span className="font-display font-bold text-ink">{v} %</span>{detail ? ` · ${detail}` : ''}</span>
+      </div>
+      <div className="relative h-3 rounded-full bg-ink/[0.07] dark:bg-white/[0.08]" role="meter" aria-valuemin={0} aria-valuemax={100}
+        aria-valuenow={v} aria-label="Уверенность решения">
+        <span className="absolute inset-y-0 left-0 w-[10%] rounded-l-full bg-danger/20" aria-hidden />
+        <span className="absolute inset-y-0 right-0 w-[10%] rounded-r-full bg-ok/25" aria-hidden />
+        <span className="absolute inset-y-0 left-0 rounded-full bg-accent/80 transition-[width] duration-500" style={{ width: `${v}%` }} aria-hidden />
+        <span className="absolute -top-1 h-5 w-1 -translate-x-1/2 rounded-full bg-accent ring-2 ring-panel transition-[left] duration-500" style={{ left: `${v}%` }} aria-hidden />
+      </div>
+      <div className="mt-1 flex justify-between text-2xs text-ink-3" aria-hidden>
+        <span>10 % — не подтвердится</span>
+        <span>{trial ? 'пробный проход' : '90 % — подтвердится'}</span>
+      </div>
     </div>
   )
 }

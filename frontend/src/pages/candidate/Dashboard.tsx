@@ -48,7 +48,7 @@ export default function CandidateDashboard() {
   const disciplines: Disc[] = p.discipline_scores ?? []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name.split(' ')[0]}` : 'Кабинет'}
         lead="Так вас видит работодатель в поиске: без имени и контактов, по категории и подтверждениям." />
 
@@ -64,7 +64,7 @@ export default function CandidateDashboard() {
             </span>
           </div>
           <p className="mt-6 font-display text-xl font-bold sm:text-2xl">{ROLE_RU[p.primary_role] ?? p.primary_role ?? 'Специализация не выбрана'}</p>
-          <p className="font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3.25rem,8vw,5.5rem)]">{p.grade ?? '—'}</p>
+          <p className="font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3.25rem,8vw,5.5rem)]">{p.grade ? gradeRu(p.grade) : '—'}</p>
           {(p.skills ?? []).length > 0 && (
             <ul className="mt-6 flex flex-wrap gap-1.5" aria-label="Навыки">
               {(p.skills ?? []).slice(0, 12).map((sk: { name: string; trust_level: string }) => (
@@ -110,10 +110,106 @@ export default function CandidateDashboard() {
         </div>
       </section>
 
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Приглашения и результаты ФСП">
+        <div className="card relative overflow-hidden">
+          {pending.length > 0 && <span className="absolute inset-y-0 left-0 w-[3px] bg-invite" aria-hidden />}
+          <div className="card-head">
+            <h2 className="section-title flex items-center gap-2">Приглашения{pending.length > 0 && <span className="count-invite">{pending.length}</span>}</h2>
+            <Link to="/candidate/offers" className="link text-sm">Все приглашения</Link>
+          </div>
+          {offersQ.isError
+            ? <p className="notice-error mt-4" role="alert">{apiError(offersQ.error, 'Не удалось загрузить приглашения')}</p>
+            : pending.length === 0
+            ? <p className="mt-4 text-sm text-ink-2">Новых приглашений нет. Работодатели пишут первыми: подтверждённый грейд и полный профиль поднимают вас в выдаче.</p>
+            : <ul className="mt-3 divide-y divide-line">
+                {pending.slice(0, 4).map(o => (
+                  <li key={o.id}>
+                    <Link to="/candidate/offers" className="-mx-2 flex items-center gap-3 rounded-md px-2 py-3 hover:bg-sunken">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-accent-soft font-display text-base font-bold text-accent" aria-hidden>
+                        {o.company.slice(0, 1)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-ink">{o.role}</span>
+                        <span className="block truncate text-sm text-ink-2">{o.company}</span>
+                      </span>
+                      <span className="text-right font-display text-sm font-bold text-ink num">{rub(o.salary_from)}<span className="block text-xs font-normal text-ink-3">до {rub(o.salary_to)}, до НДФЛ</span></span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>}
+        </div>
+        <div className="card">
+          <div className="card-head">
+            <h2 className="section-title">Подтверждено ФСП</h2>
+            <Link to="/candidate/results" className="link text-sm">Протоколы</Link>
+          </div>
+          {disciplines.length === 0
+            ? <Empty title="Нет истории ФСП">Это не минус в выдаче. Если вы участвовали в соревнованиях, привяжите ФСП ID в профиле.</Empty>
+            : <ul className="mt-4 space-y-4">
+                {disciplines.map(d => (
+                  <li key={d.discipline}>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-ink">{d.label}</span>
+                      <span className="flex items-center gap-2"><RankBadge rank={d.best_rank} />
+                        <span className="num text-ink-2">{d.events_count} соревн.</span></span>
+                    </div>
+                    <div className="mt-2"><Meter value={Math.min(1, d.lcb / 0.6)} ariaLabel={`Уровень по результатам ФСП, ${d.label}`} /></div>
+                    <p className="mt-1 text-xs text-ink-3">Нижняя граница уровня {d.lcb.toFixed(2)}, уверенность {Math.round(d.confidence * 100)} %</p>
+                  </li>
+                ))}
+              </ul>}
+        </div>
+      </section>
+
+      <section className={`grid items-start gap-6 ${weekly ? 'lg:grid-cols-[1.4fr_1fr]' : ''}`} aria-label="Задания">
+        <section className="card" aria-labelledby="tasks-title">
+        <div className="card-head">
+          <h2 id="tasks-title" className="section-title flex items-center gap-2">
+            <ClipboardList size={18} className="text-accent" aria-hidden />Задания от работодателей
+            {tasks.filter(t => t.accepts_answers).length > 0 && <span className="count">{tasks.filter(t => t.accepts_answers).length}</span>}
+          </h2>
+          <Link to="/candidate/tasks" className="link text-sm">Все задания</Link>
+        </div>
+        {tasks.length === 0
+          ? <p className="mt-3 text-sm text-ink-2">Компании пишут задания сами: для всех кандидатов специализации или лично вам. Новых заданий пока нет.</p>
+          : <ul className="mt-3 divide-y divide-line">
+              {tasks.slice(0, 3).map(t => (
+                <li key={t.id}>
+                  <Link to={`/candidate/tasks?task=${t.id}`} className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-3 hover:bg-sunken">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-ink">{t.title}</span>
+                      <span className="block truncate text-sm text-ink-2">{t.company ? `«${t.company}»` : 'Работодатель'}{t.addressed ? ', лично вам' : ''}</span>
+                    </span>
+                    {t.submission ? <TaskResult task={t} /> : <span className="badge-brand">ждёт ответа</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>}
+        </section>
+
+      {weekly && (
+        <section className="card flex flex-col items-start gap-4" aria-labelledby="weekly-title">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-xs text-ink-3"><CalendarClock size={14} aria-hidden />Сгенерировано платформой</p>
+            <h2 id="weekly-title" className="section-title mt-1">Задача недели по вакансии{weekly.company ? ` компании «${weekly.company}»` : ''}</h2>
+            <p className="mt-1 text-sm text-ink-2">
+              Платформа собрала одно задание{weekly.topic_label ? ` по теме «${weekly.topic_label}»` : ''} по тексту вакансии «{weekly.title}»;
+              сама компания его не писала. Грейд оно не меняет, а работодатели увидят в карточке свежий результат и его дату.
+            </p>
+          </div>
+          {weekly.done
+            ? <span className={`badge shrink-0 ${weekly.is_correct ? 'badge-ok' : 'badge-warn'}`}>Решена{weekly.is_correct ? ' верно' : ', есть ошибка'}</span>
+            : <Link to={`/candidate/vacancies?vacancy=${weekly.vacancy_id}`} className="btn-secondary shrink-0">Решить задачу</Link>}
+        </section>
+      )}
+
+      </section>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[1.4fr_1fr]">
       {market.data?.role && market.data.grade && (
         <section className="card" aria-labelledby="market-title">
           <h2 id="market-title" className="section-title">Ожидания в вашей категории</h2>
-          <p className="mt-1 text-sm text-ink-2">{ROLE_RU[market.data.role] ?? market.data.role}, {market.data.grade}. Чужие суммы по отдельности не показываются.</p>
+          <p className="mt-1 text-sm text-ink-2">{ROLE_RU[market.data.role] ?? market.data.role}, {gradeRu(market.data.grade)}. Чужие суммы по отдельности не показываются.</p>
           {market.data.cell ? (
             <>
               <dl className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -125,7 +221,7 @@ export default function CandidateDashboard() {
                 По {market.data.cell.n} названным ожиданиям.{' '}
                 {market.data.band
                   ? BAND_TEXT[market.data.band]
-                  : <><Link to="/candidate/profile" className="text-accent hover:underline">Укажите нижнюю границу в опросе</Link>, чтобы увидеть своё место на шкале.</>}
+                  : <><Link to="/candidate/profile" className="font-medium text-accent underline">Укажите нижнюю границу в опросе</Link>, чтобы увидеть своё место на шкале.</>}
               </p>
             </>
           ) : (
@@ -157,101 +253,11 @@ export default function CandidateDashboard() {
           {growth.data.next_market && (
             <p className="mt-3 text-sm text-ink-2">Середина названных ожиданий на следующей ступени — {rub(growth.data.next_market.median)}. По {growth.data.next_market.n} {plural(growth.data.next_market.n, ['ожиданию', 'ожиданиям', 'ожиданиям'])}.</p>
           )}
-          <p className="mt-3 text-sm"><Link to="/candidate/profile" className="text-accent hover:underline">Добавить навык в профиле</Link></p>
+          <p className="mt-3 text-sm"><Link to="/candidate/profile" className="link">Добавить навык в профиле</Link></p>
         </section>
       )}
 
-      <section className="card border-l-4 border-l-accent" aria-labelledby="tasks-title">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 id="tasks-title" className="section-title flex items-center gap-2">
-            <ClipboardList size={18} className="text-accent" aria-hidden />Задания от работодателей
-            {tasks.filter(t => t.accepts_answers).length > 0 && <span className="rounded-full bg-accent px-2 py-0.5 font-sans text-xs text-accent-ink num">{tasks.filter(t => t.accepts_answers).length}</span>}
-          </h2>
-          <Link to="/candidate/tasks" className="text-sm text-accent hover:underline">Все задания</Link>
-        </div>
-        {tasks.length === 0
-          ? <p className="mt-3 text-sm text-ink-2">Компании пишут задания сами: для всех кандидатов специализации или лично вам. Новых заданий пока нет.</p>
-          : <ul className="mt-3 divide-y divide-line">
-              {tasks.slice(0, 3).map(t => (
-                <li key={t.id}>
-                  <Link to={`/candidate/tasks?task=${t.id}`} className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-3 hover:bg-sunken">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-ink">{t.title}</span>
-                      <span className="block truncate text-sm text-ink-2">{t.company ? `«${t.company}»` : 'Работодатель'}{t.addressed ? ', лично вам' : ''}</span>
-                    </span>
-                    {t.submission ? <TaskResult task={t} /> : <span className="badge-brand">ждёт ответа</span>}
-                  </Link>
-                </li>
-              ))}
-            </ul>}
-      </section>
-
-      {weekly && (
-        <section className="card flex flex-col gap-4 sm:flex-row sm:items-center" aria-labelledby="weekly-title">
-          <CalendarClock className="hidden shrink-0 text-ink-3 sm:block" size={28} aria-hidden />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-ink-3">Сгенерировано платформой</p>
-            <h2 id="weekly-title" className="section-title">Задача недели по вакансии{weekly.company ? ` компании «${weekly.company}»` : ''}</h2>
-            <p className="mt-1 text-sm text-ink-2">
-              Платформа собрала одно задание{weekly.topic_label ? ` по теме «${weekly.topic_label}»` : ''} по тексту вакансии «{weekly.title}»;
-              сама компания его не писала. Грейд оно не меняет, а работодатели увидят в карточке свежий результат и его дату.
-            </p>
-          </div>
-          {weekly.done
-            ? <span className={`badge shrink-0 ${weekly.is_correct ? 'badge-ok' : 'badge-warn'}`}>Решена{weekly.is_correct ? ' верно' : ', есть ошибка'}</span>
-            : <Link to={`/candidate/vacancies?vacancy=${weekly.vacancy_id}`} className="btn-primary shrink-0">Решить задачу</Link>}
-        </section>
-      )}
-
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <div className="card">
-          <div className="flex items-baseline justify-between">
-            <h2 className="section-title">Приглашения{pending.length > 0 && <span className="ml-2 rounded-full bg-invite px-2 py-0.5 align-middle font-sans text-xs text-invite-ink num">{pending.length}</span>}</h2>
-            <Link to="/candidate/offers" className="text-sm text-accent hover:underline">Все</Link>
-          </div>
-          {offersQ.isError
-            ? <p className="notice-error mt-4" role="alert">{apiError(offersQ.error, 'Не удалось загрузить приглашения')}</p>
-            : pending.length === 0
-            ? <p className="mt-4 text-sm text-ink-2">Новых приглашений нет. Работодатели пишут первыми: подтверждённый грейд и полный профиль поднимают вас в выдаче.</p>
-            : <ul className="mt-3 divide-y divide-line">
-                {pending.slice(0, 4).map(o => (
-                  <li key={o.id}>
-                    <Link to="/candidate/offers" className="-mx-2 flex items-center gap-3 rounded-md px-2 py-3 hover:bg-sunken">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-accent-soft font-display text-base font-bold text-accent" aria-hidden>
-                        {o.company.slice(0, 1)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-ink">{o.role}</span>
-                        <span className="block truncate text-sm text-ink-2">{o.company}</span>
-                      </span>
-                      <span className="text-right font-display text-sm font-bold text-ink num">{rub(o.salary_from)}<span className="block text-xs font-normal text-ink-3">до {rub(o.salary_to)}, до НДФЛ</span></span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>}
-        </div>
-        <div className="card">
-          <div className="flex items-baseline justify-between">
-            <h2 className="section-title">Подтверждено ФСП</h2>
-            <Link to="/candidate/results" className="text-sm text-accent hover:underline">Протоколы</Link>
-          </div>
-          {disciplines.length === 0
-            ? <Empty title="Нет истории ФСП">Это не минус в выдаче. Если вы участвовали в соревнованиях, привяжите ФСП ID в профиле.</Empty>
-            : <ul className="mt-4 space-y-4">
-                {disciplines.map(d => (
-                  <li key={d.discipline}>
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-ink">{d.label}</span>
-                      <span className="flex items-center gap-2"><RankBadge rank={d.best_rank} />
-                        <span className="num text-ink-2">{d.events_count} соревн.</span></span>
-                    </div>
-                    <div className="mt-2"><Meter value={Math.min(1, d.lcb / 0.6)} ariaLabel={`Уровень по результатам ФСП, ${d.label}`} /></div>
-                    <p className="mt-1 text-xs text-ink-3">Нижняя граница уровня {d.lcb.toFixed(2)}, уверенность {Math.round(d.confidence * 100)} %</p>
-                  </li>
-                ))}
-              </ul>}
-        </div>
-      </section>
+      </div>
     </div>
   )
 }

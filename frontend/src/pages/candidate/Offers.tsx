@@ -88,18 +88,19 @@ export default function CandidateOffers() {
         {offers.map(o => {
           const [label, cls] = STATUS[o.status] ?? [o.status, 'badge-vc']
           return (
-            <li key={o.id} className={`card ${o.status === 'pending' ? 'ring-1 ring-inset ring-accent/40' : ''}`}>
+            <li key={o.id} className={`card relative overflow-hidden ${o.status === 'pending' ? 'border-invite/40 dark:border-invite/40' : ''}`}>
+              {o.status === 'pending' && <span className="absolute inset-y-0 left-0 w-1 bg-invite" aria-hidden />}
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-4">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-accent-soft font-display text-lg font-bold text-accent" aria-hidden>{o.company.slice(0, 1)}</span>
                 <div className="min-w-0">
                   <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}</p>
-                  <h2 className="mt-0.5 text-lg font-semibold text-ink">{o.role}</h2>
+                  <h2 className="mt-0.5 font-display text-lg font-bold tracking-[-0.01em] text-ink">{o.role}</h2>
                   <p className="mt-1 text-sm text-ink-2">{FORMAT[o.work_format] ?? o.work_format}, получено {date(o.created_at)}
                     {o.expires_at && o.status === 'pending' ? `, ответить до ${date(o.expires_at)}` : ''}</p>
                 </div>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <p className="num font-display text-xl font-bold text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</p>
                   <p className="text-xs text-ink-3">до вычета НДФЛ</p>
                   <span className={`${cls} mt-2`}>{label}</span>
@@ -108,7 +109,7 @@ export default function CandidateOffers() {
               {o.message && <blockquote className="mt-4 max-w-prose border-l-2 border-accent pl-3 text-sm text-ink">{o.message}</blockquote>}
               {o.company_profile?.about && (
                 <details className="mt-3 max-w-prose text-sm">
-                  <summary className="cursor-pointer text-accent">О компании</summary>
+                  <summary className="inline-flex min-h-6 cursor-pointer items-center font-medium text-accent">О компании</summary>
                   <p className="mt-2 text-ink-2">{o.company_profile.about}</p>
                   <p className="mt-1 text-xs text-ink-3">{[o.company_profile.website, o.company_profile.inn_given ? 'ИНН указан и проверен' : 'ИНН не указан'].filter(Boolean).join(', ')}</p>
                 </details>
@@ -146,7 +147,7 @@ export default function CandidateOffers() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
                       <MessageSquare size={14} aria-hidden /> Переписка
-                      {(o.unread_messages ?? 0) > 0 && <span className="ml-1 rounded-full bg-invite px-1.5 text-2xs text-invite-ink num" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
+                      {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                     </button>
                     {!o.contacts_revoked_at && confirm !== o.id && (
                       <button onClick={() => setConfirm(o.id)} className="btn-ghost btn-sm">Закрыть контакты для этой компании</button>

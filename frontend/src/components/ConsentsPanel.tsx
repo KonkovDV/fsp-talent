@@ -39,7 +39,7 @@ export default function ConsentsPanel() {
               <button onClick={() => {
                 if (!row.required || window.confirm('Без этого согласия карточка будет скрыта, а данные удалены в течение 30 дней. Отозвать?'))
                   withdraw.mutate(row.kind)
-              }} className="text-xs text-invite hover:underline">Отозвать</button>
+              }} className="inline-flex min-h-6 items-center text-xs font-medium text-danger hover:underline">Отозвать</button>
             )}
           </li>
         ))}
