@@ -16,7 +16,7 @@ help:
 	@echo "make check     — сквозная проверка API на запущенном стенде"
 	@echo "make load      — 40 пользователей одновременно в течение минуты"
 	@echo "make docs-pdf  — собрать docs/FSP_Talent_documentation.pdf (нужны Python, Node.js и Chromium)"
-	@echo "make docs-pitch — собрать питч: docs/pitch.html, pitch.pptx и pitch.pdf"
+	@echo "make docs-pitch — собрать docs/pitch.html и docs/pitch.pptx (PDF сохраняется из PowerPoint)"
 
 demo:
 	@test -f .env || cp .env.example .env
@@ -76,6 +76,5 @@ docs-pdf:
 	python3 docs/tools/build_pdf.py
 
 docs-pitch:
-	test -d docs/tools/node_modules/pptxgenjs || npm install --prefix docs/tools --no-save pptxgenjs@4
 	node docs/tools/build_pitch.mjs
-	python3 docs/tools/build_pdf.py --pitch
+	python3 docs/tools/build_pitch_template.py
