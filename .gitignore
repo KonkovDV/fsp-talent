@@ -20,6 +20,8 @@ dist/
 Thumbs.db
 *.pem
 *.key
+moi-dannye.json
+dannye-kompanii.json
 postgres_data/
 redis_data/
 .mypy_cache/

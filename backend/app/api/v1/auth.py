@@ -10,11 +10,13 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_any_auth
 from app.api.errors import ApiError
@@ -30,7 +32,13 @@ from app.core.security import (
     next_refresh_nonce,
     verify_password,
 )
-from app.models import Employer, Participant
+from app.models import CategoryAssignment, Consent, Employer, Offer, Participant, Skill, Vacancy
+from app.services.account_export import (
+    employer_record,
+    participant_record,
+    password_change_problem,
+    without_secrets,
+)
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
@@ -349,6 +357,40 @@ async def reset_password(body: ResetIn, response: Response, db: AsyncSession = D
     return deliver(response, _account_tokens(account, body.role))
 
 
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=8, max_length=72)
+
+
+@router.post("/password/change", response_model=TokenOut)
+async def change_password(body: PasswordChangeIn, response: Response,
+                          current: dict = Depends(get_any_auth), db: AsyncSession = Depends(get_db)):
+    """Replace the password of the signed-in account. Other sessions of this account stop working."""
+    role = current.get("role")
+    if role not in ("participant", "employer"):
+        raise ApiError(401, "unauthorized")
+    await _limit("password-change", current["sub"], limit=5)
+    model = Participant if role == "participant" else Employer
+    account = await db.get(model, uuid.UUID(current["sub"]), with_for_update=True)
+    if account is None or getattr(account, "deleted_at", None) is not None:
+        raise ApiError(401, "unauthorized")
+    has_password = bool(account.password_hash)
+    current_ok = has_password and verify_password(body.current_password, account.password_hash)
+    same = current_ok and verify_password(body.new_password, account.password_hash)
+    problem = password_change_problem(has_password, current_ok, same)
+    if problem == "no_password":
+        raise ApiError(409, "conflict", "У этого входа нет пароля. Войдите через ФСП ID или задайте пароль по письму.")
+    if problem == "bad_current":
+        raise ApiError(401, "invalid_credentials", "Текущий пароль не подошёл")
+    if problem == "same":
+        raise ApiError(422, "validation_error", "Новый пароль совпадает с текущим")
+    account.password_hash = _password_hash(body.new_password)
+    account.token_epoch = int(account.token_epoch or 0) + 1
+    account.refresh_nonce = int(account.refresh_nonce or 0) + 1
+    await db.commit()
+    return deliver(response, _account_tokens(account, role))
+
+
 # ── tokens ──────────────────────────────────────────────────────────────────
 
 class RefreshIn(BaseModel):
@@ -423,6 +465,43 @@ async def logout(response: Response, request: Request, db: AsyncSession = Depend
 async def whoami(current: dict = Depends(get_any_auth)):
     """Токен-интроспекция: возвращает sub и role."""
     return {"sub": current["sub"], "role": current.get("role")}
+
+
+@router.get("/me/export")
+async def export_my_data(current: dict = Depends(get_any_auth), db: AsyncSession = Depends(get_db)):
+    """The signed-in person's own data. Nothing from other accounts, and no secrets."""
+    role = current.get("role")
+    subject = uuid.UUID(current["sub"])
+    if role == "participant":
+        person = await db.get(Participant, subject)
+        if person is None or person.deleted_at is not None:
+            raise ApiError(404, "not_found", "Профиль не найден")
+        skills = list(await db.scalars(select(Skill).where(Skill.participant_id == person.id)))
+        category = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == person.id))
+        consents = list(await db.scalars(select(Consent).where(
+            Consent.subject_type == "participant", Consent.subject_id == person.id)))
+        offers = list((await db.scalars(
+            select(Offer).where(Offer.candidate_id == person.id).options(selectinload(Offer.employer)))).all())
+        payload = participant_record(person, skills, category, consents, offers)
+        filename = "moi-dannye.json"
+    elif role == "employer":
+        company = await db.get(Employer, subject)
+        if company is None:
+            raise ApiError(404, "not_found", "Компания не найдена")
+        consents = list(await db.scalars(select(Consent).where(
+            Consent.subject_type == "employer", Consent.subject_id == company.id)))
+        vacancies = list(await db.scalars(select(Vacancy).where(Vacancy.employer_id == company.id)))
+        offers = list((await db.scalars(
+            select(Offer).where(Offer.employer_id == company.id).options(selectinload(Offer.candidate)))).all())
+        payload = employer_record(company, consents, vacancies, offers)
+        filename = "dannye-kompanii.json"
+    else:
+        raise ApiError(401, "unauthorized")
+    body = without_secrets(payload)
+    return JSONResponse(body, headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+    })
 
 
 # ── sign-in by FSP ID ───────────────────────────────────────────────────────

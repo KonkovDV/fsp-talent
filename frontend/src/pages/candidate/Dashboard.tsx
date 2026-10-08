@@ -1,16 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CalendarClock, Check, Circle, ClipboardList } from 'lucide-react'
-import { apiError, getMyOffers, getMyProfile, tasksForMe, weeklyTask } from '../../api/client'
+import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, tasksForMe, weeklyTask } from '../../api/client'
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
-import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, rub } from '../../components/ui'
-import { ROLE_RU } from '../../labels'
+import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
+import { ROLE_RU, gradeRu } from '../../labels'
 
 interface Disc { discipline: string; label: string; score?: number; lcb: number; confidence: number; best_rank: string | null; events_count: number }
 interface Offer { id: string; company: string; role: string; salary_from: number; salary_to: number; status: string }
 interface Weekly { vacancy_id: string; title: string; company: string | null; topic_label: string | null; done: boolean; is_correct: boolean | null; week_from: string }
+interface MarketCell { p25: number; median: number; p75: number; n: number }
+interface SalaryMarket { role: string | null; grade: string | null; cell: MarketCell | null; band: string | null }
+interface Growth { role: string | null; grade: string | null; next_grade: string | null; people: number | null
+  gaps: { skill: string; people: number }[]; next_market: MarketCell | null }
+
+const BAND_TEXT: Record<string, string> = {
+  below_p25: 'Ваше ожидание ниже нижней четверти.',
+  below_median: 'Ваше ожидание ниже середины шкалы.',
+  through_p75: 'Ваше ожидание не выше верхней четверти.',
+  above_p75: 'Ваше ожидание выше верхней четверти.',
+}
 
 /** Candidate home: the category employers see, what is missing for it, and fresh invitations. */
 export default function CandidateDashboard() {
@@ -18,6 +29,8 @@ export default function CandidateDashboard() {
   const offersQ = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const { data: weekly } = useQuery<Weekly | null>({ queryKey: ['weeklyTask'], queryFn: () => weeklyTask().then(r => r.data) })
   const { data: tasks = [] } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
+  const market = useQuery<SalaryMarket>({ queryKey: ['salaryMarket'], queryFn: () => getMySalaryMarket().then(r => r.data) })
+  const growth = useQuery<Growth>({ queryKey: ['growth'], queryFn: () => getMyGrowth().then(r => r.data) })
   const p = profile.data
   const offers = offersQ.data ?? []
 
@@ -96,6 +109,57 @@ export default function CandidateDashboard() {
           </ul>
         </div>
       </section>
+
+      {market.data?.role && market.data.grade && (
+        <section className="card" aria-labelledby="market-title">
+          <h2 id="market-title" className="section-title">Ожидания в вашей категории</h2>
+          <p className="mt-1 text-sm text-ink-2">{ROLE_RU[market.data.role] ?? market.data.role}, {market.data.grade}. Чужие суммы по отдельности не показываются.</p>
+          {market.data.cell ? (
+            <>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div><dt className="text-xs text-ink-3">Нижняя четверть</dt><dd className="num font-display text-lg font-bold text-ink">{rub(market.data.cell.p25)}</dd></div>
+                <div><dt className="text-xs text-ink-3">Середина</dt><dd className="num font-display text-lg font-bold text-ink">{rub(market.data.cell.median)}</dd></div>
+                <div><dt className="text-xs text-ink-3">Верхняя четверть</dt><dd className="num font-display text-lg font-bold text-ink">{rub(market.data.cell.p75)}</dd></div>
+              </dl>
+              <p className="mt-3 text-sm text-ink-2">
+                По {market.data.cell.n} названным ожиданиям.{' '}
+                {market.data.band
+                  ? BAND_TEXT[market.data.band]
+                  : <><Link to="/candidate/profile" className="text-accent hover:underline">Укажите нижнюю границу в опросе</Link>, чтобы увидеть своё место на шкале.</>}
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-ink-2">В этой категории меньше пяти названных ожиданий, поэтому шкала скрыта.</p>
+          )}
+        </section>
+      )}
+
+      {growth.data?.next_grade && (
+        <section className="card" aria-labelledby="growth-title">
+          <h2 id="growth-title" className="section-title">Путь к следующему грейду</h2>
+          <p className="mt-1 text-sm text-ink-2">
+            {gradeRu(growth.data.next_grade)}, {ROLE_RU[growth.data.role ?? ''] ?? growth.data.role}. Грейд этот список не меняет: его по-прежнему даёт только тест.
+          </p>
+          {growth.data.people == null ? (
+            <p className="mt-3 text-sm text-ink-2">На следующей ступени меньше пяти видимых профилей, поэтому список скрыт.</p>
+          ) : growth.data.gaps.length === 0 ? (
+            <p className="mt-3 text-sm text-ink-2">По навыкам этой специализации вы уже закрываете то, что на следующей ступени называют не меньше пяти человек.</p>
+          ) : (
+            <ul className="mt-4 divide-y divide-line">
+              {growth.data.gaps.map(gap => (
+                <li key={gap.skill} className="flex items-baseline justify-between gap-3 py-2 text-sm">
+                  <span className="font-medium text-ink">{gap.skill}</span>
+                  <span className="num shrink-0 text-ink-3">{gap.people} {plural(gap.people, ['человек', 'человека', 'человек'])}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {growth.data.next_market && (
+            <p className="mt-3 text-sm text-ink-2">Середина названных ожиданий на следующей ступени — {rub(growth.data.next_market.median)}. По {growth.data.next_market.n} {plural(growth.data.next_market.n, ['ожиданию', 'ожиданиям', 'ожиданиям'])}.</p>
+          )}
+          <p className="mt-3 text-sm"><Link to="/candidate/profile" className="text-accent hover:underline">Добавить навык в профиле</Link></p>
+        </section>
+      )}
 
       <section className="card border-l-4 border-l-accent" aria-labelledby="tasks-title">
         <div className="flex flex-wrap items-baseline justify-between gap-3">

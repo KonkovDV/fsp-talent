@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, getEmployerMe, updateEmployerMe } from '../../api/client'
+import AccountSecurity from '../../components/AccountSecurity'
 import { PageHeader } from '../../components/ui'
 
 /** Company card the TZ asks the employer to keep: name, tax id, site, what the company does. */
@@ -84,6 +85,9 @@ export default function EmployerCompany() {
         </div>
         <p className="field-hint mt-2">Роль и зарплата в примере условные: в настоящем приглашении — те, что вы укажете.</p>
       </aside>
+      </div>
+      <div className="mt-6 max-w-xl">
+        <AccountSecurity />
       </div>
     </div>
   )

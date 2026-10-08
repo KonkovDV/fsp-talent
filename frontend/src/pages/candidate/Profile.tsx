@@ -6,6 +6,7 @@ import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
 import FspLinkCard from '../../components/FspLinkCard'
 import ConsentsPanel from '../../components/ConsentsPanel'
+import AccountSecurity from '../../components/AccountSecurity'
 import DeleteAccountCard from '../../components/DeleteAccountCard'
 import SurveyCard, { type SurveyHint } from '../../components/SurveyCard'
 import SkillPassport from '../../components/SkillPassport'
@@ -232,6 +233,7 @@ export default function CandidateProfile() {
           <SurveyCard profile={profile} compact hint={hint} />
           <FspLinkCard profile={profile} />
           <ConsentsPanel />
+          <AccountSecurity />
           <DeleteAccountCard />
         </aside>
       </div>

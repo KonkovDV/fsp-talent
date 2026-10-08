@@ -1,0 +1,121 @@
+"""A person's own data, for the access right in 152-FZ.
+
+The file is only what this account already sees. Password hashes, session counters and
+answer keys of the item bank stay out.
+"""
+from __future__ import annotations
+
+SECRET_KEYS = frozenset({
+    "password_hash", "token_epoch", "refresh_nonce", "code_hash", "token_hash",
+})
+
+
+def _iso(value) -> str | None:
+    return value.isoformat() if value else None
+
+
+def without_secrets(value):
+    """Drop secret field names at every level. A nested hash must not ride along in a dump."""
+    if isinstance(value, dict):
+        return {key: without_secrets(item) for key, item in value.items() if key not in SECRET_KEYS}
+    if isinstance(value, list):
+        return [without_secrets(item) for item in value]
+    return value
+
+
+def participant_record(person, skills, category, consents, offers) -> dict:
+    return {
+        "kind": "participant",
+        "email": person.email,
+        "display_name": person.display_name,
+        "region": person.region,
+        "phone": person.phone,
+        "telegram": person.telegram,
+        "fsp_id": person.fsp_id,
+        "specialization": person.specialization,
+        "declared_grade": person.declared_grade,
+        "assessed_grade": person.assessed_grade,
+        "experience_years": person.experience_years,
+        "salary_from": person.salary_from_gross,
+        "salary_to": person.salary_to_gross,
+        "is_visible": person.is_visible,
+        "job_search": person.job_search,
+        "category": None if category is None else {
+            "role": category.primary_role,
+            "grade": category.grade,
+            "grade_source": category.grade_source,
+        },
+        "skills": [{"name": skill.name, "trust_level": skill.trust_level} for skill in skills],
+        "consents": [_consent(row) for row in consents],
+        "offers": [_candidate_offer(offer) for offer in offers],
+    }
+
+
+def employer_record(company, consents, vacancies, offers) -> dict:
+    return {
+        "kind": "employer",
+        "email": company.email,
+        "company_name": company.company_name,
+        "inn": company.inn,
+        "website": company.website,
+        "industry": company.industry,
+        "description": company.description,
+        "consents": [_consent(row) for row in consents],
+        "vacancies": [{
+            "title": vacancy.title,
+            "role": vacancy.role,
+            "grade": vacancy.grade,
+            "skills": list(vacancy.skills or []),
+            "salary_from": vacancy.salary_from_gross,
+            "salary_to": vacancy.salary_to_gross,
+            "is_open": vacancy.is_open,
+        } for vacancy in vacancies],
+        "offers": [_employer_offer(offer) for offer in offers],
+    }
+
+
+def _consent(row) -> dict:
+    return {
+        "kind": row.kind,
+        "version": row.version,
+        "given_at": _iso(row.given_at),
+        "withdrawn_at": _iso(row.withdrawn_at),
+    }
+
+
+def _candidate_offer(offer) -> dict:
+    company = offer.employer.company_name if offer.employer is not None else None
+    return {
+        "company": company,
+        "role": offer.role,
+        "status": offer.status,
+        "salary_from": offer.salary_from_gross,
+        "salary_to": offer.salary_to_gross,
+        "created_at": _iso(offer.created_at),
+    }
+
+
+def _employer_offer(offer) -> dict:
+    revealed = offer.contacts_revealed_at is not None and offer.contacts_revoked_at is None
+    name = None
+    if revealed and offer.candidate is not None:
+        name = offer.candidate.display_name
+    return {
+        "role": offer.role,
+        "status": offer.status,
+        "salary_from": offer.salary_from_gross,
+        "salary_to": offer.salary_to_gross,
+        "created_at": _iso(offer.created_at),
+        "candidate_name": name,
+    }
+
+
+def password_change_problem(has_password: bool, current_ok: bool, same_as_current: bool) -> str | None:
+    """None when the change may proceed. The codes are for the API, not for the user."""
+    if not has_password:
+        return "no_password"
+    if not current_ok:
+        return "bad_current"
+    if same_as_current:
+        return "same"
+    return None

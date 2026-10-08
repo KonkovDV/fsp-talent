@@ -40,6 +40,19 @@ def quartiles(values: list[int]) -> dict | None:
     return {"p25": at(0.25), "median": at(0.5), "p75": at(0.75), "n": len(ordered)}
 
 
+def salary_band(mine: int | None, cell: dict | None) -> str | None:
+    """Where one wish sits on a quartile cell. Missing wish or a hidden cell gives nothing to compare."""
+    if mine is None or mine <= 0 or not cell:
+        return None
+    if mine < cell["p25"]:
+        return "below_p25"
+    if mine < cell["median"]:
+        return "below_median"
+    if mine <= cell["p75"]:
+        return "through_p75"
+    return "above_p75"
+
+
 def reason_shares(reasons: list[str | None]) -> dict | None:
     """Shares of decline reasons. Hidden until MIN_CELL answers, so a single refusal stays private."""
     named = [r for r in reasons if r in DECLINE_LABELS]

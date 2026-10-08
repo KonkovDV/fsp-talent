@@ -89,6 +89,9 @@ export const resendVerification = (email: string, role: Role) =>
 export const forgotPassword = (email: string, role: Role) => api.post('/auth/password/forgot', { email, role })
 export const resetPassword = (data: { email: string; role: Role; code: string; new_password: string }) =>
   api.post('/auth/password/reset', data)
+export const changePassword = (current_password: string, new_password: string) =>
+  api.post('/auth/password/change', { current_password, new_password })
+export const downloadMyData = () => api.get('/auth/me/export', { responseType: 'blob' })
 export const loginParticipant = (email: string, password: string) =>
   api.post('/auth/participant/token', ...form(email, password))
 export const loginEmployer = (email: string, password: string) =>
@@ -107,6 +110,8 @@ export const fspCallback = (code: string, state: string) => api.post('/candidate
 export const fspDemoLogin = (body: Record<string, string>) => api.post('/fsp-id-demo/login', body)
 
 export const getMyProfile = () => api.get('/candidates/me')
+export const getMySalaryMarket = () => api.get('/candidates/me/salary-market')
+export const getMyGrowth = () => api.get('/candidates/me/growth')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)
 export const listNotifications = () => api.get('/notifications')
 export const readNotification = (id: string) => api.post(`/notifications/${id}/read`)

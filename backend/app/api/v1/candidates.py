@@ -36,9 +36,11 @@ from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
+from app.services.growth import growth_gaps, next_grade
 from app.services.guardian import guardian_token
 from app.services.identity import active_consent
 from app.services.mail import send_mail
+from app.services.market import quartiles, salary_band
 from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import extract_pdf_text, profile_lines, render_profile_pdf
@@ -127,6 +129,73 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
             for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)
         ],
         "results_count": len(p.results),
+    }
+
+
+@router.get("/me/salary-market")
+async def my_salary_market(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """Quartiles of named wishes in the candidate's own category.
+
+    Same five-person floor as the employer market: a thinner cell is omitted, and no single wish is returned.
+    """
+    p = await db.get(Participant, _pid(current))
+    if not p or p.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == p.id))
+    role = cat.primary_role if cat else None
+    grade = cat.grade if cat else None
+    if not role or not grade:
+        return {"role": role, "grade": grade, "cell": None, "band": None}
+    amounts = list(await db.scalars(
+        select(Participant.salary_from_gross)
+        .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+        .where(CategoryAssignment.primary_role == role, CategoryAssignment.grade == grade,
+               Participant.salary_from_gross.is_not(None), Participant.deleted_at.is_(None),
+               Participant.is_visible.is_(True))))
+    cell = quartiles([int(amount) for amount in amounts if amount])
+    return {"role": role, "grade": grade, "cell": cell, "band": salary_band(p.salary_from_gross, cell)}
+
+
+@router.get("/me/growth")
+async def my_growth(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """Skills named by the next grade of the same specialization and missing from this profile.
+
+    A grade with fewer than five visible people is omitted, and so is a skill named by fewer than five.
+    The list does not change the candidate's grade.
+    """
+    p = await db.get(Participant, _pid(current))
+    if not p or p.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == p.id))
+    role = cat.primary_role if cat else None
+    grade = cat.grade if cat else None
+    nxt = next_grade(grade)
+    if not role or not nxt:
+        return {"role": role, "grade": grade, "next_grade": nxt, "people": None, "gaps": [], "next_market": None}
+    visible = (Participant.deleted_at.is_(None), Participant.is_visible.is_(True),
+               CategoryAssignment.primary_role == role, CategoryAssignment.grade == nxt)
+    people = await db.scalar(
+        select(func.count())
+        .select_from(Participant)
+        .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+        .where(*visible))
+    people = int(people or 0)
+    rows = (await db.execute(
+        select(Skill.name, func.count())
+        .join(Participant, Participant.id == Skill.participant_id)
+        .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+        .where(*visible)
+        .group_by(Skill.name))).all()
+    owned = {skill.name for skill in await db.scalars(select(Skill).where(Skill.participant_id == p.id))}
+    amounts = list(await db.scalars(
+        select(Participant.salary_from_gross)
+        .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+        .where(*visible, Participant.salary_from_gross.is_not(None))))
+    shown = people if people >= 5 else None
+    return {
+        "role": role, "grade": grade, "next_grade": nxt, "people": shown,
+        "gaps": growth_gaps(role, owned, {name: int(n) for name, n in rows}, people),
+        "next_market": quartiles([int(amount) for amount in amounts if amount]),
     }
 
 

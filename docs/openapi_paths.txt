@@ -19,8 +19,10 @@
 /api/v1/auth/fsp/signup
 /api/v1/auth/logout
 /api/v1/auth/me
+/api/v1/auth/me/export
 /api/v1/auth/participant/register
 /api/v1/auth/participant/token
+/api/v1/auth/password/change
 /api/v1/auth/password/forgot
 /api/v1/auth/password/reset
 /api/v1/auth/refresh
@@ -31,6 +33,7 @@
 /api/v1/candidates/me/credentials/{credential_id}/revoke
 /api/v1/candidates/me/fsp/authorize
 /api/v1/candidates/me/fsp/callback
+/api/v1/candidates/me/growth
 /api/v1/candidates/me/guardian
 /api/v1/candidates/me/offers
 /api/v1/candidates/me/offers/{offer_id}/respond
@@ -40,6 +43,7 @@
 /api/v1/candidates/me/results
 /api/v1/candidates/me/results/{result_id}/presentation
 /api/v1/candidates/me/resume
+/api/v1/candidates/me/salary-market
 /api/v1/candidates/me/survey
 /api/v1/candidates/me/visibility
 /api/v1/candidates/survey-options

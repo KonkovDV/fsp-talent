@@ -10,7 +10,7 @@ import os
 import random
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
@@ -374,6 +374,44 @@ async def ensure_pay_wishes() -> None:
         print(f"pay wishes set={len(people)}")
 
 
+async def ensure_category_market() -> None:
+    """Name wishes in Backend · middle outside the demo search pool.
+
+    The candidate cabinet shows quartiles only when five people named a sum. These profiles
+    do not match the demo need's Python and PostgreSQL query, so that need's pay hint stays put.
+    Show accounts and the load-test profiles are left as they are.
+    """
+    from app.core.rls import bypass_rls
+    from app.models import CategoryAssignment
+    from app.models.profile import ProfileSearchIndex
+    bypass_rls()
+    floors = (190_000, 230_000, 260_000, 300_000, 340_000, 380_000)
+    protected = ("fsp001@demo.talent", "fsp002@demo.talent", "nofsp@demo.talent")
+    in_demo_need = ProfileSearchIndex.skills_tsv.op("@@")(func.to_tsquery("simple", "Python & PostgreSQL"))
+    async with AsyncSessionLocal() as db:
+        people = list(await db.scalars(
+            select(Participant)
+            .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+            .outerjoin(ProfileSearchIndex, ProfileSearchIndex.participant_id == Participant.id)
+            .where(
+                CategoryAssignment.primary_role == "backend",
+                CategoryAssignment.grade == "middle",
+                Participant.is_visible.is_(True),
+                Participant.salary_from_gross.is_(None),
+                Participant.email.notin_(protected),
+                Participant.email.notlike("jury%@demo.talent"),
+                Participant.email.notlike("extra%@load.talent"),
+                or_(ProfileSearchIndex.participant_id.is_(None), ~in_demo_need),
+            )
+            .order_by(Participant.email)
+            .limit(len(floors))))
+        for person, floor in zip(people, floors):
+            person.salary_from_gross = floor
+            person.salary_to_gross = floor + 40_000
+        await db.commit()
+        print(f"category market set={len(people)}")
+
+
 async def main(extra_candidates: int | None = None) -> None:
     _refuse_production()
     from app.core.rls import bypass_rls
@@ -502,6 +540,7 @@ async def main(extra_candidates: int | None = None) -> None:
     await demo_activity()
     await fill_showcase()
     await ensure_pay_wishes()
+    await ensure_category_market()
     if extra_candidates is not None:
         await sync_extra(extra_candidates)
 
