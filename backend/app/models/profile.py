@@ -2,7 +2,19 @@ import uuid
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, Computed, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Computed,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import relationship
 
@@ -21,7 +33,10 @@ class DisciplineScore(Base):
     confidence = Column(Float, nullable=False)  # n_eff / (n_eff + k)
     events_count = Column(Integer, nullable=False, default=0)
     team_events_count = Column(Integer, nullable=False, default=0)
+    # Filled only from the registry order, never from a place in one event.
     best_rank = Column(String(10))
+    rank_assigned_at = Column(Date)
+    rank_order_ref = Column(String(64))
     top_event_ids = Column(JSONB, nullable=False, default=list)
     scoring_version = Column(String(20), nullable=False)
     computed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

@@ -8,9 +8,9 @@ import { GRADES, ROLE_RU, gradeRu } from '../labels'
 
 /** Illustrative rows for the protocol preview. They show the real card format; the people are invented. */
 const SAMPLE = [
-  { place: 1, role: 'backend', grade: 'senior', score: 91, evidence: ['Тест: 96 %', 'КМС, алгоритмическое'],
+  { place: 1, role: 'backend', grade: 'senior', score: 91, evidence: ['Грейд подтверждён тестом', 'КМС, алгоритмическое'],
     factors: [100, 100, 100, 96, 80] },
-  { place: 2, role: 'backend', grade: 'middle', score: 84, evidence: ['Тест: 88 %', 'Без истории ФСП'],
+  { place: 2, role: 'backend', grade: 'middle', score: 84, evidence: ['Грейд подтверждён тестом', 'Без истории ФСП'],
     factors: [92, 100, 100, 88, null] },
   { place: 3, role: 'fullstack', grade: 'middle', score: 71, evidence: ['Грейд не подтверждён', 'I разряд, продуктовое'],
     factors: [80, 85, 50, 50, 60] },

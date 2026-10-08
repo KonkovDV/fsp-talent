@@ -41,7 +41,7 @@ export default function PublicProfile() {
   }
   if (!profileQuery.data) return <PublicShell><Skeleton className="h-96" /></PublicShell>
   const profile = profileQuery.data
-  const scores: { discipline: string; label: string; lcb: number; confidence?: number; best_rank: string | null }[] = profile.discipline_scores ?? []
+  const scores: { discipline: string; label: string; lcb: number; confidence?: number; best_rank: string | null; rank_assigned_at?: string | null; rank_order_ref?: string | null }[] = profile.discipline_scores ?? []
   return (
     <PublicShell>
       <div className="grid items-start gap-8 lg:grid-cols-[320px_1fr]">
@@ -69,7 +69,7 @@ export default function PublicProfile() {
               {scores.map(ds => (
                 <li key={ds.discipline}>
                   <div className="flex items-center justify-between text-sm"><span className="text-ink">{ds.label}</span>
-                    <span className="flex items-center gap-2"><RankBadge rank={ds.best_rank} /><span className="num font-semibold text-ink">{ds.lcb.toFixed(2)}</span></span></div>
+                    <span className="flex items-center gap-2"><RankBadge rank={ds.best_rank} assignedAt={ds.rank_assigned_at} orderRef={ds.rank_order_ref} /><span className="num font-semibold text-ink">{ds.lcb.toFixed(2)}</span></span></div>
                   <div className="mt-2"><Meter value={Math.min(1, ds.lcb / 0.6)} /></div>
                 </li>
               ))}
@@ -86,7 +86,7 @@ export default function PublicProfile() {
                     <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                       <div>
                         <p className="text-sm font-medium text-ink">{a?.eventName ?? item.id}</p>
-                        <p className="text-xs text-ink-2">{a?.place != null && `${a.place} место из ${a.totalParticipants}`}{a?.rankEquivalent ? `, ${a.rankEquivalent}` : ''}{a?.teamSize && a.teamSize > 1 ? `, команда из ${a.teamSize}` : ''}</p>
+                        <p className="text-xs text-ink-2">{a?.place != null && `${a.place} место из ${a.totalParticipants}`}{a?.teamSize && a.teamSize > 1 ? `, команда из ${a.teamSize}` : ''}</p>
                       </div>
                       <span className={item.revoked ? 'badge-warn' : item.valid ? 'badge-ok' : 'badge-warn'}>{item.revoked ? 'отозвано' : item.valid ? 'подпись верна' : 'подпись не сходится'}</span>
                     </li>

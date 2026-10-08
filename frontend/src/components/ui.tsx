@@ -52,10 +52,17 @@ export const SOURCE_LABEL: Record<string, string> = {
   default: 'не указан',
 }
 
-export function RankBadge({ rank }: { rank: string | null | undefined }) {
+export function RankBadge({ rank, assignedAt, orderRef }: {
+  rank: string | null | undefined
+  assignedAt?: string | null
+  orderRef?: string | null
+}) {
   if (!rank) return null
-  const cls = rank === 'МС' || rank === 'МСМК' ? 'badge-mc' : rank === 'КМС' ? 'badge-kmc' : 'badge-vc'
-  return <span className={cls} title="Разряд-эквивалент по результатам ФСП">{rank}</span>
+  const cls = rank === 'МС' ? 'badge-mc' : rank === 'КМС' ? 'badge-kmc' : 'badge-vc'
+  const title = assignedAt || orderRef
+    ? `Разряд по данным реестра ФСП: присвоен ${assignedAt ? assignedAt.slice(0, 10) : 'дата не указана'}, ${orderRef || 'приказ не указан'}`
+    : 'Разряд по данным реестра ФСП'
+  return <span className={cls} title={title}>{rank}</span>
 }
 
 export function Empty({ title, children, action, icon }: { title: string; children?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
