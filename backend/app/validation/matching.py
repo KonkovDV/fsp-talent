@@ -428,11 +428,14 @@ def _pct(value: float | None) -> str:
 def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str, dict[str, dict[str, float]]]:
     """The same benchmark on several seeds: mean and spread, so one lucky seed cannot carry a claim."""
     keys = ("keyword", "full", "no_test", "no_fsp", "no_evidence")
-    per: dict[str, dict[str, list[float]]] = {k: {"ndcg": [], "rho": [], "over": [], "below": []} for k in keys}
+    per: dict[str, dict[str, list[float]]] = {
+        k: {"ndcg": [], "p10": [], "rho": [], "over": [], "below": []} for k in keys
+    }
     for sd in seeds:
         rows = {r.method: r for r in evaluate(make_dataset(n_candidates, n_needs, sd))}
         for k in keys:
             per[k]["ndcg"].append(rows[k].ndcg10)
+            per[k]["p10"].append(rows[k].p10)
             per[k]["rho"].append(rows[k].rho if rows[k].rho is not None else float("nan"))
             per[k]["over"].append(rows[k].overrated or 0.0)
             per[k]["below"].append(rows[k].below_need or 0.0)
@@ -442,11 +445,11 @@ def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str,
         return f"{statistics.mean(xs) * scale:.{digits}f} ± {sd * scale:.{digits}f}"
 
     lines = [f"Зёрна {', '.join(map(str, seeds))}: среднее ± стандартное отклонение.", "",
-             "| Ранжирование | nDCG@10 | Спирмен внутри категории | Завышенный грейд в топ-10, % "
+             "| Ранжирование | nDCG@10 | P@10, оценка ≥ 2 | Спирмен внутри категории | Завышенный грейд в топ-10, % "
              "| Настоящий грейд ниже потребности, % |",
-             "|---|---|---|---|---|"]
-    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['rho'])} | {ms(per[k]['over'], 100, 1)} "
-              f"| {ms(per[k]['below'], 100, 1)} |"
+             "|---|---|---|---|---|---|"]
+    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['p10'])} | {ms(per[k]['rho'])} "
+              f"| {ms(per[k]['over'], 100, 1)} | {ms(per[k]['below'], 100, 1)} |"
               for k in keys]
     summary = {k: {m: statistics.mean(v) for m, v in per[k].items()} for k in keys}
     return "\n".join(lines) + "\n", summary
