@@ -62,7 +62,8 @@ def coverage_parts() -> tuple[str, int, int]:
     if not report_path.is_file():
         raise SystemExit("нет backend/coverage.json: сначала pytest --cov=app --cov-report=json")
     files = json.loads(report_path.read_text(encoding="utf-8"))
-    shown = f"{files['totals']['percent_covered']:.2f}".replace(".", ",")
+    # Two decimals move between machines (66.41 here, 66.43 in CI). One decimal is the figure both runs share.
+    shown = f"{files['totals']['percent_covered']:.1f}".replace(".", ",")
     return shown, percent("app/services", files["files"]), percent("app/api", files["files"])
 
 
