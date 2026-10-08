@@ -91,7 +91,11 @@ def main() -> None:
     readme = README.read_text(encoding="utf-8")
     install = INSTALL.read_text(encoding="utf-8")
     pitch = PITCH.read_text(encoding="utf-8")
-    require(readme, f"| Доля подходящих в первой десятке, P@10 на трёх зёрнах: полная модель и по резюме | {precision} |", "README")
+    require(
+        readme,
+        f"| Доля подходящих в первой десятке, P@10 на трёх зёрнах: полная модель и по резюме | {precision} |",
+        "README",
+    )
     require(readme, f"| Юнит-тесты (в CI, со всеми компиляторами) | {count} |", "README")
     require(readme, f"{count} юнит-{word}", "README")
     require(readme, f"{total} %, {services} % и {api} %", "README")
