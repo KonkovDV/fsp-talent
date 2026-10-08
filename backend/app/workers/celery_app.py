@@ -27,6 +27,7 @@ celery_app.conf.update(
         "app.workers.tasks.purge_withdrawn":      {"queue": "maintenance"},
         "app.workers.tasks.offer_weekly_tasks":   {"queue": "maintenance"},
         "app.workers.tasks.sync_fsp_changes":     {"queue": "maintenance"},
+        "app.workers.tasks.refresh_grade_fail_rates": {"queue": "maintenance"},
     },
     beat_schedule={
         "expire-offers-hourly": {
@@ -48,6 +49,10 @@ celery_app.conf.update(
         "sync-fsp-changes-hourly": {
             "task": "app.workers.tasks.sync_fsp_changes",
             "schedule": 3600,
+        },
+        "grade-fail-rates-nightly": {
+            "task": "app.workers.tasks.refresh_grade_fail_rates",
+            "schedule": crontab(hour=3, minute=40),
         },
     },
 )

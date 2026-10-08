@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models import GradeConfirmation, InterviewSlot, Offer, Participant, Result, Skill, TestSession
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services import matching as matching_service
@@ -399,6 +400,14 @@ async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: lis
     return {pid: outcome for pid, (outcome, _) in found.items()}
 
 
+def _declared_pi(cat, fail_rates) -> float | None:
+    if settings.GRADE_MODEL != "expected" or fail_rates is None or cat is None or cat.grade_source == "assessed":
+        return None
+    from app.services.grade_posterior import lookup_pi
+    overall, cells = fail_rates
+    return lookup_pi(overall, cells, cat.primary_role, cat.grade)
+
+
 async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fused: dict[uuid.UUID, float],
                      discipline: str | None = None, employer_id: uuid.UUID | None = None) -> dict[uuid.UUID, PoolMatch]:
     """Load the facts the factor score needs for every candidate of the pool, in four queries."""
@@ -442,6 +451,15 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
         for sid, n, correct in await db.execute(counts_query, {"ids": session_ids}):
             counts[sid] = (int(correct or 0), int(n or 0))
     interviews = await _interview_outcomes(db, employer_id, ids) if employer_id else {}
+    upgrades: dict = {}
+    fail_rates = None
+    if settings.GRADE_MODEL == "expected":
+        from app.services.grade_posterior import read_fail_rates
+        if session_ids:
+            for session in await db.scalars(select(TestSession).where(TestSession.id.in_(session_ids))):
+                recommended = (session.flags or {}).get("recommended_grade")
+                upgrades[session.id] = float(session.p_upgrade or 0.0) if recommended else 0.0
+        fail_rates = await read_fail_rates()
     top = max(fused.values(), default=0.0) or 1.0
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
@@ -464,6 +482,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
             salary_refusals=int(refusals.get(pid, 0)),
             job_search=(p.job_search if p else None) or "open",
             interview_outcome=interviews.get(pid),
+            p_up=upgrades.get(conf.session_id) if conf and conf.session_id else None,
+            fail_rate=_declared_pi(cat, fail_rates),
         )
         m = match_score(need, facts)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,

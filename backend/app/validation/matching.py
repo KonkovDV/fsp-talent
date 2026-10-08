@@ -40,6 +40,8 @@ from app.services.search.pipeline import order_pool
 from app.services.skills import ROLES, TAXONOMY
 
 CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
+# Filled only for --grade-model expected, from seed 2029. The metric seeds never write it.
+_pi_table: tuple[float, dict[tuple[str, str], float]] | None = None
 TESTABLE = {"Python", "SQL", "JavaScript", "Algorithms", "Networking", "Web Security", "Machine Learning", "C"}
 INDUSTRIES = ("fintech", "ecommerce", "gamedev", "edtech", "govtech", "telecom", "industry", "any")
 
@@ -57,7 +59,7 @@ def _grade(theta: float) -> str:
 
 
 def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
-                 overclaim: float | None = None) -> dict:
+                 overclaim: float | None = None, attempts: list | None = None) -> dict:
     rng = random.Random(seed)
     candidates = []
     for i in range(n_candidates):
@@ -86,7 +88,10 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
         tested = rng.random() < 0.45
         grade, source, test_p = declared_grade, "declared", None
         if tested:
-            test_p = 1.0 / (1.0 + math.exp(-3.0 * (theta - CUTS[declared_grade])))
+            raw_p = 1.0 / (1.0 + math.exp(-3.0 * (theta - CUTS[declared_grade])))
+            if attempts is not None:
+                attempts.append((role, declared_grade, raw_p >= 0.75))
+            test_p = raw_p
             if test_p >= 0.75:
                 grade, source = declared_grade, "assessed"
             else:
@@ -192,11 +197,41 @@ def sha256(dataset: dict) -> str:
     return hashlib.sha256(json.dumps(dataset, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def synthetic_p_up(candidate: dict) -> float:
+    """P(θ ≥ the next cut) when the confirming session would recommend that grade. Seed 2029 is not used here."""
+    from app.services.cat import RECOMMEND_NEXT_P
+
+    observed = candidate["observed"]
+    if observed.get("grade_source") != "assessed" or observed.get("test_p") is None:
+        return 0.0
+    grade = observed["grade"]
+    index = GRADES.index(grade)
+    if index + 1 >= len(GRADES):
+        return 0.0
+    theta = candidate["truth"]["theta"]
+    cut = CUTS[GRADES[index + 1]]
+    p_up = 1.0 / (1.0 + math.exp(-3.0 * (theta - cut)))
+    return p_up if p_up >= RECOMMEND_NEXT_P else 0.0
+
+
 def _facts(c: dict) -> CandidateFacts:
+    from app.core.config import settings
+    from app.services.grade_posterior import lookup_pi
+
     o = c["observed"]
+    p_up = None
+    fail_rate = None
+    if settings.GRADE_MODEL == "expected" and c.get("truth"):
+        p_up = synthetic_p_up(c)
+        if o.get("grade_source") != "assessed":
+            table = _pi_table
+            if table is not None:
+                overall, cells = table
+                fail_rate = lookup_pi(overall, cells, o.get("role"), o.get("grade"))
     return CandidateFacts(role=o["role"], grade=o["grade"], grade_source=o["grade_source"], skills=dict(o["skills"]),
                           test_p=o["test_p"], test_spec=o["role"], fsp_lcb=o["fsp_lcb"], industry=o["industry"],
-                          test_correct=o.get("test_correct"), test_n=o.get("test_n"))
+                          test_correct=o.get("test_correct"), test_n=o.get("test_n"),
+                          p_up=p_up, fail_rate=fail_rate)
 
 
 def _spec(n: dict) -> NeedSpec:
@@ -428,11 +463,14 @@ def _pct(value: float | None) -> str:
 def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str, dict[str, dict[str, float]]]:
     """The same benchmark on several seeds: mean and spread, so one lucky seed cannot carry a claim."""
     keys = ("keyword", "full", "no_test", "no_fsp", "no_evidence")
-    per: dict[str, dict[str, list[float]]] = {k: {"ndcg": [], "rho": [], "over": [], "below": []} for k in keys}
+    per: dict[str, dict[str, list[float]]] = {
+        k: {"ndcg": [], "p10": [], "rho": [], "over": [], "below": []} for k in keys
+    }
     for sd in seeds:
         rows = {r.method: r for r in evaluate(make_dataset(n_candidates, n_needs, sd))}
         for k in keys:
             per[k]["ndcg"].append(rows[k].ndcg10)
+            per[k]["p10"].append(rows[k].p10)
             per[k]["rho"].append(rows[k].rho if rows[k].rho is not None else float("nan"))
             per[k]["over"].append(rows[k].overrated or 0.0)
             per[k]["below"].append(rows[k].below_need or 0.0)
@@ -442,11 +480,11 @@ def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str,
         return f"{statistics.mean(xs) * scale:.{digits}f} ± {sd * scale:.{digits}f}"
 
     lines = [f"Зёрна {', '.join(map(str, seeds))}: среднее ± стандартное отклонение.", "",
-             "| Ранжирование | nDCG@10 | Спирмен внутри категории | Завышенный грейд в топ-10, % "
+             "| Ранжирование | nDCG@10 | P@10, оценка ≥ 2 | Спирмен внутри категории | Завышенный грейд в топ-10, % "
              "| Настоящий грейд ниже потребности, % |",
-             "|---|---|---|---|---|"]
-    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['rho'])} | {ms(per[k]['over'], 100, 1)} "
-              f"| {ms(per[k]['below'], 100, 1)} |"
+             "|---|---|---|---|---|---|"]
+    lines += [f"| {TITLES[k].strip()} | {ms(per[k]['ndcg'])} | {ms(per[k]['p10'])} | {ms(per[k]['rho'])} "
+              f"| {ms(per[k]['over'], 100, 1)} | {ms(per[k]['below'], 100, 1)} |"
               for k in keys]
     summary = {k: {m: statistics.mean(v) for m, v in per[k].items()} for k in keys}
     return "\n".join(lines) + "\n", summary
@@ -718,6 +756,20 @@ def _print_overclaim(args: argparse.Namespace) -> None:
               f"{full.overrated:.1%} | {resume.overrated:.1%} |")
 
 
+def _bind_pi_table() -> None:
+    """Estimate π on seed 2029. Metric seeds are not read."""
+    global _pi_table
+    from app.core.config import settings
+    from app.services.grade_posterior import PI_SEED, fail_table
+
+    if settings.GRADE_MODEL != "expected":
+        _pi_table = None
+        return
+    taken: list[tuple[str, str, bool]] = []
+    make_dataset(attempts=taken, seed=PI_SEED)
+    _pi_table = fail_table(taken)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--candidates", type=int, default=800)
@@ -739,7 +791,14 @@ def main() -> None:
     parser.add_argument("--merged", help="where --merge-raters writes the JSONL")
     parser.add_argument("--overclaim", default="",
                         help="comma-separated shares who declare one grade too high; print the curve and exit")
+    parser.add_argument("--grade-model", choices=("legacy", "expected"), default="",
+                        help="legacy keeps the 0.85 factor; expected uses the grade posterior")
     args = parser.parse_args()
+    from app.core.config import settings
+    if args.grade_model:
+        settings.GRADE_MODEL = args.grade_model
+    _bind_pi_table()
+    print(f"модель грейда: {settings.GRADE_MODEL}")
     if args.kappa:
         value = _kappa_from_sheets(args.kappa[0], args.kappa[1])
         print(f"взвешенная каппа {value:.2f} на парах из двух файлов")

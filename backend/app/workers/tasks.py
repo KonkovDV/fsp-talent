@@ -150,6 +150,21 @@ def purge_withdrawn():
     run_async(_inner())
 
 
+@celery_app.task(name="app.workers.tasks.refresh_grade_fail_rates")
+def refresh_grade_fail_rates():
+    """Nightly π: the share who fail the first attempt at a declared grade, by specialization."""
+    async def _inner():
+        from app.core.database import AsyncSessionLocal
+        from app.services.grade_posterior import measure_fail_rates, write_fail_rates
+
+        async with AsyncSessionLocal() as db:
+            overall, cells = await measure_fail_rates(db)
+            await write_fail_rates(overall, cells)
+            return {"pi0": overall, "cells": len(cells)}
+
+    return run_async(_inner())
+
+
 @celery_app.task(name="app.workers.tasks.watchdog_stuck_tasks")
 def watchdog_stuck_tasks():
     """Revoke tasks running longer than task_soft_time_limit (300 s).
