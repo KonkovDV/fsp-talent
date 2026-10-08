@@ -173,6 +173,7 @@ class Factor:
     label: str
     weight: float
     value: float | None                   # None: not applicable
+    contrib: float | None = None          # share of the employer score; the bars sum to it
 
 
 @dataclass(frozen=True)
@@ -198,6 +199,9 @@ class MatchResult:
     fit: float | None = None          # weighted mean of the need-fit factors; None when the need names nothing
     tier: int | None = None           # floor(fit / FIT_TIER_DELTA); None when there is no fit
     confirmed: int = 0                # 1 when the shown grade comes from the test
+    employer: float = 0.0             # sum of the bar contributions, before the pay match and the queue
+    accept: float | None = None       # pay-band match, after refusals and the job-search factor
+    congestion: float = 0.0           # points taken off for a busy invitation queue
 
 
 def reason_source(code: str) -> str | None:
@@ -246,6 +250,31 @@ def _note(bucket: list[str], reasons: list[Reason], tone: str, code: str, text: 
 
 EVIDENCE_REASONS = {"test": ("TEST_SCORE", "UNTESTED"),
                     "fsp": ("FSP_BONUS", "FSP_SCORE", "FSP_RELEVANT", "FSP_OTHER")}
+
+
+def _contributions(factors: list[Factor], evidence: float | None, closeness: float,
+                   basis: str) -> list[Factor]:
+    """Each bar's share of the employer score. Present factors sum to that score."""
+    lam = EVIDENCE_WEIGHT
+    fit_rows = [f for f in factors if f.key in FIT_KEYS and f.value is not None]
+    ev_rows = [f for f in factors if f.key in EVIDENCE_KEYS and f.value is not None]
+    w_fit = sum(f.weight for f in fit_rows)
+    w_ev = sum(f.weight for f in ev_rows)
+    out = []
+    for f in factors:
+        share = None
+        if f.value is None:
+            out.append(f)
+            continue
+        if basis == "evidence":
+            if f.key in EVIDENCE_KEYS and w_ev:
+                share = f.weight * f.value / w_ev
+        elif f.key in FIT_KEYS and w_fit:
+            share = f.weight * f.value / w_fit / (1.0 + lam)
+        elif f.key in EVIDENCE_KEYS and w_ev and evidence is not None:
+            share = lam * closeness * (f.weight * f.value / w_ev) / (1.0 + lam)
+        out.append(replace(f, contrib=share))
+    return out
 
 
 def _with_points(reasons: list[Reason], factors: list[Factor], scale: float) -> list[Reason]:
@@ -402,9 +431,9 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         if values["industry"] == 1.0 and c.industry == need.industry:
             _note(plus, reasons, "plus", "INDUSTRY", "Интересна ваша предметная область")
 
-    factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
-    fit = _mean([f for f in factors if f.key in FIT_KEYS])
-    evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
+    bare = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
+    fit = _mean([f for f in bare if f.key in FIT_KEYS])
+    evidence = _mean([f for f in bare if f.key in EVIDENCE_KEYS])
     if fit is None:
         # Nothing to match against (an empty search): rank by how well the profile is confirmed.
         employer, basis = evidence or 0.0, "evidence"
@@ -416,7 +445,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             closeness *= (1.0 - SKILL_GATE) + SKILL_GATE * values["skills"]
         lift = EVIDENCE_WEIGHT * (evidence or 0.0) * closeness
         employer = (fit + lift) / (1.0 + EVIDENCE_WEIGHT)
-        reasons = _with_points(reasons, factors, EVIDENCE_WEIGHT * closeness / (1.0 + EVIDENCE_WEIGHT))
+        reasons = _with_points(reasons, bare, EVIDENCE_WEIGHT * closeness / (1.0 + EVIDENCE_WEIGHT))
         basis = "fit"
     accept = accept_probability(need.salary_from, need.salary_to, c.salary_from, c.salary_to)
     if accept is not None and c.salary_refusals > 0:
@@ -447,14 +476,16 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         _note(plus, reasons, "plus", "JOB_SEARCH_ACTIVE", "Активно ищет")
     elif c.job_search == "open":
         _note(info, reasons, "info", "JOB_SEARCH_OPEN", "Открыт к предложениям")
+    factors = _contributions(bare, evidence, closeness, basis)
+    congestion = 0.0
     total = employer
     if accept is not None:
         # Reciprocal score: harmonic mean of "the employer would invite" and "the candidate would accept".
         # Absent on either side, the factor is omitted and the ranking stays the employer-only score.
         total = _harmonic(employer, accept)
     if c.open_invites > OPEN_INVITE_FREE:
-        penalty = min(CONGESTION_CAP, CONGESTION_STEP * (c.open_invites - OPEN_INVITE_FREE))
-        total = max(0.0, total - penalty)
+        congestion = min(CONGESTION_CAP, CONGESTION_STEP * (c.open_invites - OPEN_INVITE_FREE))
+        total = max(0.0, total - congestion)
         _note(info, reasons, "info", "CONGESTION",
               f"Открытых приглашений уже {c.open_invites}: карточка чуть ниже")
     tier = None
@@ -464,7 +495,8 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             _note(info, reasons, "info", "FIT_TIER", f"Ярус соответствия {tier} из {tier_ceiling()}")
     confirmed = 1 if c.grade_source == "assessed" else 0
     return MatchResult(round(total, 4), factors, plus, minus, info, basis, reasons,
-                       fit=None if fit is None else round(fit, 4), tier=tier, confirmed=confirmed)
+                       fit=None if fit is None else round(fit, 4), tier=tier, confirmed=confirmed,
+                       employer=employer, accept=accept, congestion=congestion)
 
 
 def accept_probability(offer_from: int | None, offer_to: int | None,

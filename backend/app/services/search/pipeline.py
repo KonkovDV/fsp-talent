@@ -366,6 +366,12 @@ async def search_candidates(
             fits={i: matches[i].fit or 0.0 for i in all_ids})
     else:
         ordered = order_pool(all_ids, score_of, fused, best, cold)
+    plain = order_pool(
+        all_ids, score_of, fused, best, None,
+        tiers={i: matches[i].tier or 0 for i in all_ids} if matching_service.USE_FIT_TIERS else None,
+        confirmed={i: matches[i].confirmed for i in all_ids} if matching_service.USE_FIT_TIERS else None,
+        fits={i: matches[i].fit or 0.0 for i in all_ids} if matching_service.USE_FIT_TIERS else None)
+    cold_seats = {pid for pid, was in zip(ordered, plain, strict=True) if pid in cold and pid != was}
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
@@ -380,26 +386,36 @@ async def search_candidates(
                 "candidate_id": str(pid),
                 "have": sorted(have.get(pid, ())),
                 "skill_evidence": dict(m.facts.skills) if m.facts else {},
-                "match": {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
-                          "reasons": [{"code": r.code, "text": r.text, "tone": r.tone,
-                                       "source": reason_source(r.code), "points": r.points} for r in m.reasons],
-                          "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
-                                      for f in m.factors]},
+                "match": _match_body(m, pid in cold_seats),
             })
         return {**header, "items": items}
     ordered = ordered[offset:offset + limit]
     cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline)
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
-        card["match"] = {"score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
-                         "reasons": [{"code": r.code, "text": r.text, "tone": r.tone,
-                                      "source": reason_source(r.code), "points": r.points} for r in m.reasons],
-                         "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value}
-                                     for f in m.factors]}
+        card["match"] = _match_body(m, uuid.UUID(card["candidate_id"]) in cold_seats)
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
             "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
             "items": cards}
+
+
+def _match_body(m: PoolMatch, cold_seat: bool) -> dict:
+    reasons = [{"code": r.code, "text": r.text, "tone": r.tone,
+                "source": reason_source(r.code), "points": r.points} for r in (m.reasons or [])]
+    if cold_seat:
+        reasons.append({
+            "code": "COLD_SEAT",
+            "text": "Место для кандидата без теста (правило разнообразия)",
+            "tone": "info", "source": None, "points": None,
+        })
+    return {
+        "score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
+        "employer": m.employer, "accept": m.accept, "congestion": m.congestion,
+        "reasons": reasons,
+        "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value,
+                     "contrib": f.contrib} for f in m.factors],
+    }
 
 
 @dataclass
@@ -415,6 +431,9 @@ class PoolMatch:
     fit: float | None = None
     tier: int | None = None
     confirmed: int = 0
+    employer: float = 0.0
+    accept: float | None = None
+    congestion: float = 0.0
 
 
 async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: list[uuid.UUID]) -> dict:
@@ -505,7 +524,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, fus
         )
         m = match_score(need, facts)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,
-                             m.fit, m.tier, m.confirmed)
+                             m.fit, m.tier, m.confirmed, m.employer, m.accept, m.congestion)
     return out
 
 
