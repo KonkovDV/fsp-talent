@@ -12,7 +12,7 @@ import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
 
 const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile', 'qa', 'analyst', 'data']
 const DISCS = ['algorithmic', 'product', 'security', 'bas', 'robotics', 'ai']
-const RANKS = ['МС', 'КМС', 'I', 'II', 'III']
+const RANKS = ['МС', 'КМС', 'I', 'II', 'III', 'I юн.', 'II юн.', 'III юн.']
 const EXAMPLES = ['senior backend Python Kafka', 'middle фронтенд React TypeScript', 'специалист по ИБ с КМС']
 
 type Params = Record<string, string | boolean | number | undefined>

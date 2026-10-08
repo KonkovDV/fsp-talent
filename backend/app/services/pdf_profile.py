@@ -12,6 +12,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 MAX_PDF_BYTES = 5_000_000
+MAX_PDF_PAGES = 30
 _FONTS = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
@@ -22,10 +23,16 @@ _FONTS = (
 def extract_pdf_text(data: bytes) -> str:
     if len(data) > MAX_PDF_BYTES or not data.startswith(b"%PDF"):
         raise ValueError("pdf")
-    reader = PdfReader(io.BytesIO(data))
-    if reader.is_encrypted:
-        raise ValueError("pdf")
-    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if reader.is_encrypted:
+            raise ValueError("pdf")
+        pages = list(reader.pages)[:MAX_PDF_PAGES]
+        text = "\n".join((page.extract_text() or "") for page in pages)
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("pdf") from exc
     return text.strip()[:20000]
 
 
@@ -55,7 +62,10 @@ def profile_lines(name: str | None, role: str | None, grade: str | None,
         lines.append("Навыки: " + ", ".join(skills))
     for row in disciplines:
         rank = row.get("rank") or "—"
-        lines.append(f"{row['label']}: нижняя граница {row['lcb']:.2f}, разряд {rank}")
+        assigned = row.get("rank_assigned_at")
+        order = row.get("rank_order_ref")
+        extra = f", присвоен {assigned}, {order}" if assigned or order else ""
+        lines.append(f"{row['label']}: нижняя граница {row['lcb']:.2f}, присвоенный разряд {rank}{extra}")
     lines.append("")
     lines.append("Контакты в этот файл не входят.")
     return lines

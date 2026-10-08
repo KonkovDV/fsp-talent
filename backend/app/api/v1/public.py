@@ -100,6 +100,8 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
                 "lcb": ds.lcb,
                 "confidence": ds.confidence,
                 "best_rank": ds.best_rank,
+                "rank_assigned_at": ds.rank_assigned_at.isoformat() if ds.rank_assigned_at else None,
+                "rank_order_ref": ds.rank_order_ref,
                 "events_count": ds.events_count,
             }
             for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)
@@ -123,7 +125,9 @@ async def public_profile_pdf(participant_id: uuid.UUID, db: AsyncSession = Depen
         SPECIALIZATIONS.get(cat.primary_role, cat.primary_role) if cat else None,
         cat.grade if cat else None,
         [skill_line(s.name, s.trust_level) for s in p.skills if s.confirmed],
-        [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank}
+        [{"label": DISCIPLINE_LABELS.get(s.discipline, s.discipline), "lcb": s.lcb, "rank": s.best_rank,
+          "rank_assigned_at": s.rank_assigned_at.isoformat() if s.rank_assigned_at else None,
+          "rank_order_ref": s.rank_order_ref}
          for s in p.discipline_scores],
     )
     return Response(content=render_profile_pdf(lines), media_type="application/pdf",

@@ -181,3 +181,14 @@ def watchdog_stuck_tasks():
         logger.warning("Watchdog revoked %d stuck task(s): %s", len(revoked), revoked)
     else:
         logger.info("Watchdog: no stuck tasks (threshold=%ds)", threshold)
+
+
+@celery_app.task(name="app.workers.tasks.reset_demo")
+def reset_demo():
+    """Nightly return of the jury stand. Does nothing when the demo mode is off."""
+    from app.core.config import settings
+    if not settings.DEMO_MODE:
+        logger.info("reset_demo: DEMO_MODE is off, nothing to do")
+        return
+    from seed.reset_demo import reset_demo as run
+    run_async(run())

@@ -34,6 +34,8 @@ export interface CandidateCardData {
     lcb: number
     confidence?: number
     best_rank: string | null
+    rank_assigned_at?: string | null
+    rank_order_ref?: string | null
     events_count?: number
     evidence: { status: string; year: number; bucket: string; team: boolean }[]
   }[]
@@ -117,7 +119,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
             {card.grade_source === 'assessed'
               ? <span className="badge-ok">Грейд подтверждён тестом</span>
               : <span className="badge-vc">Грейд не подтверждён</span>}
-            {disc ? <><RankBadge rank={disc.best_rank} /><span className="text-ink-2">{disc.label}</span></>
+            {disc ? <><RankBadge rank={disc.best_rank} assignedAt={disc.rank_assigned_at} orderRef={disc.rank_order_ref} /><span className="text-ink-2">{disc.label}</span></>
               : <span className="text-ink-3">Без истории ФСП</span>}
           </div>
           {(card.matched_skills.length > 0 || card.missing_skills.length > 0 || card.stack.length > 0) && (

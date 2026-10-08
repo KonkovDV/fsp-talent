@@ -303,9 +303,11 @@ def main():
     check_needs(employer_token)
     check_employer_tasks(employer_token, participant_token, me["id"])
     check_fsp_signin(me["id"])
+    check_survey_gate(employer_token)
     check_revoke_contacts(offer["id"], employer_token, participant_token)
     check_erasure(employer_token)
     check_assessment()
+    check_demo_guard()
     check_jury_accounts()
     check_minor()
     check_idor(employer_token, participant_token)
@@ -412,6 +414,43 @@ def check_fsp_signin(linked_id):
     status, me = call("GET", "/candidates/me", token=out["access_token"])
     assert status == 200 and me["fsp_id"] == fresh and me["email"] is None, me
     print("FSP ID SIGN-IN OK", fresh)
+
+
+def _fsp_without_survey():
+    """FSP2050 is the first choice. A later free id is used when that account already finished the survey."""
+    for number in range(2050, 2100):
+        out = _fsp_signin(f"FSP{number}")
+        if out["status"] == "needs_consent":
+            status, tokens = call("POST", "/auth/fsp/signup",
+                                  {"ticket": out["ticket"], "consents": REQUIRED_CANDIDATE_CONSENTS})
+            assert status == 200, tokens
+            return tokens["access_token"]
+        status, me = call("GET", "/candidates/me", token=out["access_token"])
+        assert status == 200, me
+        if not me.get("survey_done"):
+            return out["access_token"]
+    raise AssertionError("нет свободного номера ФСП без опроса")
+
+
+def check_survey_gate(employer_token):
+    """A new FSP ID login has protocols and still stays out of search until the survey."""
+    token = _fsp_without_survey()
+    status, me = call("GET", "/candidates/me", token=token)
+    assert status == 200 and me["survey_done"] is False and me["primary_role"] == "не выбрана", me
+    hidden = "/search/candidates?role=" + urllib.parse.quote("не выбрана") + "&grade=junior&limit=50"
+    status, before = call("GET", hidden, token=employer_token)
+    assert status == 200 and before["total"] == 0, before
+    assert me["id"] not in [item["candidate_id"] for item in before["items"]]
+    status, saved = call("PUT", "/candidates/me/survey",
+                         {"specialization": "security", "declared_grade": "junior"}, token=token)
+    assert status == 200, saved
+    status, me = call("GET", "/candidates/me", token=token)
+    assert me["grade_source"] == "declared" and me["primary_role"] == "security", me
+    status, after = call("GET", "/search/candidates?role=security&grade=junior&limit=50", token=employer_token)
+    assert status == 200, after
+    card = next((item for item in after["items"] if item["candidate_id"] == me["id"]), None)
+    assert card is not None and card["grade_source"] == "declared", after["total"]
+    print("SURVEY GATE OK", me["fsp_id"])
 
 
 def check_messages(offer_id, employer_token, participant_token):
@@ -628,6 +667,19 @@ def check_minor():
     status, me = call("GET", "/candidates/me", token=token)
     assert me["minor_consent_given"], me
     print("MINOR OK guardian consent by link")
+
+
+def check_demo_guard():
+    """Published demo accounts keep the printed password: a change is refused."""
+    status, blueprint = call("GET", "/assessment/blueprint")
+    if not (status == 200 and blueprint.get("express")):
+        print("DEMO GUARD SKIPPED (DEMO_MODE off)")
+        return
+    token = _login("jury10@demo.talent")
+    status, refused = call("POST", "/auth/password/change",
+                           {"current_password": "demo12345", "new_password": "another-pass-1"}, token=token)
+    assert status == 409 and refused["error"]["code"] == "demo_protected", refused
+    print("DEMO GUARD OK")
 
 
 def check_jury_accounts():

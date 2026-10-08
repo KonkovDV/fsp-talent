@@ -1,0 +1,45 @@
+"""Demo accounts keep the printed password. A real stand is not affected."""
+import pytest
+
+from app.api.errors import ApiError
+from app.core import demo_guard
+from app.services.trust import complaints_that_count, should_pause
+
+
+def _demo(monkeypatch, on: bool) -> None:
+    monkeypatch.setattr(demo_guard.settings, "DEMO_MODE", on)
+    monkeypatch.setattr(demo_guard.settings, "DEMO_PROTECTED_SUFFIXES", "@demo.talent,.demo")
+
+
+def test_a_demo_account_cannot_change_the_password_or_be_deleted(monkeypatch):
+    _demo(monkeypatch, True)
+    with pytest.raises(ApiError) as change:
+        demo_guard.reject_protected("jury1@demo.talent")
+    assert change.value.status_code == 409 and change.value.code == "demo_protected"
+    with pytest.raises(ApiError) as erase:
+        demo_guard.reject_protected("hr@sibcode.demo")
+    assert erase.value.status_code == 409
+
+
+def test_the_guard_is_off_when_the_stand_is_not_a_demo(monkeypatch):
+    _demo(monkeypatch, False)
+    demo_guard.reject_protected("jury1@demo.talent")
+    demo_guard.reject_protected("hr@sibcode.demo")
+
+
+def test_a_normal_address_stays_open_on_the_demo_stand(monkeypatch):
+    _demo(monkeypatch, True)
+    assert demo_guard.is_protected("person@example.com") is False
+    demo_guard.reject_protected("person@example.com")
+
+
+def test_a_complaint_from_a_demo_account_does_not_move_the_pause(monkeypatch):
+    _demo(monkeypatch, True)
+    emails = ["jury1@demo.talent", "jury2@demo.talent", "fsp001@demo.talent"]
+    counted = complaints_that_count(emails)
+    assert counted == []
+    assert should_pause(len(set(counted)), len(counted), 10) is False
+    _demo(monkeypatch, False)
+    counted = complaints_that_count(emails)
+    assert len(counted) == 3
+    assert should_pause(len(set(counted)), len(counted), 10) is True

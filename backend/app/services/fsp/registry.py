@@ -11,7 +11,9 @@ Nothing else is requested: no gender, no contacts, no documents.
          "results": [{"event_id": "...", "event_name": "...", "discipline": "algorithmic",
                       "competition_status": "russia_championship", "place": 3, "total_participants": 180,
                       "is_team": false, "team_size": 1, "event_date": "2025-11-20", "regions_count": 52,
-                      "role": "participant", "protocol_url": "https://..."}]}
+                      "role": "participant", "protocol_url": "https://..."}],
+         "ranks": [{"discipline": "algorithmic", "rank": "КМС", "assigned_at": "2025-11-20",
+                    "order_ref": "Приказ-12"}]}
     404 the participant is not in the registry
 """
 from __future__ import annotations
@@ -21,9 +23,10 @@ from datetime import UTC, date, datetime
 import httpx
 
 from app.core.config import settings
-from app.services.fsp.mock import FSPChanges, FSPParticipant, FSPResult
+from app.services.fsp.mock import FSPChanges, FSPParticipant, FSPResult, RegistryRank
 
 DISCIPLINES = {"algorithmic", "product", "security", "bas", "robotics", "ai"}
+REGISTRY_RANKS = {"МС", "КМС", "I", "II", "III", "I юн.", "II юн.", "III юн."}
 
 
 class FSPRegistryError(Exception):
@@ -46,12 +49,20 @@ def _result(row: dict) -> FSPResult | None:
     )
 
 
+def _rank(row: dict) -> RegistryRank | None:
+    if row.get("discipline") not in DISCIPLINES or row.get("rank") not in REGISTRY_RANKS:
+        return None
+    return RegistryRank(row["discipline"], row["rank"], date.fromisoformat(row["assigned_at"]),
+                        str(row.get("order_ref") or ""))
+
+
 def parse_participant(payload: dict) -> FSPParticipant:
     results = [r for r in (_result(row) for row in payload.get("results", [])) if r is not None]
+    ranks = [r for r in (_rank(row) for row in payload.get("ranks", [])) if r is not None]
     return FSPParticipant(
         fsp_id=str(payload["fsp_id"]), display_name=str(payload.get("display_name") or ""),
         region=str(payload.get("region") or ""), birth_date=date.fromisoformat(payload["birth_date"]),
-        results=results,
+        results=results, ranks=ranks,
     )
 
 

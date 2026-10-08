@@ -9,6 +9,16 @@ export const DISC_RU: Record<string, string> = {
   ai: 'Системы ИИ',
 }
 
+/** Official discipline names. Short names in DISC_RU stay on chips and in tables. */
+export const DISCIPLINE_FULL: Record<string, string> = {
+  algorithmic: 'Алгоритмическое программирование',
+  product: 'Продуктовое программирование',
+  security: 'Программирование систем ИБ',
+  bas: 'Программирование БАС',
+  robotics: 'Программирование робототехники',
+  ai: 'Программирование систем ИИ',
+}
+
 export const GRADES = ['intern', 'junior', 'middle', 'senior', 'lead'] as const
 
 export const GRADE_RU: Record<string, string> = {

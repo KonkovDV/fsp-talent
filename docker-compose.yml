@@ -37,6 +37,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
+      DEMO_MODE: ${DEMO_MODE:-true}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       MAIL_MODE: ${MAIL_MODE:-smtp}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
@@ -61,6 +62,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
+      DEMO_MODE: ${DEMO_MODE:-true}
     command: celery -A app.workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
     volumes: [vc_keys:/secrets]
     depends_on:

@@ -26,8 +26,9 @@ Per discipline (empirical-Bayes shrinkage to the population prior):
 
 A plain participation scores 0, so it never lifts the mean. Team results reduce evidence
 weight (wider sigma) instead of lowering the level; the team contribution is not separated (Q&A).
-The ЕВСК rank equivalent (МС, КМС, …) is display information only (profile, credential, employer filter)
-and does not enter the score. All constants are expert priors; any change must bump VERSION.
+The score composition is unchanged in v3.2.0. The rank is not computed here: it is a registry fact
+(discipline, rank, assignment date, order number) stored beside the score and it still does not enter it.
+All constants are expert priors; any change to the score must bump VERSION.
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ import math
 from datetime import date
 from typing import TypedDict
 
-VERSION = "v3.1.0"
+VERSION = "v3.2.0"
 HALF_LIFE_MONTHS = 18.0
 PRIOR_STRENGTH = 2.0      # K: prior counts as two full-weight events
 PRIOR_MEAN = 0.30
@@ -54,33 +55,9 @@ RESULT_CLASS_LABELS = {
 # Winning a field of two is not a win: prize classes need a real field, otherwise the share of the field decides.
 MIN_FIELD_FOR_PRIZE = 6
 
-# Display only: the ЕВСК rank equivalent is shown and can be filtered on, it is not part of the score.
-RANK_ORDER = ["МС", "КМС", "I", "II", "III", "юн"]
-
-# Simplified ЕВСК ladder: status -> [(max_place, rank)]. Approximation of the norms for
-# "спортивное программирование"; must be reconciled with the current order (Минспорт № 299 от 09.04.2026).
-EVSK_LADDER: dict[str, list[tuple[int, str]]] = {
-    "world":               [(8, "МС"), (16, "КМС"), (32, "I")],
-    "russia_championship": [(2, "МС"), (4, "КМС"), (8, "I"), (16, "II"), (32, "III")],
-    "russia_cup":          [(1, "МС"), (3, "КМС"), (8, "I"), (16, "II"), (32, "III")],
-    "russia_youth":        [(3, "КМС"), (8, "I"), (16, "II"), (32, "III")],
-    "all_russian":         [(3, "КМС"), (8, "I"), (16, "II"), (32, "III")],
-    "federal_district":    [(3, "I"), (8, "II"), (16, "III")],
-    "regional":            [(3, "II"), (8, "III"), (16, "юн")],
-    "other":               [(3, "III"), (8, "юн")],
-}
-MIN_PARTICIPANTS_FOR_MASTER = 6   # МС/КМС require at least 6 competitors
-
-STATUS_LABELS = {
-    "world": "Чемпионат/первенство мира",
-    "russia_championship": "Чемпионат России",
-    "russia_cup": "Кубок России",
-    "russia_youth": "Первенство России",
-    "all_russian": "Всероссийские соревнования",
-    "federal_district": "Соревнования федерального округа",
-    "regional": "Соревнования субъекта РФ",
-    "other": "Прочие соревнования",
-}
+# Strongest rank first. Youth ranks stay separate. The product does not invent МСМК: the sport's
+# norms do not list it. A rank is never derived from a place; this order is only for the filter.
+RANK_ORDER = ["МС", "КМС", "I", "II", "III", "I юн.", "II юн.", "III юн."]
 
 class EventInput(TypedDict):
     id: str
@@ -98,18 +75,8 @@ class DisciplineResult(TypedDict):
     confidence: float
     events_count: int
     team_events_count: int
-    best_rank: str | None
     top_event_ids: list[str]
     scoring_version: str
-
-
-def rank_equivalent(status: str, place: int, total: int) -> str | None:
-    for max_place, rank in EVSK_LADDER.get(status, EVSK_LADDER["other"]):
-        if place <= max_place:
-            if rank in ("МС", "КМС") and total < MIN_PARTICIPANTS_FOR_MASTER:
-                return "I"
-            return rank
-    return None
 
 
 def rank_at_least(rank: str | None, minimum: str) -> bool:
@@ -163,9 +130,6 @@ def compute_discipline_score(events: list[EventInput], reference_date: date | No
     n_eff = sum(w for _, w, _ in ranked)
     mu = (sum(q * w for q, w, _ in ranked) + PRIOR_STRENGTH * PRIOR_MEAN) / (n_eff + PRIOR_STRENGTH)
     sigma = math.sqrt(PRIOR_VAR / (n_eff + PRIOR_STRENGTH))
-    ranks = [rank_equivalent(e["competition_status"], e["place"], e["total_participants"]) for _, _, e in weighted]
-    known = [r for r in ranks if r is not None]
-    best_rank = min(known, key=RANK_ORDER.index) if known else None
     top = ranked[:3]
     return DisciplineResult(
         score=round(mu, 4),
@@ -174,7 +138,6 @@ def compute_discipline_score(events: list[EventInput], reference_date: date | No
         confidence=round(n_eff / (n_eff + PRIOR_STRENGTH), 4),
         events_count=len(events),
         team_events_count=sum(1 for e in events if e["team_size"] > 1),
-        best_rank=best_rank,
         top_event_ids=[e["id"] for _, _, e in top],
         scoring_version=VERSION,
     )
