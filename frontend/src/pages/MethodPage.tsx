@@ -106,7 +106,7 @@ export default function MethodPage() {
                   Всего ответов {data.answers}. Самое частое задание — {Math.round(data.max_share * 1000) / 10} % показов.
                   Сумма CUSUM — накопленный избыток верных ответов над моделью; карантин по-прежнему решается по каждому ключу.
                 </p>
-                <div className="mt-4 overflow-x-auto">
+                <div className="mt-4 overflow-x-auto rounded-lg" tabIndex={0} role="region" aria-label="Таблица показов по семействам">
                   <table className="protocol">
                     <thead>
                       <tr>

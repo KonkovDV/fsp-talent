@@ -41,7 +41,7 @@ export default function CandidateResults() {
         <Empty title="Протоколов пока нет">Привяжите ФСП ID в профиле — результаты подтянутся автоматически. Без них категория строится по опросу и тесту.</Empty>
       )}
       {rows.length > 0 && (
-        <div className="card overflow-x-auto p-0">
+        <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица результатов">
           <table className="protocol">
             <thead><tr>
               <th className="w-20 text-right">Место</th><th>Соревнование</th><th>Дисциплина</th><th>Разряд</th><th className="text-right">Дата</th>
@@ -52,14 +52,14 @@ export default function CandidateResults() {
                   <td className="text-right"><span className="place">{r.place}</span><span className="num block text-xs text-ink-3">из {r.total_participants}</span></td>
                   <td>
                     <p className="font-medium text-ink">{r.event_name}</p>
-                    <button type="button" className="mt-1 text-xs text-accent underline" disabled={busy === r.id} onClick={() => openCard(r.id)}>Краткое удостоверение</button>
+                    <button type="button" className="mt-0.5 inline-flex min-h-6 items-center text-xs font-medium text-accent underline" disabled={busy === r.id} onClick={() => openCard(r.id)}>Краткое удостоверение</button>
                     <p className="text-xs text-ink-3">{r.status_label}{r.is_team ? `, команда из ${r.team_size}` : ''}{r.ekp_number ? `. ${r.ekp_number.startsWith('ЕКП-демо') ? 'Демо-номер календаря' : 'Номер в календаре ЕКП'}: ${r.ekp_number}` : ''}</p>
                   </td>
                   <td className="text-ink-2">{r.discipline_label}</td>
                   <td><RankBadge rank={r.rank_equivalent} /></td>
                   <td className="num whitespace-nowrap text-right text-ink-2">
                     {date(r.event_date)}
-                    {r.protocol_url && <a href={r.protocol_url} target="_blank" rel="noreferrer" className="ml-2 inline-flex text-accent" aria-label="Протокол"><ExternalLink size={14} /></a>}
+                    {r.protocol_url && <a href={r.protocol_url} target="_blank" rel="noreferrer" className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded text-accent hover:bg-accent-soft" aria-label="Протокол"><ExternalLink size={14} aria-hidden /></a>}
                   </td>
                 </tr>
               ))}

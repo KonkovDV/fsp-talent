@@ -14,7 +14,7 @@ export default function LegalPage() {
       <PageHeader title="Документы и согласия"
         lead="Согласие на обработку персональных данных — отдельный документ, как требует 152-ФЗ. В профиле видно, какую версию вы приняли, и любое согласие можно отозвать." />
       {isLoading && <Skeleton className="h-48" />}
-      <div className="card overflow-x-auto p-0">
+      <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица документов">
         <table className="protocol">
           <thead><tr><th>Документ</th><th>Для кого</th><th>Версия</th><th>SHA-256</th></tr></thead>
           <tbody>

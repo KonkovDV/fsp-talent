@@ -42,7 +42,7 @@ export default function LeaderboardPage() {
         </ol>
       )}
       {rows.length > 0 && (
-        <div className="card overflow-x-auto p-0">
+        <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица результатов">
           <table className="protocol">
             <thead><tr><th className="w-16 text-right">Место</th><th>Участник</th><th>Дисциплина</th><th>Разряд</th><th>Категория</th><th className="text-right">Уровень</th></tr></thead>
             <tbody>
