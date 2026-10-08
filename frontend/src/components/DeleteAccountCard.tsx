@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { apiError, deleteMyAccount, signOut } from '../api/client'
+import { apiError, apiErrorCode, deleteMyAccount, signOut } from '../api/client'
 
 /** 152-FZ, art. 21: the person can erase the account. Typing the word protects against a stray click. */
 export default function DeleteAccountCard() {
@@ -25,7 +25,9 @@ export default function DeleteAccountCard() {
           <form className="space-y-2" onSubmit={e => { e.preventDefault(); erase.mutate() }}>
             <label className="field-label" htmlFor="delete-word">Введите слово «удалить»</label>
             <input id="delete-word" value={word} onChange={e => setWord(e.target.value)} className="input" autoComplete="off" />
-            {erase.isError && <p className="field-error" role="alert">{apiError(erase.error)}</p>}
+            {erase.isError && apiErrorCode(erase.error) === 'demo_protected'
+              ? <p className="text-sm text-ink-2" role="status">{apiError(erase.error)}</p>
+              : erase.isError && <p className="field-error" role="alert">{apiError(erase.error)}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={word.trim().toLowerCase() !== 'удалить' || erase.isPending} className="btn-danger btn-sm">
                 {erase.isPending ? 'Удаляем…' : 'Удалить навсегда'}

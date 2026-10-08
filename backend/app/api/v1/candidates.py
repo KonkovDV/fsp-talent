@@ -15,6 +15,7 @@ from app.api.errors import ApiError
 from app.api.v1.messages import unread_counts
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.demo_guard import reject_protected
 from app.core.ratelimit import too_many
 from app.models import (
     AccessLog,
@@ -337,6 +338,7 @@ async def delete_my_account(body: DeleteAccountIn, current: dict = Depends(get_c
     p = await db.get(Participant, _pid(current))
     if not p or p.deleted_at is not None:
         raise HTTPException(404, "Профиль не найден")
+    reject_protected(p.email)
     await erase_participant(db, p, reason="account_deleted")
     await db.commit()
     return {"deleted": True}

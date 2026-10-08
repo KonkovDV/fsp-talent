@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { apiError, changePassword, downloadMyData } from '../api/client'
+import { apiError, apiErrorCode, changePassword, downloadMyData } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 
 /** Download this account's own data, and replace the password without leaving the cabinet. */
@@ -11,6 +11,7 @@ export default function AccountSecurity() {
   const [next, setNext] = useState('')
   const [again, setAgain] = useState('')
   const [note, setNote] = useState('')
+  const [guard, setGuard] = useState('')
   const [error, setError] = useState('')
 
   const download = useMutation({
@@ -35,7 +36,16 @@ export default function AccountSecurity() {
       setError('')
       setNote('Пароль изменён. Другие сеансы этого аккаунта закрыты.')
     },
-    onError: e => { setNote(''); setError(apiError(e, 'Пароль не изменён')) },
+    onError: e => {
+      setNote('')
+      if (apiErrorCode(e) === 'demo_protected') {
+        setError('')
+        setGuard(apiError(e))
+        return
+      }
+      setGuard('')
+      setError(apiError(e, 'Пароль не изменён'))
+    },
   })
 
   const mismatch = next !== '' && again !== '' && next !== again
@@ -62,6 +72,7 @@ export default function AccountSecurity() {
           <input id="pw-again" type="password" autoComplete="new-password" className="input" value={again} onChange={e => setAgain(e.target.value)} />
         </div>
         {mismatch && <p className="field-error" role="alert">Пароли не совпадают</p>}
+        {guard && <p className="text-sm text-ink-2" role="status">{guard}</p>}
         {error && <p className="field-error" role="alert">{error}</p>}
         {note && <p className="text-sm text-ok" role="status">{note}</p>}
         <button type="submit" className="btn-primary btn-sm" disabled={!ready || save.isPending}>

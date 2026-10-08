@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # Public demo stand without a real mail account: the registration answer carries the confirmation code,
     # only to the person who registers. Ignored unless DEMO_MODE is on as well.
     DEMO_SHOW_CODE: bool = False
+    # Addresses ending with one of these stay usable on the demo stand: password and deletion are closed.
+    DEMO_PROTECTED_SUFFIXES: str = "@demo.talent,.demo"
     VERSION: str = "1.1.0"
     PUBLIC_BASE_URL: str = "http://localhost"
     CORS_ORIGINS: str = "http://localhost,http://localhost:5173"

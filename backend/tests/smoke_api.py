@@ -306,6 +306,7 @@ def main():
     check_revoke_contacts(offer["id"], employer_token, participant_token)
     check_erasure(employer_token)
     check_assessment()
+    check_demo_guard()
     check_jury_accounts()
     check_minor()
     check_idor(employer_token, participant_token)
@@ -628,6 +629,19 @@ def check_minor():
     status, me = call("GET", "/candidates/me", token=token)
     assert me["minor_consent_given"], me
     print("MINOR OK guardian consent by link")
+
+
+def check_demo_guard():
+    """Published demo accounts keep the printed password: a change is refused."""
+    status, blueprint = call("GET", "/assessment/blueprint")
+    if not (status == 200 and blueprint.get("express")):
+        print("DEMO GUARD SKIPPED (DEMO_MODE off)")
+        return
+    token = _login("jury10@demo.talent")
+    status, refused = call("POST", "/auth/password/change",
+                           {"current_password": "demo12345", "new_password": "another-pass-1"}, token=token)
+    assert status == 409 and refused["error"]["code"] == "demo_protected", refused
+    print("DEMO GUARD OK")
 
 
 def check_jury_accounts():

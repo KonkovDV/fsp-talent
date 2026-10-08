@@ -22,6 +22,7 @@ from app.api.deps import get_any_auth
 from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.demo_guard import is_protected, reject_protected
 from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.core.security import (
     create_access_token,
@@ -327,6 +328,8 @@ class ForgotIn(BaseModel):
 @router.post("/password/forgot", status_code=202)
 async def forgot_password(body: ForgotIn, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
+    if is_protected(email):
+        return {"status": "reset_sent", "email": email, "role": body.role}
     await check_resend_allowed(email, "reset")
     account = await _account(db, body.role, email)
     if account is not None and account.email_verified_at is not None:
@@ -346,6 +349,7 @@ class ResetIn(BaseModel):
 @router.post("/password/reset", response_model=TokenOut)
 async def reset_password(body: ResetIn, response: Response, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
+    reject_protected(email)
     await _limit("reset", email, limit=10)
     row = await consume_code(db, email, body.code, "reset", body.role)
     account = await _account(db, body.role, email)
@@ -374,6 +378,7 @@ async def change_password(body: PasswordChangeIn, response: Response,
     account = await db.get(model, uuid.UUID(current["sub"]), with_for_update=True)
     if account is None or getattr(account, "deleted_at", None) is not None:
         raise ApiError(401, "unauthorized")
+    reject_protected(getattr(account, "email", None))
     has_password = bool(account.password_hash)
     current_ok = has_password and verify_password(body.current_password, account.password_hash)
     same = current_ok and verify_password(body.new_password, account.password_hash)
