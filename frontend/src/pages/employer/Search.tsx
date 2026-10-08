@@ -88,7 +88,7 @@ export default function EmployerSearch() {
       </form>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-3">
         {!q && <span>Например:{' '}
-          {EXAMPLES.map((ex, i) => <span key={ex}>{i > 0 && ', '}<button type="button" className="text-accent hover:underline" onClick={() => setQ(ex)}>{ex}</button></span>)}
+          {EXAMPLES.map((ex, i) => <span key={ex}>{i > 0 && ', '}<button type="button" className="inline-flex min-h-6 items-center text-accent underline decoration-accent/40 hover:decoration-accent" onClick={() => setQ(ex)}>{ex}</button></span>)}
         </span>}
         <button type="button" className={freshDays ? 'chip-active' : 'chip-default'}
           aria-pressed={!!freshDays}
@@ -102,7 +102,7 @@ export default function EmployerSearch() {
       </div>
 
       <details className="mt-4" open={!url.get('role') && window.matchMedia('(min-width: 1024px)').matches}>
-        <summary className="cursor-pointer text-sm font-medium text-accent">Банк кандидатов по специализациям и грейдам</summary>
+        <summary className="inline-flex min-h-8 cursor-pointer items-center gap-1 text-sm font-medium text-accent">Банк кандидатов по специализациям и грейдам</summary>
         <BankGrid />
       </details>
 
@@ -110,7 +110,7 @@ export default function EmployerSearch() {
         <button type="button" onClick={() => setShowFilters(v => !v)} aria-expanded={showFilters} className="btn-secondary lg:hidden">
           {showFilters ? 'Скрыть фильтры' : 'Фильтры'}
         </button>
-        <aside className={`${showFilters ? 'block' : 'hidden'} space-y-4 lg:sticky lg:top-36 lg:block`} aria-label="Фильтры">
+        <aside className={`${showFilters ? 'block' : 'hidden'} card space-y-4 lg:sticky lg:top-36 lg:block lg:p-5`} aria-label="Фильтры">
           <div><label className={label} htmlFor="f-role">Специализация</label>
             <select id="f-role" value={role} onChange={e => setRole(e.target.value)} className="select">
               <option value="">Любая</option>{ROLES.map(v => <option key={v} value={v}>{ROLE_RU[v]}</option>)}

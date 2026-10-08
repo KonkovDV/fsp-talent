@@ -83,7 +83,7 @@ export default function EmployerOffers() {
       {isLoading && <Skeleton className="h-48" />}
       {!isLoading && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
       {offers.length > 0 && (
-        <div className="card overflow-x-auto p-0">
+        <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отправленные приглашения">
           <table className="protocol">
             <thead><tr><th>Кандидат</th><th>Должность</th><th className="text-right">До вычета НДФЛ</th><th>Отправлено</th><th>Статус</th><th /></tr></thead>
             <tbody>
@@ -108,7 +108,7 @@ export default function EmployerOffers() {
                       {o.status === 'accepted' && (
                         <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
                           <MessageSquare size={14} aria-hidden /> Переписка
-                          {(o.unread_messages ?? 0) > 0 && <span className="ml-1 rounded-full bg-invite px-1.5 text-2xs text-invite-ink num" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
+                          {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                         </button>
                       )}
                       {o.status === 'pending' && <button onClick={() => withdraw.mutate(o.id)} className="btn-ghost btn-sm">Отозвать</button>}

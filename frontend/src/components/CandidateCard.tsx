@@ -101,9 +101,11 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
   const idle = card.match?.factors.filter(f => f.value == null) ?? []
 
   return (
-    <article className="card p-0" data-testid="candidate-card" data-candidate-id={card.candidate_id}>
-      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 p-5 sm:grid-cols-[2.5rem_1fr_auto] sm:p-6">
-        {place !== undefined && <span className="place pt-0.5 text-ink-3" aria-label={`Место ${place}`}>{place}</span>}
+    <article className="card overflow-hidden p-0" data-testid="candidate-card" data-candidate-id={card.candidate_id}>
+      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 p-5 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-x-5 sm:p-6">
+        {place !== undefined && (
+          <span className={`place pt-0.5 text-2xl leading-none ${place <= 3 ? 'text-accent' : 'text-ink-3'}`} aria-label={`Место ${place}`}>{place}</span>
+        )}
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <CategoryPlate role={card.role} grade={card.grade} source={card.grade_source} />
@@ -132,9 +134,9 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
           )}
         </div>
         {score !== null && (
-          <div className="col-span-2 flex items-baseline gap-2 sm:col-span-1 sm:block sm:text-right">
-            <span className="font-display text-3xl font-bold tabular-nums text-ink">{score}</span>
-            <span className="text-xs text-ink-3 sm:block"
+          <div className="col-span-2 flex items-center gap-3 sm:col-span-1 sm:flex-col sm:items-end sm:gap-1 sm:text-right">
+            <ScoreRing value={score} />
+            <span className="whitespace-nowrap text-xs text-ink-3"
               title={card.match?.basis === 'evidence' ? 'Критериев нет: порядок задают тест и результаты ФСП' : 'Насколько кандидат подходит под критерии'}>
               {card.match?.basis === 'evidence' ? 'сила профиля из 100' : 'совпадение из 100'}
             </span>
@@ -143,18 +145,24 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
       </div>
 
       {card.match && active.length > 0 && (
-        <div className="border-t border-line px-5 py-3 sm:px-6">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]"
-            style={{ '--n': active.length } as React.CSSProperties} aria-label="Факторы скора">
+        <div className="border-t border-line bg-sunken/50 px-5 py-3.5 sm:px-6">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 md:[grid-template-columns:var(--cols)]"
+            style={{ '--cols': active.map(f => `minmax(4.5rem,${Math.max(f.weight, 0.06).toFixed(3)}fr)`).join(' ') } as React.CSSProperties}
+            aria-label="Факторы скора">
             {active.map(f => (
               <div key={f.key} title={`${f.label}: ${Math.round((f.value ?? 0) * 100)} %; вес ${Math.round(f.weight * 100)} %`}>
-                <Meter value={f.value} label={f.label} />
+                <Meter value={f.value} ariaLabel={`${f.label}: ${Math.round((f.value ?? 0) * 100)} из 100, вес ${Math.round(f.weight * 100)} %`} />
+                <p className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px] leading-4 text-ink-3">
+                  <span className="truncate">{f.label}</span>
+                  <span className="num shrink-0 font-medium text-ink-2">{Math.round((f.value ?? 0) * 100)}</span>
+                </p>
               </div>
             ))}
           </div>
-          {idle.length > 0 && (
-            <p className="mt-2 text-2xs text-ink-3">Не учитываются: {idle.map(f => f.label === f.label.toUpperCase() ? f.label : f.label.toLowerCase()).join(', ')}</p>
-          )}
+          <p className="mt-2 text-2xs text-ink-3">
+            <span className="hidden md:inline">Ширина полосы — вес фактора. </span>
+            {idle.length > 0 && <>Не учитываются: {idle.map(f => f.label === f.label.toUpperCase() ? f.label : f.label.toLowerCase()).join(', ')}</>}
+          </p>
         </div>
       )}
 
@@ -185,7 +193,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
       </div>
 
       {open && (
-        <div className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6">
+        <div className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 motion-safe:animate-rise">
           {card.match ? (
             <div data-testid="match">
               {!!card.match.reasons?.length && (
@@ -197,7 +205,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
               )}
               <ul className="space-y-1">
                 {card.match.plus.map(l => <li key={l} className="text-ok">+ {l}</li>)}
-                {card.match.minus.map(l => <li key={l} className="text-invite">− {l}</li>)}
+                {card.match.minus.map(l => <li key={l} className="text-danger">− {l}</li>)}
                 {card.match.info.map(l => <li key={l} className="text-ink-2">{l}</li>)}
                 {fresh.map(l => <li key={l} className="text-ink-2">{l}</li>)}
               </ul>
@@ -216,5 +224,20 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
         </div>
       )}
     </article>
+  )
+}
+
+/** Score out of 100 as a ring: the number reads first, the arc shows how far it is from the top. */
+function ScoreRing({ value }: { value: number }) {
+  const r = 22, c = 2 * Math.PI * r
+  return (
+    <span className="relative grid h-14 w-14 shrink-0 place-items-center">
+      <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90" aria-hidden>
+        <circle cx="28" cy="28" r={r} fill="none" strokeWidth="4" className="stroke-ink/[0.08] dark:stroke-white/[0.1]" />
+        <circle cx="28" cy="28" r={r} fill="none" strokeWidth="4" strokeLinecap="round" className="stroke-accent"
+          strokeDasharray={`${(c * Math.max(0, Math.min(100, value))) / 100} ${c}`} />
+      </svg>
+      <span className="font-display text-xl font-bold tabular-nums text-ink">{value}</span>
+    </span>
   )
 }

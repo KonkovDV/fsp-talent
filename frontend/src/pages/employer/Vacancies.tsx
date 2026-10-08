@@ -134,7 +134,7 @@ export default function EmployerVacancies() {
         <h2 className="section-title">Отклики</h2>
         {statusError && <p className="notice-error mt-3" role="alert">{statusError}</p>}
         {applications.length === 0 ? <p className="mt-3 text-sm text-ink-2">Откликов пока нет.</p> : (
-          <div className="card mt-4 overflow-x-auto p-0">
+          <div className="card mt-4 overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отклики на вакансию">
             <table className="protocol">
               <thead><tr><th>Вакансия</th><th>Дата</th><th>Статус</th><th>Контакты</th></tr></thead>
               <tbody>
