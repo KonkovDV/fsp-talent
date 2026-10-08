@@ -45,16 +45,27 @@ def collected_tests() -> int:
     return int(match.group(1))
 
 
-def matching_sha() -> str:
+def _ru3(value: str) -> str:
+    return f"{float(value):.3f}".replace(".", ",")
+
+
+def matching_report() -> tuple[str, str]:
+    """Hash of the seed-2026 set and P@10 of the full model versus the resume sort, over three seeds."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run(
-        [sys.executable, "-m", "app.validation.matching", "--seeds", "0"],
+        [sys.executable, "-m", "app.validation.matching"],
         cwd=BACKEND, capture_output=True, text=True, encoding="utf-8", env=env, check=False,
     )
-    match = re.search(r"^sha256 ([0-9a-f]{64})$", proc.stdout, re.M)
-    if proc.returncode != 0 or not match:
+    digest = re.search(r"^sha256 ([0-9a-f]{64})$", proc.stdout, re.M)
+    model = re.search(
+        r"^\| ФСП Талант: оценка соответствия \| [0-9.]+ ± [0-9.]+ \| ([0-9.]+) ±",
+        proc.stdout, re.M)
+    base = re.search(
+        r"^\| Базовая линия «по резюме»: заявленные навыки и грейд \| [0-9.]+ ± [0-9.]+ \| ([0-9.]+) ±",
+        proc.stdout, re.M)
+    if proc.returncode != 0 or not digest or not model or not base:
         raise SystemExit(proc.stdout + proc.stderr)
-    return match.group(1)
+    return digest.group(1), f"{_ru3(model.group(1))} и {_ru3(base.group(1))}"
 
 
 def coverage_parts() -> tuple[str, int, int]:
@@ -75,11 +86,12 @@ def require(text: str, needle: str, where: str) -> None:
 def main() -> None:
     count = collected_tests()
     total, services, api = coverage_parts()
-    digest = matching_sha()
+    digest, precision = matching_report()
     word = ru_tests(count)
     readme = README.read_text(encoding="utf-8")
     install = INSTALL.read_text(encoding="utf-8")
     pitch = PITCH.read_text(encoding="utf-8")
+    require(readme, f"| Доля подходящих в первой десятке, P@10 на трёх зёрнах: полная модель и по резюме | {precision} |", "README")
     require(readme, f"| Юнит-тесты (в CI, со всеми компиляторами) | {count} |", "README")
     require(readme, f"{count} юнит-{word}", "README")
     require(readme, f"{total} %, {services} % и {api} %", "README")
