@@ -174,6 +174,7 @@ def main() -> None:
         "README",
     )
     require(readme, f"| Юнит-тесты (в CI, со всеми компиляторами) | {count} |", "README")
+    require(readme, "| Максимальная доля одного ключа внутри специализации | 69 % |", "README")
     require(readme, f"{count} юнит-{word}", "README")
     require_coverage(readme, r"(\d+,\d+) %, (\d+) % и (\d+) %", measured, services, api, "README")
     require(install, f"собирает {count} {word}", "INSTALL")
