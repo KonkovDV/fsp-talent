@@ -17,9 +17,11 @@ from datetime import UTC, datetime
 
 from app.items import same_number, whole_number
 from app.models import EmployerTask, Participant, TaskSubmission
+from app.services.code_lab import LabError, problem_public, run_problem
 
-ANSWER_TYPES = ("number", "choice", "open")
+ANSWER_TYPES = ("number", "choice", "open", "code")
 MAX_ANSWER = 4000
+MAX_CODE = 16 * 1024
 STATUS_LABELS = {"checked": "проверено системой", "review": "на проверке", "reviewed": "проверено работодателем"}
 
 
@@ -59,6 +61,15 @@ def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int 
         if answer_index is None or not 0 <= answer_index < len(options):
             raise ValueError("answer")
         return Checked("checked", answer_index == task.correct_index, None, answer_index)
+    if task.answer_type == "code":
+        text = (answer_text or "").strip()
+        if not text or len(text) > MAX_CODE:
+            raise ValueError("answer")
+        try:
+            outcome = run_problem(task.reference_number or "", text)
+        except LabError as exc:
+            raise ValueError(str(exc)) from exc
+        return Checked("checked", bool(outcome["passed"]), text, None)
     text = (answer_text or "").strip()
     if not text or len(text) > MAX_ANSWER:
         raise ValueError("answer")
@@ -79,6 +90,9 @@ def validate_reference(answer_type: str, options: list[str], correct_index: int 
             raise ValueError("Варианты ответа не должны повторяться")
         if correct_index is None or not 0 <= correct_index < len(options):
             raise ValueError("Отметьте правильный вариант")
+    elif answer_type == "code":
+        if problem_public(reference_number or "") is None:
+            raise ValueError("Выберите задание лаборатории")
     elif answer_type != "open":
         raise ValueError("Неизвестный тип ответа")
 
@@ -96,6 +110,7 @@ def candidate_view(task: EmployerTask, company: str | None, mine: TaskSubmission
         "created_at": task.created_at.isoformat() if task.created_at else None,
         "accepts_answers": accepts_answers(task, now) and mine is None,
         "submission": submission_view(mine) if mine else None,
+        "practice_only": task.answer_type == "code",
     }
     if mine is not None and mine.status == "checked":
         out["reference"] = (task.reference_number if task.answer_type == "number"
@@ -125,6 +140,8 @@ def employer_view(task: EmployerTask, counts: dict | None = None) -> dict:
         "deadline": task.deadline.isoformat() if task.deadline else None,
         "is_open": task.is_open, "accepts_answers": accepts_answers(task),
         "created_at": task.created_at.isoformat() if task.created_at else None,
+        "lab_title": (problem_public(task.reference_number or "") or {}).get("title")
+        if task.answer_type == "code" else None,
         "submissions": counts.get("total", 0), "passed": counts.get("passed", 0),
         "awaiting_review": counts.get("review", 0),
     }

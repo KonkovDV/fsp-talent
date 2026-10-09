@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, X } from 'lucide-react'
-import { apiError, createTask, getMyVacancies, type TaskAnswerType } from '../api/client'
+import { apiError, createTask, getMyVacancies, labProblems, type TaskAnswerType } from '../api/client'
 import { localDay } from '../lib/localDay'
 import { ROLE_RU } from '../labels'
 import Modal from './Modal'
@@ -10,6 +10,7 @@ const TYPES: { value: TaskAnswerType; label: string; hint: string }[] = [
   { value: 'number', label: 'Число', hint: 'Проверит система по эталону' },
   { value: 'choice', label: 'Выбор варианта', hint: 'Проверит система по эталону' },
   { value: 'open', label: 'Открытый ответ', hint: 'Скрипт или решение: проверяете вы' },
+  { value: 'code', label: 'Код', hint: 'Скрытые проверки. Грейд не меняется' },
 ]
 
 /**
@@ -23,15 +24,17 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
   const { data: vacancies = [] } = useQuery<{ id: string; title: string; is_open: boolean }[]>({
     queryKey: ['myVacancies'], queryFn: () => getMyVacancies().then(r => r.data),
   })
+  const { data: problems = [] } = useQuery({ queryKey: ['labProblems'], queryFn: () => labProblems().then(r => r.data) })
   const [form, setForm] = useState({
     title: '', statement: '', answer_type: 'number' as TaskAnswerType, reference_number: '',
-    options: ['', ''], correct_index: 0, specialization: defaultSpec, vacancy_id: '', deadline: '',
+    lab_id: 'sum_positive', options: ['', ''], correct_index: 0, specialization: defaultSpec, vacancy_id: '', deadline: '',
   })
   const [error, setError] = useState('')
   const send = useMutation({
     mutationFn: () => createTask({
       title: form.title.trim(), statement: form.statement.trim(), answer_type: form.answer_type,
-      reference_number: form.answer_type === 'number' ? form.reference_number.trim() : null,
+      reference_number: form.answer_type === 'number' ? form.reference_number.trim()
+        : form.answer_type === 'code' ? form.lab_id : null,
       options: form.answer_type === 'choice' ? form.options.map(o => o.trim()) : [],
       correct_index: form.answer_type === 'choice' ? form.correct_index : null,
       visibility: candidateId ? 'addressed' : 'public', candidate_id: candidateId ?? null,
@@ -44,6 +47,13 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
   })
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
+    const catalog = problems.find(p => p.id === form.lab_id)
+    if (form.answer_type === 'code' && catalog && form.statement.trim().length < 10) {
+      form.statement = catalog.statement
+    }
+    if (form.answer_type === 'code' && catalog && form.title.trim().length < 3) {
+      form.title = catalog.title
+    }
     if (form.title.trim().length < 3) return setError('Назовите задание')
     if (form.statement.trim().length < 10) return setError('Опишите условие')
     if (form.answer_type === 'number' && !/^\s*-?\d+\s*$/.test(form.reference_number)) return setError('Эталон — целое число')
@@ -83,7 +93,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
               className="input resize-y font-mono text-[13px]" placeholder="Что дано и что нужно найти или предложить" /></div>
           <fieldset>
             <legend className="field-label">Ответ</legend>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               {TYPES.map(t => (
                 <label key={t.value} className={`flex cursor-pointer flex-col rounded-lg border p-3 text-sm ${form.answer_type === t.value ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'}`}>
                   <span className="flex items-center gap-2 font-medium text-ink">
@@ -99,6 +109,16 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
             <div><label className="field-label" htmlFor="t-ref">Эталон: целое число</label>
               <input id="t-ref" value={form.reference_number} onChange={set('reference_number')} inputMode="numeric"
                 className="input num w-40" placeholder="500" /></div>
+          )}
+          {form.answer_type === 'code' && (
+            <div>
+              <label className="field-label" htmlFor="t-lab">Задание лаборатории</label>
+              <select id="t-lab" value={form.lab_id} onChange={set('lab_id')} className="select">
+                {problems.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              <p className="field-hint">{problems.find(p => p.id === form.lab_id)?.statement}</p>
+              <p className="field-hint">Скрытые примеры кандидату не показываются. Грейд и подбор не меняются.</p>
+            </div>
           )}
           {form.answer_type === 'choice' && (
             <fieldset className="space-y-2">

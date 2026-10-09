@@ -24,10 +24,11 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import CategoryAssignment, Employer, EmployerTask, Participant, TaskSubmission, Vacancy
+from app.services.code_lab import problem_ids, problem_public
 from app.services.notify import Outbox, category_label, notify
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import (
-    MAX_ANSWER,
+    MAX_CODE,
     accepts_answers,
     candidate_view,
     check_answer,
@@ -129,6 +130,13 @@ async def _counts(db: AsyncSession, task_ids: list[uuid.UUID]) -> dict:
         .where(TaskSubmission.task_id.in_(task_ids)).group_by(TaskSubmission.task_id))
     return {tid: {"total": total, "passed": int(ok or 0), "review": int(wait or 0)}
             for tid, total, ok, wait in rows}
+
+
+@router.get("/lab")
+async def lab_catalog(current: dict = Depends(get_current_employer)):
+    """Practice problems an employer can attach. Hidden cases are not in this list."""
+    del current
+    return [problem_public(pid) for pid in problem_ids()]
 
 
 @router.get("/mine")
@@ -241,7 +249,7 @@ async def tasks_for_me(current: dict = Depends(get_current_participant), db: Asy
 
 
 class AnswerIn(BaseModel):
-    answer_text: str | None = Field(None, max_length=MAX_ANSWER)
+    answer_text: str | None = Field(None, max_length=MAX_CODE)
     answer_index: int | None = Field(None, ge=0, le=7)
 
 

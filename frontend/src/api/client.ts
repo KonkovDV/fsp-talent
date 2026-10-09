@@ -292,7 +292,7 @@ export const fspSignInCallback = (code: string, state: string) => api.post('/aut
 export const fspSignUp = (ticket: string, consents: string[]) => api.post('/auth/fsp/signup', { ticket, consents })
 
 // Tasks written by employers: a reference answer is checked by the system, an open one by the employer.
-export type TaskAnswerType = 'number' | 'choice' | 'open'
+export type TaskAnswerType = 'number' | 'choice' | 'open' | 'code'
 export interface TaskSubmission {
   id: string; status: 'checked' | 'review' | 'reviewed'; status_label: string; passed: boolean | null
   comment: string | null; answer_text: string | null; answer_index: number | null
@@ -310,6 +310,7 @@ export interface EmployerTask {
   accepts_answers: boolean; created_at: string | null; submissions: number; passed: number; awaiting_review: number
 }
 export type ReviewedSubmission = TaskSubmission & { candidate_id: string; candidate: string }
+export const labProblems = () => api.get<{ id: string; title: string; statement: string }[]>('/tasks/lab')
 export const createTask = (data: object) => api.post<EmployerTask>('/tasks/', data)
 export const myTasks = () => api.get<EmployerTask[]>('/tasks/mine')
 export const taskSubmissions = (id: string) =>
