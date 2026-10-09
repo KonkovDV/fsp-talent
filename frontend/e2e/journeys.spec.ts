@@ -347,3 +347,17 @@ test('член жюри jury2 проходит пробный тест сраз�
   await loginCandidate(page, 'jury2@demo.talent')
   await passTrial(page)
 })
+
+test('просроченный access-токен обновляется кукой и не уводит на вход', async ({ page }) => {
+  await loginCandidate(page, 'fsp001@demo.talent')
+  await page.evaluate(() => {
+    const raw = localStorage.getItem('fsp-auth')
+    const saved = raw ? JSON.parse(raw) : { state: {} }
+    const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 120, sub: saved.state?.userId || 'x' }))
+    saved.state.token = `h.${payload}.s`
+    localStorage.setItem('fsp-auth', JSON.stringify(saved))
+  })
+  await page.goto('/candidate')
+  await expect(page).toHaveURL(/\/candidate/)
+  await expect(page.getByRole('heading', { name: /Здравствуйте|Кабинет/ })).toBeVisible()
+})

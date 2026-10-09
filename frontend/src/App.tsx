@@ -1,5 +1,6 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { renewAccess } from './api/client'
 import { useAuthStore } from './store/authStore'
 import { Skeleton } from './components/ui'
 
@@ -59,7 +60,19 @@ const EmployerCompany = page(() => import('./pages/employer/Company'))
 const EmployerTasks = page(() => import('./pages/employer/Tasks'))
 
 function ProtectedRoute({ children, role }: { children: ReactNode; role: 'participant' | 'employer' }) {
-  const { token, userRole } = useAuthStore()
+  const { token, userRole, needsRenew } = useAuthStore()
+  const [renewing, setRenewing] = useState(needsRenew)
+  useEffect(() => {
+    if (!needsRenew) {
+      setRenewing(false)
+      return
+    }
+    let live = true
+    setRenewing(true)
+    renewAccess().finally(() => { if (live) setRenewing(false) })
+    return () => { live = false }
+  }, [needsRenew])
+  if (renewing) return <p className="sr-only" role="status">Вход</p>
   if (!token) return <Navigate to="/login" replace />
   if (userRole !== role) return <Navigate to="/" replace />
   return <>{children}</>
