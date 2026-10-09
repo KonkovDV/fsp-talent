@@ -16,6 +16,11 @@ from typing import Any
 
 CODE_LIMIT = 16 * 1024
 RUN_TIMEOUT_S = 3
+STEP_BUDGET = 10_000
+MAX_NODES = 800
+GROW_DEPTH = 8
+MAX_BITS = 60
+MAX_SEQ = 10_000
 _CALLS = frozenset({
     "abs", "min", "max", "sum", "len", "range", "enumerate", "int", "bool",
     "list", "tuple", "sorted", "reversed", "zip", "all", "any", "str", "solve",
@@ -53,7 +58,30 @@ def guard(source: str) -> ast.Module:
                 raise LabError("Этот вызов в лаборатории недоступен")
         if isinstance(node, ast.Name) and node.id.startswith("__"):
             raise LabError("Служебные имена недоступны")
+    if sum(1 for _ in ast.walk(tree)) > MAX_NODES:
+        raise LabError("Слишком длинное решение")
+    if _grow_depth(tree) > GROW_DEPTH:
+        raise LabError("Слишком глубокое выражение")
     return tree
+
+
+def _grow_depth(node: ast.AST) -> int:
+    """How many times an expression can double a list or a number in one line."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mult)):
+        return 1 + max(_grow_depth(node.left), _grow_depth(node.right))
+    return max((_grow_depth(child) for child in ast.iter_child_nodes(node)), default=0)
+
+
+def _too_big(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value.bit_length() > MAX_BITS
+    if isinstance(value, str):
+        return len(value) > MAX_SEQ
+    if isinstance(value, (list, tuple)):
+        return len(value) > MAX_SEQ
+    return False
 
 
 def _sum_positive(xs: list[int]) -> int:
@@ -124,26 +152,42 @@ def child_env() -> dict[str, str]:
     return env
 
 
-def _run_once(source: str, args: list[Any]) -> tuple[bool, int | None]:
-    """Run ``solve`` on one argument list. The expected value is not sent to the child."""
-    payload = json.dumps({"source": source, "args": args}, ensure_ascii=False).encode("utf-8")
+def child_cwd() -> str:
+    """Outside the API directory, so a later import cannot read its .env."""
+    for key in ("TEMP", "TMP", "TMPDIR"):
+        value = os.environ.get(key)
+        if value and Path(value).is_dir():
+            return value
+    return "/tmp"
+
+
+def _run_cases(source: str, cases: list[list[Any]]) -> list[int | None]:
+    """Run ``solve`` on every case in one process. Expected values are not sent across."""
+    blank: list[int | None] = [None] * len(cases)
+    payload = json.dumps({"source": source, "cases": cases}, ensure_ascii=False).encode("utf-8")
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "app.services.code_lab", "--child"],
             input=payload, capture_output=True, timeout=RUN_TIMEOUT_S, check=False,
-            env=child_env(),
+            env=child_env(), cwd=child_cwd(),
         )
     except subprocess.TimeoutExpired:
-        return False, None
-    if proc.returncode != 0:
-        return False, None
+        return blank
+    if proc.returncode != 0 or len(proc.stdout) > 4096:
+        return blank
     try:
         got = json.loads(proc.stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return False, None
-    if isinstance(got, bool) or not isinstance(got, int):
-        return False, None
-    return True, got
+        return blank
+    if not isinstance(got, list) or len(got) != len(cases):
+        return blank
+    out: list[int | None] = []
+    for item in got:
+        if isinstance(item, bool) or not isinstance(item, int) or item.bit_length() > MAX_BITS:
+            out.append(None)
+        else:
+            out.append(item)
+    return out
 
 
 def run_problem(problem_id: str, source: str) -> dict[str, Any]:
@@ -152,15 +196,19 @@ def run_problem(problem_id: str, source: str) -> dict[str, Any]:
     if row is None:
         raise LabError("Такого задания в лаборатории нет")
     guard(source)
-    public_ok = []
-    for args, fn in row["public"]:
-        ran, got = _run_once(source, list(args))
-        public_ok.append(ran and got == fn(*args))
-    hidden_passed = 0
-    for args, fn in row["hidden"]:
-        ran, got = _run_once(source, list(args))
-        if ran and got == fn(*args):
-            hidden_passed += 1
+    public_cases = [list(args) for args, _fn in row["public"]]
+    hidden_cases = [list(args) for args, _fn in row["hidden"]]
+    got = _run_cases(source, public_cases + hidden_cases)
+    public_got = got[:len(public_cases)]
+    hidden_got = got[len(public_cases):]
+    public_ok = [
+        value is not None and value == fn(*args)
+        for (args, fn), value in zip(row["public"], public_got, strict=True)
+    ]
+    hidden_passed = sum(
+        1 for (args, fn), value in zip(row["hidden"], hidden_got, strict=True)
+        if value is not None and value == fn(*args)
+    )
     hidden_total = len(row["hidden"])
     passed = all(public_ok) and hidden_passed == hidden_total
     return {
@@ -180,11 +228,30 @@ def _child() -> None:
         safe = {name: __builtins__[name] if isinstance(__builtins__, dict) else getattr(__builtins__, name)
                 for name in _CALLS if name != "solve"}
         ns: dict[str, Any] = {"__builtins__": safe}
+        steps = 0
+
+        def _trace(frame, event, _arg):
+            nonlocal steps
+            if event == "line" and frame.f_code.co_filename == "<lab>":
+                steps += 1
+                if steps > STEP_BUDGET:
+                    raise RuntimeError("steps")
+                for value in frame.f_locals.values():
+                    if _too_big(value):
+                        raise RuntimeError("size")
+            return _trace
+
+        sys.settrace(_trace)
         exec(compile(tree, "<lab>", "exec"), ns, ns)  # noqa: S102 — guarded source, separate process
-        out = ns["solve"](*msg["args"])
-        if isinstance(out, bool) or not isinstance(out, int):
-            raise LabError("solve должна вернуть целое число")
-        sys.stdout.write(json.dumps(out))
+        results = []
+        for args in msg["cases"]:
+            out = ns["solve"](*args)
+            if isinstance(out, bool) or not isinstance(out, int) or _too_big(out):
+                results.append(None)
+            else:
+                results.append(out)
+        sys.settrace(None)
+        sys.stdout.write(json.dumps(results))
     except Exception:
         sys.exit(1)
 

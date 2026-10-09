@@ -1,12 +1,14 @@
 """The practice lab checks a function and does not describe a grade."""
+import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from app.models import EmployerTask
-from app.services.code_lab import LabError, child_env, guard, run_problem
-from app.services.tasks import check_answer, validate_reference
+from app.services.code_lab import LabError, child_cwd, child_env, guard, run_problem
+from app.services.tasks import check_answer, stored_reference, validate_reference
 
 SOLVE = "def solve(xs):\n    return sum(x for x in xs if x > 0)\n"
 
@@ -33,6 +35,7 @@ def test_the_practice_process_does_not_inherit_the_database_url(monkeypatch):
     assert "DATABASE_URL" not in env
     assert "postgres://secret" not in env.values()
     assert "PYTHONPATH" in env
+    assert Path(child_cwd()).resolve() != Path(__file__).resolve().parents[2]
 
 
 def test_imports_and_a_wrong_answer_do_not_pass():
@@ -40,6 +43,25 @@ def test_imports_and_a_wrong_answer_do_not_pass():
         guard("import os\ndef solve(xs):\n    return 0\n")
     out = run_problem("sum_positive", "def solve(xs):\n    return 0\n")
     assert out["passed"] is False and out["practice_only"] is True
+
+
+def test_a_code_task_keeps_the_lab_problem_and_a_growing_loop_stops():
+    assert stored_reference("code", " sum_positive ") == "sum_positive"
+    assert stored_reference("number", "12") == "12"
+    assert stored_reference("open", "sum_positive") is None
+    assert stored_reference("choice", "x") is None
+    expr = "x"
+    for _ in range(9):
+        expr = f"({expr}*{expr})"
+    with pytest.raises(LabError):
+        guard(f"def solve(xs):\n    x = 2\n    return {expr}\n")
+    started = time.perf_counter()
+    out = run_problem(
+        "sum_positive",
+        "def solve(xs):\n    x = 2\n    while True:\n        x = x * x\n    return x\n",
+    )
+    assert out["passed"] is False and out["practice_only"] is True
+    assert time.perf_counter() - started < 2
 
 
 def test_a_code_task_is_checked_and_does_not_ask_for_a_grade():

@@ -70,6 +70,7 @@ function Submissions({ task }: { task: EmployerTask }) {
       {closeError && <p className="notice-error" role="alert">{closeError}</p>}
       <p className="whitespace-pre-wrap text-sm text-ink">{task.statement}</p>
       {task.answer_type === 'number' && <p className="text-sm text-ink-2">Эталон: <b className="num text-ink">{task.reference_number}</b></p>}
+      {task.answer_type === 'code' && <p className="text-sm text-ink-2">Лаборатория: {task.lab_title ?? 'задание'}. Грейд и подбор не меняются.</p>}
       {task.answer_type === 'choice' && (
         <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-2">
           {task.options.map((o, i) => <li key={i} className={i === task.correct_index ? 'font-medium text-ok' : ''}>{o}{i === task.correct_index ? ' — верный' : ''}</li>)}

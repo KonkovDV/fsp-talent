@@ -35,6 +35,7 @@ from app.services.tasks import (
     check_answer,
     employer_view,
     record_verdict,
+    stored_reference,
     submission_view,
     validate_reference,
     visible_to,
@@ -100,7 +101,7 @@ async def create_task(body: TaskCreate, current: dict = Depends(get_current_empl
         statement=body.statement.strip(), answer_type=body.answer_type,
         options=[o.strip() for o in body.options] if body.answer_type == "choice" else [],
         correct_index=body.correct_index if body.answer_type == "choice" else None,
-        reference_number=body.reference_number.strip() if body.answer_type == "number" else None,
+        reference_number=stored_reference(body.answer_type, body.reference_number),
         visibility=body.visibility,
         specialization=body.specialization if body.visibility == "public" else (candidate.specialization or None),
         candidate_id=candidate.id if candidate else None, deadline=body.deadline,
@@ -269,8 +270,11 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
     try:
         checked = check_answer(task, body.answer_text, body.answer_index)
     except ValueError as e:
-        raise ApiError(422, "validation_error", "Ответ не подходит к заданию: введите число, "
-                       "выберите вариант или опишите решение") from e
+        detail = str(e).strip()
+        if not detail or detail == "answer":
+            detail = ("Ответ не подходит к заданию: введите число, "
+                      "выберите вариант или опишите решение")
+        raise ApiError(422, "validation_error", detail) from e
     now = datetime.now(UTC)
     comment = None
     if task.answer_type == "code" and checked.answer_text:

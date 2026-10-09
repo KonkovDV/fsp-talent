@@ -25,10 +25,10 @@ class EmployerTask(Base):
     vacancy_id = Column(UUID(as_uuid=True), ForeignKey("vacancies.id", ondelete="SET NULL"))
     title = Column(String(200), nullable=False)
     statement = Column(Text, nullable=False)
-    answer_type = Column(String(10), nullable=False)          # number | choice | open
+    answer_type = Column(String(10), nullable=False)          # number | choice | open | code
     options = Column(JSONB, nullable=False, default=list)      # choice only
     correct_index = Column(Integer)                            # choice only; never sent before the answer
-    reference_number = Column(String(40))                      # number only; never sent before the answer
+    reference_number = Column(String(40))                      # number key or lab id; never sent before the answer
     visibility = Column(String(10), nullable=False)            # public | addressed
     specialization = Column(String(30))                        # public: who sees it
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"))
