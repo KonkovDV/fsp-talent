@@ -36,6 +36,8 @@ class Participant(Base):
     phone = Column(Text)
     birth_date = Column(Date)
     region = Column(String(100), index=True)
+    # The anonymous card omits the city when this is off. The score still reads region.
+    show_city = Column(Boolean, nullable=False, default=True, server_default="true")
     # office / hybrid / remote. Empty means "not chosen" and the search filter does not drop the person.
     work_formats = Column(JSONB, nullable=False, default=list, server_default="[]")
     experience_years = Column(Integer)

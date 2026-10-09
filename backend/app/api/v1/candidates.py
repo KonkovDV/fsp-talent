@@ -67,7 +67,7 @@ from app.services.vc.issuer import issue_derived_credential, issue_sd_jwt, prese
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
-PRIVACY_FIELDS = ("is_visible", "public_profile")
+PRIVACY_FIELDS = ("is_visible", "public_profile", "show_city")
 _PAGE_SIZE_MAX = 50
 
 
@@ -127,7 +127,8 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "assessed_grade": p.assessed_grade,
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
-        "is_visible": p.is_visible, "public_profile": p.public_profile, "job_search": p.job_search,
+        "is_visible": p.is_visible, "public_profile": p.public_profile, "show_city": p.show_city,
+        "job_search": p.job_search,
         "is_minor": p.minor_now(), "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
         "guardian_demo_link": (
             demo_consent_link(p.id, p.guardian_email) if p.minor_now() and not p.minor_consent_given else None
@@ -239,6 +240,7 @@ class ProfileUpdate(BaseModel):
     phone: str | None = Field(None, max_length=20)
     public_profile: bool | None = None
     is_visible: bool | None = None
+    show_city: bool | None = None
     job_search: Literal["active", "open", "not_looking"] | None = None
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
@@ -266,12 +268,15 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     for field in ("experience_years", "declared_grade"):
         if field in data:
             setattr(p, field, data[field])
+    city_changed = False
     for field in PRIVACY_FIELDS:
         value = data.get(field)
         if value is None:
             continue
         if value != getattr(p, field):
             _log_privacy(db, p, field, value)
+            if field == "show_city":
+                city_changed = True
         setattr(p, field, value)
     for field in ("telegram", "phone"):
         if field in data:
@@ -317,6 +322,8 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         raise HTTPException(409, "Данные конфликтуют с другим профилем") from e
     await rebuild_profile(db, p)
     await db.commit()
+    if city_changed:
+        await bump_bank_epoch()
     return {"ok": True}
 
 

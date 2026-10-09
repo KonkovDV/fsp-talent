@@ -70,6 +70,7 @@ def test_alembic_graph_has_one_head_and_no_dangling_parent():
     schema = (BACKEND / "alembic" / "versions" / "0001_initial.py").read_text(encoding="utf-8")
     assert "uq_participants_email_bindex" in schema and "uq_employers_email_bindex" in schema
     assert "participants_email_key" not in schema and "employers_email_key" not in schema
+    assert "show_city boolean DEFAULT true NOT NULL" in schema
 
 
 def test_secret_looking_paths_are_not_the_application_page():
