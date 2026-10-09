@@ -19,6 +19,7 @@ from app.core.demo_guard import reject_protected
 from app.core.ratelimit import too_many
 from app.models import (
     AccessLog,
+    Application,
     CategoryAssignment,
     Complaint,
     ConsentLog,
@@ -489,6 +490,10 @@ async def file_complaint(body: ComplaintIn, current: dict = Depends(get_current_
     else:
         vacancy = await db.get(Vacancy, body.vacancy_id)
         if vacancy is None or not vacancy.is_open:
+            raise ApiError(404, "not_found", "Вакансия не найдена")
+        applied = await db.scalar(select(Application.id).where(
+            Application.vacancy_id == vacancy.id, Application.candidate_id == participant_id))
+        if applied is None:
             raise ApiError(404, "not_found", "Вакансия не найдена")
         employer_id = vacancy.employer_id
     row = Complaint(participant_id=participant_id, offer_id=body.offer_id, vacancy_id=body.vacancy_id,

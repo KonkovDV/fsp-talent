@@ -78,6 +78,38 @@ def test_a_foreign_invitation_is_not_found():
     raise AssertionError("чужое приглашение нашлось")
 
 
+def test_a_vacancy_without_an_application_is_not_found():
+    from types import SimpleNamespace
+
+    from app.api.errors import ApiError
+    from app.api.v1.candidates import ComplaintIn, file_complaint
+
+    mine = uuid.uuid4()
+    vacancy_id = uuid.uuid4()
+
+    class _Db:
+        async def get(self, _model, _id):
+            return SimpleNamespace(id=vacancy_id, is_open=True, employer_id=uuid.uuid4())
+
+        async def scalar(self, _query):
+            return None
+
+        def add(self, _row):
+            raise AssertionError("жалоба без отклика не сохраняется")
+
+    body = ComplaintIn(reason="не_вакансия", vacancy_id=vacancy_id)
+
+    async def run():
+        await file_complaint(body, {"sub": str(mine)}, _Db())
+
+    try:
+        asyncio.run(run())
+    except ApiError as exc:
+        assert exc.status_code == 404
+        return
+    raise AssertionError("вакансия без отклика нашлась")
+
+
 def test_complaints_migration_downgrades():
     from pathlib import Path
 

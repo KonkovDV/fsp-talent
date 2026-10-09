@@ -17,20 +17,18 @@ MIN_CELL = 5
 
 
 def salary_gap_hint(offer_to: int, expected_from: int | None) -> str | None:
-    """Russian sentence when the offer's top is below the candidate's ask, else None.
+    """Say the offer is short only when it is under the whole 50 000 ₽ band of the ask.
 
-    The ask is folded into a 50 000 ₽ band first. A caller who varies the offer then learns
-    the band, not the exact ruble.
+    Inside the band the answer stays quiet. A sweep then learns the band, not the ruble,
+    and an offer that already covers a small ask is not called short.
     """
-    if not expected_from or expected_from <= 0:
+    if not expected_from or expected_from <= 0 or offer_to <= 0:
         return None
-    band = max(50_000, (expected_from // 50_000) * 50_000)
-    if offer_to >= band:
+    low = (expected_from // 50_000) * 50_000
+    if low == 0 or offer_to >= low:
         return None
-    pct = (round(100 * (band - offer_to) / band) // 10) * 10
-    if pct < 10:
-        return None
-    return f"Ваша вилка ниже ожиданий кандидата на {pct} %"
+    shown = f"{low:,}".replace(",", " ")
+    return f"Ваша вилка ниже ожиданий кандидата (ориентир от {shown} ₽)"
 
 
 def quartiles(values: list[int]) -> dict | None:
