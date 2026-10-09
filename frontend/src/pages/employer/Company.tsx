@@ -75,7 +75,13 @@ export default function EmployerCompany() {
             <p className={form.description ? 'text-ink-2' : 'text-ink-3'}>{form.description || 'Здесь будет текст «О компании». Две-три фразы о продукте и команде помогают кандидату принять приглашение.'}</p>
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-ink-3">
               {form.website && <span>{form.website}</span>}
-              <span className={form.inn ? 'text-ok' : ''}>{form.inn ? 'ИНН указан и проверен по контрольной сумме' : 'ИНН не указан: кандидату спокойнее отвечать компании с проверенным ИНН'}</span>
+              <span className={data?.inn_checked && form.inn === data.inn ? 'text-ok' : ''}>
+                {data?.inn_checked && form.inn === data.inn
+                  ? 'ИНН указан и проверен по контрольной сумме'
+                  : form.inn
+                    ? 'Контрольная сумма ИНН проверяется при сохранении'
+                    : 'ИНН не указан: кандидату спокойнее отвечать компании с проверенным ИНН'}
+              </span>
             </p>
             <div className="flex gap-2 pt-1">
               <span className="btn-primary btn-sm pointer-events-none">Принять</span>

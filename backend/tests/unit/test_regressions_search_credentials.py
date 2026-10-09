@@ -90,7 +90,7 @@ def test_register_buckets_are_role_specific():
     a participant fsp_id equal to an employer email does not share
     the rate-limit counter.
     """
-    source = (_APP / "api" / "v1" / "auth.py").read_text()
+    source = (_APP / "api" / "v1" / "auth.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     limit_buckets: list[str] = []

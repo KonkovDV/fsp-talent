@@ -66,6 +66,7 @@ from app.services.identity import (
     normalize_email,
     send_code,
 )
+from app.services.inn import inn_is_valid
 from app.services.privacy import contacts_allowed
 from app.services.profile import ingest_from_fsp, rebuild_profile
 
@@ -108,17 +109,26 @@ def _account_tokens(account, role: str) -> TokenOut:
 REFRESH_COOKIE = "fsp_refresh"
 
 
+def _refresh_cookie_flags() -> dict:
+    return {"path": "/api/v1/auth", "secure": settings.COOKIE_SECURE, "httponly": True, "samesite": "lax"}
+
+
 def attach_refresh(response: Response, token: str) -> None:
     """The refresh token lives in an HttpOnly cookie. JavaScript does not receive it."""
     response.set_cookie(
         key=REFRESH_COOKIE,
         value=token,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/api/v1/auth",
+        **_refresh_cookie_flags(),
     )
+
+
+def clear_refresh(response: Response) -> None:
+    """Remove the refresh cookie with the same flags it was stored with.
+
+    A deletion that leaves out Secure does not replace a Secure cookie, so the browser keeps it.
+    """
+    response.delete_cookie(REFRESH_COOKIE, **_refresh_cookie_flags())
 
 
 def browser_tokens(tokens: TokenOut) -> TokenOut:
@@ -243,6 +253,8 @@ async def register_employer(body: EmployerRegister, request: Request, db: AsyncS
     if repeat_registration(employer):
         await check_resend_allowed(email, "verify")
         return await _send_verification(db, "employer", employer, email)
+    if body.inn is not None and not inn_is_valid(body.inn):
+        raise ApiError(422, "validation_error", "ИНН не проходит контрольную сумму")
     password_hash = _password_hash(body.password)
     employer = Employer(company_name=body.company_name, email=email, password_hash=password_hash,
                         inn=body.inn, website=body.website)
@@ -484,7 +496,7 @@ async def logout(response: Response, request: Request, db: AsyncSession = Depend
             ):
                 account.refresh_nonce = int(account.refresh_nonce or 0) + 1
                 await db.commit()
-    response.delete_cookie(REFRESH_COOKIE, path="/api/v1/auth")
+    clear_refresh(response)
     return {"status": "signed_out"}
 
 

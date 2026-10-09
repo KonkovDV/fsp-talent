@@ -41,6 +41,7 @@ from app.services.fsp.registry import FSPRegistryError
 from app.services.growth import growth_gaps, next_grade
 from app.services.guardian import consent_link, guardian_token
 from app.services.identity import active_consent
+from app.services.inn import published_inn
 from app.services.mail import send_mail
 from app.services.market import quartiles, salary_band
 from app.services.notify import Outbox, category_label, notify
@@ -451,7 +452,7 @@ async def get_my_offers(
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
         "company_profile": {"industry": o.employer.industry, "website": o.employer.website,
-                            "about": o.employer.description, "inn_given": bool(o.employer.inn)},
+                            "about": o.employer.description, "inn_given": published_inn(o.employer.inn)},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "currency": o.currency, "work_format": o.work_format, "message": o.message,

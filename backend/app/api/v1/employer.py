@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.models.employer import Employer
-from app.services.inn import inn_is_valid
+from app.services.inn import inn_is_valid, published_inn
 
 router = APIRouter(prefix="/employer", tags=["employer"])
 
@@ -29,6 +29,7 @@ class EmployerProfileOut(BaseModel):
     description: str | None
     industry: str | None
     subscription_tier: str
+    inn_checked: bool
 
 
 class EmployerProfileUpdate(BaseModel):
@@ -53,6 +54,7 @@ async def get_me(
         description=getattr(emp, "description", None),
         industry=getattr(emp, "industry", None),
         subscription_tier=emp.subscription_tier,
+        inn_checked=published_inn(emp.inn),
     )
 
 
@@ -84,4 +86,5 @@ async def update_me(
         description=getattr(emp, "description", None),
         industry=getattr(emp, "industry", None),
         subscription_tier=emp.subscription_tier,
+        inn_checked=published_inn(emp.inn),
     )

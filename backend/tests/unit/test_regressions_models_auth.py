@@ -17,7 +17,7 @@ ROOT = Path(__file__).parent.parent.parent  # backend/
 
 
 def _src(relpath: str) -> str:
-    return (ROOT / relpath).read_text()
+    return (ROOT / relpath).read_text(encoding="utf-8")
 
 
 class TestProfileSearchIndexUpdatedAt:

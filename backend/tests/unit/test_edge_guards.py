@@ -8,11 +8,18 @@ import pytest
 from app.core.rls import bypass_rls, current, reset_rls
 from app.legal import _parse
 from app.services.fsp.relevance import lcb_for_need
-from app.services.inn import _digit, inn_is_valid
+from app.services.inn import _digit, inn_is_valid, published_inn
 from app.services.interviews import moscow_start, slot_view
 from app.services.psychometrics import bank_curve
 from app.services.skills import read_resume_evidence, with_resume_token
 from app.services.tasks import employer_view, validate_reference
+
+
+def test_a_stored_inn_is_shown_as_checked_only_with_a_valid_checksum():
+    assert published_inn("7707083893") is True
+    assert published_inn("7707083894") is False
+    assert published_inn(None) is False
+    assert published_inn("") is False
 
 
 def test_inn_rejects_letters_and_checks_twelve_digits():
