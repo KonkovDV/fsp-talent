@@ -540,8 +540,11 @@ async def _answer(session_id: uuid.UUID, body: AnswerIn, current: dict, db: Asyn
             await rebuild_profile(db, participant)
     await db.commit()
     if fin is not None:
-        from app.services.search.cache import publish_grade
-        await publish_grade((session.flags or {}).get("mode") == "express")
+        # The grade is already stored. The bank refresh runs after the commit and cannot undo it.
+        import app.services.search.cache  # noqa: F401  (registers the bank listener)
+        from app.services.profile_events import AssessmentFinished, publish_assessment_finished
+        await publish_assessment_finished(AssessmentFinished(
+            str(session.participant_id), (session.flags or {}).get("mode") == "express"))
     items = await session_items(db, session.id)
     if fin is not None:
         result = await _finished_result(db, session, items, fin)
