@@ -7,7 +7,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test'
 const PASSWORD = 'demo12345'
 const BASE = process.env.E2E_BASE_URL || 'http://localhost'
 
-const screens: { name: string; path: string; heading: RegExp; account?: 'candidate' | 'employer'; openInvite?: boolean }[] = [
+const screens: { name: string; path: string; heading: RegExp; account?: 'candidate' | 'employer'; openInvite?: boolean; openItem?: boolean }[] = [
   { name: 'главная', path: '/', heading: /Приглашайте разработчиков/ },
   { name: 'вход', path: '/login', heading: /^Вход$/ },
   { name: 'регистрация', path: '/register', heading: /^Регистрация$/ },
@@ -17,6 +17,7 @@ const screens: { name: string; path: string; heading: RegExp; account?: 'candida
   { name: 'кабинет кандидата', path: '/candidate', heading: /Здравствуйте|Кабинет/, account: 'candidate' },
   { name: 'профиль кандидата', path: '/candidate/profile', heading: /.+/, account: 'candidate' },
   { name: 'тест', path: '/candidate/assessment', heading: /Тест на грейд/, account: 'candidate' },
+  { name: 'задание', path: '/candidate/assessment', heading: /Тест на грейд/, account: 'candidate', openItem: true },
   { name: 'приглашения кандидата', path: '/candidate/offers', heading: /^Приглашения$/, account: 'candidate' },
   { name: 'кабинет работодателя', path: '/employer', heading: /Кабинет работодателя/, account: 'employer' },
   { name: 'потребности', path: '/employer/needs', heading: /^Потребности$/, account: 'employer' },
@@ -72,11 +73,33 @@ for (const theme of ['light', 'dark'] as const) {
           })
           const page = await context.newPage()
           await page.addInitScript(value => localStorage.setItem('fsp-theme', value), theme)
+          if (screen.openItem) {
+            await page.route('**/api/v1/assessment/active', route => route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                session_id: 's1', status: 'in_progress', specialization: 'backend', target_grade: 'middle',
+                expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+                progress: { answered: 1, min_items: 8, max_items: 20, p_pass: 0.4, se: 0.4, theta: 0 },
+                result: null,
+                item: {
+                  token: 'tok-1', seq: 2, stem: 'Сколько будет 2 + 2?', code: null, language: null,
+                  answer_mode: 'choice',
+                  options: [{ index: 0, text: 'четыре' }, { index: 1, text: 'пять' }],
+                  topic_label: 'Арифметика', family_title: 'Сумма', kind: 'code', time_limit_s: 75,
+                  served_at: new Date().toISOString(),
+                },
+              }),
+            }))
+          }
           await page.goto(`${BASE}${screen.path}`)
           await expect(page.getByRole('heading', { name: screen.heading }).first()).toBeVisible()
           await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
           await settle(page)
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+          if (screen.openItem) {
+            await expect(page.getByRole('radiogroup', { name: 'Варианты ответа' })).toBeVisible()
+          }
           if (screen.openInvite) {
             const invite = page.getByRole('button', { name: 'Пригласить' }).first()
             await expect(invite).toBeVisible()
