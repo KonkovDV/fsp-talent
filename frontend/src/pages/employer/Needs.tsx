@@ -283,6 +283,9 @@ export default function EmployerNeeds() {
                   {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
                   {matches.isError && <p className="notice-error" role="alert">{apiError(matches.error, 'Подборка не загрузилась')}</p>}
                   {matches.data && !matches.isError && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
+                  {matches.data && (matches.data.total ?? 0) > (matches.data.items ?? []).length && (
+                    <p className="text-sm text-ink-2">На экране первые {(matches.data.items ?? []).length} из {matches.data.total}.</p>
+                  )}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
                     <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}

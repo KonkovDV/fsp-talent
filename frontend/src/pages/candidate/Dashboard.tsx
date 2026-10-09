@@ -28,7 +28,7 @@ export default function CandidateDashboard() {
   const profile = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
   const offersQ = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const { data: weekly } = useQuery<Weekly | null>({ queryKey: ['weeklyTask'], queryFn: () => weeklyTask().then(r => r.data) })
-  const { data: tasks = [] } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
+  const { data: tasks = [], isError: tasksError, error: tasksLoadError } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
   const market = useQuery<SalaryMarket>({ queryKey: ['salaryMarket'], queryFn: () => getMySalaryMarket().then(r => r.data) })
   const growth = useQuery<Growth>({ queryKey: ['growth'], queryFn: () => getMyGrowth().then(r => r.data) })
   const p = profile.data
@@ -172,7 +172,9 @@ export default function CandidateDashboard() {
           </h2>
           <Link to="/candidate/tasks" className="link text-sm">Все задания</Link>
         </div>
-        {tasks.length === 0
+        {tasksError
+          ? <p className="notice-error mt-3" role="alert">{apiError(tasksLoadError, 'Не удалось загрузить задания')}</p>
+          : tasks.length === 0
           ? <p className="mt-3 text-sm text-ink-2">Компании пишут задания сами: для всех кандидатов специализации или лично вам. Новых заданий пока нет.</p>
           : <ul className="mt-3 divide-y divide-line">
               {tasks.slice(0, 3).map(t => (

@@ -8,8 +8,9 @@ interface Cell { role: string; grade: string; hidden: boolean; candidates: numbe
 /** The bank as a showcase: specialization × grade, people and how many confirmed the grade by test.
  * A cell opens the search with these filters. Cells under five people are hidden. */
 export default function BankGrid() {
-  const { data, isLoading } = useQuery({ queryKey: ['searchBank'], queryFn: () => searchBank().then(r => r.data as { min_cell: number; cells: Cell[] }) })
-  if (isLoading || !data) return null
+  const { data, isLoading, isError } = useQuery({ queryKey: ['searchBank'], queryFn: () => searchBank().then(r => r.data as { min_cell: number; cells: Cell[] }) })
+  if (isLoading) return null
+  if (isError || !data) return <p className="mt-3 text-sm text-ink-2">Банк сейчас не загрузился.</p>
   const at = (role: string, grade: string) => data.cells.find(c => c.role === role && c.grade === grade)
   const roles = Object.keys(ROLE_RU).filter(r => data.cells.some(c => c.role === r))
   const max = Math.max(1, ...data.cells.map(c => (c.hidden ? 0 : c.candidates ?? 0)))

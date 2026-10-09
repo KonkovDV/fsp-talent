@@ -31,7 +31,7 @@ export default function CandidateVacancies() {
   const topic = params.get('topic')
   const fromVacancy = params.get('vacancy')
   const { data: cards = [], isLoading, isError, error } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
-  const { data: mine = [] } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
+  const { data: mine = [], isError: mineError, error: mineLoadError } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
   const practice = useMutation({
     mutationFn: (opts: { vacancy_id?: string; topic?: string }) => startPractice(opts).then(r => r.data as PracticeItem),
     onSuccess: item => { setTaskError(''); setPicked(null); setTyped(''); setTask(item) },
@@ -100,6 +100,7 @@ export default function CandidateVacancies() {
           )}
         </section>
       )}
+      {mineError && <p className="notice-error mb-4" role="alert">{apiError(mineLoadError, 'Не удалось загрузить отклики')}</p>}
       {mine.length > 0 && (
         <section className="mb-6">
           <h2 className="section-title">Мои отклики</h2>

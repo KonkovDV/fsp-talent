@@ -66,6 +66,12 @@ describe('поиск работодателя', () => {
     expect(await screen.findByText(/фильтры изменены, список ещё прежний/)).toBeInTheDocument()
   })
 
+  it('пишет, что на экране только начало длинной выдачи', async () => {
+    searchCandidates.mockResolvedValue({ data: { total: 80, items: [declared], recommended_categories: [] } })
+    renderPage(<EmployerSearch />)
+    expect(await screen.findByText(/на экране первые 1/)).toBeInTheDocument()
+  })
+
   it('в выдаче помечает неподтверждённый грейд', async () => {
     renderPage(<EmployerSearch />)
     expect(await screen.findByText('Грейд не подтверждён')).toBeInTheDocument()
