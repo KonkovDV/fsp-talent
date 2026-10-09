@@ -17,11 +17,18 @@ MIN_CELL = 5
 
 
 def salary_gap_hint(offer_to: int, expected_from: int | None) -> str | None:
-    """Russian sentence when the offer's top is below what the candidate asked, else None."""
-    if not expected_from or expected_from <= 0 or offer_to >= expected_from:
+    """Russian sentence when the offer's top is below the candidate's ask, else None.
+
+    The ask is folded into a 50 000 ₽ band first. A caller who varies the offer then learns
+    the band, not the exact ruble.
+    """
+    if not expected_from or expected_from <= 0:
         return None
-    pct = round(100 * (expected_from - offer_to) / expected_from)
-    if pct <= 0:
+    band = max(50_000, (expected_from // 50_000) * 50_000)
+    if offer_to >= band:
+        return None
+    pct = (round(100 * (band - offer_to) / band) // 10) * 10
+    if pct < 10:
         return None
     return f"Ваша вилка ниже ожиданий кандидата на {pct} %"
 

@@ -6,6 +6,7 @@ from app.services.market import quartiles, reason_shares, salary_band, salary_ga
 
 def test_hint_names_the_gap_and_stays_quiet_when_the_offer_covers_it():
     assert salary_gap_hint(80_000, 100_000) == "Ваша вилка ниже ожиданий кандидата на 20 %"
+    assert salary_gap_hint(80_000, 149_000) == salary_gap_hint(80_000, 100_000)
     assert salary_gap_hint(120_000, 100_000) is None
     assert salary_gap_hint(80_000, None) is None
 

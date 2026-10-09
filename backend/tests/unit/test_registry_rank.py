@@ -46,6 +46,20 @@ def test_kms_filter_keeps_master_and_candidate_master_only():
     assert not rank_at_least("I", "КМС")
 
 
+def test_a_protocol_link_that_is_not_http_is_dropped():
+    base = {
+        "event_id": "e1", "event_name": "Кубок", "discipline": "algorithmic",
+        "competition_status": "regional", "place": 2, "total_participants": 40, "event_date": "2025-06-01",
+    }
+    person = {
+        "fsp_id": "FSP9", "display_name": "Тест", "region": "Москва", "birth_date": "2004-01-01", "ranks": [],
+    }
+    kept = parse_participant({**person, "results": [{**base, "protocol_url": "https://fsp.ru/p/1"}]})
+    dropped = parse_participant({**person, "results": [{**base, "protocol_url": "javascript:alert(1)"}]})
+    assert kept.results[0].protocol_url == "https://fsp.ru/p/1"
+    assert dropped.results[0].protocol_url is None
+
+
 def test_the_registry_contract_drops_an_unknown_rank():
     person = parse_participant({
         "fsp_id": "FSP9", "display_name": "Тест", "region": "Москва", "birth_date": "2004-01-01",

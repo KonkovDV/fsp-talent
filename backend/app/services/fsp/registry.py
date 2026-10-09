@@ -33,6 +33,17 @@ class FSPRegistryError(Exception):
     """The registry answered with something other than a participant or 404."""
 
 
+def _http_url(value: object) -> str | None:
+    """A protocol link is only a web address. Anything else is dropped before it can be stored."""
+    if not isinstance(value, str):
+        return None
+    url = value.strip()
+    scheme = url.split(":", 1)[0].lower()
+    if scheme in {"http", "https"} and "://" in url[:8].lower():
+        return url[:500]
+    return None
+
+
 def _result(row: dict) -> FSPResult | None:
     if row.get("discipline") not in DISCIPLINES:
         return None   # an unknown discipline is skipped, not guessed
@@ -44,7 +55,7 @@ def _result(row: dict) -> FSPResult | None:
         competition_status=str(row["competition_status"]), place=place, total_participants=total,
         is_team=bool(row.get("is_team", False)), team_size=max(1, int(row.get("team_size") or 1)),
         event_date=date.fromisoformat(row["event_date"]), regions_count=row.get("regions_count"),
-        role=str(row.get("role") or "participant"), protocol_url=row.get("protocol_url"),
+        role=str(row.get("role") or "participant"), protocol_url=_http_url(row.get("protocol_url")),
         ekp_number=(str(row["ekp_number"]) if row.get("ekp_number") else None),
     )
 

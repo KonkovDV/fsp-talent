@@ -12,6 +12,17 @@ interface Row {
   event_date: string; protocol_url: string | null; ekp_number?: string | null
 }
 
+/** A stored protocol link is followed only when it is a web address. */
+function protocolHref(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null
+  } catch {
+    return null
+  }
+}
+
 /** Competition protocols as a protocol: place first, field size next to it. */
 export default function CandidateResults() {
   const navigate = useNavigate()
@@ -48,7 +59,9 @@ export default function CandidateResults() {
               <th className="w-20 text-right">Место</th><th>Соревнование</th><th>Дисциплина</th><th className="text-right">Дата</th>
             </tr></thead>
             <tbody>
-              {rows.map(r => (
+              {rows.map(r => {
+                const protocol = protocolHref(r.protocol_url)
+                return (
                 <tr key={r.id}>
                   <td className="text-right"><span className="place">{r.place}</span><span className="num block text-xs text-ink-3">из {r.total_participants}</span></td>
                   <td>
@@ -59,10 +72,11 @@ export default function CandidateResults() {
                   <td className="text-ink-2">{DISC_RU[r.discipline] ?? r.discipline_label}</td>
                   <td className="num whitespace-nowrap text-right text-ink-2">
                     {date(r.event_date)}
-                    {r.protocol_url && <a href={r.protocol_url} target="_blank" rel="noreferrer" className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded text-accent hover:bg-accent-soft" aria-label="Протокол"><ExternalLink size={14} aria-hidden /></a>}
+                    {protocol && <a href={protocol} target="_blank" rel="noreferrer" className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded text-accent hover:bg-accent-soft" aria-label="Протокол"><ExternalLink size={14} aria-hidden /></a>}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
