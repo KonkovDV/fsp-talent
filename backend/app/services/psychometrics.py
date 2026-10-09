@@ -8,7 +8,7 @@ import math
 
 from app.items.hierarchy import parent
 from app.items.registry import BLUEPRINTS, FAMILIES, expected_guess, families_for
-from app.services.cat import CUTS, RANDOMESQUE, info3
+from app.services.cat import CUTS, EXPOSURE_TARGET, RANDOMESQUE, info3
 
 # Twelve items is inside the real test (8–20) and long enough for the SE illustration.
 ILLUSTRATIVE_ITEMS = 12
@@ -98,5 +98,6 @@ def summarize_exposure(rows: list[tuple[str, int, int, float, str]]) -> dict:
     return {
         "answers": total,
         "max_share": round(hottest / total, 3) if total else 0.0,
+        "exposure_target": EXPOSURE_TARGET,
         "families": families,
     }

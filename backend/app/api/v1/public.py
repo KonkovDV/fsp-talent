@@ -288,7 +288,37 @@ async def item_health(db: AsyncSession = Depends(get_db)):
 
 
 _PSYCHOMETRICS_TTL = 300
-_PSYCHOMETRICS_KEY = "method:psychometrics:v2:"
+_CURVE_KEY = "method:curve:v1:"
+_EXPOSURE_KEY = "method:exposure:v1"
+
+
+def curve_cache_key(spec: str) -> str:
+    """The information curve depends on the specialisation. Exposure does not."""
+    return _CURVE_KEY + spec
+
+
+def exposure_cache_key() -> str:
+    """One copy for the whole bank. The same answers feed every specialisation."""
+    return _EXPOSURE_KEY
+
+
+async def _cached_json(redis, key: str) -> dict | None:
+    if redis is None:
+        return None
+    try:
+        raw = await redis.get(key)
+    except Exception:
+        return None
+    return json.loads(raw) if raw else None
+
+
+async def _store_json(redis, key: str, payload: dict) -> None:
+    if redis is None:
+        return
+    try:
+        await redis.set(key, json.dumps(payload, ensure_ascii=False), ex=_PSYCHOMETRICS_TTL)
+    except Exception:
+        return
 
 
 def _without_keys(payload: dict) -> dict:
@@ -325,25 +355,22 @@ async def psychometrics(response: Response, spec: str = "backend", db: AsyncSess
     if spec not in BLUEPRINTS:
         raise HTTPException(400, "Неизвестная специализация")
     response.headers["Cache-Control"] = "public, max-age=300"
-    key = _PSYCHOMETRICS_KEY + spec
     redis = None
     try:
         redis = await get_redis()
-        cached = await redis.get(key)
     except Exception:
-        cached = None
-    if cached:
-        return json.loads(cached)
-    rows = list(await db.execute(
-        select(ItemStat.family_id, ItemStat.level, ItemStat.n, ItemStat.cusum, ItemStat.status)))
-    payload = _without_keys({**bank_curve(spec), **summarize_exposure(
-        [(f, lvl, n, c, s) for f, lvl, n, c, s in rows])})
-    if redis is not None:
-        try:
-            await redis.set(key, json.dumps(payload, ensure_ascii=False), ex=_PSYCHOMETRICS_TTL)
-        except Exception:
-            pass
-    return payload
+        redis = None
+    curve = await _cached_json(redis, curve_cache_key(spec))
+    if curve is None:
+        curve = bank_curve(spec)
+        await _store_json(redis, curve_cache_key(spec), curve)
+    exposure = await _cached_json(redis, exposure_cache_key())
+    if exposure is None:
+        rows = list(await db.execute(
+            select(ItemStat.family_id, ItemStat.level, ItemStat.n, ItemStat.cusum, ItemStat.status)))
+        exposure = summarize_exposure([(f, lvl, n, c, s) for f, lvl, n, c, s in rows])
+        await _store_json(redis, exposure_cache_key(), exposure)
+    return _without_keys({**curve, **exposure})
 
 
 class GuardianConsentIn(BaseModel):

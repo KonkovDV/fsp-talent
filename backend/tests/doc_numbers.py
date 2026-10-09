@@ -23,6 +23,7 @@ README = ROOT / "README.md"
 INSTALL = ROOT / "docs" / "INSTALL.md"
 PITCH = ROOT / "docs" / "tools" / "build_pitch.mjs"
 VALIDATION = ROOT / "docs" / "VALIDATION_MATCHING.md"
+FIGURES = ROOT / "frontend" / "src" / "methodFigures.ts"
 
 
 def ru_tests(count: int) -> str:
@@ -140,6 +141,24 @@ def forbid_stale_discipline_claims() -> None:
                 raise SystemExit(f"{path.relative_to(ROOT)} содержит устаревшую фразу «{phrase}»")
 
 
+def method_figure_values() -> list[str]:
+    """The first quoted string of each row on the method page."""
+    text = FIGURES.read_text(encoding="utf-8")
+    start = text.index("export const FIGURES")
+    body = text[start:text.index("\n]", start)]
+    return re.findall(r"'([^']*)'", body)[::3]
+
+
+def require_method_figures(readme: str) -> None:
+    """Each method-page figure must sit in the README numbers table, not inside a larger number."""
+    start = readme.index("## Цифры, которые можно проверить")
+    section = readme[start:]
+    section = section[:section.index("\n## ", 3)]
+    for value in method_figure_values():
+        if re.search(rf"(?<![\d,]){re.escape(value)}", section) is None:
+            raise SystemExit(f"README не содержит «{value}»")
+
+
 def main() -> None:
     forbid_stale_discipline_claims()
     count = collected_tests()
@@ -168,6 +187,7 @@ def main() -> None:
     )
     require(VALIDATION.read_text(encoding="utf-8"), digest, "VALIDATION_MATCHING.md")
     pitch_deck_matches_html()
+    require_method_figures(readme)
     print(f"doc numbers: {count} {word}, coverage {total} %, services {services} %, API {api} %, sha256 {digest}")
 
 
