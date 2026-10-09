@@ -929,6 +929,37 @@ def _paired_bounds(deltas: list[float], seed: int = 11, rounds: int = 10000) -> 
     return mean, means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
 
 
+def _print_pass_floor(seeds: list[int], n_candidates: int, n_needs: int) -> None:
+    """Before/after for a floor under a passed grade. Public seeds are not used."""
+    print("Полоса «Тест» у сдавшего на грейд потребности не ниже непроверенного. Новое минус старое.")
+    print("| Зерно | Δ nDCG@10 | Δ Спирмен в категории |")
+    print("|---|---|---|")
+    nd_all: list[float] = []
+    rho_all: list[float] = []
+    try:
+        for seed in seeds:
+            dataset = make_dataset(n_candidates, n_needs, seed)
+            matching_service.PASS_TEST_FLOOR = False
+            old_nd, old_rho = _full_curves(dataset)
+            matching_service.PASS_TEST_FLOOR = True
+            new_nd, new_rho = _full_curves(dataset)
+            nd_delta = [b - a for a, b in zip(old_nd, new_nd, strict=True)]
+            rho_delta = [b - a for a, b in zip(old_rho, new_rho, strict=True) if a is not None and b is not None]
+            nd_all.extend(nd_delta)
+            rho_all.extend(rho_delta)
+            rho_mean = statistics.mean(rho_delta) if rho_delta else float("nan")
+            print(f"| {seed} | {statistics.mean(nd_delta):+.4f} | {rho_mean:+.4f} |", flush=True)
+    finally:
+        matching_service.PASS_TEST_FLOOR = False
+    mean, low, high = _paired_bounds(nd_all)
+    rho_mean = statistics.mean(rho_all) if rho_all else float("nan")
+    print(f"Вместе: Δ nDCG@10 {mean:+.4f}, 95 % ДИ [{low:+.4f}; {high:+.4f}], Δ Спирмен {rho_mean:+.4f}")
+    if low < -0.005 or rho_mean < 0:
+        print("Порог не пройден. Пол в продукт не записывается.")
+        raise SystemExit(1)
+    print("Порог пройден.")
+
+
 def _print_holdout(seeds: list[int], n_candidates: int, n_needs: int) -> None:
     """Before/after on holdout seeds. Before is the old average of test and FSP; after only lifts."""
     print("Отложенные зёрна, LCB из событий движка. Новое минус старое. Порядок «до» — среднее факторов.")
@@ -972,6 +1003,8 @@ def main() -> None:
                         help="LCB from the scoring engine on contest histories; the public hash is without this")
     parser.add_argument("--holdout", action="store_true",
                         help="before/after on the holdout seeds, with contest histories")
+    parser.add_argument("--pass-floor", action="store_true",
+                        help="before/after for a floor under a passed grade; does not change the product")
     parser.add_argument("--order", choices=("score", "category_first"), default="score",
                         help="category_first measures a band before the score; it does not change the product")
     parser.add_argument("--export", help="write the generated dataset (with labels) to this JSON file")
@@ -1014,6 +1047,9 @@ def main() -> None:
         return
     if args.overclaim:
         _print_overclaim(args)
+        return
+    if args.pass_floor:
+        _print_pass_floor(seed_list(args.seeds, args.seed), args.candidates, args.needs)
         return
     if args.holdout or (args.fsp_events and "," in str(args.seeds)):
         seeds = list(HOLDOUT_SEEDS) if args.holdout else seed_list(args.seeds, args.seed)

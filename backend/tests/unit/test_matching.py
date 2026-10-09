@@ -593,6 +593,32 @@ def test_sign_permutation_is_certain_only_for_a_zero_gap():
     assert "Δ nDCG@10" in text and "нуль релевантных" in text
 
 
+def test_a_passed_grade_is_not_under_an_unchecked_one():
+    from app.services.matching import PASS_FLOOR, UNTESTED
+    rng = random.Random(11)
+    roles = ("backend", "frontend", "ml")
+    grades = ("junior", "middle", "senior")
+    saved = matching_mod.PASS_TEST_FLOOR
+    matching_mod.PASS_TEST_FLOOR = True
+    try:
+        for _ in range(2000):
+            role = rng.choice(roles)
+            grade = rng.choice(grades)
+            need = NeedSpec(role=role, grade=grade, skills=("Python",))
+            facts = CandidateFacts(
+                role=role, grade=grade, grade_source="assessed",
+                skills={"Python": "test_confirmed"},
+                test_p=rng.random(), test_spec=role,
+                test_correct=rng.randint(0, 12), test_n=12,
+            )
+            result = score(need, facts)
+            measured = next(factor.value for factor in result.factors if factor.key == "test")
+            assert measured is not None and measured > UNTESTED
+            assert measured + 1e-9 >= PASS_FLOOR
+    finally:
+        matching_mod.PASS_TEST_FLOOR = saved
+
+
 def test_compare_keeps_four_cards():
     cards = [{"candidate_id": str(i), "role": "backend", "grade": "middle",
               "match": {"factors": [], "reasons": []}} for i in range(5)]
