@@ -245,6 +245,9 @@ export const answerAssessment = (sessionId: string, item_token: string,
     headers: { 'Idempotency-Key': `${sessionId}:${item_token}` },
   })
 export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
+export const leaveAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/leave`)
+export const disputeGrade = (sessionId: string) =>
+  api.post<{ text: string }>(`/assessment/${sessionId}/dispute`)
 export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
 export const assessmentCooldown = (specialization?: string) =>
   api.get('/assessment/cooldown', { params: specialization ? { specialization } : {} })

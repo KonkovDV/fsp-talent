@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Info, Lock, XCircle } from 'lucide-react'
 import {
   abandonAssessment, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
-  getMyProfile, reviewAssessment, startAssessment,
+  disputeGrade, getMyProfile, leaveAssessment, reviewAssessment, startAssessment,
 } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
 import { Meter, PageHeader, plural } from '../../components/ui'
@@ -86,6 +86,7 @@ export default function CandidateAssessment() {
   const levelTouched = useRef(false)
   const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
+  const [disputeText, setDisputeText] = useState('')
   const [picked, setPicked] = useState<number | null>(null)
   const [typed, setTyped] = useState('')
   const [error, setError] = useState('')
@@ -153,6 +154,20 @@ export default function CandidateAssessment() {
     onSuccess: () => { setState(null); setError(''); refresh() },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось прервать тест')),
   })
+  const dispute = useMutation({
+    mutationFn: () => disputeGrade(state!.session_id),
+    onSuccess: (r) => setDisputeText(r.data.text),
+    onError: (e: unknown) => setDisputeText(apiError(e, 'Оспорить не удалось')),
+  })
+  useEffect(() => {
+    if (!state || state.status !== 'in_progress' || state.result) return
+    const id = state.session_id
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void leaveAssessment(id).catch(() => undefined)
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [state])
   const review = useQuery({
     queryKey: ['review', state?.session_id], enabled: showReview && !!state?.result,
     queryFn: () => reviewAssessment(state!.session_id).then(r => r.data),
@@ -310,7 +325,7 @@ export default function CandidateAssessment() {
             Ответ нельзя изменить. Отвечено: {state.progress.answered}.{' '}
             {state.progress.min_items === state.progress.max_items
               ? `Это пробный проход из ${state.progress.max_items} заданий: шкала уверенности видна, но грейд не меняется.`
-              : `Тест закончится, когда уверенность дойдёт до 90 % или упадёт ниже 10 %, не раньше ${state.progress.min_items}-го и не позже ${state.progress.max_items}-го задания.`}
+              : `Тест закончится, когда уверенность дойдёт до 90 % или упадёт ниже 10 %, не раньше ${state.progress.min_items}-го и не позже ${state.progress.max_items}-го задания. Сворачивание вкладки записывается и на грейд не влияет.`}
           </p>
         </div>
       )}
@@ -327,6 +342,14 @@ export default function CandidateAssessment() {
           {(result.review_notes ?? []).map(note => (
             <p key={note} className="notice" role="status">{note}</p>
           ))}
+          {!result.trial && (
+            <div className="space-y-2">
+              <p className="text-sm text-ink-2">Решение принято автоматически по правилам теста. Пересмотр — вручную в течение 5 рабочих дней. Пересдача доступна по обычным правилам. Грейд этой кнопкой не меняется.</p>
+              <button type="button" onClick={() => dispute.mutate()} disabled={dispute.isPending || dispute.isSuccess}
+                className="btn-secondary btn-sm">Оспорить результат</button>
+              {disputeText && <p className="text-sm text-ink" role="status">{disputeText}</p>}
+            </div>
+          )}
           {result.trial ? (
             <div className="flex items-start gap-3" data-testid="trial-verdict">
               <Info className="shrink-0 text-accent" aria-hidden />
