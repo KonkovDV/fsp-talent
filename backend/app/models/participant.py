@@ -33,6 +33,8 @@ class Participant(Base):
     phone = Column(String(20))
     birth_date = Column(Date)
     region = Column(String(100), index=True)
+    # office / hybrid / remote. Empty means "not chosen" and the search filter does not drop the person.
+    work_formats = Column(JSONB, nullable=False, default=list, server_default="[]")
     experience_years = Column(Integer)
     declared_grade = Column(String(20))
     # Survey (TZ 2.1): specialization drives the category and the test blueprint.

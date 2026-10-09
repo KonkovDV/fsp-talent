@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
+from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
+from app.services.cities import WORK_FORMATS, city_name
 from app.services.matching import NeedSpec
 from app.services.search.pipeline import bank_grid, search_candidates
 from app.services.skills import extract_skills, normalize_skill
@@ -44,6 +46,9 @@ async def search(
     assessed_only: bool = Query(False, description="Только кандидаты с грейдом, подтверждённым тестом"),
     has_fsp: bool | None = Query(None, description="true — только с историей ФСП, false — только без неё"),
     work_goal: str | None = Query(None, pattern="^(job|internship)$", description="internship — режим стажировки"),
+    city: str | None = Query(None, max_length=40, description="Город из справочника. В балл не входит"),
+    work_format: str | None = Query(None, pattern="^(office|hybrid|remote)$",
+                                    description="Формат работы. В балл не входит"),
     industry: str | None = Query(None, max_length=40),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),
@@ -56,10 +61,16 @@ async def search(
             headers={"Retry-After": "60"},
         )
     skill_list = [s.strip() for s in skills.split(",") if s.strip()] if skills else []
+    named = city_name(city) if city else None
+    if city and named is None:
+        raise ApiError(422, "validation_error", "Город выберите из справочника")
+    if work_format and work_format not in WORK_FORMATS:
+        raise ApiError(422, "validation_error", "Неизвестный формат работы")
     return await search_candidates(
         db, role=role or None, grade=grade or None, discipline=discipline or None,
         min_rank=min_rank or None, skills=skill_list, q=q or None, limit=limit, fresh_days=fresh_days,
         assessed_only=assessed_only, has_fsp=has_fsp, work_goal=work_goal,
+        city=named, work_format=work_format,
         need=NeedSpec(role=role or None, grade=grade or None, skills=_wanted(skill_list, q),
                       industry=industry or None, text=bool(q)),
         employer_id=uuid.UUID(employer_id),

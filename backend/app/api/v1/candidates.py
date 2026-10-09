@@ -747,6 +747,8 @@ class SurveyIn(BaseModel):
     experience_years: int | None = Field(None, ge=0, le=50)
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
+    work_formats: list[Literal["office", "hybrid", "remote"]] = Field(default_factory=list, max_length=3)
+    region: str | None = Field(None, max_length=40)
 
 
 @router.put("/me/survey")
@@ -766,6 +768,14 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
             raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")
         p.salary_from_gross = body.salary_from_gross
         p.salary_to_gross = body.salary_to_gross
+    if body.work_formats:
+        p.work_formats = list(dict.fromkeys(body.work_formats))
+    if body.region:
+        from app.services.cities import city_name
+        named = city_name(body.region)
+        if named is None:
+            raise ApiError(422, "validation_error", "Город выберите из справочника")
+        p.region = named
     p.profile_version = (p.profile_version or 0) + 1
     if body.experience_years is not None:
         p.experience_years = body.experience_years

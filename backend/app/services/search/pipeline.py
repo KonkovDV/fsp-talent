@@ -253,6 +253,8 @@ async def search_candidates(
     assessed_only: bool = False,
     has_fsp: bool | None = None,
     work_goal: str | None = None,
+    city: str | None = None,
+    work_format: str | None = None,
     need: NeedSpec | None = None,
     employer_id: uuid.UUID | None = None,
     build_cards: bool = True,
@@ -306,6 +308,14 @@ async def search_candidates(
         stmt = stmt.where(Participant.work_goal.in_(("internship", "both")))
     elif work_goal == "job":
         stmt = stmt.where(or_(Participant.work_goal.is_(None), Participant.work_goal.in_(("job", "both"))))
+    if city:
+        # An unnamed region stays. A different city drops out. The match score does not see the city.
+        stmt = stmt.where(or_(Participant.region.is_(None), func.lower(Participant.region) == city.casefold()))
+    if work_format:
+        stmt = stmt.where(or_(
+            func.jsonb_array_length(Participant.work_formats) == 0,
+            Participant.work_formats.contains([work_format]),
+        ))
     if role:
         stmt = stmt.where(PSI.role == role)
     if grade:
