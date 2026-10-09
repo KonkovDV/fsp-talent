@@ -38,13 +38,11 @@ export default function CandidateDashboard() {
   if (profile.isError || !p) return <p className="notice-error" role="alert">{apiError(profile.error, 'Не удалось открыть кабинет')}</p>
 
   const pending = offers.filter(o => o.status === 'pending')
-  const steps = [
-    { done: p.email_verified, text: 'Email подтверждён', to: null },
-    { done: p.survey_done, text: 'Опрос: направление и специализация', to: '/candidate/profile' },
-    { done: p.grade_source === 'assessed', text: 'Грейд подтверждён тестом', to: '/candidate/assessment' },
-    { done: p.has_fsp, text: 'ФСП ID привязан (необязательно)', to: '/candidate/profile' },
-    { done: p.discoverable, text: 'Карточка видна работодателям', to: '/candidate/profile' },
-  ]
+  const completeness = p.completeness as {
+    percent: number; done: number; total: number
+    items: { code: string; label: string; done: boolean; href: string | null }[]
+  } | undefined
+  const steps = completeness?.items ?? []
   const disciplines: Disc[] = p.discipline_scores ?? []
 
   return (
@@ -93,22 +91,28 @@ export default function CandidateDashboard() {
         <div className="card">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="section-title">Готовность профиля</h2>
-            <span className="font-display text-sm font-bold text-ink num">{steps.filter(st => st.done).length} из {steps.length}</span>
+            <span className="font-display text-sm font-bold text-ink num" data-testid="profile-completeness">
+              {completeness ? `${completeness.percent} %, ${completeness.done} из ${completeness.total}` : '—'}
+            </span>
           </div>
-          <div className="mt-3 grid grid-cols-5 gap-1" aria-hidden>
-            {steps.map(st => <span key={st.text} className={`h-1.5 rounded-full ${st.done ? 'bg-accent' : 'bg-sunken'}`} />)}
+          <div className="mt-3 grid grid-cols-8 gap-1" aria-hidden>
+            {steps.map(st => <span key={st.code} className={`h-1.5 rounded-full ${st.done ? 'bg-accent' : 'bg-sunken'}`} />)}
           </div>
           <ul className="mt-5 space-y-3 text-sm">
             {steps.map(st => (
-              <li key={st.text} className="flex items-center gap-3">
+              <li key={st.code} className="flex items-center gap-3">
                 {st.done
                   ? <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ok text-white"><Check size={13} aria-hidden /></span>
                   : <Circle size={20} className="shrink-0 text-line-strong" aria-hidden />}
-                {st.done || !st.to ? <span className={st.done ? 'text-ink-2' : 'text-ink'}>{st.text}</span>
-                  : <Link to={st.to} className="font-medium text-accent hover:underline">{st.text}</Link>}
+                {st.done || !st.href ? <span className={st.done ? 'text-ink-2' : 'text-ink'}>{st.label}</span>
+                  : <Link to={st.href} className="font-medium text-accent hover:underline">{st.label}</Link>}
               </li>
             ))}
           </ul>
+          <p className="mt-4 text-xs text-ink-3">
+            {p.has_fsp ? 'ФСП ID привязан.' : 'ФСП ID не привязан: на заполненность это не влияет.'}
+            {' '}{p.discoverable ? 'Карточка видна работодателям.' : 'Карточка скрыта из поиска.'}
+          </p>
         </div>
       </section>
 

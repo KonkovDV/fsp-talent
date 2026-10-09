@@ -51,6 +51,7 @@ from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
+from app.services.profile_completeness import profile_completeness
 from app.services.search.cache import bump_bank_epoch
 from app.services.search.pipeline import _bucket
 from app.services.skills import (
@@ -144,6 +145,17 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "skills": [_skill_view(s) for s in p.skills],
         "discipline_scores": [discipline_score_view(ds) for ds in sorted(p.discipline_scores, key=lambda d: -d.lcb)],
         "results_count": len(p.results),
+        "completeness": profile_completeness(
+            email_verified=p.email_verified_at is not None,
+            survey_done=p.survey_at is not None,
+            declared_grade=p.declared_grade,
+            assessed_grade=p.assessed_grade,
+            skill_count=len(p.skills or []),
+            salary_from=p.salary_from_gross,
+            salary_to=p.salary_to_gross,
+            region=p.region,
+            work_formats=p.work_formats,
+        ),
     }
 
 
