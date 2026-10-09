@@ -1,13 +1,16 @@
 """Practice problems whose hidden cases do not move the grade or the match score.
 
 The candidate writes one function, ``solve``. The process that runs it is a separate interpreter
-with a three-second limit. Hidden expected values stay in this module and are not returned.
+with a three-second limit. On Linux that process installs a filter which refuses new sockets.
+Hidden expected values stay in this module and are not returned.
 """
 from __future__ import annotations
 
 import ast
+import ctypes
 import json
 import os
+import platform
 import subprocess
 import sys
 from collections.abc import Callable
@@ -146,6 +149,72 @@ def problem_public(problem_id: str) -> dict[str, str] | None:
     return {"id": problem_id, "title": row["title"], "statement": row["statement"]}
 
 
+# Network calls the practice process must not make. Numbers are the Linux syscall table.
+_NETWORK_X86_64 = (41, 42, 43, 44, 45, 46, 47, 49, 50, 53, 288)
+_NETWORK_AARCH64 = (198, 199, 200, 201, 202, 203, 206, 207, 242)
+_SECCOMP_RET_ALLOW = 0x7FFF0000
+_SECCOMP_RET_ERRNO = 0x00050000
+_EPERM = 1
+
+
+def network_syscalls(machine: str | None = None) -> tuple[int, ...]:
+    """Syscall numbers that open or use a socket. Empty when this process is not Linux."""
+    if machine is None and sys.platform != "linux":
+        return ()
+    kind = machine if machine is not None else platform.machine()
+    if kind in ("x86_64", "amd64"):
+        return _NETWORK_X86_64
+    if kind in ("aarch64", "arm64"):
+        return _NETWORK_AARCH64
+    return ()
+
+
+def _seccomp_filter(syscalls: tuple[int, ...]) -> bytes:
+    """Classic BPF: load the syscall number, return EPERM for each listed call, allow the rest."""
+    if not syscalls:
+        return b""
+    deny_at = len(syscalls) + 1
+    words: list[tuple[int, int, int, int]] = [(0x20, 0, 0, 0)]
+    for index, number in enumerate(syscalls, start=1):
+        words.append((0x15, deny_at - index, 0, number))
+    words.append((0x06, 0, 0, _SECCOMP_RET_ALLOW))
+    words.append((0x06, 0, 0, _SECCOMP_RET_ERRNO | _EPERM))
+    return b"".join(
+        ctypes.c_uint16(code).value.to_bytes(2, "little")
+        + bytes((jt, jf))
+        + ctypes.c_uint32(k).value.to_bytes(4, "little")
+        for code, jt, jf, k in words
+    )
+
+
+def deny_network() -> bool:
+    """Refuse new sockets in this process. A machine without this call keeps the source guard."""
+    numbers = network_syscalls()
+    if not numbers or not hasattr(ctypes, "CDLL"):
+        return False
+    try:
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+    except OSError:
+        return False
+
+    class _Filter(ctypes.Structure):
+        _fields_ = (
+            ("code", ctypes.c_uint16), ("jt", ctypes.c_uint8),
+            ("jf", ctypes.c_uint8), ("k", ctypes.c_uint32),
+        )
+
+    class _Program(ctypes.Structure):
+        _fields_ = (("len", ctypes.c_uint16), ("filter", ctypes.POINTER(_Filter)))
+
+    raw = _seccomp_filter(numbers)
+    count = len(raw) // 8
+    filters = (_Filter * count).from_buffer_copy(raw)
+    program = _Program(count, filters)
+    if libc.prctl(38, 1, 0, 0, 0) != 0:
+        return False
+    return libc.prctl(22, 2, ctypes.byref(program)) == 0
+
+
 def child_env() -> dict[str, str]:
     """The practice process sees the interpreter, not the API's secrets."""
     root = str(Path(__file__).resolve().parents[2])
@@ -188,7 +257,7 @@ def _run_cases(source: str, cases: list[list[Any]]) -> tuple[list[int | None], b
     try:
         got = json.loads(proc.stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return blank
+        return blank, False
     if not isinstance(got, list) or len(got) != len(cases):
         return blank
     out: list[int | None] = []
@@ -232,6 +301,7 @@ def run_problem(problem_id: str, source: str) -> dict[str, Any]:
 
 
 def _child() -> None:
+    deny_network()
     raw = sys.stdin.buffer.read()
     try:
         msg = json.loads(raw.decode("utf-8"))
