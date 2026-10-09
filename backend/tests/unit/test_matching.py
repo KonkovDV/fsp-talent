@@ -623,3 +623,28 @@ def test_compare_keeps_four_cards():
     cards = [{"candidate_id": str(i), "role": "backend", "grade": "middle",
               "match": {"factors": [], "reasons": []}} for i in range(5)]
     assert len(anonymous_compare(cards, [str(i) for i in range(5)])) == 4
+
+
+def test_city_and_format_raise_the_score_only_when_the_need_names_them():
+    """A matching city and format score above a mismatch. An unnamed city is not a zero."""
+    quiet = NeedSpec(role="backend", grade="middle", skills=("Python",))
+    moscow = _cand(grade_source="assessed", skills={"Python": "test_confirmed"},
+                   city="Москва", work_formats=("remote",))
+    kazan = _cand(grade_source="assessed", skills={"Python": "test_confirmed"},
+                  city="Казань", work_formats=("office",))
+    blank = _cand(grade_source="assessed", skills={"Python": "test_confirmed"})
+    assert score(quiet, moscow).score == score(quiet, kazan).score == score(quiet, blank).score
+
+    named = NeedSpec(role="backend", grade="middle", skills=("Python",),
+                     city="Москва", work_format="remote")
+    same = score(named, moscow)
+    other = score(named, kazan)
+    unnamed = score(named, _cand(grade_source="assessed", skills={"Python": "test_confirmed"},
+                                 work_formats=("remote",)))
+    hybrid = score(named, _cand(grade_source="assessed", skills={"Python": "test_confirmed"},
+                                city="Москва", work_formats=("hybrid",)))
+    assert same.score > hybrid.score > other.score
+    assert unnamed.score == same.score
+    assert any(line.startswith("Город совпадает") for line in same.plus)
+    assert any("Другой город" in line for line in other.minus)
+    assert any("не штрафуется" in line for line in unnamed.info)

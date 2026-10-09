@@ -358,14 +358,7 @@ async def search_candidates(
         stmt = stmt.where(Participant.work_goal.in_(("internship", "both")))
     elif work_goal == "job":
         stmt = stmt.where(or_(Participant.work_goal.is_(None), Participant.work_goal.in_(("job", "both"))))
-    if city:
-        # An unnamed region stays. A different city drops out. The match score does not see the city.
-        stmt = stmt.where(or_(Participant.region.is_(None), func.lower(Participant.region) == city.casefold()))
-    if work_format:
-        stmt = stmt.where(or_(
-            func.jsonb_array_length(Participant.work_formats) == 0,
-            Participant.work_formats.contains([work_format]),
-        ))
+    # City and format are score factors. A mismatch stays in the list and sorts lower.
     if role and grade:
         # The primary category and a second confirmed specialization are checked separately.
         # Filtering only by the stored primary grade would hide a junior confirmation on another role.
@@ -419,11 +412,18 @@ async def search_candidates(
                     DisciplineScore.participant_id.in_(list(ids_set)))):
             by_discipline.setdefault(pid, {})[disc] = float(value or 0.0)
 
-    need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q))
+    need = need or NeedSpec(role=role, grade=grade, skills=tuple(wanted_list), text=bool(q),
+                            city=city, work_format=work_format)
     if q:
         need = NeedSpec(
             role=need.role, grade=need.grade, skills=need.skills, nice=need.nice,
-            industry=need.industry, text=True, salary_from=need.salary_from, salary_to=need.salary_to)
+            industry=need.industry, text=True, salary_from=need.salary_from, salary_to=need.salary_to,
+            city=city or need.city, work_format=work_format or need.work_format)
+    elif city or work_format:
+        need = NeedSpec(
+            role=need.role, grade=need.grade, skills=need.skills, nice=need.nice,
+            industry=need.industry, text=need.text, salary_from=need.salary_from, salary_to=need.salary_to,
+            city=city or need.city, work_format=work_format or need.work_format)
 
     def _need_lcb(pid: uuid.UUID) -> float:
         return lcb_for_need(need.role, by_discipline.get(pid, {}), discipline)[0]
@@ -653,6 +653,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             salary_refusals=int(refusals.get(pid, 0)),
             job_search=(p.job_search if p else None) or "open",
             interview_outcome=interviews.get(pid),
+            city=p.region if p else None,
+            work_formats=tuple(p.work_formats or ()) if p else (),
         )
         m = match_score(need, facts)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,

@@ -70,7 +70,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         <div>
           <p className="section-title">{profile.survey_done ? 'Направление и специализация' : 'Шаг 1. Направление и специализация'}</p>
             {!compact && <p className="text-sm text-ink-2">Специализация задаёт категорию и состав теста.
-            Грейд выбираете вы, подтверждает его только тест. Город и формат работы сужают поиск и в балл не входят.</p>}
+            Грейд выбираете вы, подтверждает его только тест. Город и формат работы входят в балл, когда вакансия их называет, и из выдачи не убирают.</p>}
         </div>
       </div>
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
