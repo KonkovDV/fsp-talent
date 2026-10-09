@@ -361,6 +361,8 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         raise ApiError(401, "invalid_credentials")
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
+    if role == "participant":
+        account.last_login_at = datetime.now(UTC)
     return _account_tokens(account, role)
 
 

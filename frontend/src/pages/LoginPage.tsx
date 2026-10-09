@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '../store/authStore'
-import { apiError, apiErrorCode, loginEmployer, loginParticipant, publicDemo } from '../api/client'
+import { apiError, apiErrorCode, loginEmployer, loginParticipant, publicDemo, publicJuryFree } from '../api/client'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
 import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
 
@@ -32,7 +32,17 @@ export default function LoginPage() {
     publicDemo().then(res => setDemo(Boolean(res.data.demo_mode))).catch(() => setDemo(false))
   }, [])
 
-  const takeJury = () => {
+  const takeJury = async () => {
+    try {
+      const email = (await publicJuryFree()).data.email
+      if (/^jury([1-9]|10)@demo\.talent$/.test(email)) {
+        setValue('username', email)
+        setValue('password', 'demo12345')
+        return
+      }
+    } catch {
+      // The stand did not answer. A random account is still a way in.
+    }
     const n = 1 + Math.floor(Math.random() * 10)
     setValue('username', `jury${n}@demo.talent`)
     setValue('password', 'demo12345')

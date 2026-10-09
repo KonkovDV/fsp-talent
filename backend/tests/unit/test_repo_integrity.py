@@ -64,8 +64,8 @@ def test_alembic_graph_has_one_head_and_no_dangling_parent():
     cfg.set_main_option("script_location", str(BACKEND / "alembic"))
     script = ScriptDirectory.from_config(cfg)
     revisions = list(script.walk_revisions())  # raises if a down_revision does not exist
-    assert [item.revision for item in revisions] == ["0001_initial"]
-    assert script.get_heads() == ["0001_initial"]
+    assert [item.revision for item in revisions] == ["0002_last_login", "0001_initial"]
+    assert script.get_heads() == ["0002_last_login"]
     assert len(script.get_bases()) == 1
     schema = (BACKEND / "alembic" / "versions" / "0001_initial.py").read_text(encoding="utf-8")
     assert "uq_participants_email_bindex" in schema and "uq_employers_email_bindex" in schema
