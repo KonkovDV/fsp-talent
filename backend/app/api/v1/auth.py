@@ -349,7 +349,8 @@ async def resend_verification(body: ResendIn, db: AsyncSession = Depends(get_db)
 
 async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -> TokenOut:
     email = normalize_email(form.username)
-    await _limit(role, email)
+    # The printed demo account is the one the interface suite signs in with, many times a minute.
+    await _limit(role, email, limit=60 if settings.DEMO_MODE else 5)
     if "@" not in email:
         raise ApiError(401, "invalid_credentials",
                        "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
