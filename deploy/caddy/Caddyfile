@@ -14,9 +14,13 @@
 		-Server
 	}
 
-	# The API answers 413. A body limit in Caddy closes the connection instead.
+	# The API answers 413 when Content-Length is above 10 MB. The same bound here
+	# stops a body that arrives without a length.
 	@api path /api/* /health /docs /docs/* /openapi.json
 	handle @api {
+		request_body {
+			max_size 10MB
+		}
 		reverse_proxy backend:8000 {
 			header_up X-Real-IP {remote_host}
 			transport http {
