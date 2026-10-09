@@ -30,7 +30,7 @@ export default function CandidateVacancies() {
   const [params] = useSearchParams()
   const topic = params.get('topic')
   const fromVacancy = params.get('vacancy')
-  const { data: cards = [], isLoading } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
+  const { data: cards = [], isLoading, isError, error } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
   const { data: mine = [] } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
   const practice = useMutation({
     mutationFn: (opts: { vacancy_id?: string; topic?: string }) => startPractice(opts).then(r => r.data as PracticeItem),
@@ -63,7 +63,8 @@ export default function CandidateVacancies() {
       <PageHeader title="Вакансии под профиль"
         lead="Второй путь, кроме приглашений: откликнуться самому. Отклик — согласие показать контакты работодателю этой вакансии." />
       {isLoading && <Skeleton className="h-48" />}
-      {!isLoading && cards.length === 0 && <Empty title="Подходящих открытых вакансий нет">Они появятся, когда работодатели опубликуют вакансии вашей специализации.</Empty>}
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить вакансии')}</p>}
+      {!isLoading && !isError && cards.length === 0 && <Empty title="Подходящих открытых вакансий нет">Они появятся, когда работодатели опубликуют вакансии вашей специализации.</Empty>}
       {apply.isError && <p className="notice-error mb-4" role="alert">{apiError(apply.error, 'Не удалось откликнуться')}</p>}
       {taskError && <p className="notice-error mb-4" role="alert">{taskError}</p>}
       {task && (

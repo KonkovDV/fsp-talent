@@ -28,7 +28,7 @@ const STATUS: Record<string, [string, string]> = {
 /** Sent invitations as a funnel: sent → viewed → accepted, with contacts after consent (TZ 2.2 п.3). */
 export default function EmployerOffers() {
   const qc = useQueryClient()
-  const { data: offers = [], isLoading } = useQuery<Offer[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
+  const { data: offers = [], isLoading, isError, error: loadError } = useQuery<Offer[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
   const market = useQuery({ queryKey: ['offerMarket'], queryFn: () => offerMarket().then(r => r.data as {
     reasons: { n: number; shares: Record<string, number> } | null
     salaries: { role: string; grade: string; p25: number; median: number; p75: number; n: number }[]
@@ -90,7 +90,8 @@ export default function EmployerOffers() {
       )}
       {error && <p className="notice-error mb-4" role="alert">{error}</p>}
       {isLoading && <Skeleton className="h-48" />}
-      {!isLoading && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(loadError, 'Не удалось загрузить приглашения')}</p>}
+      {!isLoading && !isError && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
       {offers.length > 0 && (
         <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отправленные приглашения">
           <table className="protocol">

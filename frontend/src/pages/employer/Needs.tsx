@@ -39,7 +39,7 @@ export default function EmployerNeeds() {
   const [sent, setSent] = useState(false)
 
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
-  const { data: needs = [] } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
+  const { data: needs = [], isLoading: needsLoading, isError: needsError, error: needsLoadError } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
   useEffect(() => { if (!selected && needs.length) setSelected(needs[0].id) }, [needs, selected])
   useEffect(() => { setPicked([]); setSent(false) }, [selected])
   const current = needs.find(n => n.id === selected) ?? null
@@ -76,8 +76,10 @@ export default function EmployerNeeds() {
   const toggle = useMutation({
     mutationFn: ({ id, on }: { id: string; on: boolean }) => on ? setShortlist(selected!, id) : removeShortlist(selected!, id),
     onSuccess: () => {
+      setError('')
       for (const k of ['needMatches', 'needShortlist', 'needs']) qc.invalidateQueries({ queryKey: [k] })
     },
+    onError: (e: unknown) => setError(apiError(e, 'Шорт-лист не изменился')),
   })
   const restore = useMutation({
     mutationFn: (version: number) => restoreNeed(selected!, version).then(r => r.data),
@@ -150,7 +152,8 @@ export default function EmployerNeeds() {
         </form>
       )}
 
-      {needs.length === 0 && !editing && (
+      {needsError && <p className="notice-error mb-4" role="alert">{apiError(needsLoadError, 'Не удалось загрузить потребности')}</p>}
+      {!needsLoading && !needsError && needs.length === 0 && !editing && (
         <Empty title="Потребностей пока нет" action={<button onClick={() => { setEditing('new'); setForm(EMPTY) }} className="btn-primary">Создать первую</button>}>
           Подборка с объяснением появится сразу после сохранения.
         </Empty>
@@ -227,6 +230,7 @@ export default function EmployerNeeds() {
                 ))}
               </div>
               {sent && <p className="notice-ok mt-4" role="status">Приглашение отправлено.</p>}
+              {error && !editing && <p className="notice-error mt-4" role="alert">{error}</p>}
 
               {tab === 'matches' && (
                 <div className="mt-5 space-y-4">
@@ -277,7 +281,8 @@ export default function EmployerNeeds() {
                     </div>
                   )}
                   {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
-                  {matches.data && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
+                  {matches.isError && <p className="notice-error" role="alert">{apiError(matches.error, 'Подборка не загрузилась')}</p>}
+                  {matches.data && !matches.isError && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
                     <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}

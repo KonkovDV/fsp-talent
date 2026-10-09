@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getLeaderboard } from '../api/client'
+import { apiError, getLeaderboard } from '../api/client'
 import { DISC_RU, ROLE_RU } from '../labels'
 import PublicShell from '../components/PublicShell'
 import { Empty, PageHeader, RankBadge, Skeleton } from '../components/ui'
@@ -12,7 +12,7 @@ interface Row { participant_id: string; rank: number; display_name: string; regi
 /** Public rating: only adults who gave a separate consent to publish their data (152-FZ art. 10.1). */
 export default function LeaderboardPage() {
   const [disc, setDisc] = useState('')
-  const { data: rows = [], isLoading } = useQuery<Row[]>({ queryKey: ['leaderboard', disc], queryFn: () => getLeaderboard(disc || undefined).then(r => r.data) })
+  const { data: rows = [], isLoading, isError, error } = useQuery<Row[]>({ queryKey: ['leaderboard', disc], queryFn: () => getLeaderboard(disc || undefined).then(r => r.data) })
   return (
     <PublicShell>
       <PageHeader title="Рейтинг участников ФСП"
@@ -23,7 +23,8 @@ export default function LeaderboardPage() {
             {Object.entries(DISC_RU).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>} />
       {isLoading && <Skeleton className="h-96" />}
-      {!isLoading && rows.length === 0 && <Empty title="В этой дисциплине пока никого">Участники попадают в рейтинг, когда включают публичную страницу.</Empty>}
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить рейтинг')}</p>}
+      {!isLoading && !isError && rows.length === 0 && <Empty title="В этой дисциплине пока никого">Участники попадают в рейтинг, когда включают публичную страницу.</Empty>}
       {rows.length >= 3 && (
         <ol className="mb-6 grid gap-4 sm:grid-cols-3" aria-label="Первые три места">
           {rows.slice(0, 3).map(r => (

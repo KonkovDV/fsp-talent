@@ -26,8 +26,8 @@ export default function EmployerVacancies() {
   const [exam, setExam] = useState<Exam | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [contacts, setContacts] = useState<Record<string, string>>({})
-  const { data: vacancies = [] } = useQuery<Vacancy[]>({ queryKey: ['myVacancies'], queryFn: () => getMyVacancies().then(r => r.data) })
-  const { data: applications = [] } = useQuery<Application[]>({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
+  const { data: vacancies = [], isError: vacanciesError, error: vacanciesLoadError } = useQuery<Vacancy[]>({ queryKey: ['myVacancies'], queryFn: () => getMyVacancies().then(r => r.data) })
+  const { data: applications = [], isError: appsError, error: appsLoadError } = useQuery<Application[]>({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
   const payload = () => ({ ...form, skills: form.skills.split(',').map(s => s.trim()).filter(Boolean),
     discipline: form.discipline || null, min_rank: form.min_rank || null, description: form.description || null })
   const create = useMutation({
@@ -43,9 +43,11 @@ export default function EmployerVacancies() {
   const close = useMutation({
     mutationFn: (id: string) => closeVacancy(id),
     onSuccess: () => {
+      setError('')
       qc.invalidateQueries({ queryKey: ['myVacancies'] })
       qc.invalidateQueries({ queryKey: ['applications'] })
     },
+    onError: e => setError(apiError(e, 'Вакансия не закрыта')),
   })
   const reveal = useMutation({
     mutationFn: (id: string) => applicationContacts(id).then(r => ({ id, d: r.data })),
@@ -109,7 +111,9 @@ export default function EmployerVacancies() {
         </form>
       )}
 
-      {vacancies.length === 0 && !open ? <Empty title="Вакансий пока нет">Это необязательный путь: основная механика — приглашения из подборки.</Empty> : (
+      {vacanciesError && <p className="notice-error mb-4" role="alert">{apiError(vacanciesLoadError, 'Не удалось загрузить вакансии')}</p>}
+      {!open && error && <p className="notice-error mb-4" role="alert">{error}</p>}
+      {!vacanciesError && vacancies.length === 0 && !open ? <Empty title="Вакансий пока нет">Это необязательный путь: основная механика — приглашения из подборки.</Empty> : (
         <ul className="space-y-3">
           {vacancies.map(v => (
             <li key={v.id} className="card flex flex-wrap items-center justify-between gap-4">
@@ -139,7 +143,8 @@ export default function EmployerVacancies() {
       <section className="mt-10">
         <h2 className="section-title">Отклики</h2>
         {statusError && <p className="notice-error mt-3" role="alert">{statusError}</p>}
-        {applications.length === 0 ? <p className="mt-3 text-sm text-ink-2">Откликов пока нет.</p> : (
+        {appsError ? <p className="notice-error mt-3" role="alert">{apiError(appsLoadError, 'Не удалось загрузить отклики')}</p>
+          : applications.length === 0 ? <p className="mt-3 text-sm text-ink-2">Откликов пока нет.</p> : (
           <div className="card mt-4 overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отклики на вакансию">
             <table className="protocol">
               <thead><tr><th>Вакансия</th><th>Дата</th><th>Статус</th><th>Контакты</th></tr></thead>

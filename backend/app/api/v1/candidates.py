@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -424,17 +424,17 @@ async def revoke_credential(credential_id: uuid.UUID, current: dict = Depends(ge
 
 @router.get("/me/offers")
 async def get_my_offers(
-    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    limit: int = Query(_PAGE_SIZE_MAX, ge=1, le=_PAGE_SIZE_MAX),
     offset: int = Query(0, ge=0),
     current: dict = Depends(get_current_participant),
     db: AsyncSession = Depends(get_db),
 ):
-    """Paginated list of offers sent to this candidate."""
+    """Offers sent to this candidate. A waiting one stays on the first page, ahead of newer closed ones."""
     rows = list(await db.scalars(
         select(Offer)
         .where(Offer.candidate_id == _pid(current))
         .options(selectinload(Offer.employer))
-        .order_by(Offer.created_at.desc())
+        .order_by(case((Offer.status == "pending", 0), else_=1), Offer.created_at.desc())
         .limit(limit).offset(offset)
     ))
     changed = expire_stale(rows)

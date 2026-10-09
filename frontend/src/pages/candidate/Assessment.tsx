@@ -147,7 +147,8 @@ export default function CandidateAssessment() {
   })
   const stop = useMutation({
     mutationFn: () => abandonAssessment(state!.session_id),
-    onSuccess: () => { setState(null); refresh() },
+    onSuccess: () => { setState(null); setError(''); refresh() },
+    onError: (e: unknown) => setError(apiError(e, 'Не удалось прервать тест')),
   })
   const review = useQuery({
     queryKey: ['review', state?.session_id], enabled: showReview && !!state?.result,

@@ -118,7 +118,7 @@ export const readNotification = (id: string) => api.post(`/notifications/${id}/r
 export const readAllNotifications = () => api.post('/notifications/read-all')
 export const deleteMyAccount = (confirm: string) => api.delete('/candidates/me', { data: { confirm } })
 export const getMyResults = () => api.get('/candidates/me/results')
-export const getMyOffers = () => api.get('/candidates/me/offers')
+export const getMyOffers = () => api.get('/candidates/me/offers', { params: { limit: 50 } })
 export const respondToOffer = (offerId: string, action: 'accept' | 'reject', reason?: string) =>
   api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null })
 export const fileComplaint = (offerId: string, reason: string) =>
@@ -151,7 +151,7 @@ export const downloadInterview = (offerId: string) =>
 
 export const getEmployerMe = () => api.get('/employer/me')
 export const updateEmployerMe = (data: object) => api.patch('/employer/me', data)
-export const getMyVacancies = () => api.get('/vacancies/mine')
+export const getMyVacancies = () => api.get('/vacancies/mine', { params: { limit: 50 } })
 export const updateVacancy = (id: string, data: object) => api.put(`/vacancies/${id}`, data)
 export const updateApplicationStatus = (id: string, status: string) =>
   api.patch(`/vacancies/applications/${id}/status`, { status })
@@ -167,7 +167,7 @@ export const previewVacancyExam = (data: object) => api.post('/vacancies/exam', 
 export const closeVacancy = (id: string) => api.post(`/vacancies/${id}/close`)
 export const vacanciesForMe = () => api.get('/vacancies/for-me')
 export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
-export const vacancyApplications = () => api.get('/vacancies/applications')
+export const vacancyApplications = () => api.get('/vacancies/applications', { params: { limit: 50 } })
 export const applicationContacts = (id: string) => api.get(`/vacancies/applications/${id}/contacts`)
 
 export const assessmentBlueprint = () => api.get('/assessment/blueprint')
@@ -183,7 +183,7 @@ export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${
 export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
 export const assessmentCooldown = (specialization?: string) =>
   api.get('/assessment/cooldown', { params: specialization ? { specialization } : {} })
-export const assessmentHistory = () => api.get('/assessment/history')
+export const assessmentHistory = () => api.get('/assessment/history', { params: { limit: 100 } })
 export const startPractice = (opts?: { vacancy_id?: string | null; topic?: string | null }) =>
   api.post('/assessment/practice/start', { vacancy_id: opts?.vacancy_id || null, topic: opts?.topic || null })
 export const compareNeed = (needId: string, ids: string[]) =>

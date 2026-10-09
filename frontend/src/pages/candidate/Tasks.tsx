@@ -96,7 +96,7 @@ function TaskCard({ task, focused }: { task: CandidateTask; focused: boolean }) 
 export default function CandidateTasks() {
   const [params] = useSearchParams()
   const focus = params.get('task')
-  const { data: tasks = [], isLoading } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
+  const { data: tasks = [], isLoading, isError, error } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
   useEffect(() => {
     if (focus && tasks.length) document.getElementById(`task-${focus}`)?.scrollIntoView({ block: 'start' })
   }, [focus, tasks.length])
@@ -107,7 +107,8 @@ export default function CandidateTasks() {
       <PageHeader title="Задания от работодателей"
         lead="Компании пишут задания сами: одни для всех кандидатов вашей специализации, другие лично вам. Грейд они не меняют, а вердикт с датой работодатели видят в вашей карточке." />
       {isLoading && <Skeleton className="h-48" />}
-      {!isLoading && tasks.length === 0 && (
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить задания')}</p>}
+      {!isLoading && !isError && tasks.length === 0 && (
         <Empty title="Заданий пока нет">Задания появляются, когда работодатели публикуют их для вашей специализации или отправляют лично вам. Пока можно решить задачу недели на странице «Обзор».</Empty>
       )}
       {open.length > 0 && <h2 className="mb-3 section-title">Ждут ответа: {open.length}</h2>}

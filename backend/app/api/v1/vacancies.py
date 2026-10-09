@@ -150,7 +150,7 @@ async def preview_exam(body: VacancyIn, current: dict = Depends(get_current_empl
 
 @router.get("/mine")
 async def my_vacancies(
-    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    limit: int = Query(_PAGE_SIZE_MAX, ge=1, le=_PAGE_SIZE_MAX),
     offset: int = Query(0, ge=0),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),
@@ -293,7 +293,7 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
 
 @router.get("/applications")
 async def my_applications(
-    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    limit: int = Query(_PAGE_SIZE_MAX, ge=1, le=_PAGE_SIZE_MAX),
     offset: int = Query(0, ge=0),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),

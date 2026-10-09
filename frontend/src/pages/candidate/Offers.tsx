@@ -45,9 +45,11 @@ export default function CandidateOffers() {
     mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
       respondToOffer(id, action, action === 'reject' ? reasons[id] : undefined),
     onSuccess: (res, vars) => {
+      setRespondError('')
       qc.invalidateQueries({ queryKey: ['myOffers'] })
       if (vars.action === 'accept' && res.data?.suggest_hide) setHideFor(vars.id)
     },
+    onError: e => setRespondError(apiError(e, 'Ответ не отправлен')),
   })
   const hideMe = useMutation({
     mutationFn: () => updateMyProfile({ job_search: 'not_looking' }),
@@ -67,6 +69,7 @@ export default function CandidateOffers() {
   const [complaintReason, setComplaintReason] = useState('не_вакансия')
   const [complaintNote, setComplaintNote] = useState('')
   const [revokeError, setRevokeError] = useState('')
+  const [respondError, setRespondError] = useState('')
   const complain = useMutation({
     mutationFn: (id: string) => fileComplaint(id, complaintReason),
     onSuccess: (res) => {
@@ -90,6 +93,8 @@ export default function CandidateOffers() {
       {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить приглашения')}</p>}
       {complaintNote && <p className="notice-info mb-4" role="status">{complaintNote}</p>}
       {!isLoading && !isError && offers.length === 0 && <Empty title="Приглашений пока нет">Подтвердите грейд тестом и заполните навыки — так вас быстрее найдут.</Empty>}
+      {respondError && <p className="notice-error mb-4" role="alert">{respondError}</p>}
+      {!isError && offers.length === 50 && <p className="mb-4 text-sm text-ink-2">Показаны последние 50 приглашений. Ждущие ответа стоят в начале списка.</p>}
       <ul className="space-y-4">
         {offers.map(o => {
           const [label, cls] = STATUS[o.status] ?? [o.status, 'badge-vc']
