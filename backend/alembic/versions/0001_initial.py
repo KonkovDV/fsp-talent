@@ -7,8 +7,10 @@ Tables, checks, partial indexes, the answer-count function and row-level
 policies. Extensions are created here. The role fsp_app is created, or stripped
 of superuser rights if it already exists.
 
-A database that already has this schema must be stamped onto this revision.
-upgrade there tries to create the objects again and the transaction rolls back.
+Contact columns are text. Login looks up email_bindex, not the address itself.
+A fresh database is created in that shape. A database that already has this
+schema must be stamped onto this revision: upgrade would try to create the
+objects again and the transaction would roll back.
 """
 from __future__ import annotations
 
@@ -142,7 +144,8 @@ CREATE TABLE public.email_verifications (
     subject_type character varying(20) NOT NULL,
     subject_id uuid NOT NULL,
     purpose character varying(20) NOT NULL,
-    email character varying(200) NOT NULL,
+    email text NOT NULL,
+    email_bindex character varying(64),
     code_hash character varying(64) NOT NULL,
     token_hash character varying(64) NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
@@ -180,7 +183,8 @@ CREATE TABLE public.employer_tasks (
 CREATE TABLE public.employers (
     id uuid NOT NULL,
     company_name character varying(200) NOT NULL,
-    email character varying(200) NOT NULL,
+    email text NOT NULL,
+    email_bindex character varying(64),
     password_hash character varying(200) NOT NULL,
     inn character varying(12),
     website character varying(200),
@@ -318,7 +322,7 @@ CREATE TABLE public.offers (
     employer_viewed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now(),
     expires_at timestamp with time zone,
-    contact_method character varying(300),
+    contact_method text,
     candidate_viewed_at timestamp with time zone,
     decline_reason character varying(20),
     contacts_revoked_at timestamp with time zone,
@@ -334,9 +338,10 @@ CREATE TABLE public.participants (
     id uuid NOT NULL,
     fsp_id character varying(64),
     display_name character varying(200),
-    email character varying(200),
-    telegram character varying(64),
-    phone character varying(20),
+    email text,
+    email_bindex character varying(64),
+    telegram text,
+    phone text,
     birth_date date,
     region character varying(100),
     work_formats jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -346,7 +351,7 @@ CREATE TABLE public.participants (
     public_profile boolean DEFAULT false NOT NULL,
     is_minor boolean DEFAULT false NOT NULL,
     minor_consent_given boolean DEFAULT false NOT NULL,
-    guardian_email character varying(200),
+    guardian_email text,
     guardian_consent_at timestamp with time zone,
     job_search character varying(20) DEFAULT 'open'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
@@ -656,11 +661,6 @@ ALTER TABLE ONLY public.employer_tasks
 
 
 ALTER TABLE ONLY public.employers
-    ADD CONSTRAINT employers_email_key UNIQUE (email);
-
-
-
-ALTER TABLE ONLY public.employers
     ADD CONSTRAINT employers_pkey PRIMARY KEY (id);
 
 
@@ -702,11 +702,6 @@ ALTER TABLE ONLY public.offer_messages
 
 ALTER TABLE ONLY public.offers
     ADD CONSTRAINT offers_pkey PRIMARY KEY (id);
-
-
-
-ALTER TABLE ONLY public.participants
-    ADD CONSTRAINT participants_email_key UNIQUE (email);
 
 
 
@@ -844,11 +839,19 @@ CREATE INDEX ix_discipline_scores_participant_id ON public.discipline_scores USI
 
 
 
+CREATE INDEX ix_email_verifications_bindex ON public.email_verifications USING btree (email_bindex);
+
+
+
 CREATE INDEX ix_email_verifications_email ON public.email_verifications USING btree (email);
 
 
 
 CREATE INDEX ix_email_verifications_subject ON public.email_verifications USING btree (subject_type, subject_id);
+
+
+
+CREATE UNIQUE INDEX uq_employers_email_bindex ON public.employers USING btree (email_bindex);
 
 
 
@@ -881,6 +884,10 @@ CREATE INDEX ix_offers_candidate_id ON public.offers USING btree (candidate_id);
 
 
 CREATE INDEX ix_offers_employer_id ON public.offers USING btree (employer_id);
+
+
+
+CREATE UNIQUE INDEX uq_participants_email_bindex ON public.participants USING btree (email_bindex);
 
 
 
