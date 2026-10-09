@@ -44,6 +44,13 @@ class Checked:
     passed: bool | None    # None while the employer has not reviewed an open answer
     answer_text: str | None
     answer_index: int | None
+    note: str | None = None  # a system mark; it does not change the grade
+
+
+LIMIT_NOTE = (
+    "Пометка системы: проверка оборвалась по лимиту лаборатории. "
+    "Это не ошибка в примерах и грейд не меняет."
+)
 
 
 def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int | None) -> Checked:
@@ -69,7 +76,8 @@ def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int 
             outcome = run_problem(task.reference_number or "", text)
         except LabError as exc:
             raise ValueError(str(exc)) from exc
-        return Checked("checked", bool(outcome["passed"]), text, None)
+        return Checked("checked", bool(outcome["passed"]), text, None,
+                       LIMIT_NOTE if outcome.get("timed_out") else None)
     text = (answer_text or "").strip()
     if not text or len(text) > MAX_ANSWER:
         raise ValueError("answer")

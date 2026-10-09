@@ -15,7 +15,7 @@ SOLVE = "def solve(xs):\n    return sum(x for x in xs if x > 0)\n"
 
 def test_a_correct_function_passes_hidden_cases_without_revealing_them():
     out = run_problem("sum_positive", SOLVE)
-    assert out["passed"] is True and out["practice_only"] is True
+    assert out["passed"] is True and out["practice_only"] is True and out["timed_out"] is False
     assert out["hidden_passed"] == out["hidden_total"] > 0
     assert "expected" not in out
     blob = str(out)
@@ -42,7 +42,7 @@ def test_imports_and_a_wrong_answer_do_not_pass():
     with pytest.raises(LabError):
         guard("import os\ndef solve(xs):\n    return 0\n")
     out = run_problem("sum_positive", "def solve(xs):\n    return 0\n")
-    assert out["passed"] is False and out["practice_only"] is True
+    assert out["passed"] is False and out["practice_only"] is True and out["timed_out"] is False
 
 
 def test_a_code_task_keeps_the_lab_problem_and_a_growing_loop_stops():
@@ -60,7 +60,7 @@ def test_a_code_task_keeps_the_lab_problem_and_a_growing_loop_stops():
         "sum_positive",
         "def solve(xs):\n    x = 2\n    while True:\n        x = x * x\n    return x\n",
     )
-    assert out["passed"] is False and out["practice_only"] is True
+    assert out["passed"] is False and out["practice_only"] is True and out["timed_out"] is True
     assert time.perf_counter() - started < 2
 
 
