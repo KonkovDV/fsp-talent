@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, apiErrorCode, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
+import { apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -38,11 +38,16 @@ export default function EmployerOffers() {
   const reveal = useMutation({
     mutationFn: (id: string) => getOfferContacts(id).then(r => ({ id, data: r.data as Contacts })),
     onSuccess: ({ id, data }) => { setError(''); setContacts(c => ({ ...c, [id]: data })) },
-    onError: e => setError(apiErrorCode(e) === 'contacts_hidden' || !apiErrorCode(e)
-      ? 'Контакты откроются, когда кандидат примет приглашение.' : apiError(e)),
+    onError: e => setError(apiError(e, 'Не удалось открыть контакты')),
   })
-  const [params] = useSearchParams()
-  const [thread, setThread] = useState<string | null>(params.get('thread'))
+  const [params, setParams] = useSearchParams()
+  const thread = params.get('thread')
+  const toggleThread = (id: string) => {
+    const next = new URLSearchParams(params)
+    if (thread === id) next.delete('thread')
+    else next.set('thread', id)
+    setParams(next, { replace: true })
+  }
   const [meeting, setMeeting] = useState<string | null>(null)
   const withdraw = useMutation({
     mutationFn: withdrawOffer,
@@ -110,7 +115,7 @@ export default function EmployerOffers() {
                         <button onClick={() => setMeeting(meeting === o.id ? null : o.id)} aria-expanded={meeting === o.id} className="btn-ghost btn-sm">Собеседование</button>
                       )}
                       {o.status === 'accepted' && (
-                        <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
+                        <button onClick={() => toggleThread(o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
                           <MessageSquare size={14} aria-hidden /> Переписка
                           {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                         </button>

@@ -40,7 +40,13 @@ export default function EmployerVacancies() {
     onSuccess: () => { setStatusError(''); qc.invalidateQueries({ queryKey: ['applications'] }) },
     onError: e => setStatusError(apiError(e, 'Статус не изменён')),
   })
-  const close = useMutation({ mutationFn: (id: string) => closeVacancy(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['myVacancies'] }) })
+  const close = useMutation({
+    mutationFn: (id: string) => closeVacancy(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['myVacancies'] })
+      qc.invalidateQueries({ queryKey: ['applications'] })
+    },
+  })
   const reveal = useMutation({
     mutationFn: (id: string) => applicationContacts(id).then(r => ({ id, d: r.data })),
     onSuccess: ({ id, d }) => setContacts(prev => ({ ...prev, [id]: [d.display_name, d.email, d.telegram].filter(Boolean).join(', ') })),

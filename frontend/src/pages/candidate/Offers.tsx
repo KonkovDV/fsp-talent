@@ -37,13 +37,13 @@ const COMPLAINTS: [string, string][] = [
 export default function CandidateOffers() {
   const qc = useQueryClient()
   const { data: offers = [], isLoading, isError, error } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
-  const [reason, setReason] = useState('')
+  const [reasons, setReasons] = useState<Record<string, string>>({})
   const [hideFor, setHideFor] = useState<string | null>(null)
   const [hidden, setHidden] = useState(false)
   const [hideError, setHideError] = useState('')
   const respond = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
-      respondToOffer(id, action, action === 'reject' ? reason : undefined),
+      respondToOffer(id, action, action === 'reject' ? reasons[id] : undefined),
     onSuccess: (res, vars) => {
       qc.invalidateQueries({ queryKey: ['myOffers'] })
       if (vars.action === 'accept' && res.data?.suggest_hide) setHideFor(vars.id)
@@ -54,8 +54,14 @@ export default function CandidateOffers() {
     onSuccess: () => { setHideFor(null); setHidden(true); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: e => setHideError(apiError(e, 'Не удалось скрыть карточку')),
   })
-  const [params] = useSearchParams()
-  const [thread, setThread] = useState<string | null>(params.get('thread'))
+  const [params, setParams] = useSearchParams()
+  const thread = params.get('thread')
+  const toggleThread = (id: string) => {
+    const next = new URLSearchParams(params)
+    if (thread === id) next.delete('thread')
+    else next.set('thread', id)
+    setParams(next, { replace: true })
+  }
   const [confirm, setConfirm] = useState<string | null>(null)
   const [complaintFor, setComplaintFor] = useState<string | null>(null)
   const [complaintReason, setComplaintReason] = useState('не_вакансия')
@@ -145,7 +151,7 @@ export default function CandidateOffers() {
                   )}
                   <InterviewSlots offerId={o.id} side="participant" listKey="myOffers" />
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
+                    <button onClick={() => toggleThread(o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
                       <MessageSquare size={14} aria-hidden /> Переписка
                       {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                     </button>
@@ -171,11 +177,11 @@ export default function CandidateOffers() {
                 <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
                   <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
                   <label className="text-sm text-ink-2">Причина отказа
-                    <select value={reason} onChange={e => setReason(e.target.value)} className="select ml-2" aria-label="Причина отказа">
+                    <select value={reasons[o.id] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [o.id]: e.target.value }))} className="select ml-2" aria-label="Причина отказа">
                       {REASONS.map(([value, label]) => <option key={value || 'none'} value={value} disabled={value === ''}>{label}</option>)}
                     </select>
                   </label>
-                  <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending || !reason} className="btn-secondary">Отклонить</button>
+                  <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending || !reasons[o.id]} className="btn-secondary">Отклонить</button>
                 </div>
               )}
             </li>

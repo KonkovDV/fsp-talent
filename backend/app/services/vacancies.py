@@ -60,3 +60,13 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
         "missing_skills": sorted(wanted - have),
         "why": why,
     }
+
+
+_STILL_OPEN = frozenset({"applied", "reviewing", "invited"})
+
+
+def status_after_close(status: str) -> str | None:
+    """A closed vacancy ends an application that is still in progress. A refusal stays a refusal."""
+    if status in _STILL_OPEN:
+        return "closed"
+    return None

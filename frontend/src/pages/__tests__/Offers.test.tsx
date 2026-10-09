@@ -27,11 +27,11 @@ const pending = {
 
 const accepted = { ...pending, id: 'offer-2', status: 'accepted', contacts_revoked_at: null }
 
-function renderPage(ui: ReactNode) {
+function renderPage(ui: ReactNode, path = '/') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -77,6 +77,12 @@ describe('приглашения кандидата', () => {
     expect(revokeContacts).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Закрыть контакты' }))
     expect(revokeContacts).toHaveBeenCalledWith('offer-2')
+  })
+
+  it('открывает переписку по ссылке из уведомления', async () => {
+    getMyOffers.mockResolvedValue({ data: [accepted] })
+    renderPage(<CandidateOffers />, '/candidate/offers?thread=offer-2')
+    expect(await screen.findByRole('button', { name: /Переписка/ })).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('пустое состояние не показывает чужие приглашения', async () => {

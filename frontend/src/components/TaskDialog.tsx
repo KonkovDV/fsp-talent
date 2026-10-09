@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, X } from 'lucide-react'
 import { apiError, createTask, getMyVacancies, type TaskAnswerType } from '../api/client'
+import { localDay } from '../lib/localDay'
 import { ROLE_RU } from '../labels'
 import Modal from './Modal'
 
@@ -57,7 +58,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
     ...form, options: form.options.filter((_, j) => j !== i),
     correct_index: form.correct_index === i ? 0 : form.correct_index > i ? form.correct_index - 1 : form.correct_index,
   })
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDay()
 
   return (
     <Modal titleId="task-title" onClose={onClose} sheet>

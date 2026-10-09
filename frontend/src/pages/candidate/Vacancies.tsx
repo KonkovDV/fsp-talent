@@ -53,7 +53,10 @@ export default function CandidateVacancies() {
   })
   const apply = useMutation({
     mutationFn: (id: string) => applyToVacancy(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['vacanciesForMe'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vacanciesForMe'] })
+      qc.invalidateQueries({ queryKey: ['myApplications'] })
+    },
   })
   return (
     <div>
