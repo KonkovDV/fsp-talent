@@ -4,7 +4,17 @@ import random
 from app.models.assessment import GRADE_ORDER
 from app.services.matching import score
 from app.services.search.pipeline import order_pool
-from app.validation.assessment import Truth, _path_detail_lines, run, simulate_path, study_paths
+from app.validation.assessment import Session as SimSession
+from app.validation.assessment import (
+    Truth,
+    _decision_consistency,
+    _path_detail_lines,
+    multiclass_rudner,
+    reliability_curve,
+    run,
+    simulate_path,
+    study_paths,
+)
 from app.validation.matching import _facts, _spec, make_dataset, overrated_parts, overrated_share, rank, sha256
 
 
@@ -71,6 +81,17 @@ def test_path_detail_splits_the_same_people_and_interpolates_the_half():
     study = study_paths([(0.2, "backend", "middle"), (-0.8, "backend", "junior")], truth, random.Random(4), None)
     text = "\n".join(_path_detail_lines(study))
     assert study.n == 2 and "Нижняя" in text and "θ − порог" in text
+
+
+def test_decision_consistency_follows_the_pass_rule():
+    sure = SimSession("backend", "middle", 2.0, "middle", True, None, 12, [],
+                      theta_hat=2.0, se=0.4, p_pass=0.99)
+    weak = SimSession("backend", "middle", -0.4, None, False, None, 12, [],
+                      theta_hat=-0.4, se=0.4, p_pass=0.2)
+    assert _decision_consistency([sure]) > 0.9
+    assert multiclass_rudner([sure]) > 0.5
+    ece, rows = reliability_curve([sure, weak])
+    assert len(rows) == 10 and 0 <= ece <= 1
 
 
 def test_the_grade_path_stops_within_four_sessions():
