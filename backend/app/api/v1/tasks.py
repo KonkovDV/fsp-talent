@@ -25,6 +25,7 @@ from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import CategoryAssignment, Employer, EmployerTask, Participant, TaskSubmission, Vacancy
 from app.services.code_lab import problem_ids, problem_public
+from app.services.code_mark import copy_mark
 from app.services.notify import Outbox, category_label, notify
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import (
@@ -271,7 +272,14 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
         raise ApiError(422, "validation_error", "Ответ не подходит к заданию: введите число, "
                        "выберите вариант или опишите решение") from e
     now = datetime.now(UTC)
+    comment = None
+    if task.answer_type == "code" and checked.answer_text:
+        others = list(await db.scalars(select(TaskSubmission.answer_text).where(
+            TaskSubmission.task_id == task.id, TaskSubmission.answer_text.is_not(None))))
+        if copy_mark(checked.answer_text, [text for text in others if text]):
+            comment = "Пометка для разбора: решение похоже на другое сданное. Проверка примеров от этого не меняется."
     sub = TaskSubmission(task_id=task.id, participant_id=participant.id, answer_text=checked.answer_text,
+                         comment=comment,
                          answer_index=checked.answer_index, status=checked.status, passed=checked.passed,
                          submitted_at=now, reviewed_at=now if checked.status == "checked" else None)
     db.add(sub)
