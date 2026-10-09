@@ -19,6 +19,7 @@
 | `conflict` | HTTP 409 |
 | `gone` | HTTP 410 |
 | `validation_error` | HTTP 422 |
+| `payload_too_large` | HTTP 413 |
 | `rate_limited` | HTTP 429 |
 | `internal_error` | HTTP 500 |
 | `unavailable` | HTTP 503 |

@@ -91,6 +91,7 @@
 /api/v1/public/demo
 /api/v1/public/guardian-consent
 /api/v1/public/issuer
+/api/v1/public/jury-free
 /api/v1/public/leaderboard
 /api/v1/search/bank
 /api/v1/search/candidates

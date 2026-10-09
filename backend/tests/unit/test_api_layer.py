@@ -192,7 +192,7 @@ def quiet(monkeypatch):
     monkeypatch.setattr(candidates, "bump_bank_epoch", nothing)
 
 
-def test_error_pages_keep_one_shape():
+async def test_error_pages_keep_one_shape():
     app = FastAPI()
     install_error_handlers(app)
 
@@ -227,6 +227,36 @@ def test_error_pages_keep_one_shape():
     invalid = client.post("/form", json={"n": "нет"})
     assert invalid.status_code == 422
     assert invalid.json()["error"]["code"] == "validation_error"
+
+    from app.core.body_limit import LimitRequestBody
+
+    capped = FastAPI()
+
+    @capped.post("/echo")
+    async def echo(request: Request):
+        return {"n": len(await request.body())}
+
+    capped.add_middleware(LimitRequestBody, max_bytes=8)
+    capped_client = TestClient(capped)
+    too_big = capped_client.post("/echo", content=b"123456789")
+    assert too_big.status_code == 413
+    assert too_big.json()["error"]["code"] == "payload_too_large"
+    assert capped_client.post("/echo", content=b"1234").json()["n"] == 4
+
+    streamed = []
+
+    async def receive_stream():
+        return {"type": "http.request", "body": b"12345", "more_body": False}
+
+    async def send_stream(message):
+        streamed.append(message)
+
+    async def untouched(scope, receive, send):
+        raise AssertionError("oversized stream must not reach the route")
+
+    await LimitRequestBody(untouched, max_bytes=4)(
+        {"type": "http", "method": "POST", "headers": []}, receive_stream, send_stream)
+    assert streamed[0]["status"] == 413
 
 
 async def test_token_opens_the_account_and_a_closed_one_does_not():

@@ -30,6 +30,7 @@ STATUS_CODES: dict[int, str] = {
     409: "conflict",
     410: "gone",
     422: "validation_error",
+    413: "payload_too_large",
     429: "rate_limited",
     500: "internal_error",
     503: "unavailable",
