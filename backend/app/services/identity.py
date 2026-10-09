@@ -59,19 +59,25 @@ async def issue_code(db: AsyncSession, subject_type: str, subject_id: uuid.UUID,
     return code, token
 
 
-async def send_code(email: str, role: str, purpose: str, code: str, token: str) -> None:
+def letter(role: str, purpose: str, code: str, token: str) -> tuple[str, str]:
+    """The code stays in the body. The link keeps its token in the fragment, not the query."""
     base = settings.PUBLIC_BASE_URL.rstrip("/")
     ttl = settings.EMAIL_CODE_TTL_MINUTES
     if purpose == "verify":
-        subject = f"Код подтверждения FSP Talent: {code}"
+        subject = "Код подтверждения FSP Talent"
         text = (f"Вы регистрируете аккаунт {ROLE_LABEL[role]} на FSP Talent.\n\n"
                 f"Код подтверждения: {code}\n"
-                f"Или откройте ссылку: {base}/verify?token={token}\n\n"
+                f"Или откройте ссылку: {base}/verify#token={token}\n\n"
                 f"Код действует {ttl} минут. Если вы не регистрировались, просто удалите письмо.")
     else:
-        subject = f"Сброс пароля FSP Talent: {code}"
+        subject = "Сброс пароля FSP Talent"
         text = (f"Код для сброса пароля: {code}\n"
                 f"Код действует {ttl} минут. Если вы не запрашивали сброс, ничего делать не нужно.")
+    return subject, text
+
+
+async def send_code(email: str, role: str, purpose: str, code: str, token: str) -> None:
+    subject, text = letter(role, purpose, code, token)
     await send_mail(email, subject, text, meta={"purpose": purpose, "role": role, "code": code, "token": token})
 
 

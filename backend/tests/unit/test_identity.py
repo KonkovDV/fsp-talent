@@ -8,6 +8,7 @@ import pytest
 
 from app.api.errors import ERROR_CODES, ApiError, error_body
 from app.legal import documents, get_document, required_kinds
+from app.services.identity import letter
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -53,6 +54,17 @@ def test_every_raised_code_is_registered_and_documented():
     assert used <= set(ERROR_CODES), used - set(ERROR_CODES)
     documented = set(re.findall(r"^\| `([a-z_0-9]+)` \|", (ROOT.parent / "docs/API_ERRORS.md").read_text(), re.M))
     assert set(ERROR_CODES) == documented, set(ERROR_CODES) ^ documented
+
+
+def test_the_code_stays_in_the_body_and_the_link_token_stays_out_of_the_query():
+    subject, text = letter("participant", "verify", "123456", "sekret")
+    assert "123456" not in subject
+    assert "123456" in text
+    assert "/verify#token=sekret" in text
+    assert "?" not in text
+    reset_subject, reset_text = letter("employer", "reset", "654321", "other")
+    assert "654321" not in reset_subject
+    assert "654321" in reset_text
 
 
 def test_login_and_contacts_use_the_confirmed_email():

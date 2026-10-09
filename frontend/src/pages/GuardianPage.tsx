@@ -1,17 +1,18 @@
-import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { apiError, guardianConsent } from '../api/client'
 import { PageHeader } from '../components/ui'
+import { dropLetterToken, forgetLetterToken, letterToken } from '../lib/letterToken'
 
 /** The legal representative opens the link from the letter and confirms the consent. */
 export default function GuardianPage() {
-  const [params] = useSearchParams()
-  const token = params.get('token') ?? ''
+  const [token] = useState(letterToken)
+  useEffect(() => { if (token) dropLetterToken() }, [token])
   const [done, setDone] = useState<string | null>(null)
   const confirm = useMutation({
     mutationFn: () => guardianConsent(token).then(r => r.data as { display_name: string | null }),
-    onSuccess: d => setDone(d.display_name || 'кандидата'),
+    onSuccess: d => { forgetLetterToken(); setDone(d.display_name || 'кандидата') },
   })
   return (
     <div className="mx-auto max-w-2xl">

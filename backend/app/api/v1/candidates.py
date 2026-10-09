@@ -39,7 +39,7 @@ from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
 from app.services.growth import growth_gaps, next_grade
-from app.services.guardian import guardian_token
+from app.services.guardian import consent_link, guardian_token
 from app.services.identity import active_consent
 from app.services.mail import send_mail
 from app.services.market import quartiles, salary_band
@@ -717,7 +717,7 @@ async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_par
     db.add(ConsentLog(participant_id=p.id, event_type="guardian_requested", actor_id=p.id, meta={}))
     await db.commit()
     token = guardian_token(p.id, email)
-    link = f"{settings.PUBLIC_BASE_URL.rstrip('/')}/guardian?token={token}"
+    link = consent_link(settings.PUBLIC_BASE_URL, token)
     await send_mail(email, "Согласие законного представителя — ФСП Талант",
                     f"{p.display_name or 'Ваш ребёнок'} зарегистрировался на платформе подбора ФСП Талант.\n"
                     "Работодатели увидят анонимную карточку кандидата только после вашего согласия на обработку "
