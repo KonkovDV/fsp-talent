@@ -118,10 +118,12 @@ export default function CandidateAssessment() {
   }, [profile])
 
   const spec: string | null = profile?.specialization ?? null
-  const plan = spec && blueprint ? blueprint.specializations[spec] : null
+  const [testSpec, setTestSpec] = useState<string | null>(null)
+  const chosen = testSpec || spec
+  const plan = chosen && blueprint ? blueprint.specializations[chosen] : null
   const confirmation = useMemo(
-    () => (profile?.confirmations ?? []).find((c: { specialization: string }) => c.specialization === spec),
-    [profile, spec])
+    () => (profile?.confirmations ?? []).find((c: { specialization: string }) => c.specialization === chosen),
+    [profile, chosen])
   const left = useCountdown(state?.item ?? null)
 
   const refresh = () => {
@@ -130,7 +132,7 @@ export default function CandidateAssessment() {
   const startKey = useRef<{ sig: string; key: string } | null>(null)
   const start = useMutation({
     mutationFn: (mode: 'grade' | 'express' = 'grade') => {
-      const body = { target_grade: target, code_language: lang, mode, vacancy_id: mode === 'grade' ? vacancyId : null }
+      const body = { target_grade: target, specialization: chosen, code_language: lang, mode, vacancy_id: mode === 'grade' ? vacancyId : null }
       const sig = JSON.stringify(body)
       if (!startKey.current || startKey.current.sig !== sig) startKey.current = { sig, key: crypto.randomUUID() }
       return startAssessment(body, startKey.current.key).then(r => r.data)
@@ -176,8 +178,14 @@ export default function CandidateAssessment() {
         <div className="grid items-start gap-6 lg:grid-cols-[1.3fr_1fr]">
           <div className="card space-y-6">
             <div>
-              <p className="text-xs text-ink-3">Специализация из опроса</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{plan?.label ?? spec}</p>
+              <label className="field-label" htmlFor="test-spec">Специализация теста</label>
+              <select id="test-spec" className="select mt-1" value={chosen ?? ''} onChange={e => setTestSpec(e.target.value)}>
+                {Object.keys(blueprint?.specializations ?? {}).map(key => (
+                  <option key={key} value={key}>{ROLE_RU[key] ?? key}{key === spec ? ' — из опроса' : ''}</option>
+                ))}
+              </select>
+              <p className="field-hint">Другая специализация подтверждается отдельным тестом. В поиске этой роли вы попадёте один раз. Категория из опроса не подменяется.</p>
+              <p className="mt-3 text-lg font-semibold text-ink">{plan?.label ?? chosen}</p>
               <p className="mt-1 text-sm text-ink-2">Подтверждённый грейд: <b className="text-ink">{confirmation?.grade ? gradeRu(confirmation.grade) : 'пока нет'}</b>
                 {confirmation?.locked_until && <>, повышение после {new Date(confirmation.locked_until).toLocaleDateString('ru-RU')}</>}</p>
             </div>
