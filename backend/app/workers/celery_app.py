@@ -28,6 +28,7 @@ celery_app.conf.update(
         "app.workers.tasks.offer_weekly_tasks":   {"queue": "maintenance"},
         "app.workers.tasks.sync_fsp_changes":     {"queue": "maintenance"},
         "app.workers.tasks.reset_demo":          {"queue": "maintenance"},
+        "app.workers.tasks.refresh_grade_fail_rates": {"queue": "maintenance"},
     },
     beat_schedule={
         "expire-offers-hourly": {
@@ -53,6 +54,10 @@ celery_app.conf.update(
         "demo-reset-nightly": {
             "task": "app.workers.tasks.reset_demo",
             "schedule": crontab(hour=4, minute=10),
+        },
+        "grade-fail-rates-nightly": {
+            "task": "app.workers.tasks.refresh_grade_fail_rates",
+            "schedule": crontab(hour=3, minute=40),
         },
     },
 )

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     FSP_MODE: str = "mock"   # mock | real
     AI_ENABLED: bool = True
     EMBEDDINGS_MODE: str = "off"   # off | model (sentence-transformers, see [ai] extra)
+    # legacy: a declared grade counts as 0.85 of a confirmed one.
+    # expected: the grade factor is the expected relevance under the posterior of the true grade.
+    # The default stays legacy until a three-seed run meets the acceptance rule.
+    GRADE_MODEL: str = "legacy"
 
     # JWT
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
