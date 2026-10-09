@@ -6,11 +6,13 @@ those three figures; VALIDATION_MATCHING.md must contain the hash the command pr
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 from coverage_lines import percent
@@ -78,6 +80,20 @@ def coverage_parts() -> tuple[str, int, int]:
     return shown, percent("app/services", files["files"]), percent("app/api", files["files"])
 
 
+def pitch_deck_matches_html() -> None:
+    """The slide images are baked into the deck. A changed pitch.html without a rebuild must fail."""
+    html_path = ROOT / "docs" / "pitch.html"
+    deck = ROOT / "docs" / "pitch.pptx"
+    digest = hashlib.sha256(html_path.read_bytes()).hexdigest()
+    needle = f"pitch-html-sha256={digest}"
+    with zipfile.ZipFile(deck) as package:
+        core = package.read("docProps/core.xml").decode("utf-8")
+    if needle not in core:
+        raise SystemExit(
+            "перерисуйте слайды: node docs/tools/build_pitch.mjs && python docs/tools/build_pitch_template.py"
+        )
+
+
 def require(text: str, needle: str, where: str) -> None:
     if needle not in text:
         raise SystemExit(f"{where} не содержит «{needle}»")
@@ -120,6 +136,7 @@ def main() -> None:
     require(install, f"{total} % по всему приложению, сервисы {services} %, API {api} %", "INSTALL")
     require(pitch, f"{count} юнит-{word}, покрытие приложения {total} %, сервисы {services} % и API {api} %", "питч")
     require(VALIDATION.read_text(encoding="utf-8"), digest, "VALIDATION_MATCHING.md")
+    pitch_deck_matches_html()
     print(f"doc numbers: {count} {word}, coverage {total} %, services {services} %, API {api} %, sha256 {digest}")
 
 

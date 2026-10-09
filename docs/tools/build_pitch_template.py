@@ -8,6 +8,7 @@ fills them. The PDF is exported from this file in PowerPoint, not by this script
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -121,6 +122,31 @@ def fill_lines(paragraph, lines: list[str]) -> None:
         host.append(run)
 
 
+def fill_bullets(shape, lines: list[str]) -> None:
+    """One template paragraph per line, with the first paragraph's bullet properties."""
+    frame = shape.text_frame
+    frame.word_wrap = True
+    body = frame._txBody
+    first = body.find(qn("a:p"))
+    if first is None:
+        raise SystemExit("в поле слайда нет абзаца")
+    bullet = first.find(qn("a:pPr"))
+    proto = first.find(qn("a:r"))
+    for paragraph in list(body.findall(qn("a:p"))):
+        body.remove(paragraph)
+    for line in lines:
+        paragraph = etree.Element(qn("a:p"))
+        if bullet is not None:
+            paragraph.append(deepcopy(bullet))
+        run = deepcopy(proto) if proto is not None else etree.Element(qn("a:r"))
+        node = run.find(qn("a:t"))
+        if node is None:
+            node = etree.SubElement(run, qn("a:t"))
+        node.text = line
+        paragraph.append(run)
+        body.append(paragraph)
+
+
 def fill_shape(shape, lines: list[str]) -> None:
     frame = shape.text_frame
     frame.word_wrap = True
@@ -182,8 +208,8 @@ def fill_template(prs: Presentation) -> None:
     fill_shape(shape_starting(story, "Расскажите о самых интересных"), HARD)
     notes(story, "Историю команды заполняет владелец. Почему эта задача и какие были сложности — уже вписаны.")
 
-    fill_shape(shape_starting(short, "Опишите в чем техническая"), TECH)
-    fill_shape(shape_starting(short, "Опишите ваши идеи"), MARKET)
+    fill_bullets(shape_starting(short, "Опишите в чем техническая"), TECH)
+    fill_bullets(shape_starting(short, "Опишите ваши идеи"), MARKET)
     notes(short, "Техническая суть слева, пилот с Федерацией справа. На защите этот слайд — последние секунды.")
 
 
@@ -206,7 +232,8 @@ def stamp(prs: Presentation) -> None:
     props.subject = "ЛЦТ 2026, трек Федерации спортивного программирования"
     props.category = ""
     props.keywords = ""
-    props.comments = ""
+    html = (DOCS / "pitch.html").read_bytes()
+    props.comments = "pitch-html-sha256=" + hashlib.sha256(html).hexdigest()
 
 
 def patch_package(path: Path, slides: int) -> None:
