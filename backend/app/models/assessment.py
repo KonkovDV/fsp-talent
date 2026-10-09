@@ -87,6 +87,20 @@ class TestSession(Base):
 GRADE_ORDER = ("intern", "junior", "middle", "senior", "lead")
 
 
+class GradeDispute(Base):
+    """A request to look at a finished test again. It does not change the grade."""
+    __tablename__ = "grade_disputes"
+    __table_args__ = (UniqueConstraint("session_id", name="uq_grade_dispute_session"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("test_sessions.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
 class TestSessionItem(Base):
     """One served item of an adaptive session. The right answer never leaves the server before the end."""
     __tablename__ = "test_session_items"

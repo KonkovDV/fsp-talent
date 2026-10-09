@@ -1,5 +1,6 @@
 from app.models.assessment import (
     GradeConfirmation,
+    GradeDispute,
     ItemStat,
     PracticeAttempt,
     TestSession,
@@ -31,6 +32,7 @@ __all__ = [
     "Employer",
     "EmployerTask",
     "GradeConfirmation",
+    "GradeDispute",
     "InterviewSlot",
     "ItemStat",
     "Need",

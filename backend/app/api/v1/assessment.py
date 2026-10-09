@@ -6,6 +6,8 @@ GET  /assessment/active               - resume the running session after a reloa
 GET  /assessment/{id}                 - session state: current item or the result
 POST /assessment/{id}/answer          - answer the current item (item_token + option index)
 POST /assessment/{id}/abandon         - stop; counts as an attempt
+POST /assessment/{id}/leave           - the tab was hidden; a mark, the grade does not move
+POST /assessment/{id}/dispute         - ask for a manual look at a finished test
 GET  /assessment/{id}/review          - after the end: items with right answers and explanations
 GET  /assessment/cooldown             - retake / upgrade locks
 GET  /assessment/history              - past sessions
@@ -39,7 +41,7 @@ from app.core.ratelimit import too_many
 from app.items.families.langs import LANGUAGE_LABELS
 from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
 from app.models import Participant, PracticeAttempt, Vacancy
-from app.models.assessment import GRADE_ORDER, TestSession, TestSessionItem
+from app.models.assessment import GRADE_ORDER, GradeDispute, TestSession, TestSessionItem
 from app.services import cat
 from app.services.assessment import (
     Finished,
@@ -66,6 +68,7 @@ from app.services.practice import (
     weekly_task,
 )
 from app.services.profile import rebuild_profile
+from app.services.session_marks import DISPUTE_TEXT, dispute_error, note_tab_leave
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
@@ -211,6 +214,8 @@ def _review_notes(flags: dict) -> list[str]:
         notes.append("Ответ совпал с ключом другого варианта того же семейства. Грейд не изменён.")
     if flags.get("integrity_review"):
         notes.append("Подпись задания не сошлась с ответом. Грейд не изменён.")
+    if int(flags.get("tab_leaves") or 0) > 0:
+        notes.append("Вкладка теста скрывалась. Грейд не изменён.")
     return notes
 
 
@@ -539,6 +544,50 @@ async def _answer(session_id: uuid.UUID, body: AnswerIn, current: dict, db: Asyn
     if fin is not None:
         result = await _finished_result(db, session, items, fin)
     return _session_out(session, items, result)
+
+
+@router.post("/{session_id}/leave")
+async def leave_tab(session_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                    db: AsyncSession = Depends(get_db)):
+    """The test tab was hidden. The mark is stored. Answers and the grade stay as they are."""
+    session = await _own(db, session_id, current)
+    if session.status != "in_progress":
+        return {"tab_leaves": int((session.flags or {}).get("tab_leaves") or 0)}
+    session.flags = note_tab_leave(session.flags)
+    await db.commit()
+    return {"tab_leaves": int(session.flags["tab_leaves"])}
+
+
+@router.post("/{session_id}/dispute")
+async def dispute_grade(session_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                        db: AsyncSession = Depends(get_db)):
+    """Ask for a manual look. The employer does not see the row, and the grade is not changed."""
+    session = await db.get(TestSession, session_id)
+    owned = (
+        session is not None
+        and session.participant_id == uuid.UUID(current["sub"])
+        and session.engine == "cat_v2"
+    )
+    already = False
+    if owned and session is not None:
+        already = await db.scalar(
+            select(GradeDispute.id).where(GradeDispute.session_id == session.id)) is not None
+    err = dispute_error(session.status if session is not None else "", owned, already)
+    if err == "not_found":
+        raise ApiError(404, "not_found", "Сессия не найдена")
+    if err == "not_finished":
+        raise ApiError(409, "conflict", "Оспорить можно только законченный тест")
+    if err == "already":
+        raise ApiError(409, "conflict", "Этот результат уже отправлен на пересмотр")
+    assert session is not None
+    db.add(GradeDispute(
+        participant_id=session.participant_id, session_id=session.id, created_at=datetime.now(UTC)))
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise ApiError(409, "conflict", "Этот результат уже отправлен на пересмотр") from e
+    return {"text": DISPUTE_TEXT}
 
 
 @router.post("/{session_id}/abandon", response_model=SessionOut)

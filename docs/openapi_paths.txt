@@ -11,6 +11,8 @@
 /api/v1/assessment/{session_id}
 /api/v1/assessment/{session_id}/abandon
 /api/v1/assessment/{session_id}/answer
+/api/v1/assessment/{session_id}/dispute
+/api/v1/assessment/{session_id}/leave
 /api/v1/assessment/{session_id}/review
 /api/v1/auth/employer/register
 /api/v1/auth/employer/token
