@@ -8,6 +8,7 @@ const CHECK: Record<string, string> = {
   number: 'Ответ — целое число. Проверит система сразу.',
   choice: 'Один вариант из списка. Проверит система сразу.',
   open: 'Решение или подход к решению, до 4000 знаков. Проверит работодатель.',
+  code: 'Функция solve. Скрытые проверки. Грейд и подбор не меняются.',
 }
 
 export function TaskResult({ task }: { task: CandidateTask }) {
@@ -46,6 +47,12 @@ function AnswerForm({ task }: { task: CandidateTask }) {
             </label>
           ))}
         </fieldset>
+      )}
+      {task.answer_type === 'code' && (
+        <div><label className="field-label" htmlFor={id}>Функция solve</label>
+          <textarea id={id} value={text} onChange={e => setText(e.target.value)} rows={8} maxLength={16384}
+            className="input resize-y font-mono text-[13px]" placeholder={'def solve(xs):\n    return 0'} />
+          <p className="field-hint">Результат практики. Грейд не меняется.</p></div>
       )}
       {task.answer_type === 'open' && (
         <div><label className="field-label" htmlFor={id}>Решение или подход к решению</label>
