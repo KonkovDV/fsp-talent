@@ -276,12 +276,15 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
                       "выберите вариант или опишите решение")
         raise ApiError(422, "validation_error", detail) from e
     now = datetime.now(UTC)
-    comment = None
+    notes = [checked.note] if checked.note else []
     if task.answer_type == "code" and checked.answer_text:
         others = list(await db.scalars(select(TaskSubmission.answer_text).where(
             TaskSubmission.task_id == task.id, TaskSubmission.answer_text.is_not(None))))
         if copy_mark(checked.answer_text, [text for text in others if text]):
-            comment = "Пометка для разбора: решение похоже на другое сданное. Проверка примеров от этого не меняется."
+            notes.append(
+                "Пометка для разбора: решение похоже на другое сданное. "
+                "Проверка примеров от этого не меняется.")
+    comment = "\n".join(notes) if notes else None
     sub = TaskSubmission(task_id=task.id, participant_id=participant.id, answer_text=checked.answer_text,
                          comment=comment,
                          answer_index=checked.answer_index, status=checked.status, passed=checked.passed,

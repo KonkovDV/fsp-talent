@@ -31,6 +31,10 @@ class LabError(ValueError):
     """The source is not a practice solution. The API shows this text."""
 
 
+class _Stopped(Exception):
+    """The practice run hit its step or size limit. Exit code 2, not a wrong answer."""
+
+
 def guard(source: str) -> ast.Module:
     """Accept a single ``solve`` and refuse imports, attributes and other calls."""
     if len(source.encode("utf-8")) > CODE_LIMIT:
@@ -161,8 +165,12 @@ def child_cwd() -> str:
     return "/tmp"
 
 
-def _run_cases(source: str, cases: list[list[Any]]) -> list[int | None]:
-    """Run ``solve`` on every case in one process. Expected values are not sent across."""
+def _run_cases(source: str, cases: list[list[Any]]) -> tuple[list[int | None], bool]:
+    """Run ``solve`` on every case in one process. Expected values are not sent across.
+
+    The second value is true when the run was stopped by the time or size limit.
+    A wrong number and a crash stay false: those are not a timeout.
+    """
     blank: list[int | None] = [None] * len(cases)
     payload = json.dumps({"source": source, "cases": cases}, ensure_ascii=False).encode("utf-8")
     try:
@@ -172,9 +180,11 @@ def _run_cases(source: str, cases: list[list[Any]]) -> list[int | None]:
             env=child_env(), cwd=child_cwd(),
         )
     except subprocess.TimeoutExpired:
-        return blank
+        return blank, True
+    if proc.returncode == 2:
+        return blank, True
     if proc.returncode != 0 or len(proc.stdout) > 4096:
-        return blank
+        return blank, False
     try:
         got = json.loads(proc.stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -187,7 +197,7 @@ def _run_cases(source: str, cases: list[list[Any]]) -> list[int | None]:
             out.append(None)
         else:
             out.append(item)
-    return out
+    return out, False
 
 
 def run_problem(problem_id: str, source: str) -> dict[str, Any]:
@@ -198,7 +208,7 @@ def run_problem(problem_id: str, source: str) -> dict[str, Any]:
     guard(source)
     public_cases = [list(args) for args, _fn in row["public"]]
     hidden_cases = [list(args) for args, _fn in row["hidden"]]
-    got = _run_cases(source, public_cases + hidden_cases)
+    got, timed_out = _run_cases(source, public_cases + hidden_cases)
     public_got = got[:len(public_cases)]
     hidden_got = got[len(public_cases):]
     public_ok = [
@@ -217,6 +227,7 @@ def run_problem(problem_id: str, source: str) -> dict[str, Any]:
         "hidden_passed": hidden_passed,
         "hidden_total": hidden_total,
         "practice_only": True,
+        "timed_out": timed_out,
     }
 
 
@@ -234,11 +245,8 @@ def _child() -> None:
             nonlocal steps
             if event == "line" and frame.f_code.co_filename == "<lab>":
                 steps += 1
-                if steps > STEP_BUDGET:
-                    raise RuntimeError("steps")
-                for value in frame.f_locals.values():
-                    if _too_big(value):
-                        raise RuntimeError("size")
+                if steps > STEP_BUDGET or any(_too_big(value) for value in frame.f_locals.values()):
+                    raise _Stopped()
             return _trace
 
         sys.settrace(_trace)
@@ -252,6 +260,8 @@ def _child() -> None:
                 results.append(out)
         sys.settrace(None)
         sys.stdout.write(json.dumps(results))
+    except _Stopped:
+        sys.exit(2)
     except Exception:
         sys.exit(1)
 
