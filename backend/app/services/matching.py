@@ -15,6 +15,7 @@ import statistics
 from dataclasses import dataclass, field, replace
 
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.scoring.engine import LCB0
 from app.services.survey import SPECIALIZATIONS
 
 GRADES = ("intern", "junior", "middle", "senior", "lead")
@@ -106,6 +107,10 @@ def category_band(role: str | None, grade: str | None,
 
 
 FSP_FULL_LCB = 0.6     # LCB at which the FSP factor saturates
+# "boost": a history can only raise the evidence above the test. "mean" is the previous
+# average of the two factors, kept so the holdout can print before and after.
+FSP_LIFT = "mean"
+FSP_OMEGA = WEIGHTS["fsp"] / (WEIGHTS["test"] + WEIGHTS["fsp"])
 # Pending invitations a candidate may hold before the list steps them down. The step is small
 # and capped, so a strong fit is not buried by a busy inbox.
 OPEN_INVITE_FREE = 2
@@ -119,7 +124,7 @@ SALARY_REFUSAL_CAP = 3
 INTERVIEW_FACTOR = {"passed": 1.10, "failed": 0.85, "no_show": 0.70}
 REASON_SOURCE = {
     "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "UNTESTED": "тест",
-    "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП",
+    "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП", "FSP_NO_LIFT": "ФСП",
     "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП",
     "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
     "RELATED_SKILL": "заявлено",
@@ -245,16 +250,50 @@ def _note(bucket: list[str], reasons: list[Reason], tone: str, code: str, text: 
 
 
 EVIDENCE_REASONS = {"test": ("TEST_SCORE", "UNTESTED"),
-                    "fsp": ("FSP_BONUS", "FSP_SCORE", "FSP_RELEVANT", "FSP_OTHER")}
+                    "fsp": ("FSP_BONUS", "FSP_SCORE", "FSP_RELEVANT", "FSP_OTHER", "FSP_NO_LIFT")}
+
+
+def fsp_factor(lcb: float) -> float:
+    """0 at the empty-history bound, 1 at a full result. Below the empty bound stays 0."""
+    span = FSP_FULL_LCB - LCB0
+    return min(1.0, max(0.0, (lcb - LCB0) / span))
+
+
+def combine_evidence(test: float | None, fsp: float | None) -> float | None:
+    """FSP adds only the part above the test. No history leaves the test as it is."""
+    if test is None and fsp is None:
+        return None
+    if test is None:
+        return fsp
+    if fsp is None or fsp <= test:
+        return test
+    return test + FSP_OMEGA * (fsp - test)
+
+
+def _evidence_parts(test: float | None, fsp: float | None) -> dict[str, float]:
+    """How much of the evidence number comes from the test and how much from FSP."""
+    if FSP_LIFT != "boost":
+        present = {k: v for k, v in (("test", test), ("fsp", fsp)) if v is not None}
+        weight = sum(WEIGHTS[k] for k in present)
+        if not weight:
+            return {}
+        return {k: WEIGHTS[k] / weight * v for k, v in present.items()}
+    if test is None and fsp is None:
+        return {}
+    if test is None:
+        return {"fsp": fsp}
+    if fsp is None or fsp <= test:
+        return {"test": test}
+    return {"test": test, "fsp": FSP_OMEGA * (fsp - test)}
 
 
 def _with_points(reasons: list[Reason], factors: list[Factor], scale: float) -> list[Reason]:
     """Attach to the test and FSP lines how much each moved the score, so the card shows the contribution."""
-    present = [f for f in factors if f.key in EVIDENCE_KEYS and f.value is not None]
-    total = sum(f.weight for f in present)
-    if not total:
+    by_key = {f.key: f.value for f in factors if f.key in EVIDENCE_KEYS}
+    parts = _evidence_parts(by_key.get("test"), by_key.get("fsp"))
+    if not parts:
         return reasons
-    points = {f.key: scale * f.weight / total * f.value for f in present}
+    points = {k: scale * v for k, v in parts.items() if v}
     out = []
     for r in reasons:
         key = next((k for k, codes in EVIDENCE_REASONS.items() if r.code in codes), None)
@@ -380,8 +419,14 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         if c.fsp_lcb is None:
             _note(info, reasons, "info", "FSP_NEUTRAL", "Нет истории ФСП — ось не учитывается и не штрафует")
         else:
-            values["fsp"] = min(1.0, max(0.0, c.fsp_lcb / FSP_FULL_LCB))
-            if c.fsp_kind == "profile":
+            if FSP_LIFT == "boost":
+                values["fsp"] = fsp_factor(c.fsp_lcb)
+            else:
+                values["fsp"] = min(1.0, max(0.0, c.fsp_lcb / FSP_FULL_LCB))
+            no_lift = FSP_LIFT == "boost" and values["test"] is not None and values["fsp"] <= values["test"]
+            if no_lift:
+                _note(info, reasons, "info", "FSP_NO_LIFT", "Результаты ФСП учтены, место не опускают")
+            elif c.fsp_kind == "profile":
                 label = DISCIPLINE_LABELS.get(c.fsp_discipline or "", c.fsp_discipline or "")
                 tone, bucket = ("plus", plus) if values["fsp"] >= 0.5 else ("info", info)
                 _note(bucket, reasons, tone, "FSP_RELEVANT", f"Результат в профильной дисциплине: {label}")
@@ -404,7 +449,10 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
 
     factors = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
     fit = _mean([f for f in factors if f.key in FIT_KEYS])
-    evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
+    if FSP_LIFT == "boost":
+        evidence = combine_evidence(values["test"], values["fsp"])
+    else:
+        evidence = _mean([f for f in factors if f.key in EVIDENCE_KEYS])
     if fit is None:
         # Nothing to match against (an empty search): rank by how well the profile is confirmed.
         employer, basis = evidence or 0.0, "evidence"

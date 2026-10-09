@@ -1,6 +1,7 @@
 """Explainable match score and the offline ranking benchmark."""
 import random
 
+from app.services import matching as matching_mod
 from app.services.matching import (
     CandidateFacts,
     NeedSpec,
@@ -498,6 +499,42 @@ def test_a_lower_tier_cannot_overtake_with_a_test():
         confirmed={"weak": 1, "strong": 0},
         fits={"weak": weak.fit or 0.0, "strong": strong.fit or 0.0})
     assert ordered[0] == "strong"
+
+
+def test_fsp_never_lowers_score():
+    """The rejected boost (FSP only raises evidence) has the property. It is not the shipped score."""
+    rng = random.Random(3001)
+    previous_lift = matching_mod.FSP_LIFT
+    matching_mod.FSP_LIFT = "boost"
+    try:
+        _assert_fsp_boost_never_lowers(rng)
+    finally:
+        matching_mod.FSP_LIFT = previous_lift
+
+
+def _assert_fsp_boost_never_lowers(rng: random.Random) -> None:
+    roles = ("backend", "frontend", "ml", "qa")
+    grades = ("junior", "middle", "senior")
+    previous = None
+    ladder = None
+    for i in range(2000):
+        role = rng.choice(roles)
+        grade = rng.choice(grades)
+        need = NeedSpec(role=role, grade=grade, skills=("Python",))
+        base = dict(role=role, grade=grade, grade_source=rng.choice(("declared", "assessed")),
+                    skills={"Python": rng.choice(("self_reported", "test_confirmed"))},
+                    test_p=rng.random() if rng.random() < 0.7 else None)
+        if base["test_p"] is not None:
+            base["test_spec"] = role
+        plain = score(need, CandidateFacts(fsp_lcb=None, **base))
+        x = rng.random() * 0.9
+        lifted = score(need, CandidateFacts(fsp_lcb=x, **base))
+        assert lifted.score + 1e-9 >= plain.score
+        if i == 0:
+            ladder = [score(need, CandidateFacts(fsp_lcb=step / 20, **base)).score for step in range(19)]
+            previous = ladder
+    assert previous == sorted(previous)
+    assert ladder[0] <= ladder[-1]
 
 
 def test_missing_fsp_does_not_change_the_fit_tier():

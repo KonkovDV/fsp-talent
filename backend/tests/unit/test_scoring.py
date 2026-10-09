@@ -1,17 +1,22 @@
-from datetime import date
+import random
+from datetime import date, timedelta
 
 import pytest
 
 from app.services.scoring.engine import (
     EVENT_CAP,
+    best_subset_exact,
+    best_subset_greedy,
     compute_discipline_score,
     event_quality,
     event_weight,
+    lcb_star,
     months_between,
     percentile,
     rank_at_least,
     result_class,
 )
+from app.validation.fsp_axis import history
 
 
 def ev(place, total=100, status="russia_championship", team=1, when=None):
@@ -208,6 +213,42 @@ def test_top_event_ids_with_fewer_than_three_events():
 # ---------------------------------------------------------------------------
 # New: scoring_version пробрасывается в результат
 # ---------------------------------------------------------------------------
+
+def test_adding_event_never_lowers_lcb():
+    rng = random.Random(101)
+    ref = date(2026, 10, 1)
+    for i in range(2000):
+        events = history(rng, rng.gauss(0.0, 1.0))
+        before = lcb_star(events, reference_date=ref)["lcb"]
+        extra = {
+            "id": f"extra-{i}",
+            "place": rng.randint(1, 80),
+            "total_participants": rng.choice((6, 16, 50, 100)),
+            "competition_status": "other",
+            "team_size": rng.randint(1, 5),
+            "event_date": ref - timedelta(days=rng.randrange(0, 49) * 30),
+        }
+        after = lcb_star([*events, extra], reference_date=ref)["lcb"]
+        assert after >= before - 1e-9
+
+
+def test_greedy_subset_matches_the_exhaustive_search_up_to_twelve_events():
+    from app.services.scoring.engine import _lcb
+
+    rng = random.Random(102)
+    ref = date(2026, 10, 1)
+    for _ in range(40):
+        events = history(rng, rng.gauss(0.0, 1.0))[:12]
+        weighted = []
+        for e in events:
+            q = event_quality(e["place"], e["total_participants"])
+            w = event_weight(e["event_date"], e["team_size"], ref)
+            weighted.append((q, w, e))
+        assert _lcb(best_subset_greedy(weighted)) == pytest.approx(_lcb(best_subset_exact(weighted)), abs=1e-9)
+    for n in range(13):
+        weighted = [(rng.random(), 0.2 + rng.random(), {"id": str(i)}) for i in range(n)]
+        assert _lcb(best_subset_greedy(weighted)) == pytest.approx(_lcb(best_subset_exact(weighted)), abs=1e-9)
+
 
 def test_scoring_version_is_present():
     from app.services.scoring.engine import VERSION
