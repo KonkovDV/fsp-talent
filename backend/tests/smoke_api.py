@@ -221,6 +221,8 @@ def check_erasure(employer_token):
 def main():
     with urllib.request.urlopen(BASE.replace("/api/v1", "/health")) as response:
         print("health", json.loads(response.read().decode()))
+    status, document = call("GET", "/public/issuer")
+    assert status == 200 and document["verificationMethod"][0]["publicKeyMultibase"].startswith("z"), document
     status, employer = call("POST", "/auth/employer/token", form=EMPLOYER)
     assert status == 200, employer
     employer_token = employer["access_token"]

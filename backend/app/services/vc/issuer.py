@@ -51,12 +51,43 @@ def _jcs(obj) -> bytes:
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
+def _running_as_root() -> bool:
+    geteuid = getattr(os, "geteuid", None)
+    return bool(geteuid and geteuid() == 0)
+
+
+def _give_new_key_to_appuser(path: str) -> None:
+    """A seed started as root must not leave a mode-600 key that appuser cannot read.
+
+    The container entrypoint drops to appuser and can chown a key that already exists.
+    `docker compose exec` does not: it keeps the caller's uid, and a root seed creates the file.
+    """
+    if not _running_as_root():
+        return
+    try:
+        import pwd
+        account = pwd.getpwnam("appuser")
+    except (ImportError, KeyError):
+        return
+    os.chown(path, account.pw_uid, account.pw_gid)
+
+
 @lru_cache(maxsize=1)
 def _private_key() -> Ed25519PrivateKey:
     path = settings.VC_PRIVATE_KEY_PATH
     if os.path.exists(path):
-        with open(path, "rb") as f:
-            return serialization.load_pem_private_key(f.read(), password=None)
+        try:
+            with open(path, "rb") as f:
+                pem = f.read()
+        except PermissionError:
+            logger.error(
+                "VC signing key %s is not readable. It must be owned by appuser, mode 600. "
+                "Restart the container, or run the seed as appuser: "
+                "docker compose exec -T -u appuser backend python -m seed.generate_seed",
+                path,
+            )
+            raise
+        return serialization.load_pem_private_key(pem, password=None)
     key = Ed25519PrivateKey.generate()
     pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                             serialization.NoEncryption())
@@ -65,6 +96,10 @@ def _private_key() -> Ed25519PrivateKey:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(pem)
+        try:
+            _give_new_key_to_appuser(path)
+        except OSError:
+            logger.error("VC signing key %s was written but not given to appuser", path)
         logger.warning(f"Generated new VC signing key at {path}")
     except FileExistsError:
         _private_key.cache_clear()
