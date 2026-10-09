@@ -131,7 +131,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
               <option value="">Свой текст</option>
               {TEMPLATES.map(tpl => <option key={tpl.id} value={tpl.id}>{tpl.label}</option>)}
             </select>
-            <p className="field-hint">Шаблон только заполняет поля. Эталон и открытый ответ по-прежнему проверяются как раньше, грейд не меняется.</p>
+            <p className="field-hint">Шаблон только заполняет поля. Число и выбор проверяет система, открытый ответ смотрите вы. Грейд не меняется.</p>
           </div>
           <div><label className="field-label" htmlFor="t-title">Название</label>
             <input id="t-title" value={form.title} onChange={set('title')} className="input" maxLength={200}

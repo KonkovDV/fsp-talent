@@ -238,7 +238,7 @@ export default function CandidateDashboard() {
         <section className="card" aria-labelledby="growth-title">
           <h2 id="growth-title" className="section-title">Путь к следующему грейду</h2>
           <p className="mt-1 text-sm text-ink-2">
-            {gradeRu(growth.data.next_grade)}, {ROLE_RU[growth.data.role ?? ''] ?? growth.data.role}. Грейд этот список не меняет: его по-прежнему даёт только тест.
+            {gradeRu(growth.data.next_grade)}, {ROLE_RU[growth.data.role ?? ''] ?? growth.data.role}. Этот список грейд не меняет: грейд даёт только тест.
           </p>
           {growth.data.people == null ? (
             <p className="mt-3 text-sm text-ink-2">На следующей ступени меньше пяти видимых профилей, поэтому список скрыт.</p>

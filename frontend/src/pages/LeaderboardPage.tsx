@@ -43,7 +43,26 @@ export default function LeaderboardPage() {
         </ol>
       )}
       {rows.length > 0 && (
-        <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица результатов">
+        <>
+        <ul className="space-y-3 sm:hidden">
+          {rows.map(r => (
+            <li key={`${r.participant_id}-${r.discipline}`} className="card">
+              <Link to={`/p/${r.participant_id}`} className="flex items-start justify-between gap-3">
+                <span>
+                  <span className="place text-ink">{r.rank}</span>
+                  <span className="ml-2 font-medium text-ink">{r.display_name}</span>
+                  <span className="mt-1 block text-sm text-ink-2">{r.label ?? DISC_RU[r.discipline] ?? r.discipline}</span>
+                  <span className="mt-1 block text-xs text-ink-3">{r.primary_role ? `${ROLE_RU[r.primary_role] ?? r.primary_role}, ` : ''}{r.grade ?? ''}</span>
+                </span>
+                <span className="text-right">
+                  <RankBadge rank={r.best_rank} />
+                  <span className="mt-1 block num font-semibold text-ink">{r.lcb.toFixed(2)}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="card hidden overflow-x-auto p-0 sm:block" tabIndex={0} role="region" aria-label="Таблица результатов">
           <table className="protocol">
             <thead><tr><th className="w-16 text-right">Место</th><th>Участник</th><th>Дисциплина</th><th>Разряд</th><th>Категория</th><th className="text-right">Уровень</th></tr></thead>
             <tbody>
@@ -68,6 +87,7 @@ export default function LeaderboardPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </PublicShell>
   )
