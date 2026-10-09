@@ -1,3 +1,6 @@
+import logging
+from types import SimpleNamespace
+
 import pytest
 
 from app.core.config import settings
@@ -55,6 +58,50 @@ def test_credential_uuid_reads_only_a_real_uuid():
     assert credential_uuid({"id": "urn:uuid:cred-1"}) is None
     assert credential_uuid({"id": 12}) is None
     assert credential_uuid({}) is None
+
+
+def test_a_root_process_gives_the_new_key_to_appuser(signing_key, monkeypatch):
+    given = {}
+    account = SimpleNamespace(pw_uid=4242, pw_gid=4243)
+
+    def getpwnam(name):
+        if name != "appuser":
+            raise KeyError(name)
+        return account
+
+    monkeypatch.setattr(issuer.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(issuer.os, "chown", lambda path, uid, gid: given.update(path=path, uid=uid, gid=gid),
+                        raising=False)
+    monkeypatch.setitem(__import__("sys").modules, "pwd", SimpleNamespace(getpwnam=getpwnam))
+    issuer._private_key()
+    assert given["uid"] == 4242 and given["gid"] == 4243
+    assert given["path"].endswith("vc.pem")
+
+
+def test_a_process_that_is_not_root_leaves_the_key_alone(signing_key, monkeypatch):
+    called = []
+    monkeypatch.setattr(issuer.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(issuer.os, "chown", lambda *args: called.append(args), raising=False)
+    issuer._private_key()
+    assert called == []
+
+
+def test_an_unreadable_key_is_named_in_the_log(signing_key, monkeypatch, caplog):
+    path = settings.VC_PRIVATE_KEY_PATH
+    with open(path, "wb") as handle:
+        handle.write(b"present")
+    real_open = open
+
+    def refuse(target, mode="r", *args, **kwargs):
+        if str(target) == path and "b" in str(mode):
+            raise PermissionError(13, "Permission denied", target)
+        return real_open(target, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", refuse)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(PermissionError):
+            issuer._private_key()
+    assert path in caplog.text and "appuser" in caplog.text
 
 
 def test_sd_jwt_hides_the_event_title_until_it_is_disclosed(signing_key):
