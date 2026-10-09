@@ -1,4 +1,4 @@
-"""Cities and work formats as a search filter. They are not inputs of the match score."""
+"""Cities and work formats. The search can filter by them, and the match score uses them when named."""
 from __future__ import annotations
 
 CITIES = (
@@ -18,10 +18,6 @@ def city_name(raw: str | None) -> str | None:
 
 def place_keeps(region: str | None, formats: list[str] | None,
                 city: str | None, work_format: str | None) -> bool:
-    """Drop only an explicit mismatch. An empty field stays in the list."""
-    if city and region and region.casefold() != city.casefold():
-        return False
-    chosen = [item for item in (formats or []) if item in WORK_FORMATS]
-    if work_format and chosen and work_format not in chosen:
-        return False
+    """The list keeps a mismatch. The match score lowers it when the vacancy names a place."""
+    del region, formats, city, work_format
     return True

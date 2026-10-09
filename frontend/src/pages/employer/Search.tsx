@@ -75,7 +75,7 @@ export default function EmployerSearch() {
   return (
     <div>
       <PageHeader title="Поиск кандидатов"
-        lead="Карточки анонимны: имя и контакты откроются, когда кандидат примет приглашение. Фильтры сужают список, балл только расставляет оставшихся. Приглашение отправляет человек." />
+        lead="Карточки анонимны: имя и контакты откроются, когда кандидат примет приглашение. Специализация и грейд сужают список. Город и формат входят в балл и из списка не убирают. Приглашение отправляет человек." />
 
       <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); run() }} role="search">
         <div className="relative min-w-0 flex-1 basis-72">
@@ -141,7 +141,7 @@ export default function EmployerSearch() {
               <option value="">Любой</option>
               {['Москва', 'Санкт-Петербург', 'Новосибирск', 'Екатеринбург', 'Казань', 'Нижний Новгород', 'Челябинск', 'Самара', 'Омск', 'Ростов-на-Дону', 'Уфа', 'Красноярск', 'Пермь', 'Воронеж', 'Волгоград'].map(name => <option key={name} value={name}>{name}</option>)}
             </select>
-            <p className="field-hint">Не входит в балл. Неназванный город остаётся в списке.</p></div>
+            <p className="field-hint">Входит в балл. Другой город остаётся в списке и стоит ниже. Неназванный город не штрафуется.</p></div>
           <div><label className={label} htmlFor="f-format">Формат работы</label>
             <select id="f-format" value={workFormat} onChange={e => setWorkFormat(e.target.value)} className="select">
               <option value="">Любой</option>
@@ -149,7 +149,7 @@ export default function EmployerSearch() {
               <option value="hybrid">Гибрид</option>
               <option value="office">Офис</option>
             </select>
-            <p className="field-hint">Не входит в балл. Пустой выбор кандидата его не отсекает.</p></div>
+            <p className="field-hint">Входит в балл. Другой формат остаётся в списке и стоит ниже. Пустой выбор кандидата не штрафуется.</p></div>
           <fieldset className="space-y-2.5 pt-1 text-sm text-ink">
             <label className="flex items-center gap-2"><input type="checkbox" checked={assessedOnly} onChange={e => setAssessedOnly(e.target.checked)} />Только грейд, подтверждённый тестом</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={internship} onChange={e => setInternship(e.target.checked)} />Ищут стажировку или практику</label>

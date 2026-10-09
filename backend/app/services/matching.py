@@ -28,7 +28,7 @@ GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "м�
 # requested role and grade, so a strong profile from another category is not pulled over a matching one,
 # while inside the category a passed test and FSP results outrank one more self-described skill (TZ section 2).
 # A missing FSP history is omitted, not scored as zero. docs/VALIDATION_MATCHING.md has the ablations.
-FIT_KEYS = ("skills", "grade", "role", "text", "industry")
+FIT_KEYS = ("skills", "grade", "role", "text", "industry", "conditions")
 EVIDENCE_KEYS = ("test", "fsp")
 WEIGHTS = {
     "skills": 0.50,
@@ -36,6 +36,8 @@ WEIGHTS = {
     "role": 0.20,
     "text": 0.05,
     "industry": 0.05,
+    # City and format together, five hundredths of the fit. Omitted when the need names neither.
+    "conditions": 0.05,
     "test": 0.50,
     "fsp": 0.50,
 }
@@ -48,9 +50,9 @@ EVIDENCE_WEIGHT = 0.40
 # Width of one fit tier, used only while USE_FIT_TIERS is on.
 # Sweep on 07.10.2026, seeds 2026–2028, 800 candidates and 80 needs:
 # `python -m app.validation.matching --tier-delta 0.02,0.03,0.05,0.08,0.10`
-# Only 0.02 kept nDCG(full) within 0.005 of nDCG(no evidence), and it dropped
-# Spearman to 0.098 and raised overclaim to 24.3 %. That misses Spearman ≥ 0.22
-# and overclaim ≤ 20 %, so the product order does not use tiers.
+# No width keeps nDCG(full) within 0.005 of nDCG(no evidence).
+# At 0.02 Spearman falls to 0.097 and overclaim rises to 24.4 %.
+# The product order does not use tiers.
 FIT_TIER_DELTA = 0.05
 USE_FIT_TIERS = False
 # A grade the candidate only declared counts for this share of a grade the test confirmed.
@@ -61,6 +63,7 @@ SKILL_GATE = 0.5
 LABELS = {
     "skills": "Навыки", "grade": "Грейд", "test": "Тест", "role": "Специализация",
     "fsp": "ФСП", "text": "Запрос", "industry": "Предметная область",
+    "conditions": "Город и формат",
 }
 TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
 RELATED_CREDIT = 0.3
@@ -136,6 +139,8 @@ REASON_SOURCE = {
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
     "CONGESTION": "очередь",
     "JOB_SEARCH_ACTIVE": "профиль", "JOB_SEARCH_OPEN": "профиль",
+    "PLACE_MATCH": "город", "PLACE_OTHER": "город", "PLACE_OPEN": "город",
+    "FORMAT_MATCH": "формат", "FORMAT_PART": "формат", "FORMAT_OTHER": "формат",
     "INTERVIEW_PASSED": "собеседование", "INTERVIEW_FAILED": "собеседование",
     "INTERVIEW_NO_SHOW": "собеседование",
 }
@@ -151,6 +156,8 @@ class NeedSpec:
     text: bool = False                    # a free-text query was given
     salary_from: int | None = None        # gross, optional; with the candidate's wish it is P(accept)
     salary_to: int | None = None
+    city: str | None = None               # from the directory; omitted from the score when empty
+    work_format: str | None = None        # office | hybrid | remote
 
 
 @dataclass
@@ -175,6 +182,8 @@ class CandidateFacts:
     salary_refusals: int = 0              # earlier declines whose reason was the pay band
     job_search: str = "open"              # active | open | not_looking; open multiplies P(accept) by 0.8
     interview_outcome: str | None = None  # passed | failed | no_show with this company; None leaves P(accept)
+    city: str | None = None
+    work_formats: tuple[str, ...] = ()
     p_up: float | None = None             # P(θ ≥ cut of the next grade); used only by GRADE_MODEL=expected
     fail_rate: float | None = None        # π for a declared grade; None keeps the legacy 0.85 factor
 
@@ -356,6 +365,27 @@ def _skill_credit(skill: str, have: dict[str, str]) -> tuple[float, str]:
     return 0.0, "missing"
 
 
+def conditions_value(need: NeedSpec, c: CandidateFacts) -> float | None:
+    """City and format as one factor. An unnamed side is not a penalty. A mismatch is not a ban."""
+    parts: list[float] = []
+    if need.city:
+        if not c.city or c.city.casefold() == need.city.casefold():
+            parts.append(1.0)
+        else:
+            parts.append(0.0)
+    if need.work_format:
+        have = tuple(c.work_formats or ())
+        if not have or need.work_format in have:
+            parts.append(1.0)
+        elif "hybrid" in have or need.work_format == "hybrid":
+            parts.append(0.6)
+        else:
+            parts.append(0.0)
+    if not parts:
+        return None
+    return sum(parts) / len(parts)
+
+
 def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: bool = True,
           use_fsp: bool = True, use_related: bool = True) -> MatchResult:
     """Factor score with plus / minus / info lines. The use_* switches exist for the ablation study."""
@@ -500,6 +530,25 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         values["industry"] = 1.0 if c.industry in (need.industry, "any") else 0.0
         if values["industry"] == 1.0 and c.industry == need.industry:
             _note(plus, reasons, "plus", "INDUSTRY", "Интересна ваша предметная область")
+
+    cond = conditions_value(need, c)
+    if cond is not None:
+        values["conditions"] = cond
+        if need.city:
+            if not c.city:
+                _note(info, reasons, "info", "PLACE_OPEN", "Город не указан и не штрафуется")
+            elif c.city.casefold() == need.city.casefold():
+                _note(plus, reasons, "plus", "PLACE_MATCH", f"Город совпадает: {need.city}")
+            else:
+                _note(minus, reasons, "minus", "PLACE_OTHER", f"Другой город: {c.city}")
+        if need.work_format:
+            have = tuple(c.work_formats or ())
+            if have and need.work_format in have:
+                _note(plus, reasons, "plus", "FORMAT_MATCH", "Формат работы подходит")
+            elif have and ("hybrid" in have or need.work_format == "hybrid"):
+                _note(info, reasons, "info", "FORMAT_PART", "Формат работы совпадает частично")
+            elif have:
+                _note(minus, reasons, "minus", "FORMAT_OTHER", "Формат работы не совпадает")
 
     bare = [Factor(k, LABELS[k], WEIGHTS[k], values[k]) for k in (*FIT_KEYS, *EVIDENCE_KEYS)]
     fit = _mean([f for f in bare if f.key in FIT_KEYS])

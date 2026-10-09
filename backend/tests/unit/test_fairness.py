@@ -1,7 +1,8 @@
-"""Name, gender and region are not ranking features.
+"""Name, gender and the profile region field are not ranking features.
 
 The plan's fairness check: a counterfactual change of identity must not move a candidate.
-These fields are absent from the score inputs, so they cannot change the order.
+Those fields are absent from the score inputs, so they cannot change the order.
+City and work format enter only when the vacancy names them.
 A hidden group with the same professional facts must also clear the four-fifths rule.
 """
 import random
