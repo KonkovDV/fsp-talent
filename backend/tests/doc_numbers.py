@@ -110,7 +110,8 @@ def pitch_deck_matches_html() -> None:
     """The slide images are baked into the deck. A changed pitch.html without a rebuild must fail."""
     html_path = ROOT / "docs" / "pitch.html"
     deck = ROOT / "docs" / "pitch.pptx"
-    digest = hashlib.sha256(html_path.read_bytes()).hexdigest()
+    # A Windows checkout with core.autocrlf stores CRLF. The deck keeps the hash of the LF text.
+    digest = hashlib.sha256(html_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
     needle = f"pitch-html-sha256={digest}"
     with zipfile.ZipFile(deck) as package:
         core = package.read("docProps/core.xml").decode("utf-8")

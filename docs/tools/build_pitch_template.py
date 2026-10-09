@@ -232,7 +232,7 @@ def stamp(prs: Presentation) -> None:
     props.subject = "ЛЦТ 2026, трек Федерации спортивного программирования"
     props.category = ""
     props.keywords = ""
-    html = (DOCS / "pitch.html").read_bytes()
+    html = (DOCS / "pitch.html").read_bytes().replace(b"\r\n", b"\n")
     props.comments = "pitch-html-sha256=" + hashlib.sha256(html).hexdigest()
 
 
