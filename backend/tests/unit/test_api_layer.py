@@ -773,6 +773,12 @@ async def test_tab_leave_dispute_and_review(quiet, monkeypatch):
     db.gets = [session]
     left = await assessment.leave_tab(session.id, current, db)
     assert left["tab_leaves"] == 1
+    db.gets = [session]
+    copied = await assessment.copy_stem(session.id, current, db)
+    assert copied["copies"] == 1
+    notes = assessment._review_notes(session.flags)
+    assert any("копировали" in line for line in notes)
+    assert any("Грейд не изменён" in line for line in notes)
 
     session.status = "completed"
     db.gets = [session]

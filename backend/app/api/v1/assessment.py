@@ -68,7 +68,7 @@ from app.services.practice import (
     weekly_task,
 )
 from app.services.profile import rebuild_profile
-from app.services.session_marks import DISPUTE_TEXT, dispute_error, note_tab_leave
+from app.services.session_marks import DISPUTE_TEXT, dispute_error, note_copy, note_tab_leave
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
@@ -216,6 +216,8 @@ def _review_notes(flags: dict) -> list[str]:
         notes.append("Подпись задания не сошлась с ответом. Грейд не изменён.")
     if int(flags.get("tab_leaves") or 0) > 0:
         notes.append("Вкладка теста скрывалась. Грейд не изменён.")
+    if int(flags.get("copies") or 0) > 0:
+        notes.append("Текст задания копировали. Грейд не изменён.")
     return notes
 
 
@@ -556,6 +558,18 @@ async def leave_tab(session_id: uuid.UUID, current: dict = Depends(get_current_p
     session.flags = note_tab_leave(session.flags)
     await db.commit()
     return {"tab_leaves": int(session.flags["tab_leaves"])}
+
+
+@router.post("/{session_id}/copy")
+async def copy_stem(session_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                    db: AsyncSession = Depends(get_db)):
+    """The question text was copied. The mark is stored. Answers and the grade stay as they are."""
+    session = await _own(db, session_id, current)
+    if session.status != "in_progress":
+        return {"copies": int((session.flags or {}).get("copies") or 0)}
+    session.flags = note_copy(session.flags)
+    await db.commit()
+    return {"copies": int(session.flags["copies"])}
 
 
 @router.post("/{session_id}/dispute")
