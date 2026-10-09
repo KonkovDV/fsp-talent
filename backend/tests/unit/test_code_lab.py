@@ -20,6 +20,13 @@ def test_a_correct_function_passes_hidden_cases_without_revealing_them():
     assert "100" not in blob
 
 
+def test_a_huge_number_or_a_power_is_refused_before_it_runs():
+    with pytest.raises(LabError):
+        guard("def solve(xs):\n    return 10 ** 8\n")
+    with pytest.raises(LabError):
+        guard("def solve(xs):\n    return [0] * 1000001\n")
+
+
 def test_imports_and_a_wrong_answer_do_not_pass():
     with pytest.raises(LabError):
         guard("import os\ndef solve(xs):\n    return 0\n")

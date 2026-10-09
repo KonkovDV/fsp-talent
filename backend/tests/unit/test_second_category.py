@@ -1,7 +1,7 @@
 """A second confirmed specialization is used for that need and does not replace the primary one."""
 from types import SimpleNamespace
 
-from app.services.search.pipeline import _role_for_need
+from app.services.search.pipeline import _role_for_need, passes_role_grade
 
 
 def test_the_need_role_uses_its_own_confirmation():
@@ -10,3 +10,10 @@ def test_the_need_role_uses_its_own_confirmation():
     assert _role_for_need(cat, "security", other) == ("security", "junior", "assessed")
     assert _role_for_need(cat, "backend", other) == ("backend", "middle", "assessed")
     assert _role_for_need(cat, None, other) == ("backend", "middle", "assessed")
+
+
+def test_a_second_grade_is_not_hidden_by_the_primary_grade():
+    confirmed = [("security", "junior")]
+    assert passes_role_grade("backend", "middle", confirmed, "security", "junior") is True
+    assert passes_role_grade("backend", "middle", confirmed, "security", "senior") is False
+    assert passes_role_grade("backend", "middle", confirmed, None, "junior") is False

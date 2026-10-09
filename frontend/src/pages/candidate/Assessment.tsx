@@ -33,6 +33,7 @@ interface Result {
   excluded_items: number
   person_fit?: { lz_star: number; review: boolean } | null
   family_review?: boolean
+  review_notes?: string[]
 }
 interface SessionState {
   session_id: string; status: string; specialization: string | null; target_grade: string; expires_at: string
@@ -323,6 +324,9 @@ export default function CandidateAssessment() {
           {result.family_review && (
             <p className="notice" role="status">По одному семейству доля верных ответов и скорость выбиваются из обычного хода. Грейд из-за этого не меняется.</p>
           )}
+          {(result.review_notes ?? []).map(note => (
+            <p key={note} className="notice" role="status">{note}</p>
+          ))}
           {result.trial ? (
             <div className="flex items-start gap-3" data-testid="trial-verdict">
               <Info className="shrink-0 text-accent" aria-hidden />
