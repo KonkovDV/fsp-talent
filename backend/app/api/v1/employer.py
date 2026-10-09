@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.models.employer import Employer
+from app.services.ats_sandbox import receipt
 from app.services.inn import inn_is_valid, published_inn
 
 router = APIRouter(prefix="/employer", tags=["employer"])
@@ -88,3 +89,9 @@ async def update_me(
         subscription_tier=emp.subscription_tier,
         inn_checked=published_inn(emp.inn),
     )
+
+
+@router.post("/ats-sandbox")
+async def ats_sandbox(current: dict = Depends(get_current_employer)):
+    """Sign one sample event on the stand. No address is called."""
+    return receipt(str(current["sub"]))

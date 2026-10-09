@@ -6,6 +6,21 @@ from datetime import UTC, datetime
 from app.services.trust import should_pause
 
 
+def test_ats_sample_is_signed_and_not_delivered():
+    import asyncio
+
+    from app.api.v1.employer import ats_sandbox
+    from app.services.ats_sandbox import receipt, sign
+
+    card = asyncio.run(ats_sandbox({"sub": "employer-1"}))
+    assert card["delivered"] is False
+    assert card["valid"] is True and card["tamper_rejected"] is True
+    assert card["event"]["type"] == "offer.accepted"
+    assert "email" not in card["event"]["candidate"]
+    assert card["signature"].startswith("sha256=")
+    assert sign("secret", b"{}") != sign("secret", b"{ }")
+
+
 def test_three_people_among_ten_invitations_pause_the_company():
     assert should_pause(3, 3, 10)
 
