@@ -29,6 +29,9 @@ class Participant(Base):
     salary_from_gross = Column(Integer)
     salary_to_gross = Column(Integer)
     email_verified_at = Column(DateTime(timezone=True))
+    # Successful password login. Empty means this account has never signed in.
+    # The jury button offers the address that has been idle the longest.
+    last_login_at = Column(DateTime(timezone=True))
     telegram = Column(Text)
     phone = Column(Text)
     birth_date = Column(Date)

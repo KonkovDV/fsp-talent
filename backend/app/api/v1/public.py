@@ -13,7 +13,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import Consent, ConsentLog, Participant, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
+from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.field_cipher import blind_index
 from app.services.guardian import token_participant, token_valid
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
@@ -60,6 +62,42 @@ def _public_skill(s: Skill) -> dict:
 async def demo_stand():
     """Whether this stand shows the jury trial and the jury accounts. No other settings."""
     return {"demo_mode": bool(settings.DEMO_MODE)}
+
+
+def free_jury_email(seen: dict[str, datetime | None]) -> str | None:
+    """The jury address idle the longest.
+
+    An account that has never signed in comes before any stamp. Equal stamps break toward the
+    lower number. The answer is only the address: not the time, not the name.
+    """
+    if not seen:
+        return None
+
+    def order(email: str) -> tuple:
+        stamp = seen[email]
+        number = int(email.split("@", 1)[0].removeprefix("jury"))
+        return (stamp is not None, stamp or datetime.min.replace(tzinfo=UTC), number)
+
+    return min(seen, key=order)
+
+
+@router.get("/jury-free")
+async def jury_free(db: AsyncSession = Depends(get_db)):
+    """Demo stand only. Two clicks before either login can still meet on one address."""
+    if not settings.DEMO_MODE:
+        raise HTTPException(404, "Not Found")
+    wanted = {blind_index(email): email for email in JURY_EMAILS}
+    rows = list(await db.scalars(
+        select(Participant).where(Participant.email_bindex.in_(wanted), Participant.deleted_at.is_(None))))
+    seen: dict[str, datetime | None] = {}
+    for person in rows:
+        email = (person.email or "").strip().lower()
+        if email in JURY_EMAILS and person.deleted_at is None:
+            seen[email] = person.last_login_at
+    chosen = free_jury_email(seen)
+    if chosen is None:
+        raise HTTPException(404, "Not Found")
+    return {"email": chosen}
 
 
 @router.get("/issuer")
