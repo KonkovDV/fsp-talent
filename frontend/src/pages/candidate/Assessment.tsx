@@ -61,17 +61,20 @@ function previousGrade(grade: string): string | null {
   return i > 0 ? GRADES[i - 1] : null
 }
 
+function secondsLeft(item: Item | null): number {
+  if (!item) return 0
+  const end = new Date(item.served_at).getTime() + item.time_limit_s * 1000
+  return Math.max(0, Math.round((end - Date.now()) / 1000))
+}
+
 function useCountdown(item: Item | null) {
-  const [left, setLeft] = useState(0)
+  const [, bump] = useState(0)
   useEffect(() => {
     if (!item) return
-    const end = new Date(item.served_at).getTime() + item.time_limit_s * 1000
-    const tick = () => setLeft(Math.max(0, Math.round((end - Date.now()) / 1000)))
-    tick()
-    const t = setInterval(tick, 1000)
+    const t = setInterval(() => bump(n => n + 1), 1000)
     return () => clearInterval(t)
   }, [item])
-  return left
+  return secondsLeft(item)
 }
 
 export default function CandidateAssessment() {
@@ -93,9 +96,12 @@ export default function CandidateAssessment() {
   const { data: profile } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
   const { data: blueprint } = useQuery({ queryKey: ['blueprint'], queryFn: () => assessmentBlueprint().then(r => r.data) })
   const { data: history } = useQuery({ queryKey: ['assessmentHistory'], queryFn: () => assessmentHistory().then(r => r.data) })
-  const { data: active } = useQuery({
-    queryKey: ['assessmentActive'], queryFn: () => activeAssessment().then(r => r.data).catch(() => null), retry: false,
+  const activeQuery = useQuery({
+    queryKey: ['assessmentActive'],
+    queryFn: () => activeAssessment().then(r => r.data as SessionState | null),
+    retry: false,
   })
+  const active = activeQuery.data
   useEffect(() => {
     if (active && !state && !adoptedActive.current) {
       adoptedActive.current = true
@@ -159,7 +165,13 @@ export default function CandidateAssessment() {
 
       {!spec && <SurveyCard profile={profile} />}
 
-      {spec && !item && !result && (
+      {activeQuery.isError && (
+        <p className="notice-error" role="alert">{apiError(activeQuery.error, 'Не удалось проверить, есть ли незавершённый тест')}
+          <button type="button" className="btn-secondary btn-sm ml-3" onClick={() => activeQuery.refetch()}>Повторить</button>
+        </p>
+      )}
+
+      {spec && !item && !result && !activeQuery.isError && (
         <div className="grid items-start gap-6 lg:grid-cols-[1.3fr_1fr]">
           <div className="card space-y-6">
             <div>
@@ -241,6 +253,7 @@ export default function CandidateAssessment() {
               <Clock size={13} aria-hidden />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
             </span>
           </div>
+          {left === 0 && <p className="text-sm text-danger" role="status">Время задания вышло. Опоздавший ответ не засчитывается как верный.</p>}
           {state.progress.answered >= 1 && state.progress.p_pass != null && (
             <ConfidenceScale p={state.progress.p_pass} trial={state.progress.min_items === state.progress.max_items}
               detail={state.progress.se != null ? `θ ${state.progress.theta?.toFixed(2)} ± ${state.progress.se.toFixed(2)}` : ''} />

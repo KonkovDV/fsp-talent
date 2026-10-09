@@ -1,9 +1,9 @@
 """Interview times stay in Moscow on the calendar, and the outcome moves P(accept) only for that company."""
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
-from app.services.interviews import calendar_text, moscow_start
+from app.services.interviews import calendar_text, moscow_start, still_ahead
 from app.services.matching import CandidateFacts, NeedSpec, score
 
 
@@ -19,6 +19,13 @@ def test_calendar_writes_moscow_wall_time():
     poisoned = calendar_text(uuid.UUID("22222222-2222-2222-2222-222222222222"), start, "online",
                              "комната\r\nSUMMARY:чужая встреча", "Собеседование")
     assert sum(1 for line in poisoned.split("\r\n") if line.startswith("SUMMARY:")) == 1
+
+
+def test_a_meeting_that_already_started_cannot_be_chosen():
+    start = moscow_start("2026-10-15", "14:00")
+    assert still_ahead(start, datetime(2026, 10, 15, 10, 59, tzinfo=UTC))
+    assert not still_ahead(start, datetime(2026, 10, 15, 11, 0, tzinfo=UTC))
+    assert not still_ahead(start, datetime(2026, 10, 15, 12, 0, tzinfo=UTC))
 
 
 def test_a_failed_interview_lowers_accept_and_no_interview_leaves_it():

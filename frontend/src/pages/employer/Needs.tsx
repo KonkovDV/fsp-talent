@@ -41,6 +41,7 @@ export default function EmployerNeeds() {
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const { data: needs = [] } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
   useEffect(() => { if (!selected && needs.length) setSelected(needs[0].id) }, [needs, selected])
+  useEffect(() => { setPicked([]); setSent(false) }, [selected])
   const current = needs.find(n => n.id === selected) ?? null
   const matches = useQuery({ queryKey: ['needMatches', selected, current?.version], enabled: !!selected,
     queryFn: () => needMatches(selected!).then(r => r.data) })
@@ -57,7 +58,7 @@ export default function EmployerNeeds() {
   const detail = useQuery({ queryKey: ['need', selected], enabled: !!selected,
     queryFn: () => getNeed(selected!).then(r => r.data as Need & { versions: { version: number; params: NeedParams }[] }) })
   const body = () => ({
-    title: form.title,
+    title: form.title.trim(),
     params: { role: form.role || null, grade: form.grade || null, skills: csv(form.skills), nice_to_have: csv(form.nice),
       industry: form.industry || null, work_goal: form.internship ? 'internship' : null,
       salary_from: money(form.payFrom), salary_to: money(form.payTo) },
@@ -143,7 +144,7 @@ export default function EmployerNeeds() {
           <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.internship} onChange={e => setForm({ ...form, internship: e.target.checked })} />Ищем стажёра или практиканта</label>
           {error && <p className="notice-error" role="alert">{error}</p>}
           <div className="flex gap-3">
-            <button className="btn-primary" disabled={form.title.length < 2 || save.isPending}>{editing === 'new' ? 'Создать' : 'Сохранить новую версию'}</button>
+            <button className="btn-primary" disabled={form.title.trim().length < 2 || save.isPending}>{editing === 'new' ? 'Создать' : 'Сохранить новую версию'}</button>
             <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Отмена</button>
           </div>
         </form>

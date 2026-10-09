@@ -53,7 +53,8 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
             <legend className="field-label">Зарплата до вычета НДФЛ, ₽ в месяц</legend>
             <div className="grid grid-cols-2 gap-3">
               <input type="number" min={0} step={5000} value={form.salary_from_gross} onChange={set('salary_from_gross')} className="input num" aria-label="От" />
-              <input type="number" min={0} step={5000} value={form.salary_to_gross} onChange={set('salary_to_gross')} onBlur={look} className="input num" aria-label="До" />
+              <input type="number" min={0} step={5000} value={form.salary_to_gross} onBlur={look}
+                onChange={e => { set('salary_to_gross')(e); setHint('') }} className="input num" aria-label="До" />
             </div>
             {hint && <p className="mt-2 text-sm text-ink-2" role="status">{hint} Отправить приглашение всё равно можно.</p>}
           </fieldset>

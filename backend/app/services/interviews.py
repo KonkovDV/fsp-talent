@@ -13,6 +13,15 @@ MSK = ZoneInfo("Europe/Moscow")
 FORMAT_RU = {"online": "онлайн", "office": "в офисе", "phone": "по телефону"}
 
 
+def still_ahead(starts_at: datetime, now: datetime | None = None) -> bool:
+    """The meeting can still be chosen. A naive instant is read as UTC."""
+    moment = now or datetime.now(UTC)
+    start = starts_at if starts_at.tzinfo is not None else starts_at.replace(tzinfo=UTC)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return start > moment
+
+
 def moscow_start(day: str, clock: str) -> datetime:
     """Wall clock in Moscow. `day` is YYYY-MM-DD, `clock` is HH:MM."""
     wall = datetime.fromisoformat(f"{day}T{clock}")
