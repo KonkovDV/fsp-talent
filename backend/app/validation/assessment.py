@@ -179,7 +179,7 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         else:
             p_true = p3(theta, ch.a * truth.a_mult[key], LEVEL_B[ch.level] + truth.offsets[key], c)
             correct = rng.random() < p_true
-        state.responses.append(Response(ch.a, ch.b, c, correct))
+        state.responses.append(Response(ch.a, ch.b, c, correct, ch.family.id))
         state.families_used[ch.family.id] += 1
         state.topics_used[ch.family.topic] += 1
         state.concept_used += ch.family.kind == "concept"
@@ -1533,6 +1533,59 @@ def sh_holdout(n: int) -> bool:
     return ok
 
 
+def _family_pair(n: int, seed: int) -> tuple[CohortReport, CohortReport]:
+    """Clean cohort and the published leak cohort (the next people, stream seed+6)."""
+    rng = random.Random(seed)
+    truth = Truth.draw(rng)
+    people = population(n, random.Random(seed + 1))
+    _, pretest = cohort(population(n, rng), truth, rng)
+    offsets = calibrate(pretest)
+    clean, _ = cohort(people, truth, rng, offsets=offsets)
+    leaked_people = population(n, random.Random(seed + 5))
+    leak, _ = cohort(leaked_people, truth, rng, leak_share=0.3, offsets=offsets, stream=seed + 6)
+    return clean, leak
+
+
+def family_grid(n: int, seed: int) -> None:
+    """Six cells: at most 3, 4 or 5 items from one family, with and without the family knife.
+
+    The product constants are restored when this returns. A cell is accepted only when every
+    bar below holds; this command does not write the winner into cat.py.
+    """
+    saved = (cat_module.MAX_PER_FAMILY, cat_module.FAMILY_KNIFE)
+    print(f"Перебор семей: {n} кандидатов, seed {seed}. "
+          "Принять клетку можно только если ложные сдачи при утечке ≤ 12 %, без утечки ≤ 8 %, "
+          "сдали из тех, кто на уровне ≥ 71 %, точность вдали от порога ≥ 91 % и средняя длина ≤ 15.")
+    print("| Потолок семьи | Нож | Ложные сдачи, утечка | Ложные сдачи, чисто | "
+          "Сдали на уровне | Точность вдали | Средняя длина | Принять |")
+    print("|---|---|---|---|---|---|---|---|")
+    accepted = False
+    try:
+        for cap in (3, 4, 5):
+            for knife in (False, True):
+                cat_module.MAX_PER_FAMILY = cap
+                cat_module.FAMILY_KNIFE = knife
+                try:
+                    clean, leak = _family_pair(n, seed)
+                except LookupError as exc:
+                    print(f"| {cap} | {'да' if knife else 'нет'} | — | — | — | — | — | нет |")
+                    print(f"  не посчитано: {exc}")
+                    continue
+                ok = (leak.false_pass <= 0.12 and clean.false_pass <= 0.08
+                      and clean.sensitivity >= 0.71 and clean.accuracy_clear >= 0.91
+                      and clean.mean_len <= 15.0)
+                accepted = accepted or ok
+                print(f"| {cap} | {'да' if knife else 'нет'} | {leak.false_pass:.1%} | {clean.false_pass:.1%} | "
+                      f"{clean.sensitivity:.1%} | {clean.accuracy_clear:.1%} | {clean.mean_len:.1f} | "
+                      f"{'да' if ok else 'нет'} |")
+    finally:
+        cat_module.MAX_PER_FAMILY, cat_module.FAMILY_KNIFE = saved
+    if accepted:
+        print("Есть клетка, которая проходит эти пороги. Полный --check и запись в продукт — отдельным шагом.")
+    else:
+        print("Ни одна клетка не прошла порог. Настройки продукта не менялись.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n", type=int, default=3000)
@@ -1543,12 +1596,17 @@ def main() -> None:
                         help="stopping-rule grid; does not change product constants")
     parser.add_argument("--sh-holdout", action="store_true",
                         help="Sympson–Hetter by specialization on 201–205; does not change the product")
+    parser.add_argument("--family-grid", action="store_true",
+                        help="family cap and knife grid; does not change product constants")
     args = parser.parse_args()
     if args.sh_holdout:
         passed = sh_holdout(args.n if args.n != 3000 else 800)
         sys.exit(0 if passed else 1)
     if args.grid:
         stopping_grid(args.n, args.seed)
+        return
+    if args.family_grid:
+        family_grid(args.n, args.seed)
         return
     report = run(args.n, args.seed)
     text = markdown(report, args.n, args.seed)

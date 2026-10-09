@@ -41,6 +41,10 @@ PASS_P = 0.75
 RECOMMEND_NEXT_P = 0.90
 RANDOMESQUE = 5
 MAX_PER_FAMILY = 5
+# Leave-one-family-out: a pass also needs P(θ ≥ cut) ≥ this floor without each family
+# that contributed at least two answers. Off until a seed-7 grid accepts it.
+FAMILY_KNIFE = False
+KNIFE_FLOOR = 0.5
 TOPIC_SLACK = 0.15
 EXPOSURE_TARGET = 0.40
 
@@ -70,6 +74,7 @@ class Response:
     b: float
     c: float
     correct: bool
+    family_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -336,13 +341,33 @@ class Outcome:
     se: float
 
 
+def family_knife_holds(state: State) -> bool:
+    """A published solver of one family must not be enough to pass."""
+    if not FAMILY_KNIFE:
+        return True
+    grouped: dict[str, int] = {}
+    for row in state.responses:
+        if row.family_id:
+            grouped[row.family_id] = grouped.get(row.family_id, 0) + 1
+    cut = CUTS[state.target]
+    for family_id, count in grouped.items():
+        if count < 2:
+            continue
+        others = [row for row in state.responses if row.family_id != family_id]
+        if not others:
+            return False
+        if posterior(others, prior_mean=CUTS[state.target]).prob_at_least(cut) < KNIFE_FLOOR:
+            return False
+    return True
+
+
 def decide(state: State) -> Outcome:
     post = state.post()
     target = state.target
     p_pass = post.prob_at_least(CUTS[target])
     up = next_grade(target)
     p_up = post.prob_at_least(CUTS[up]) if up else None
-    if p_pass >= PASS_P:
+    if p_pass >= PASS_P and family_knife_holds(state):
         recommend = up if up and p_up is not None and p_up >= RECOMMEND_NEXT_P else None
         return Outcome(target, True, recommend, p_pass, p_up, post.theta, post.se)
     lower = prev_grade(target)
