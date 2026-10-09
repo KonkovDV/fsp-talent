@@ -8,9 +8,24 @@ name: fsp-talent-prod
 services:
   caddy:
     image: caddy:2.10-alpine
+    # An empty address must not be written into the config: Caddy refuses to start.
+    # Set ACME_EMAIL in deploy/.env when there is a mailbox that receives expiry notices.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cfg=/etc/caddy/Caddyfile
+        if [ -n "$$ACME_EMAIL" ]; then
+          case "$$ACME_EMAIL" in
+            *[!A-Za-z0-9@._+-]*|*"@"*"@"*) echo "ACME_EMAIL is not an address"; exit 1 ;;
+          esac
+          { printf '{\n\temail %s\n}\n' "$$ACME_EMAIL"; cat "$$cfg"; } > /tmp/Caddyfile
+          cfg=/tmp/Caddyfile
+        fi
+        exec caddy run --config "$$cfg" --adapter caddyfile
     ports: ["80:80", "443:443"]
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS, e.g. 203-0-113-10.sslip.io}
+      ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
       - ./caddy:/etc/caddy:ro
       - caddy_data:/data

@@ -70,3 +70,16 @@ def test_alembic_graph_has_one_head_and_no_dangling_parent():
     schema = (BACKEND / "alembic" / "versions" / "0001_initial.py").read_text(encoding="utf-8")
     assert "uq_participants_email_bindex" in schema and "uq_employers_email_bindex" in schema
     assert "participants_email_key" not in schema and "employers_email_key" not in schema
+
+
+def test_secret_looking_paths_are_not_the_application_page():
+    """A scanner must not get index.html with status 200 for /.env or /.git."""
+    caddy = (REPO / "deploy" / "caddy" / "Caddyfile").read_text(encoding="utf-8")
+    assert "@hidden path /.env /.env.* /.git /.git/**" in caddy
+    assert 'respond "Not Found" 404' in caddy
+    nginx = (REPO / "frontend" / "nginx.conf").read_text(encoding="utf-8")
+    assert "return 404;" in nginx
+    assert r"^/\.(env|git)($|/|\.)" in nginx
+    compose = (REPO / "deploy" / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    assert "ACME_EMAIL" in compose
+    assert "empty address must not be written" in compose
