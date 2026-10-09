@@ -90,4 +90,30 @@ async def test_a_real_exam_drops_the_shortlist_and_a_trial_does_not(monkeypatch)
     await cache.publish_grade(trial=False)
     await cache.publish_grade(trial=True)
     await cache.publish_invite()
-    assert calls == ["bump", "bump"]
+    from app.services.profile_events import (
+        AssessmentFinished,
+        forget_assessment_listener,
+        on_assessment_finished,
+        publish_assessment_finished,
+    )
+    await publish_assessment_finished(AssessmentFinished("p", False))
+    await publish_assessment_finished(AssessmentFinished("p", True))
+    assert calls == ["bump", "bump", "bump"]
+
+    seen: list[str] = []
+
+    async def boom(event) -> None:
+        raise RuntimeError(event.participant_id)
+
+    async def note(event) -> None:
+        seen.append(event.participant_id)
+
+    on_assessment_finished(boom)
+    on_assessment_finished(note)
+    try:
+        await publish_assessment_finished(AssessmentFinished("kept", True))
+    finally:
+        forget_assessment_listener(boom)
+        forget_assessment_listener(note)
+    assert seen == ["kept"]
+    assert calls == ["bump", "bump", "bump"]

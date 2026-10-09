@@ -81,6 +81,17 @@ async def publish_grade(trial: bool) -> None:
         await bump_bank_epoch()
 
 
+def _register_assessment_listener() -> None:
+    from app.services.profile_events import on_assessment_finished
+
+    @on_assessment_finished
+    async def refresh_bank(event) -> None:
+        await publish_grade(event.trial)
+
+
+_register_assessment_listener()
+
+
 async def publish_invite() -> None:
     """An invitation changes the queue penalty on the card."""
     await bump_bank_epoch()
