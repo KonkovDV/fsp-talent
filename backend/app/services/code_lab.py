@@ -42,6 +42,10 @@ def guard(source: str) -> ast.Module:
                              ast.Lambda, ast.ClassDef, ast.Try, ast.With, ast.Raise, ast.Delete,
                              ast.Await, ast.Yield, ast.YieldFrom)):
             raise LabError("Такая конструкция в лаборатории недоступна")
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+            raise LabError("Возведение в степень в лаборатории недоступно")
+        if isinstance(node, ast.Constant) and isinstance(node.value, int) and abs(node.value) > 100_000:
+            raise LabError("Слишком большое число")
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in _CALLS:
                 raise LabError("Этот вызов в лаборатории недоступен")

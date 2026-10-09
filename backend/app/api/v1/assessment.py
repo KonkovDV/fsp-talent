@@ -169,6 +169,7 @@ class ResultOut(BaseModel):
     note: str | None = None
     person_fit: PersonFitOut | None = None
     family_review: bool = False
+    review_notes: list[str] = Field(default_factory=list)
 
 
 class ProgressOut(BaseModel):
@@ -201,6 +202,18 @@ def _item_out(session_id: uuid.UUID, it: TestSessionItem) -> ItemOut:
     )
 
 
+def _review_notes(flags: dict) -> list[str]:
+    """Marks for a human look. None of them changes the assigned grade."""
+    notes = []
+    if flags.get("pace_review"):
+        notes.append("Быстрые верные ответы по одному семейству. Грейд не изменён.")
+    if flags.get("variant_review"):
+        notes.append("Ответ совпал с ключом другого варианта того же семейства. Грейд не изменён.")
+    if flags.get("integrity_review"):
+        notes.append("Подпись задания не сошлась с ответом. Грейд не изменён.")
+    return notes
+
+
 def _result_from_session(session: TestSession, items: list[TestSessionItem], confirmed: str | None,
                          reason: str | None = None, locked: str | None = None,
                          skills: list[tuple[str, float]] | None = None) -> ResultOut:
@@ -230,6 +243,7 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
         items_count=session.items_count or len(answered), score=round(session.score or 0.0, 3),
         stop_reason=session.stop_reason, grade_locked_until=locked, person_fit=fit,
         family_review=bool(flags.get("family_cusum_review")),
+        review_notes=_review_notes(flags),
         confirmed_skills=[SkillOut(name=n, share=round(v, 2)) for n, v in (skills or [])],
         topics=[TopicOut(topic=k, label=TOPIC_LABELS.get(k, k), answered=v[0], correct=v[1],
                          wilson_low=None if (low := wilson_lower(v[1], v[0])) is None else round(low, 3))

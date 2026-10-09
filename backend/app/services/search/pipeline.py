@@ -239,6 +239,24 @@ async def bank_grid(db: AsyncSession) -> dict:
     return {"min_cell": BANK_MIN, "cells": bank_cells([tuple(r) for r in rows])}
 
 
+def passes_role_grade(primary_role: str | None, primary_grade: str | None,
+                      confirmations: list[tuple[str, str]], role: str | None, grade: str | None) -> bool:
+    """Who stays when the employer filters by role and grade.
+
+    A second confirmed specialization counts for that pair. The primary grade
+    alone must not hide it. A grade filter without a role still reads the primary category.
+    """
+    if role and grade:
+        if primary_role == role and primary_grade == grade:
+            return True
+        return (role, grade) in confirmations
+    if role:
+        return primary_role == role or any(spec == role for spec, _ in confirmations)
+    if grade:
+        return primary_grade == grade
+    return True
+
+
 def _role_for_need(cat, need_role: str | None, confirmation) -> tuple[str | None, str | None, str | None]:
     """Use the confirmation that matches the need when it is not the primary category."""
     role = cat.primary_role if cat else None
@@ -326,12 +344,20 @@ async def search_candidates(
             func.jsonb_array_length(Participant.work_formats) == 0,
             Participant.work_formats.contains([work_format]),
         ))
-    if role:
-        # A second confirmed specialization is the same person, once, under the role the need asked for.
+    if role and grade:
+        # The primary category and a second confirmed specialization are checked separately.
+        # Filtering only by the stored primary grade would hide a junior confirmation on another role.
+        confirmed_pair = select(GradeConfirmation.participant_id).where(
+            GradeConfirmation.specialization == role, GradeConfirmation.grade == grade)
+        stmt = stmt.where(or_(
+            and_(PSI.role == role, PSI.grade == grade),
+            Participant.id.in_(confirmed_pair),
+        ))
+    elif role:
         confirmed_here = select(GradeConfirmation.participant_id).where(
             GradeConfirmation.specialization == role)
         stmt = stmt.where(or_(PSI.role == role, Participant.id.in_(confirmed_here)))
-    if grade:
+    elif grade:
         stmt = stmt.where(PSI.grade == grade)
     if discipline or min_rank:
         sub = select(DisciplineScore.participant_id)
