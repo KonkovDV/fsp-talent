@@ -1055,10 +1055,10 @@ def main() -> None:
             table, _ = seeds_table(seeds, args.candidates, args.needs)
             print()
             print(table)
-        seed_list = [args.seed + i for i in range(args.seeds)] if args.seeds else [args.seed]
-        if seed_list and not args.imported:
+        paired_seeds = seeds or [args.seed]
+        if not args.imported and not args.fsp_events:
             print()
-            print(paired_report(seed_list, args.candidates, args.needs))
+            print(paired_report(paired_seeds, args.candidates, args.needs))
     print("sha256", sha256(dataset))
     if args.check:
         failed = checks_ok(rows, synthetic)

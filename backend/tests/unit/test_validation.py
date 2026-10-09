@@ -1,5 +1,6 @@
 """The simulation runs end to end and its headline numbers stay inside agreed bounds."""
 import random
+import sys
 
 from app.models.assessment import GRADE_ORDER
 from app.services.matching import score
@@ -119,6 +120,13 @@ def test_the_grade_path_stops_within_four_sessions():
     grade, sessions, _items, _passed = low
     assert sessions <= 4
     assert grade is None or GRADE_ORDER.index(grade) <= GRADE_ORDER.index("junior")
+
+
+def test_matching_check_prints_the_paired_comparison(capsys, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["matching", "--seeds", "1", "--candidates", "60", "--needs", "6"])
+    from app.validation.matching import main
+    main()
+    assert "Парное сравнение" in capsys.readouterr().out
 
 
 def test_overclaim_zero_states_the_true_grade_and_the_default_dataset_is_unchanged():

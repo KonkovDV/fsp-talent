@@ -189,6 +189,40 @@ async def test_an_old_refresh_burns_the_current_generation():
         await refresh(Response(), request, body=type("B", (), {"refresh_token": current})(), db=Db())
 
 
+async def test_the_previous_refresh_inside_the_grace_window_does_not_burn(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from fastapi import Response
+    from starlette.requests import Request
+
+    from app.api.errors import ApiError
+    from app.api.v1.auth import refresh
+    from app.core.security import create_refresh_token
+
+    person = "11111111-1111-1111-1111-111111111111"
+    account = SimpleNamespace(id=person, token_epoch=0, refresh_nonce=2, deleted_at=None)
+
+    class Db:
+        async def get(self, _model, _id, with_for_update=False):
+            return account
+
+        async def commit(self):
+            raise AssertionError("grace must not commit")
+
+    monkeypatch.setattr("app.api.v1.auth.refresh_grace_open", AsyncMock(return_value=True))
+    previous = create_refresh_token(person, "participant", epoch=0, nonce=1)
+    request = Request({
+        "type": "http", "http_version": "1.1", "method": "POST", "scheme": "http",
+        "path": "/api/v1/auth/refresh", "raw_path": b"/api/v1/auth/refresh", "query_string": b"",
+        "headers": [], "client": ("127.0.0.1", 1), "server": ("test", 80),
+    })
+    with pytest.raises(ApiError) as caught:
+        await refresh(Response(), request, body=type("B", (), {"refresh_token": previous})(), db=Db())
+    assert caught.value.code == "refresh_superseded"
+    assert account.token_epoch == 0
+
+
 def test_refresh_rotation_kills_the_presented_token():
     from app.core.security import decode_refresh_token, next_refresh_nonce
 

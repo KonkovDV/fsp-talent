@@ -18,6 +18,7 @@
 			max_size 6MB
 		}
 		reverse_proxy backend:8000 {
+			header_up X-Real-IP {remote_host}
 			transport http {
 				read_timeout 120s
 			}

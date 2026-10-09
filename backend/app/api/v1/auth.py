@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.demo_guard import is_protected, reject_protected
 from app.core.ratelimit import RateLimitUnavailable, too_many
+from app.core.redis_client import get_redis
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -462,6 +463,27 @@ def account_can_refresh(account) -> bool:
     return account is not None and getattr(account, "deleted_at", None) is None
 
 
+def _grace_key(role: str, subject: str) -> str:
+    return f"refresh:grace:{role}:{subject}"
+
+
+async def refresh_grace_open(role: str, subject: str) -> bool:
+    """True for 30 seconds after a refresh rotated. A missing Redis keeps the stricter rule."""
+    try:
+        redis = await get_redis()
+        return bool(await redis.get(_grace_key(role, subject)))
+    except Exception:
+        return False
+
+
+async def remember_refresh(role: str, subject: str) -> None:
+    try:
+        redis = await get_redis()
+        await redis.set(_grace_key(role, subject), "1", ex=30)
+    except Exception:
+        return
+
+
 @router.post("/refresh", response_model=TokenOut)
 async def refresh(response: Response, request: Request, body: RefreshIn | None = None,
                   db: AsyncSession = Depends(get_db)):
@@ -483,16 +505,24 @@ async def refresh(response: Response, request: Request, body: RefreshIn | None =
             account = None
     if not account_can_refresh(account) or not epochs_match(payload.get("ep"), account.token_epoch):
         raise ApiError(401, "unauthorized")
-    nxt = next_refresh_nonce(payload.get("rn"), int(account.refresh_nonce or 0))
+    current = int(account.refresh_nonce or 0)
+    nxt = next_refresh_nonce(payload.get("rn"), current)
     if nxt is None:
-        # A repeated older refresh is treated as theft: the whole generation dies, including a token
-        # that was still current. Commit before the 401, or the request rollback would undo the bump.
+        # The refresh from the previous second is the other tab, not a stolen token.
+        # Anything older, or the same gap after the grace window, closes every session.
         presented = payload.get("rn")
-        if presented is not None and int(presented) < int(account.refresh_nonce or 0):
+        if (
+            presented is not None
+            and int(presented) == current - 1
+            and await refresh_grace_open(str(role), str(payload["sub"]))
+        ):
+            raise ApiError(401, "refresh_superseded")
+        if presented is not None and int(presented) < current:
             account.token_epoch = int(account.token_epoch or 0) + 1
             await db.commit()
         raise ApiError(401, "unauthorized")
     account.refresh_nonce = nxt
+    await remember_refresh(str(role), str(payload["sub"]))
     return deliver(response, _tokens(payload["sub"], role, int(account.token_epoch or 0), nxt))
 
 
@@ -603,7 +633,7 @@ class FspSignUpIn(BaseModel):
 
 
 def client_address(request: Request) -> str:
-    """The visitor's address. Behind the site proxy the socket peer is that proxy, one address for everyone."""
+    """The visitor's address. X-Real-IP is set by the proxy (nginx or Caddy) and replaces a client header."""
     recorded = (request.headers.get("x-real-ip") or "").strip()
     if recorded:
         return recorded[:64]

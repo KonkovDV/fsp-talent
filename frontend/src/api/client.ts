@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { useAuthStore } from '../store/authStore'
+import { isTokenExpired, useAuthStore } from '../store/authStore'
 
 type ErrorPayload = { error?: { code?: string; message?: string; details?: unknown }; detail?: unknown }
 
@@ -55,20 +55,28 @@ function tokenExpiry(token: string): number | null {
   }
 }
 
-/** One refresh for every caller. Parallel 401s share it; a failure logs out once. */
+/** One refresh for every caller and every tab. Parallel 401s share it; a failure logs out once. */
 export function renewAccess(): Promise<string | null> {
   if (!inflight) {
-    inflight = api.post('/auth/refresh', {})
-      .then(response => {
-        const token = response.data?.access_token as string | undefined
-        const role = useAuthStore.getState().userRole
-        if (token && role) {
-          useAuthStore.getState().setAuth(token, role)
-          return token
-        }
-        useAuthStore.getState().logout()
-        return null
-      })
+    const run = async () => {
+      const before = useAuthStore.getState().token
+      await useAuthStore.persist.rehydrate()
+      const now = useAuthStore.getState().token
+      if (now && now !== before && !isTokenExpired(now)) return now
+      const response = await api.post('/auth/refresh', {})
+      const token = response.data?.access_token as string | undefined
+      const role = useAuthStore.getState().userRole
+      if (token && role) {
+        useAuthStore.getState().setAuth(token, role)
+        return token
+      }
+      useAuthStore.getState().logout()
+      return null
+    }
+    const started: Promise<string | null> = typeof navigator !== 'undefined' && 'locks' in navigator
+      ? navigator.locks.request('fsp-refresh', () => run() as unknown as string | null) as Promise<string | null>
+      : run()
+    inflight = started
       .catch(() => {
         useAuthStore.getState().logout()
         return null
@@ -83,7 +91,8 @@ function armRenew(token: string | null) {
   const exp = token ? tokenExpiry(token) : null
   if (!exp) return
   const wait = exp * 1000 - 60_000 - Date.now()
-  renewTimer = setTimeout(() => { void renewAccess() }, Math.max(0, wait))
+  const spread = Math.floor(Math.random() * 15_000)
+  renewTimer = setTimeout(() => { void renewAccess() }, Math.max(0, wait - spread))
 }
 
 /** Refresh shortly before the access token expires, and when the jury comes back to the tab. */
