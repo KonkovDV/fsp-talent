@@ -97,6 +97,13 @@ def validate_reference(answer_type: str, options: list[str], correct_index: int 
         raise ValueError("Неизвестный тип ответа")
 
 
+def stored_reference(answer_type: str, reference_number: str | None) -> str | None:
+    """A number keeps its key. A code task keeps the lab problem id. Other types keep neither."""
+    if answer_type not in ("number", "code") or not reference_number or not reference_number.strip():
+        return None
+    return reference_number.strip()
+
+
 def candidate_view(task: EmployerTask, company: str | None, mine: TaskSubmission | None,
                    now: datetime | None = None) -> dict:
     """What the candidate sees. The reference appears only after the candidate's own answer is checked."""

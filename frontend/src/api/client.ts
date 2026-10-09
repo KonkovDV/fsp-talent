@@ -308,7 +308,8 @@ export interface EmployerTask {
   id: string; title: string; statement: string; answer_type: TaskAnswerType; options: string[]; correct_index: number | null
   reference_number: string | null; visibility: 'public' | 'addressed'; specialization: string | null
   candidate_id: string | null; vacancy_id: string | null; deadline: string | null; is_open: boolean
-  accepts_answers: boolean; created_at: string | null; submissions: number; passed: number; awaiting_review: number
+  accepts_answers: boolean; created_at: string | null; lab_title?: string | null
+  submissions: number; passed: number; awaiting_review: number
 }
 export type ReviewedSubmission = TaskSubmission & { candidate_id: string; candidate: string }
 export const labProblems = () => api.get<{ id: string; title: string; statement: string }[]>('/tasks/lab')
