@@ -615,6 +615,19 @@ class PathStudy:
     kappa: float
     weighted_kappa: float
     matrix: list[list[int]]
+    # Same people as the first path. Shares are among that group; a missing grade is not "under".
+    lower_n: int = 0
+    lower_under: float = 0.0
+    upper_n: int = 0
+    upper_under: float = 0.0
+    below_n: int = 0
+    below_under: float = 0.0
+    equal_n: int = 0
+    equal_under: float = 0.0
+    above_n: int = 0
+    above_under: float = 0.0
+    pass_curve: list[tuple[float, int, float]] = field(default_factory=list)
+    half_shift: float | None = None
 
 
 @dataclass
@@ -656,10 +669,13 @@ def simulate_path(theta: float, spec: str, declared: str, truth: Truth, rng: ran
     downs = 0
     climbed = False
     sessions = items = 0
+    passed_declared = False
     for _ in range(4):
         session = run_session(theta, spec, target, truth, rng, offsets=offsets)
         sessions += 1
         items += session.n
+        if sessions == 1:
+            passed_declared = session.passed
         if session.passed:
             confirmed = target
             if session.recommended and not climbed:
@@ -674,7 +690,7 @@ def simulate_path(theta: float, spec: str, declared: str, truth: Truth, rng: ran
             break
         downs += 1
         target = lower
-    return confirmed, sessions, items
+    return confirmed, sessions, items, passed_declared
 
 
 def _cohen(xs: list[str | None], ys: list[str | None]) -> float:
@@ -714,28 +730,103 @@ def _path_shares(rows: list[tuple[float, str | None]]) -> tuple[float, float, fl
     return exact / n, within / n, over / n, under / n, bare / n
 
 
+def _under_grade(theta: float, grade: str | None) -> bool | None:
+    """True when the confirmed grade is below the true one. None when there is no true grade."""
+    truth_g = true_grade(theta)
+    if truth_g not in GRADE_ORDER:
+        return None
+    if grade not in GRADE_ORDER:
+        return False
+    return GRADE_ORDER.index(grade) < GRADE_ORDER.index(truth_g)
+
+
+def _group_under(flags: list[bool]) -> tuple[int, float]:
+    if not flags:
+        return 0, 0.0
+    return len(flags), sum(flags) / len(flags)
+
+
+def path_detail(rows: list[tuple[float, str, str | None, bool]]) -> dict:
+    """Where the first path sits low, and how often the declared-level test is passed.
+
+    rows are (theta, declared, confirmed grade, passed the declared level). The random stream is not touched.
+    """
+    lower, upper = [], []
+    below, equal, above = [], [], []
+    edges = [-1 + 0.25 * i for i in range(10)]
+    passed = [0] * 9
+    counted = [0] * 9
+    for theta, declared, grade, declared_passed in rows:
+        flag = _under_grade(theta, grade)
+        truth_g = true_grade(theta)
+        if flag is not None and truth_g in GRADE_ORDER:
+            (lower if theta - CUTS[truth_g] < 0.5 else upper).append(flag)
+            declared_i = GRADE_ORDER.index(declared)
+            truth_i = GRADE_ORDER.index(truth_g)
+            (below if declared_i < truth_i else equal if declared_i == truth_i else above).append(flag)
+        if declared not in GRADE_ORDER:
+            continue
+        delta = theta - CUTS[declared]
+        for i in range(9):
+            right = edges[i + 1]
+            if edges[i] <= delta < right or (i == 8 and delta == right):
+                counted[i] += 1
+                passed[i] += int(declared_passed)
+                break
+    curve = [(edges[i], counted[i], (passed[i] / counted[i] if counted[i] else 0.0)) for i in range(9)]
+    shift = None
+    for i in range(8):
+        left_n, right_n = counted[i], counted[i + 1]
+        if not left_n or not right_n:
+            continue
+        s0, s1 = passed[i] / left_n, passed[i + 1] / right_n
+        if s0 < 0.5 <= s1 and s1 != s0:
+            d0, d1 = edges[i], edges[i + 1]
+            shift = d0 + (0.5 - s0) * (d1 - d0) / (s1 - s0)
+            break
+    lower_n, lower_under = _group_under(lower)
+    upper_n, upper_under = _group_under(upper)
+    below_n, below_under = _group_under(below)
+    equal_n, equal_under = _group_under(equal)
+    above_n, above_under = _group_under(above)
+    return {
+        "lower_n": lower_n, "lower_under": lower_under,
+        "upper_n": upper_n, "upper_under": upper_under,
+        "below_n": below_n, "below_under": below_under,
+        "equal_n": equal_n, "equal_under": equal_under,
+        "above_n": above_n, "above_under": above_under,
+        "pass_curve": curve, "half_shift": shift,
+    }
+
+
 def study_paths(people: list[Person], truth: Truth, rng: random.Random,
                 offsets: dict[str, float] | None) -> PathStudy:
     first = [simulate_path(theta, spec, declared, truth, rng, offsets) for theta, spec, declared in people]
     second = [simulate_path(theta, spec, declared, truth, rng, offsets) for theta, spec, declared in people]
-    left = [(theta, grade) for (theta, _, _), (grade, _, _) in zip(people, first, strict=True)]
-    right = [(theta, grade) for (theta, _, _), (grade, _, _) in zip(people, second, strict=True)]
+    left = [(theta, grade) for (theta, _, _), (grade, _, _, _) in zip(people, first, strict=True)]
+    right = [(theta, grade) for (theta, _, _), (grade, _, _, _) in zip(people, second, strict=True)]
     exact, within, over, under, bare = _path_shares(left)
     again = _path_shares(right)
     matrix_sessions = []
-    for (theta, _, _), (grade, _, _) in zip(people, first, strict=True):
+    for (theta, _, _), (grade, _, _, _) in zip(people, first, strict=True):
         matrix_sessions.append(Session("", "", theta, grade, grade is not None, None, 0, []))
+    detail_rows = [
+        (theta, declared, grade, passed)
+        for (theta, _, declared), (grade, _, _, passed) in zip(people, first, strict=True)
+    ]
+    detail = path_detail(detail_rows)
     return PathStudy(
         n=len(people), exact=exact, within_one=within, over=over, under=under, unconfirmed=bare,
-        mean_sessions=statistics.mean(s for _, s, _ in first),
-        mean_items=statistics.mean(items for _, _, items in first),
+        mean_sessions=statistics.mean(sessions for _, sessions, _, _ in first),
+        mean_items=statistics.mean(items for _, _, items, _ in first),
         again_exact=again[0], again_within=again[1], again_over=again[2], again_under=again[3],
         again_unconfirmed=again[4],
-        again_sessions=statistics.mean(s for _, s, _ in second),
-        again_items=statistics.mean(items for _, _, items in second),
-        kappa=_cohen([g for g, _, _ in first], [g for g, _, _ in second]),
-        weighted_kappa=_quadratic_kappa([g for g, _, _ in first], [g for g, _, _ in second]),
+        again_sessions=statistics.mean(sessions for _, sessions, _, _ in second),
+        again_items=statistics.mean(items for _, _, items, _ in second),
+        kappa=_cohen([g for g, _, _, _ in first], [g for g, _, _, _ in second]),
+        weighted_kappa=_quadratic_kappa([g for g, _, _, _ in first], [g for g, _, _, _ in second]),
         matrix=grade_matrix(matrix_sessions),
+        **detail,
     )
 
 
@@ -1034,6 +1125,7 @@ def _path_lines(r: Report) -> list[str]:
         _row("Повторный", path.again_exact, path.again_within, path.again_over, path.again_under,
              path.again_unconfirmed, path.again_sessions, path.again_items),
         "",
+        *_path_detail_lines(path),
         f"Согласованность двух путей: каппа Коэна итогового грейда {path.kappa:.2f}, "
         f"взвешенная каппа {path.weighted_kappa:.2f}.",
         "",
@@ -1045,6 +1137,49 @@ def _path_lines(r: Report) -> list[str]:
           for i, row in enumerate(path.matrix)],
         "",
     ]
+
+
+def _path_detail_lines(path: PathStudy) -> list[str]:
+    """Three cuts of the same first path: where in the true grade, what was declared, and the pass curve."""
+    def share(n: int, rate: float) -> str:
+        return "—" if n == 0 else f"{rate:.1%}"
+
+    lines = [
+        "Те же люди, первый путь. Занижение — подтверждённый грейд ниже истинного; без грейда в эту долю не входит.",
+        "",
+        "Положение в истинном грейде. Нижняя половина: θ − порог истинного грейда < 0,5.",
+        "",
+        "| Половина | Людей | Занижено |",
+        "|---|---|---|",
+        f"| Нижняя | {path.lower_n} | {share(path.lower_n, path.lower_under)} |",
+        f"| Верхняя | {path.upper_n} | {share(path.upper_n, path.upper_under)} |",
+        "",
+        "Заявленный грейд относительно истинного.",
+        "",
+        "| Заявил | Людей | Занижено |",
+        "|---|---|---|",
+        f"| Ниже истинного | {path.below_n} | {share(path.below_n, path.below_under)} |",
+        f"| Тот же | {path.equal_n} | {share(path.equal_n, path.equal_under)} |",
+        f"| Выше истинного | {path.above_n} | {share(path.above_n, path.above_under)} |",
+        "",
+        "Доля сдавших тест заявленного уровня по θ − порог этого грейда. Шаг 0,25, от −1 до 1,25.",
+        "",
+        "| θ − порог | Людей | Сдали |",
+        "|---|---|---|",
+    ]
+    for left, n, rate in path.pass_curve:
+        lines.append(f"| {left:+.2f} | {n} | {share(n, rate)} |")
+    if path.half_shift is None:
+        lines.append("")
+        lines.append("Доля 0,5 между соседними корзинами не пересекается.")
+    else:
+        lines.append("")
+        lines.append(
+            f"θ − порог, где доля сдавших равна 0,5: {path.half_shift:+.3f} "
+            "(линейная интерполяция между соседними корзинами)."
+        )
+    lines.append("")
+    return lines
 
 
 def _misspec_lines(r: Report) -> list[str]:
