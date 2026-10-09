@@ -21,7 +21,7 @@ class Offer(Base):
     message = Column(Text)
     # TZ 2.2 п.2: the invitation carries the way to reach the company. Nullable only for rows created
     # before migration 0010; the API requires it for every new offer.
-    contact_method = Column(String(300))
+    contact_method = Column(Text)
     status = Column(String(20), nullable=False, default="pending")
     # Optional, set when the candidate declines: salary, format, stack, not_looking, other.
     decline_reason = Column(String(20))

@@ -37,6 +37,7 @@ from app.models import (
     Vacancy,
 )
 from app.services import assessment
+from app.services.field_cipher import email_is
 from app.services.notify import Outbox, category_label, notify, salary
 from app.services.practice import offer_weekly_tasks
 from app.services.profile import rebuild_profile
@@ -271,7 +272,7 @@ COMPANY_PROFILES = {
 
 async def _company_profiles(db) -> None:
     for email, (industry, site, about) in COMPANY_PROFILES.items():
-        employer = await db.scalar(select(Employer).where(Employer.email == email))
+        employer = await db.scalar(select(Employer).where(email_is(Employer, email)))
         if employer is not None and not employer.description:
             employer.industry, employer.website, employer.description = industry, site, about
 
@@ -305,11 +306,11 @@ OPEN_ANSWERS = [
 
 async def _employer_tasks(db, now: datetime) -> int:
     """Three tasks of «Сибирский код» and a few answers. Idempotent: does nothing if the first task exists."""
-    employer = await db.scalar(select(Employer).where(Employer.email == DEMO_EMPLOYER))
+    employer = await db.scalar(select(Employer).where(email_is(Employer, DEMO_EMPLOYER)))
     if employer is None or await db.scalar(select(EmployerTask.id).where(
             EmployerTask.employer_id == employer.id, EmployerTask.title == DEMO_TASKS[0][0])):
         return 0
-    demo = await db.scalar(select(Participant).where(Participant.email == "fsp001@demo.talent"))
+    demo = await db.scalar(select(Participant).where(email_is(Participant, "fsp001@demo.talent")))
     vacancy = await db.scalar(select(Vacancy).where(Vacancy.employer_id == employer.id, Vacancy.role == "backend")
                               .order_by(Vacancy.title).limit(1))
     outbox = Outbox()
@@ -367,7 +368,7 @@ async def _employer_tasks(db, now: datetime) -> int:
 async def main() -> None:
     now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
-        employer = await db.scalar(select(Employer).where(Employer.email == DEMO_EMPLOYER))
+        employer = await db.scalar(select(Employer).where(email_is(Employer, DEMO_EMPLOYER)))
         if employer is None:
             print("demo activity: run seed.generate_seed first")
             return

@@ -12,7 +12,8 @@ class Employer(Base):
     __tablename__ = "employers"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_name = Column(String(200), nullable=False)
-    email = Column(String(200), unique=True, nullable=False)
+    email = Column(Text, nullable=False)
+    email_bindex = Column(String(64), unique=True)
     password_hash = Column(String(200), nullable=False)
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
     # Bumped when a refresh token is exchanged. The new refresh carries the new number.

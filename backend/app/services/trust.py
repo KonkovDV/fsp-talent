@@ -42,7 +42,7 @@ async def refresh_hold(db, employer_id: uuid.UUID) -> bool:
 
     since = datetime.now(UTC) - timedelta(days=WINDOW_DAYS)
     rows = (await db.execute(
-        select(Participant.email)
+        select(Participant.id, Participant.email)
         .select_from(Complaint)
         .join(Participant, Participant.id == Complaint.participant_id)
         .outerjoin(Offer, Complaint.offer_id == Offer.id)
@@ -50,7 +50,17 @@ async def refresh_hold(db, employer_id: uuid.UUID) -> bool:
         .where(Complaint.created_at >= since,
                or_(Offer.employer_id == employer_id, Vacancy.employer_id == employer_id))
     )).all()
-    counted = complaints_that_count([row[0] for row in rows])
+    from app.services.field_cipher import PREFIX, open_seal
+    emails = []
+    for pid, stored in rows:
+        if isinstance(stored, str) and stored.startswith(PREFIX):
+            try:
+                emails.append(open_seal(str(pid), "participants", "email", stored))
+            except Exception:
+                continue
+        else:
+            emails.append(stored)
+    counted = complaints_that_count(emails)
     invitations = await db.scalar(select(func.count()).select_from(Offer).where(
         Offer.employer_id == employer_id, Offer.created_at >= since)) or 0
     if not should_pause(len(set(counted)), len(counted), int(invitations)):

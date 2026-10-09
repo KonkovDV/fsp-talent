@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     # Used only when SECRET_KEY is left as the placeholder: the first process generates a random key here,
     # every other process (API, worker, a seed run through `docker compose exec`) reads the same file.
     SECRET_KEY_FILE: str = "/secrets/secret_key"
+    # Optional 32+ byte secret for contact encryption. Empty means the signing key is the HKDF input.
+    FIELD_ENCRYPTION_KEY: str = ""
     DATABASE_URL: str = "postgresql+asyncpg://fsp:fsp@localhost:5432/fsp_talent"
     REDIS_URL: str = "redis://localhost:6379/0"
     DEBUG: bool = False

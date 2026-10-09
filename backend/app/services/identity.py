@@ -95,9 +95,10 @@ async def check_resend_allowed(email: str, purpose: str) -> None:
 
 async def consume_code(db: AsyncSession, email: str, code: str, purpose: str,
                        subject_type: str | None = None) -> EmailVerification:
+    from app.services.field_cipher import email_is
     now = datetime.now(UTC)
     query = select(EmailVerification).where(
-        EmailVerification.email == email, EmailVerification.purpose == purpose,
+        email_is(EmailVerification, email), EmailVerification.purpose == purpose,
         EmailVerification.consumed_at.is_(None)).with_for_update()
     if subject_type:
         query = query.where(EmailVerification.subject_type == subject_type)
