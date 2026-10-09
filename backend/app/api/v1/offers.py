@@ -185,6 +185,8 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
                  "Контакты компания получит, только если вы примете приглашение. Срок ответа — 14 дней.",
                  "/candidate/offers")
     await db.commit()
+    from app.services.search.cache import publish_invite
+    await publish_invite()
     await outbox.deliver()
     out = _offer_out(offer)
     out["salary_hint"] = salary_gap_hint(offer.salary_to_gross, candidate.salary_from_gross)
@@ -229,6 +231,8 @@ async def withdraw_offer(offer_id: uuid.UUID, current: dict = Depends(get_curren
                  f"«{employer.company_name}» отозвала приглашение",
                  f"Приглашение на роль «{offer.role}» больше не действует.", "/candidate/offers")
     await db.commit()
+    from app.services.search.cache import publish_invite
+    await publish_invite()
     await outbox.deliver()
     return {"status": offer.status}
 

@@ -1,4 +1,4 @@
-"""The shortlist cache keeps one ranking and never stores another company's marks."""
+"""The shortlist cache keeps one ranking and drops it after a real exam or an invitation."""
 import pytest
 
 from app.services.search import cache
@@ -77,3 +77,17 @@ async def test_bump_drops_the_previous_ranking(monkeypatch):
     await cache.bump_bank_epoch()
     assert await cache.bank_epoch(redis) == epoch + 1
     assert await cache.read_ranked(redis, cache.shortlist_key("n", 1, epoch + 1)) is None
+
+
+@pytest.mark.asyncio
+async def test_a_real_exam_drops_the_shortlist_and_a_trial_does_not(monkeypatch):
+    calls = []
+
+    async def fake_bump() -> None:
+        calls.append("bump")
+
+    monkeypatch.setattr(cache, "bump_bank_epoch", fake_bump)
+    await cache.publish_grade(trial=False)
+    await cache.publish_grade(trial=True)
+    await cache.publish_invite()
+    assert calls == ["bump", "bump"]

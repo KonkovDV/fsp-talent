@@ -518,6 +518,9 @@ async def _answer(session_id: uuid.UUID, body: AnswerIn, current: dict, db: Asyn
         if participant is not None:
             await rebuild_profile(db, participant)
     await db.commit()
+    if fin is not None:
+        from app.services.search.cache import publish_grade
+        await publish_grade((session.flags or {}).get("mode") == "express")
     items = await session_items(db, session.id)
     if fin is not None:
         result = await _finished_result(db, session, items, fin)

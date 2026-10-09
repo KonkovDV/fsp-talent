@@ -548,6 +548,8 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                      f"Кандидат ({who}) отклонил приглашение. Подборка по потребности обновляется сама.",
                      "/employer/offers")
     await db.commit()
+    from app.services.search.cache import publish_invite
+    await publish_invite()
     await outbox.deliver()
     suggest_hide = False
     if offer.status == "accepted":
