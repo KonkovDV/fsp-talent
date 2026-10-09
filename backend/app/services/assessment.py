@@ -64,6 +64,7 @@ SHARE_SLACK = 0.10
 TIME_REF_S = 8.0
 TIME_SLACK = 0.20
 FAMILY_CUSUM_H = 1.6
+RESIDUAL_SLACK = 0.05
 SKILL_CONFIRM_SHARE = 0.75  # a tested skill counts as confirmed at ≥ 75 % right answers (≥ 3 items)
 EXPOSURE_MIN_SESSIONS = 20
 
@@ -84,11 +85,13 @@ def note_pace(flags: dict, family_id: str, *, correct: bool, elapsed: float, kin
     return flags
 
 
-def note_family_cusum(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str) -> dict:
-    """One-sided CUSUM of the right-answer share and of fast code answers, per family.
+def note_family_cusum(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str,
+                      expected_p: float | None = None) -> dict:
+    """One-sided CUSUM of the right-answer share, of fast code answers, and of the residual.
 
+    The residual is the answer minus the model's probability at the theta from before this item.
     The key-level CUSUM in the item monitor is a different signal and still decides quarantine.
-    This one only asks for a look at the session.
+    None of these marks moves the grade.
     """
     flags = dict(flags)
     pace = {key: dict(value) for key, value in (flags.get("family_pace") or {}).items()}
@@ -98,11 +101,17 @@ def note_family_cusum(flags: dict, family_id: str, *, correct: bool, elapsed: fl
     if kind == "code":
         excess = max(0.0, (TIME_REF_S - float(elapsed)) / TIME_REF_S)
         time_cusum = max(0.0, time_cusum + excess - TIME_SLACK)
+    residual = float(cell.get("residual_cusum") or 0.0)
+    if expected_p is not None:
+        gap = int(correct) - min(max(expected_p, 0.0), 1.0)
+        residual = max(0.0, residual + gap - RESIDUAL_SLACK)
     cell["share_cusum"] = round(share, 3)
     cell["time_cusum"] = round(time_cusum, 3)
+    cell["residual_cusum"] = round(residual, 3)
     pace[family_id] = cell
     flags["family_pace"] = pace
-    if cell["share_cusum"] >= FAMILY_CUSUM_H or cell["time_cusum"] >= FAMILY_CUSUM_H:
+    if (cell["share_cusum"] >= FAMILY_CUSUM_H or cell["time_cusum"] >= FAMILY_CUSUM_H
+            or cell["residual_cusum"] >= FAMILY_CUSUM_H):
         flags["family_cusum_review"] = family_id
     return flags
 
@@ -494,8 +503,12 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
             current.family_id, session.specialization, current.level,
             str(current.options[current.correct_index]), current.answer_text):
         flags["variant_review"] = current.family_id
+    expected_p = None
+    if session.irt_theta is not None:
+        expected_p = cat.p3(float(session.irt_theta), current.a, current.b, current.c)
     flags = note_family_cusum(
-        flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind)
+        flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind,
+        expected_p=expected_p)
     session.flags = flags
     await db.flush()
 

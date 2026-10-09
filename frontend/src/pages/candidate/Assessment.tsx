@@ -337,7 +337,7 @@ export default function CandidateAssessment() {
             <p className="notice" role="status">Ответы плохо сходятся с оценкой уровня. Это не вывод о списывании: имеет смысл пересдать.</p>
           )}
           {result.family_review && (
-            <p className="notice" role="status">По одному семейству доля верных ответов и скорость выбиваются из обычного хода. Грейд из-за этого не меняется.</p>
+            <p className="notice" role="status">По одному семейству ответы выбиваются из модели или из обычного темпа. Грейд из-за этого не меняется.</p>
           )}
           {(result.review_notes ?? []).map(note => (
             <p key={note} className="notice" role="status">{note}</p>
