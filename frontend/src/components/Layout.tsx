@@ -24,6 +24,7 @@ const EMPLOYER_LINKS = [
   { to: '/employer/offers', label: 'Приглашения', end: false },
   { to: '/employer/vacancies', label: 'Вакансии', end: false },
   { to: '/employer/company', label: 'Компания', end: false },
+  { to: '/employer/moderation', label: 'Жалобы', end: false },
 ]
 
 export default function Layout() {
