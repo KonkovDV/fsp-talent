@@ -1,7 +1,7 @@
 """A second confirmed specialization is used for that need and does not replace the primary one."""
 from types import SimpleNamespace
 
-from app.services.search.pipeline import _role_for_need, passes_role_grade, shown_category
+from app.services.search.pipeline import _role_for_need, passes_role_grade, shown_category, shown_region
 
 
 def test_the_need_role_uses_its_own_confirmation():
@@ -15,6 +15,13 @@ def test_the_need_role_uses_its_own_confirmation():
     assert also == {"role": "backend", "grade": "middle", "grade_source": "assessed"}
     assert shown_category("backend", "middle", "assessed", "backend", "middle", "assessed") == (
         "backend", "middle", "assessed", None)
+
+
+def test_a_hidden_city_leaves_the_card_and_stays_in_the_score():
+    assert shown_region("Казань", True) == "Казань"
+    assert shown_region("Казань", False) is None
+    assert shown_region(None, True) is None
+    assert shown_region("", False) is None
 
 
 def test_a_second_grade_is_not_hidden_by_the_primary_grade():

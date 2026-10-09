@@ -267,6 +267,13 @@ def _role_for_need(cat, need_role: str | None, confirmation) -> tuple[str | None
     return role, grade, source
 
 
+def shown_region(region: str | None, show_city: bool) -> str | None:
+    """The city on the anonymous card. Hiding it leaves the field empty; the score still uses the city."""
+    if not show_city:
+        return None
+    return region or None
+
+
 def shown_category(primary_role: str | None, primary_grade: str | None, primary_source: str | None,
                    scored_role: str | None, scored_grade: str | None, scored_source: str | None,
                    ) -> tuple[str | None, str | None, str | None, dict | None]:
@@ -787,7 +794,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             "grade": header_grade,
             "grade_source": header_source,
             "also_primary": also_primary,
-            "region": p.region,
+            "region": shown_region(p.region, bool(p.show_city)),
             "experience_years": p.experience_years,
             "stack": cat.stack if cat else [],
             "matched_skills": matched,

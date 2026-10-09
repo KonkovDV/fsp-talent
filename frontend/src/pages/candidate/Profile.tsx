@@ -76,6 +76,14 @@ export default function CandidateProfile() {
     mutationFn: (value: boolean) => updateVisibility(value),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
   })
+  const cityVisibility = useMutation({
+    mutationFn: (value: boolean) => updateMyProfile({
+      show_city: value,
+      ...(profile?.profile_version != null ? { expected_version: profile.profile_version } : {}),
+    }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
+    onError: (error: unknown) => setNote(apiError(error, 'Не удалось сохранить видимость города')),
+  })
   const jobSearch = useMutation({
     mutationFn: (value: 'active' | 'open' | 'not_looking') => updateMyProfile({
       job_search: value,
@@ -140,6 +148,16 @@ export default function CandidateProfile() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="card mb-6" aria-labelledby="city-h">
+        <h2 id="city-h" className="section-title">Город на карточке</h2>
+        <p className="mt-1 text-sm text-ink-2">Скрытый город не печатается на анонимной карточке. В балл подбора он входит по-прежнему, когда вакансия называет город.</p>
+        <button type="button" aria-pressed={profile.show_city !== false} disabled={cityVisibility.isPending}
+          onClick={() => cityVisibility.mutate(profile.show_city === false)}
+          className={`mt-4 ${(profile.show_city !== false) ? 'btn-primary' : 'btn-secondary'}`}>
+          {profile.show_city === false ? 'Город скрыт' : 'Город виден работодателям'}
+        </button>
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">

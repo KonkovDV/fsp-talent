@@ -344,6 +344,7 @@ CREATE TABLE public.participants (
     phone text,
     birth_date date,
     region character varying(100),
+    show_city boolean DEFAULT true NOT NULL,
     work_formats jsonb DEFAULT '[]'::jsonb NOT NULL,
     experience_years integer,
     declared_grade character varying(20),
