@@ -15,9 +15,9 @@ class Participant(Base):
     fsp_id = Column(String(64), unique=True, nullable=True, index=True)
     fsp_linked_at = Column(DateTime(timezone=True))
     display_name = Column(String(200))
-    # Login identity (stored lower-case). It is also the contact an employer gets after consent,
-    # so it is always a confirmed address.
-    email = Column(String(200), unique=True)
+    # Login identity. The column holds AES-GCM ciphertext; lookup uses email_bindex.
+    email = Column(Text)
+    email_bindex = Column(String(64), unique=True)
     password_hash = Column(String(200))
     # Bumped on password reset. Tokens carry the same number and die when it moves.
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
@@ -29,8 +29,8 @@ class Participant(Base):
     salary_from_gross = Column(Integer)
     salary_to_gross = Column(Integer)
     email_verified_at = Column(DateTime(timezone=True))
-    telegram = Column(String(64))
-    phone = Column(String(20))
+    telegram = Column(Text)
+    phone = Column(Text)
     birth_date = Column(Date)
     region = Column(String(100), index=True)
     # office / hybrid / remote. Empty means "not chosen" and the search filter does not drop the person.
@@ -51,7 +51,7 @@ class Participant(Base):
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
     # Legal representative of a candidate aged 15 to 17: who confirmed and when.
-    guardian_email = Column(String(200))
+    guardian_email = Column(Text)
     guardian_consent_at = Column(DateTime(timezone=True))
     grade_locked_until = Column(DateTime(timezone=True))
     # Grade confirmed by a completed test. It outranks declared_grade and experience in the category:

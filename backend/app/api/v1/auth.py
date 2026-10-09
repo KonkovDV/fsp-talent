@@ -199,7 +199,8 @@ def repeat_registration(account) -> bool:
 
 async def _account(db: AsyncSession, role: str, email: str):
     model = Participant if role == "participant" else Employer
-    return await db.scalar(select(model).where(model.email == email))
+    from app.services.field_cipher import email_is
+    return await db.scalar(select(model).where(email_is(model, email)))
 
 
 async def _send_verification(db: AsyncSession, role: str, account, email: str) -> VerificationSent:

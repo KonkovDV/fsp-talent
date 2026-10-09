@@ -19,6 +19,7 @@ from app.models import Consent, Employer, Participant, Skill, Vacancy
 from app.services.categorization import DISCIPLINE_ROLE_MAP, grade_from_experience
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
+from app.services.field_cipher import email_is
 from app.services.survey import INDUSTRIES
 
 SKILLS = {
@@ -300,7 +301,9 @@ async def sync_extra(n: int) -> None:
     async with AsyncSessionLocal() as db:
         password_hash = hash_password(DEMO_PASSWORD)
         now = datetime.now(UTC)
-        rows = list(await db.scalars(select(Participant).where(Participant.email.like("extra%@load.talent"))))
+        from app.services.field_cipher import blind_index
+        indexes = [blind_index(extra_email(i)) for i in range(1, max(n, 2000) + 1)]
+        rows = list(await db.scalars(select(Participant).where(Participant.email_bindex.in_(indexes))))
         by_email = {p.email: p for p in rows}
         wanted = {extra_email(i) for i in range(1, n + 1)}
         created = 0
@@ -337,7 +340,7 @@ async def sync_extra(n: int) -> None:
         from app.services.search.cache import bump_bank_epoch
         await bump_bank_epoch()
         visible = await db.scalar(select(func.count()).select_from(Participant).where(
-            Participant.email.like("extra%@load.talent"), Participant.is_visible.is_(True),
+            Participant.email_bindex.in_(indexes), Participant.is_visible.is_(True),
             Participant.job_search != "not_looking"))
         print(f"extra participants={n} created={created} in_search={visible or 0}")
 
@@ -424,7 +427,7 @@ async def main(extra_candidates: int | None = None) -> None:
         now = datetime.now(UTC)
         employers = 0
         for name, email in EMPLOYERS:
-            existing = await db.scalar(select(Employer).where(Employer.email == email))
+            existing = await db.scalar(select(Employer).where(email_is(Employer, email)))
             if existing is not None:
                 if not existing.password_hash:
                     existing.password_hash = password_hash
@@ -490,7 +493,7 @@ async def main(extra_candidates: int | None = None) -> None:
             if created % 25 == 0:
                 await db.commit()
         email, name, region, years, grade, skill_names = NO_FSP_DEMO
-        existing_plain = await db.scalar(select(Participant).where(Participant.email == email))
+        existing_plain = await db.scalar(select(Participant).where(email_is(Participant, email)))
         if existing_plain is not None:
             if not existing_plain.password_hash:
                 existing_plain.password_hash = password_hash
@@ -513,7 +516,7 @@ async def main(extra_candidates: int | None = None) -> None:
         # With DEMO_MODE they take the full test without pauses (app.services.assessment.jury_unlimited).
         for n in range(1, 11):
             email = f"jury{n}@demo.talent"
-            if await db.scalar(select(Participant.id).where(Participant.email == email)) is not None:
+            if await db.scalar(select(Participant.id).where(email_is(Participant, email))) is not None:
                 continue
             juror = Participant(email=email, display_name=f"Член жюри {n}", password_hash=password_hash,
                                 email_verified_at=now, is_minor=False, is_visible=True, public_profile=False)
@@ -523,7 +526,7 @@ async def main(extra_candidates: int | None = None) -> None:
             created += 1
         jobs = 0
         for email, title, role, grade, disc, rank, skills, lo, hi, fmt, text in DEMO_VACANCIES:
-            employer = await db.scalar(select(Employer).where(Employer.email == email))
+            employer = await db.scalar(select(Employer).where(email_is(Employer, email)))
             if employer is None:
                 continue
             existing = await db.scalar(

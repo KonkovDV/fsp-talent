@@ -54,3 +54,7 @@ __all__ = [
     "Vacancy",
     "VerifiableCredential",
 ]
+
+from app.services.field_cipher import install as _install_field_cipher
+
+_install_field_cipher()

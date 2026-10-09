@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -14,7 +14,8 @@ class EmailVerification(Base):
     subject_type = Column(String(20), nullable=False)
     subject_id = Column(UUID(as_uuid=True), nullable=False)
     purpose = Column(String(20), nullable=False)
-    email = Column(String(200), nullable=False, index=True)
+    email = Column(Text, nullable=False)
+    email_bindex = Column(String(64), index=True)
     code_hash = Column(String(64), nullable=False)
     token_hash = Column(String(64), nullable=False, unique=True)
     attempts = Column(Integer, nullable=False, default=0)
