@@ -131,6 +131,7 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
                 attack: str | None = None, collision: dict[str, float] | None = None,
                 exposure: dict[str, float] | None = None,
                 misspec: tuple[float, float] | None = None,
+                control: dict[str, float] | None = None,
                 known: set[tuple] | None = None, remember: set[tuple] | None = None) -> Session:
     state = State(spec=spec, target=target)
     keys: list[str] = []
@@ -139,7 +140,7 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         verdict = evaluate(state)
         if verdict.done:
             break
-        ch = choose(state, rng, offsets=offsets, blocked=blocked, exposure=exposure)
+        ch = choose(state, rng, offsets=offsets, blocked=blocked, exposure=exposure, control=control)
         key = item_key(ch.family, ch.level)
         typed = _TYPED and rng.random() < typed_share(ch.family.id, ch.level)
         c = TYPED_C if typed else CHOICE_C
@@ -228,20 +229,31 @@ def population(n: int, rng: random.Random) -> list[Person]:
 def cohort(people: list[Person], truth: Truth, rng: random.Random, leak_share: float = 0.0,
            blocked: set[str] | None = None, offsets: dict[str, float] | None = None,
            stream: int | None = None, misspec: tuple[float, float] | None = None,
+           by_spec: bool = False, control: dict[str, float] | None = None,
            ) -> tuple[CohortReport, list[Session]]:
     """`stream` gives every person an own random stream: two designs then differ only by the design
     (the same people leak, the same answers fall the same way until the item sequences part)."""
     sessions = []
     seen: collections.Counter[str] = collections.Counter()
+    spec_seen: dict[str, collections.Counter[str]] = {}
+    spec_n: dict[str, int] = {}
     for index, (theta, spec, target) in enumerate(people):
         if stream is not None:
             rng = random.Random(stream * 1_000_003 + index)
         leaked = MAIN_FAMILY[spec] if rng.random() < leak_share else None
         # The live bank starts Sympson–Hetter after the same warm-up the selector uses.
-        rates = {key: count / index for key, count in seen.items()} if index >= 20 else None
+        if by_spec:
+            n_here = spec_n.get(spec, 0)
+            bucket = spec_seen.get(spec)
+            rates = {key: count / n_here for key, count in bucket.items()} if bucket and n_here >= 20 else None
+        else:
+            rates = {key: count / index for key, count in seen.items()} if index >= 20 else None
         session = run_session(theta, spec, target, truth, rng, leaked, blocked, offsets=offsets,
-                              exposure=rates, misspec=misspec)
+                              exposure=rates, misspec=misspec, control=control)
         seen.update(set(session.keys))
+        if by_spec:
+            spec_seen.setdefault(spec, collections.Counter()).update(set(session.keys))
+            spec_n[spec] = spec_n.get(spec, 0) + 1
         sessions.append(session)
     n = len(sessions)
     right = sum(s.passed == (s.theta >= CUTS[s.target]) for s in sessions)
@@ -1130,6 +1142,91 @@ def stopping_grid(n: int, seed: int) -> None:
         print("Ни одна клетка не прошла порог. Настройки продукта не менялись.")
 
 
+def sh_step(k: float, shown: float, r_max: float = 0.40) -> float:
+    """One Sympson–Hetter update. A key that was not shown keeps its constant."""
+    if shown <= 0:
+        return k
+    return min(1.0, k * r_max / shown)
+
+
+def _spec_peak(sessions: list[Session]) -> float:
+    grouped: dict[str, list[Session]] = {}
+    for session in sessions:
+        grouped.setdefault(session.spec, []).append(session)
+    peak = 0.0
+    for group in grouped.values():
+        counts = collections.Counter(key for session in group for key in set(session.keys))
+        if counts:
+            peak = max(peak, max(counts.values()) / len(group))
+    return peak
+
+
+def _binary_kappa(left: list[bool], right: list[bool]) -> float:
+    n = len(left)
+    if n == 0:
+        return 1.0
+    po = sum(a == b for a, b in zip(left, right, strict=True)) / n
+    p1 = sum(left) / n
+    p2 = sum(right) / n
+    pe = p1 * p2 + (1.0 - p1) * (1.0 - p2)
+    return (po - pe) / (1.0 - pe) if pe < 1.0 else 1.0
+
+
+def _controlled(people: list[Person], truth: Truth, stream: int,
+                by_spec: bool, control: dict[str, float] | None):
+    return cohort(people, truth, random.Random(0), stream=stream, by_spec=by_spec, control=control)
+
+
+def calibrate_sh(n: int, rounds: int = 10, r_max: float = 0.40) -> dict[str, float]:
+    """Ten passes on the tuning seeds. K starts at 1 and is never fit on 7 or 2026–2028."""
+    control = {item_key(fam, level): 1.0 for fam in FAMILIES.values() for level in fam.levels}
+    for round_i in range(rounds):
+        shown: dict[str, collections.Counter[str]] = {}
+        spec_n: dict[str, int] = {}
+        for seed in (101, 102, 103, 104, 105):
+            people = population(n, random.Random(seed))
+            truth = Truth.draw(random.Random(seed + 50))
+            _, sessions = _controlled(people, truth, seed + 80, True, control)
+            for session in sessions:
+                spec_n[session.spec] = spec_n.get(session.spec, 0) + 1
+                shown.setdefault(session.spec, collections.Counter()).update(set(session.keys))
+        worst: dict[str, float] = {}
+        for spec, counts in shown.items():
+            n_here = spec_n[spec]
+            for key, count in counts.items():
+                worst[key] = max(worst.get(key, 0.0), count / n_here)
+        for key, rate in worst.items():
+            control[key] = sh_step(control[key], rate, r_max)
+        low = sum(value < 0.999 for value in control.values())
+        print(f"итерация {round_i + 1}: ключей с K < 1 — {low}", flush=True)
+    return control
+
+
+def sh_holdout(n: int) -> bool:
+    """Spec denominator plus calibrated K. Fails closed: a miss is not merged."""
+    print(f"Настройка 101–105, проверка 201–205, n={n}, r_max=0.40. Публичные зёрна не используются.")
+    control = calibrate_sh(n)
+    print("| Зерно | max в спец. было | стало | Δ точности вне ±0,5, п.п. | Δ каппы |")
+    print("|---|---|---|---|---|")
+    ok = True
+    for seed in (201, 202, 203, 204, 205):
+        people = population(n, random.Random(seed))
+        truth = Truth.draw(random.Random(seed + 50))
+        base, base_s = _controlled(people, truth, seed + 11, False, None)
+        new, new_s = _controlled(people, truth, seed + 11, True, control)
+        _, base_b = _controlled(people, truth, seed + 12, False, None)
+        _, new_b = _controlled(people, truth, seed + 12, True, control)
+        d_acc = (new.accuracy_clear - base.accuracy_clear) * 100
+        d_kappa = _binary_kappa([s.passed for s in new_s], [s.passed for s in new_b]) - _binary_kappa(
+            [s.passed for s in base_s], [s.passed for s in base_b])
+        peak_base, peak_new = _spec_peak(base_s), _spec_peak(new_s)
+        print(f"| {seed} | {peak_base:.3f} | {peak_new:.3f} | {d_acc:+.2f} | {d_kappa:+.3f} |", flush=True)
+        if peak_new > 0.55 or d_acc < -1.0 or d_kappa < -0.02:
+            ok = False
+    print("Порог пройден." if ok else "Порог не пройден. Знаменатель продукта и K не менялись.")
+    return ok
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n", type=int, default=3000)
@@ -1138,7 +1235,12 @@ def main() -> None:
     parser.add_argument("--check", action="store_true", help="fail when the clean scenario breaks CHECKS")
     parser.add_argument("--grid", action="store_true",
                         help="stopping-rule grid; does not change product constants")
+    parser.add_argument("--sh-holdout", action="store_true",
+                        help="Sympson–Hetter by specialization on 201–205; does not change the product")
     args = parser.parse_args()
+    if args.sh_holdout:
+        passed = sh_holdout(args.n if args.n != 3000 else 800)
+        sys.exit(0 if passed else 1)
     if args.grid:
         stopping_grid(args.n, args.seed)
         return
