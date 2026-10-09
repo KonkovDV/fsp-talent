@@ -361,6 +361,7 @@ CREATE TABLE public.participants (
     assessed_at timestamp with time zone,
     password_hash character varying(200),
     email_verified_at timestamp with time zone,
+    last_login_at timestamp with time zone,
     fsp_linked_at timestamp with time zone,
     specialization character varying(30),
     industry character varying(40),

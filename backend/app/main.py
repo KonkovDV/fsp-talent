@@ -9,6 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.api.docs import install_docs
 from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
+from app.core.body_limit import LimitRequestBody
 from app.core.config import PUBLISHED_SECRETS, settings
 from app.core.rls import reset_rls, set_rls
 from app.core.security import decode_token
@@ -48,6 +49,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Added last, so it runs first and can answer 413 before the body is parsed.
+app.add_middleware(LimitRequestBody)
 
 
 # Paths that run before a session exists. A signed-in request is never on this list: the bearer is read first.
