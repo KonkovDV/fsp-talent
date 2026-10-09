@@ -156,6 +156,16 @@ def _password_hash(password: str) -> str:
         raise ApiError(422, "validation_error", "Пароль длиннее 72 байт") from e
 
 
+def repeat_registration(account) -> bool:
+    """The address already has an account, and the mailbox has not confirmed it yet.
+
+    A later registration must not replace the password or the profile. The letter is delivered
+    to that mailbox either way, so the person who opens it would otherwise confirm a password
+    chosen by someone else.
+    """
+    return account is not None and account.email_verified_at is None
+
+
 async def _account(db: AsyncSession, role: str, email: str):
     model = Participant if role == "participant" else Employer
     return await db.scalar(select(model).where(model.email == email))
@@ -194,12 +204,11 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     p = await _account(db, "participant", email)
     if p is not None and p.email_verified_at is not None:
         raise ApiError(409, "email_taken")
-    if p is not None:
+    if repeat_registration(p):
         await check_resend_allowed(email, "verify")
-    if p is None:
-        p = Participant(email=email, is_visible=True, public_profile=False)
-        db.add(p)
-    # An unconfirmed account belongs to nobody yet: the latest registration sets the password.
+        return await _send_verification(db, "participant", p, email)
+    p = Participant(email=email, is_visible=True, public_profile=False)
+    db.add(p)
     p.password_hash = _password_hash(body.password)
     p.display_name = (body.display_name or "").strip() or p.display_name
     p.is_minor = not body.is_adult
@@ -231,14 +240,13 @@ async def register_employer(body: EmployerRegister, request: Request, db: AsyncS
     employer = await _account(db, "employer", email)
     if employer is not None and employer.email_verified_at is not None:
         raise ApiError(409, "email_taken")
-    if employer is not None:
+    if repeat_registration(employer):
         await check_resend_allowed(email, "verify")
+        return await _send_verification(db, "employer", employer, email)
     password_hash = _password_hash(body.password)
-    if employer is None:
-        employer = Employer(company_name=body.company_name, email=email, password_hash=password_hash)
-        db.add(employer)
-    employer.company_name, employer.password_hash = body.company_name, password_hash
-    employer.inn, employer.website = body.inn, body.website
+    employer = Employer(company_name=body.company_name, email=email, password_hash=password_hash,
+                        inn=body.inn, website=body.website)
+    db.add(employer)
     try:
         await db.flush()
     except IntegrityError as e:   # a parallel registration of the same email won the race
