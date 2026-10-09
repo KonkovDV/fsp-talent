@@ -498,6 +498,9 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     state = build_state(session.specialization, session.target_grade, items, bank.blocked,
                         _topic_shares(session))
     verdict = cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS if is_trial(session.flags) else None)
+    if verdict.stop_reason == "extend":
+        # The continuation is a simulation hook. A live session still stops at twenty items.
+        verdict.stop_reason = "max_items"
     session.p_pass, session.p_upgrade = verdict.p_pass, verdict.p_upgrade
     session.irt_theta, session.theta_se = verdict.theta, verdict.se
     if verdict.done:

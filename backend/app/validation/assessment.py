@@ -144,9 +144,18 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
     answers = []
     while True:
         verdict = evaluate(state)
+        if verdict.stop_reason == "extend" and not state.extended:
+            state.extended = True
+            continue
         if verdict.done:
             break
-        ch = choose(state, rng, offsets=offsets, blocked=blocked, exposure=exposure, control=control)
+        try:
+            ch = choose(state, rng, offsets=offsets, blocked=blocked, exposure=exposure, control=control)
+        except LookupError:
+            # The same selector has nothing left. The extra six are a cap, not a promise.
+            if not state.extended:
+                raise
+            break
         key = item_key(ch.family, ch.level)
         typed = _TYPED and rng.random() < typed_share(ch.family.id, ch.level)
         c = TYPED_C if typed else CHOICE_C
@@ -1586,6 +1595,31 @@ def family_grid(n: int, seed: int) -> None:
         print("Ни одна клетка не прошла порог. Настройки продукта не менялись.")
 
 
+def _print_extend(n: int, seed: int) -> None:
+    """Full report with the one-time extension on. Product flag is restored afterwards."""
+    saved = cat_module.ALLOW_EXTEND
+    cat_module.ALLOW_EXTEND = True
+    print(f"Продление: ещё {cat_module.EXTEND_ITEMS} заданий, если после {cat_module.MAX_ITEMS} "
+          f"вероятность уровня от {cat_module.EXTEND_LOW:.2f} включительно и ниже {cat_module.PASS_P:.2f}. "
+          f"{n} кандидатов, seed {seed}.")
+    try:
+        report = run(n, seed)
+    finally:
+        cat_module.ALLOW_EXTEND = saved
+    print(markdown(report, n, seed))
+    print(f"приёмка: сдали на уровне {report.clean.sensitivity:.1%} (порог 77 %), "
+          f"ложные сдачи {report.clean.false_pass:.1%} (порог 8,5 %), "
+          f"занижение после пути {report.path.under:.1%} (порог 26 %), "
+          f"средняя длина {report.clean.mean_len:.1f} (порог 15,5), "
+          f"каппа повтора {report.retest.kappa:.2f} (порог 0,47)")
+    failed = [name for name, ok in CHECKS.items() if not ok(report)]
+    print("checks:", "failed " + ", ".join(failed) if failed else f"all {len(CHECKS)} passed")
+    bars = (report.clean.sensitivity >= 0.77 and report.clean.false_pass <= 0.085
+            and report.path.under <= 0.26 and report.clean.mean_len <= 15.5
+            and report.retest.kappa >= 0.47 and not failed)
+    print("принять:", "да" if bars else "нет")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n", type=int, default=3000)
@@ -1598,6 +1632,8 @@ def main() -> None:
                         help="Sympson–Hetter by specialization on 201–205; does not change the product")
     parser.add_argument("--family-grid", action="store_true",
                         help="family cap and knife grid; does not change product constants")
+    parser.add_argument("--extend", action="store_true",
+                        help="measure one optional extension of 6 items; does not change the product")
     args = parser.parse_args()
     if args.sh_holdout:
         passed = sh_holdout(args.n if args.n != 3000 else 800)
@@ -1607,6 +1643,9 @@ def main() -> None:
         return
     if args.family_grid:
         family_grid(args.n, args.seed)
+        return
+    if args.extend:
+        _print_extend(args.n, args.seed)
         return
     report = run(args.n, args.seed)
     text = markdown(report, args.n, args.seed)

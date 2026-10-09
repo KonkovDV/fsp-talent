@@ -45,6 +45,11 @@ MAX_PER_FAMILY = 5
 # that contributed at least two answers. Off until a seed-7 grid accepts it.
 FAMILY_KNIFE = False
 KNIFE_FLOOR = 0.5
+# One optional continuation after 20 items, only while the pass probability sits in this band.
+# n=2000 seed 7 missed the bars (sensitivity, false passes, path undergrade), so the product stays off.
+ALLOW_EXTEND = False
+EXTEND_ITEMS = 6
+EXTEND_LOW = 0.35
 TOPIC_SLACK = 0.15
 EXPOSURE_TARGET = 0.40
 
@@ -133,6 +138,7 @@ class State:
     keys_used: set = field(default_factory=set)
     # Topic shares formed from a vacancy. None: the specialization blueprint.
     blueprint: dict[str, float] | None = None
+    extended: bool = False
     _ll: list[float] = field(default_factory=lambda: [0.0] * len(GRID))
     _ll_n: int = 0
 
@@ -230,7 +236,12 @@ def evaluate(state: State, item_limit: int | None = None) -> Verdict:
         glr = glr_log_lambda(state, cut)
         above, below = _glr_bounds()
         glr_stop = (glr >= above and side >= 0.5) or (glr <= below and side <= 0.5)
-    if state.n >= MAX_ITEMS:
+    cap = MAX_ITEMS + (EXTEND_ITEMS if state.extended else 0)
+    if state.n >= cap:
+        # Express trials pass item_limit and never reach this branch.
+        if (not state.extended and ALLOW_EXTEND and item_limit is None
+                and EXTEND_LOW <= p_pass < PASS_P):
+            return Verdict(True, p_pass, p_up, post.theta, post.se, "extend")
         return Verdict(True, p_pass, p_up, post.theta, post.se, "max_items")
     if state.n >= MIN_ITEMS and decided_pass and decided_up:
         return Verdict(True, p_pass, p_up, post.theta, post.se, "decided")
@@ -282,7 +293,8 @@ def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = 
         share = blueprint.get(fam.topic, 0.0)
         if share <= 0:
             continue
-        if state.topics_used[fam.topic] >= math.ceil((share + TOPIC_SLACK) * MAX_ITEMS):
+        horizon = MAX_ITEMS + (EXTEND_ITEMS if state.extended else 0)
+        if state.topics_used[fam.topic] >= math.ceil((share + TOPIC_SLACK) * horizon):
             continue
         if fam.kind == "concept" and state.concept_used + 1 > CONCEPT_MAX_SHARE * planned + 1e-9:
             continue
