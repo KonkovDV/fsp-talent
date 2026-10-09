@@ -270,21 +270,50 @@ async def get_leaderboard(
     ]
 
 
+def _round_step(value: float | None, step: float = 0.05) -> float | None:
+    """Coarse public rates. A solver should not read the exact easiest key off this list."""
+    if value is None:
+        return None
+    return round(round(value / step) * step, 2)
+
+
+_ITEMS_KEY = "method:items:v1"
+_ITEMS_TTL = 300
+
+
 @router.get("/assessment/items")
-async def item_health(db: AsyncSession = Depends(get_db)):
+async def item_health(response: Response, db: AsyncSession = Depends(get_db)):
     """Open statistics of the item bank: answers, solve rate against the model and leak status.
 
     z is (right − expected) / sd, with ability measured without the item's own family. z ≥ 3.5 on 30+
     answers sends the key to quarantine: it is no longer served and its answers stop counting.
+    The list is cached for five minutes. solve_rate and b_offset are rounded to 0.05.
     """
+    from app.core.redis_client import get_redis
     from app.models.assessment import ItemStat
+
+    response.headers["Cache-Control"] = "public, max-age=300"
+    redis = None
+    try:
+        redis = await get_redis()
+        cached = await redis.get(_ITEMS_KEY)
+    except Exception:
+        cached = None
+    if cached:
+        return json.loads(cached)
     rows = list(await db.scalars(select(ItemStat).order_by(ItemStat.z.desc())))
-    return [{
+    payload = [{
         "item_key": r.item_key, "family_id": r.family_id, "level": r.level, "answers": r.n,
-        "solve_rate": round(r.correct / r.n, 3) if r.n else None,
+        "solve_rate": _round_step(r.correct / r.n) if r.n else None,
         "expected_rate": round(r.expected / r.n, 3) if r.n else None,
-        "z": round(r.z, 2), "status": r.status, "b_offset": round(r.b_offset, 2), "sessions": r.sessions,
+        "z": round(r.z, 2), "status": r.status, "b_offset": _round_step(r.b_offset), "sessions": r.sessions,
     } for r in rows]
+    if redis is not None:
+        try:
+            await redis.set(_ITEMS_KEY, json.dumps(payload, ensure_ascii=False), ex=_ITEMS_TTL)
+        except Exception:
+            pass
+    return payload
 
 
 _PSYCHOMETRICS_TTL = 300

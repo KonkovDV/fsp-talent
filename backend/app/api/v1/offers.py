@@ -21,7 +21,7 @@ from app.core.idempotency import (
     idem_begin,
     idem_finish,
 )
-from app.core.ratelimit import too_many
+from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
 from app.services.market import quartiles, reason_shares, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
@@ -143,9 +143,6 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
         raise HTTPException(404, "Работодатель не найден")
     if getattr(employer, "invites_paused_at", None) is not None:
         raise ApiError(403, "invites_paused", "Приглашения приостановлены до проверки")
-    # Employers are not verified in the MVP: cap how many people one account can message per day.
-    if await too_many(f"offers:create:{employer.id}", limit=_OFFERS_PER_DAY, window_seconds=86_400):
-        raise HTTPException(429, "Лимит приглашений на сегодня исчерпан")
     candidate = await db.get(Participant, body.candidate_id)
     if not candidate or not candidate.discoverable:
         raise HTTPException(404, "Кандидат недоступен для предложений")
@@ -163,6 +160,14 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
         raise ApiError(409, "decline_pause",
                        f"Кандидат отклонил ваше приглашение. Повторно пригласить можно после {pause:%d.%m.%Y}",
                        details={"reinvite_after": pause.isoformat()})
+    # Count only an invitation that passed the checks. A 404 or 409 must not spend the daily cap.
+    # Redis down refuses the invite instead of opening the cap.
+    try:
+        if await too_many(f"offers:create:{employer.id}", limit=_OFFERS_PER_DAY, window_seconds=86_400,
+                          fail_closed=True):
+            raise HTTPException(429, "Лимит приглашений на сегодня исчерпан")
+    except RateLimitUnavailable as e:
+        raise HTTPException(503, "Лимит приглашений сейчас недоступен") from e
     offer = Offer(
         employer_id=employer.id, candidate_id=candidate.id,
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,

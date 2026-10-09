@@ -90,6 +90,85 @@ def test_the_browser_does_not_receive_the_refresh_token_in_the_body():
     assert presented_refresh("  ", None) is None
 
 
+def test_client_ip_trusts_x_real_ip():
+    from starlette.requests import Request
+
+    from app.api.v1.auth import _client_ip
+
+    request = Request({
+        "type": "http", "http_version": "1.1", "method": "GET", "scheme": "http",
+        "path": "/", "raw_path": b"/", "query_string": b"",
+        "headers": [(b"x-real-ip", b"203.0.113.10"), (b"x-forwarded-for", b"198.51.100.1")],
+        "client": ("10.0.0.8", 1), "server": ("test", 80),
+    })
+    assert _client_ip(request) == "203.0.113.10"
+    from app.services.identity import client_fingerprint
+    forwarded_only = Request({
+        "type": "http", "http_version": "1.1", "method": "GET", "scheme": "http",
+        "path": "/", "raw_path": b"/", "query_string": b"",
+        "headers": [(b"x-forwarded-for", b"198.51.100.1")],
+        "client": ("10.0.0.8", 1), "server": ("test", 80),
+    })
+    assert client_fingerprint(forwarded_only)[0] == client_fingerprint(Request({
+        "type": "http", "http_version": "1.1", "method": "GET", "scheme": "http",
+        "path": "/", "raw_path": b"/", "query_string": b"", "headers": [],
+        "client": ("10.0.0.8", 1), "server": ("test", 80),
+    }))[0]
+
+
+def test_a_429_without_its_own_header_still_says_retry_after():
+    from fastapi import FastAPI, HTTPException
+    from fastapi.testclient import TestClient
+
+    from app.api.errors import install_error_handlers
+
+    app = FastAPI()
+    install_error_handlers(app)
+
+    @app.get("/limited")
+    def limited():
+        raise HTTPException(429, "подождите")
+
+    response = TestClient(app).get("/limited")
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "60"
+
+
+async def test_an_old_refresh_burns_the_current_generation():
+    from types import SimpleNamespace
+
+    from fastapi import Response
+    from starlette.requests import Request
+
+    from app.api.errors import ApiError
+    from app.api.v1.auth import refresh
+    from app.core.security import create_refresh_token
+
+    person = "11111111-1111-1111-1111-111111111111"
+    account = SimpleNamespace(id=person, token_epoch=0, refresh_nonce=2, deleted_at=None)
+    committed = []
+
+    class Db:
+        async def get(self, _model, _id, with_for_update=False):
+            return account
+
+        async def commit(self):
+            committed.append(account.token_epoch)
+
+    old = create_refresh_token(person, "participant", epoch=0, nonce=0)
+    request = Request({
+        "type": "http", "http_version": "1.1", "method": "POST", "scheme": "http",
+        "path": "/api/v1/auth/refresh", "raw_path": b"/api/v1/auth/refresh", "query_string": b"",
+        "headers": [], "client": ("127.0.0.1", 1), "server": ("test", 80),
+    })
+    with pytest.raises(ApiError):
+        await refresh(Response(), request, body=type("B", (), {"refresh_token": old})(), db=Db())
+    assert account.token_epoch == 1 and committed == [1]
+    current = create_refresh_token(person, "participant", epoch=0, nonce=2)
+    with pytest.raises(ApiError):
+        await refresh(Response(), request, body=type("B", (), {"refresh_token": current})(), db=Db())
+
+
 def test_refresh_rotation_kills_the_presented_token():
     from app.core.security import decode_refresh_token, next_refresh_nonce
 

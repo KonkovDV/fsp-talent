@@ -31,6 +31,7 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       DEMO_MODE: ${DEMO_MODE:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     volumes: [vc_keys:/secrets]
     depends_on:
       postgres: {condition: service_healthy}
@@ -56,6 +57,7 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       DEMO_MODE: ${DEMO_MODE:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     command: celery -A app.workers.celery_app worker --loglevel=info -Q scoring,embeddings,maintenance --concurrency=2
     volumes: [vc_keys:/secrets]
     depends_on:
@@ -75,6 +77,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       DEMO_MODE: ${DEMO_MODE:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     command: celery -A app.workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       backend: {condition: service_healthy}
