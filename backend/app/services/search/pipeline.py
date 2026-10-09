@@ -239,6 +239,16 @@ async def bank_grid(db: AsyncSession) -> dict:
     return {"min_cell": BANK_MIN, "cells": bank_cells([tuple(r) for r in rows])}
 
 
+def _role_for_need(cat, need_role: str | None, confirmation) -> tuple[str | None, str | None, str | None]:
+    """Use the confirmation that matches the need when it is not the primary category."""
+    role = cat.primary_role if cat else None
+    grade = cat.grade if cat else None
+    source = cat.grade_source if cat else None
+    if need_role and confirmation is not None and confirmation.specialization == need_role and role != need_role:
+        return confirmation.specialization, confirmation.grade, "assessed"
+    return role, grade, source
+
+
 async def search_candidates(
     db: AsyncSession,
     role: str | None = None,
@@ -317,7 +327,10 @@ async def search_candidates(
             Participant.work_formats.contains([work_format]),
         ))
     if role:
-        stmt = stmt.where(PSI.role == role)
+        # A second confirmed specialization is the same person, once, under the role the need asked for.
+        confirmed_here = select(GradeConfirmation.participant_id).where(
+            GradeConfirmation.specialization == role)
+        stmt = stmt.where(or_(PSI.role == role, Participant.id.in_(confirmed_here)))
     if grade:
         stmt = stmt.where(PSI.grade == grade)
     if discipline or min_rank:
@@ -570,9 +583,10 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             fsp_lcb, fsp_kind, fsp_discipline = lcb_for_need(need.role, by_discipline.get(pid, {}), discipline)
         else:
             fsp_lcb, fsp_kind, fsp_discipline = None, None, None
+        role_name, grade_name, grade_source = _role_for_need(cat, need.role, conf)
         facts = CandidateFacts(
-            role=cat.primary_role if cat else None, grade=cat.grade if cat else None,
-            grade_source=cat.grade_source if cat else None, skills=skills.get(pid, {}),
+            role=role_name, grade=grade_name,
+            grade_source=grade_source, skills=skills.get(pid, {}),
             test_p=conf.p_pass if conf and conf.p_pass is not None else (1.0 if conf else None),
             test_spec=conf.specialization if conf else None,
             fsp_lcb=fsp_lcb, fsp_kind=fsp_kind, fsp_discipline=fsp_discipline,
