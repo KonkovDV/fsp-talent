@@ -13,7 +13,7 @@ from jwt.algorithms import RSAAlgorithm
 
 from app.core.config import settings
 from app.services.fsp import identity
-from app.services.fsp.registry import FSPRegistryError, HttpFSPAdapter
+from app.services.fsp.registry import FSPRegistryError, HttpFSPAdapter, registry_id
 
 
 class FakeRedis:
@@ -187,6 +187,16 @@ async def test_registry_client_maps_the_contract_and_skips_unknown_disciplines(m
     assert seen == {"auth": "Bearer k", "path": "/v1/participants/FSP4321"}
     assert participant.fsp_id == "FSP4321" and [r.event_id for r in participant.results] == ["E1"]
     assert participant.gender is None
+
+
+async def test_registry_client_does_not_request_an_id_outside_one_segment(monkeypatch):
+    adapter, seen = _registry(monkeypatch, 200, PAYLOAD)
+    with pytest.raises(FSPRegistryError):
+        await adapter.fetch_participant("FSP1/other")
+    assert seen == {}
+    assert registry_id("FSP2000") == "FSP2000"
+    assert registry_id("../x") is None
+    assert registry_id(True) is None
 
 
 async def test_registry_client_404_is_none_and_other_errors_raise(monkeypatch):

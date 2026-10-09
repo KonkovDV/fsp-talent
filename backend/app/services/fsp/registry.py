@@ -18,6 +18,7 @@ Nothing else is requested: no gender, no contacts, no documents.
 """
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime
 
 import httpx
@@ -27,6 +28,18 @@ from app.services.fsp.mock import FSPChanges, FSPParticipant, FSPResult, Registr
 
 DISCIPLINES = {"algorithmic", "product", "security", "bas", "robotics", "ai"}
 REGISTRY_RANKS = {"МС", "КМС", "I", "II", "III", "I юн.", "II юн.", "III юн."}
+# One path segment. The id is placed in the registry URL next to the access key.
+_REGISTRY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def registry_id(value: object) -> str | None:
+    """An id the registry client may put in a path. Anything else is refused before the request."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    text = str(value).strip()
+    if _REGISTRY_ID.fullmatch(text) is None:
+        return None
+    return text
 
 
 class FSPRegistryError(Exception):
@@ -84,9 +97,12 @@ class HttpFSPAdapter:
     async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None:
         if not settings.FSP_API_URL:
             raise FSPRegistryError("FSP_API_URL is not set")
+        safe = registry_id(fsp_id)
+        if safe is None:
+            raise FSPRegistryError("registry id")
         client = self._http or httpx.AsyncClient(timeout=10)
         try:
-            response = await client.get(f"{settings.FSP_API_URL.rstrip('/')}/participants/{fsp_id}",
+            response = await client.get(f"{settings.FSP_API_URL.rstrip('/')}/participants/{safe}",
                                         headers={"Authorization": f"Bearer {settings.FSP_API_KEY}",
                                                  "Accept": "application/json"})
         except httpx.HTTPError as e:
@@ -122,7 +138,7 @@ class HttpFSPAdapter:
             raise FSPRegistryError(f"registry answered {response.status_code}")
         try:
             payload = response.json()
-            ids = [str(item) for item in payload.get("fsp_ids", [])]
+            ids = [item for raw in payload.get("fsp_ids", []) if (item := registry_id(raw))]
             nxt = payload.get("next_since")
             moment = datetime.fromisoformat(nxt.replace("Z", "+00:00")) if nxt else datetime.now(UTC)
             return FSPChanges(ids, moment)
