@@ -742,9 +742,11 @@ def check_assessment():
     token = _login("fsp001@demo.talent")
     strong = _run_test(token, "middle", _right_answer)
     result = strong["result"]
-    # A test at middle confirms middle only; a confident result suggests a separate test at senior.
+    # A test at middle confirms middle only. The next grade is suggested when P(θ ≥ its cut) reaches the rule.
+    from app.services.cat import RECOMMEND_NEXT_P
     assert result["passed"] and result["confirmed_grade"] == "middle" and not result["upgraded"], result
-    assert result["recommended_grade"] == "senior", result
+    expect = "senior" if (result["p_upgrade"] or 0) >= RECOMMEND_NEXT_P else None
+    assert result["recommended_grade"] == expect, result
     assert result["p_pass"] >= 0.75 and result["confirmed_skills"], result
     status, me = call("GET", "/candidates/me", token=token)
     assert me["grade_source"] == "assessed" and me["assessed_grade"] == result["confirmed_grade"], me
