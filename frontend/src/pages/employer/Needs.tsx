@@ -234,6 +234,7 @@ export default function EmployerNeeds() {
 
               {tab === 'matches' && (
                 <div className="mt-5 space-y-4">
+                  <p className="text-sm text-ink-3">Балл расставляет карточки и никого из них не выбрасывает. Приглашение отправляет человек.</p>
                   {matches.data?.pay_hint?.gained > 0 && (
                     <p className="text-sm text-ink-2">
                       Если поднять верх вилки до <span className="num">{rub((matches.data.pay_hint as PayHint).proposed_to)}</span>,

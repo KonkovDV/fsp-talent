@@ -75,7 +75,7 @@ export default function EmployerSearch() {
   return (
     <div>
       <PageHeader title="Поиск кандидатов"
-        lead="Карточки анонимны: имя и контакты откроются, когда кандидат примет приглашение. Порядок задаёт один скор, его разбор — в каждой карточке." />
+        lead="Карточки анонимны: имя и контакты откроются, когда кандидат примет приглашение. Фильтры сужают список, балл только расставляет оставшихся. Приглашение отправляет человек." />
 
       <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); run() }} role="search">
         <div className="relative min-w-0 flex-1 basis-72">

@@ -47,6 +47,7 @@ describe('поиск работодателя', () => {
   it('фильтр истории ФСП предлагает «есть» и «нет»', async () => {
     renderPage(<EmployerSearch />)
     const filter = await screen.findByRole('combobox', { name: 'История ФСП' })
+    expect(screen.getByText(/Приглашение отправляет человек/)).toBeInTheDocument()
     expect(filter).toHaveDisplayValue('Не важно')
     expect(screen.getByRole('option', { name: 'Есть' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Нет' })).toBeInTheDocument()
