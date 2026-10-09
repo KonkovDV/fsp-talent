@@ -139,7 +139,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | 40 пользователей одновременно: ошибок, p95 поиска | 0, 69 мс | `make load` |
 | Подборка на 10 000 профилях, 2 процесса API, p95 | 360 мс | `python tests/load_api.py --scenario shortlist --seconds 60 --reuse`, банк 10 000 |
 | Юнит-тесты (в CI, со всеми компиляторами) | 810 | `python -m pytest tests/unit --collect-only -q` |
-| Покрытие приложения, сервисы и API | 73,9 %, 74 % и 62 % | `python -m pytest tests/unit -q --cov=app --cov-report=json --cov-fail-under=65` и `python tests/coverage_lines.py` |
+| Покрытие приложения, сервисы и API | 73,9 %, 73 % и 62 % | `python -m pytest tests/unit -q --cov=app --cov-report=json --cov-fail-under=65` и `python tests/coverage_lines.py` |
 | Покрытие вместе с интеграционными тестами | порог: приложение от 72 %, pipeline и assessment от 60 % | `python tests/integration_coverage.py` |
 | Тесты интерфейса | 57 | `npm test` в `frontend/` |
 | Проверки Playwright | 67 | `npx playwright test --list` в `frontend/`: 7 сквозных сценариев и 60 проверок доступности |

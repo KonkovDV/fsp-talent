@@ -1,4 +1,6 @@
 """The practice lab checks a function and does not describe a grade."""
+import subprocess
+import sys
 import time
 import uuid
 from datetime import UTC, datetime
@@ -7,7 +9,15 @@ from pathlib import Path
 import pytest
 
 from app.models import EmployerTask
-from app.services.code_lab import LabError, child_cwd, child_env, guard, run_problem
+from app.services.code_lab import (
+    LabError,
+    _seccomp_filter,
+    child_cwd,
+    child_env,
+    guard,
+    network_syscalls,
+    run_problem,
+)
 from app.services.tasks import check_answer, stored_reference, validate_reference
 
 SOLVE = "def solve(xs):\n    return sum(x for x in xs if x > 0)\n"
@@ -36,6 +46,24 @@ def test_the_practice_process_does_not_inherit_the_database_url(monkeypatch):
     assert "postgres://secret" not in env.values()
     assert "PYTHONPATH" in env
     assert Path(child_cwd()).resolve() != Path(__file__).resolve().parents[2]
+    numbers = network_syscalls("x86_64")
+    assert 41 in numbers and 288 in numbers
+    assert _seccomp_filter(numbers)
+    if sys.platform == "linux":
+        probe = subprocess.run(
+            [sys.executable, "-c",
+             "import socket\n"
+             "from app.services.code_lab import deny_network\n"
+             "installed = deny_network()\n"
+             "blocked = False\n"
+             "try:\n"
+             "    socket.socket()\n"
+             "except OSError:\n"
+             "    blocked = True\n"
+             "raise SystemExit(0 if installed and blocked else 1)\n"],
+            capture_output=True, timeout=15, check=False,
+        )
+        assert probe.returncode == 0, probe.stderr.decode("utf-8", "replace")
 
 
 def test_imports_and_a_wrong_answer_do_not_pass():
