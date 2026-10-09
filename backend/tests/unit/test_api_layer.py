@@ -126,7 +126,7 @@ def _person(**extra):
         id=_uid(), email="anya@demo.talent", display_name="Аня", region="Москва",
         phone=None, telegram=None, fsp_id=None, specialization="backend",
         declared_grade="middle", assessed_grade=None, experience_years=3,
-        salary_from_gross=180_000, salary_to_gross=240_000, is_visible=True,
+        salary_from_gross=180_000, salary_to_gross=240_000, is_visible=True, show_city=True,
         job_search="active", birth_date=None, minor_consent_given=False,
         guardian_email=None, guardian_consent_at=None, public_profile=False,
         deleted_at=None, discoverable=True, email_verified_at=None,
@@ -699,6 +699,9 @@ async def test_candidate_profile_market_and_growth(quiet):
     db.scalars_q = [[]]
     profile = await candidates.get_my_profile(current, db)
     assert profile["display_name"] == "Аня" and profile["discoverable"] is True
+    assert profile["completeness"]["total"] == 8
+    assert "skills" in profile["completeness"]["missing"]
+    assert "city" not in profile["completeness"]["missing"]
 
     category = SimpleNamespace(primary_role="backend", grade="middle")
     db.gets = [person]

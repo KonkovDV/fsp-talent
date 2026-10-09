@@ -1,6 +1,7 @@
 """A second confirmed specialization is used for that need and does not replace the primary one."""
 from types import SimpleNamespace
 
+from app.services.profile_completeness import profile_completeness
 from app.services.search.pipeline import _role_for_need, passes_role_grade, shown_category, shown_region
 
 
@@ -22,6 +23,28 @@ def test_a_hidden_city_leaves_the_card_and_stays_in_the_score():
     assert shown_region("Казань", False) is None
     assert shown_region(None, True) is None
     assert shown_region("", False) is None
+
+
+def _filled(**over):
+    base = dict(email_verified=True, survey_done=True, declared_grade="middle", assessed_grade="middle",
+                skill_count=2, salary_from=180_000, salary_to=None, region="Казань", work_formats=["remote"])
+    base.update(over)
+    return profile_completeness(**base)
+
+
+def test_profile_completeness_lists_the_eight_gaps():
+    empty = profile_completeness(
+        email_verified=False, survey_done=False, declared_grade=None, assessed_grade=None,
+        skill_count=0, salary_from=None, salary_to=None, region="  ", work_formats=[])
+    assert empty["percent"] == 0 and empty["done"] == 0 and empty["total"] == 8
+    assert empty["missing"] == ["email", "survey", "grade", "test", "skills", "salary", "city", "format"]
+    one = _filled(email_verified=False, survey_done=False, declared_grade=None, assessed_grade=None,
+                  skill_count=0, salary_from=None, salary_to=100_000, region=None, work_formats=None)
+    assert one["missing"] == ["email", "survey", "grade", "test", "skills", "city", "format"]
+    assert one["percent"] == 13
+    confirmed = _filled(declared_grade=None)
+    assert confirmed["missing"] == [] and confirmed["percent"] == 100
+    assert _filled()["items"][0]["href"] is None
 
 
 def test_a_second_grade_is_not_hidden_by_the_primary_grade():
