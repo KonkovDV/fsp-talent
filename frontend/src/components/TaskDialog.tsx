@@ -6,6 +6,32 @@ import { localDay } from '../lib/localDay'
 import { ROLE_RU } from '../labels'
 import Modal from './Modal'
 
+const TEMPLATES: {
+  id: string; label: string; title: string; statement: string; answer_type: TaskAnswerType
+  reference_number?: string; options?: string[]; correct_index?: number; lab_id?: string
+}[] = [
+  {
+    id: 'rows', label: 'Число: строки после фильтра', answer_type: 'number', reference_number: '6',
+    title: 'Сколько строк останется',
+    statement: 'В таблице events 20 строк. У 8 из них status = \'paid\', у 6 из этих восьми amount > 0.\n\nСколько строк вернёт запрос\nSELECT id FROM events WHERE status = \'paid\' AND amount > 0?',
+  },
+  {
+    id: 'index', label: 'Выбор: какой индекс', answer_type: 'choice', correct_index: 1,
+    options: ['(created_at)', '(customer_id, created_at DESC)', '(status)', '(id)'],
+    title: 'Индекс для последних заказов клиента',
+    statement: 'Запрос выбирает 20 последних заказов одного клиента:\nSELECT * FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20.\n\nКакой индекс сильнее всего сузит поиск до начала сортировки?',
+  },
+  {
+    id: 'idem', label: 'Открытый ответ: повтор оплаты', answer_type: 'open',
+    title: 'Повторный запрос оплаты',
+    statement: 'Клиент дважды отправил одну и ту же оплату. Опишите, как API отличит повтор от нового платежа: что сохранить, что вернуть на повтор и что не списать второй раз. Достаточно подхода, код не обязателен.',
+  },
+  {
+    id: 'lab', label: 'Код: лаборатория', answer_type: 'code', lab_id: 'sum_positive',
+    title: '', statement: '',
+  },
+]
+
 const TYPES: { value: TaskAnswerType; label: string; hint: string }[] = [
   { value: 'number', label: 'Число', hint: 'Проверит система по эталону' },
   { value: 'choice', label: 'Выбор варианта', hint: 'Проверит система по эталону' },
@@ -69,6 +95,21 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
     correct_index: form.correct_index === i ? 0 : form.correct_index > i ? form.correct_index - 1 : form.correct_index,
   })
   const today = localDay()
+  const applyTemplate = (id: string) => {
+    const tpl = TEMPLATES.find(item => item.id === id)
+    if (!tpl) return
+    const catalog = problems.find(p => p.id === (tpl.lab_id ?? form.lab_id))
+    setForm({
+      ...form,
+      answer_type: tpl.answer_type,
+      title: tpl.title || catalog?.title || form.title,
+      statement: tpl.statement || catalog?.statement || form.statement,
+      reference_number: tpl.reference_number ?? form.reference_number,
+      options: tpl.options ?? form.options,
+      correct_index: tpl.correct_index ?? form.correct_index,
+      lab_id: tpl.lab_id ?? form.lab_id,
+    })
+  }
 
   return (
     <Modal titleId="task-title" onClose={onClose} sheet>
@@ -85,6 +126,13 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
           <button type="button" onClick={onClose} className="btn-icon" aria-label="Закрыть"><X size={18} /></button>
         </div>
         <div className="mt-5 max-h-[62dvh] space-y-4 overflow-y-auto pr-1">
+          <div><label className="field-label" htmlFor="t-template">Шаблон, если нужен</label>
+            <select id="t-template" className="select" defaultValue="" onChange={e => applyTemplate(e.target.value)}>
+              <option value="">Свой текст</option>
+              {TEMPLATES.map(tpl => <option key={tpl.id} value={tpl.id}>{tpl.label}</option>)}
+            </select>
+            <p className="field-hint">Шаблон только заполняет поля. Эталон и открытый ответ по-прежнему проверяются как раньше, грейд не меняется.</p>
+          </div>
           <div><label className="field-label" htmlFor="t-title">Название</label>
             <input id="t-title" value={form.title} onChange={set('title')} className="input" maxLength={200}
               placeholder="Сколько строк вернёт запрос" autoFocus /></div>
