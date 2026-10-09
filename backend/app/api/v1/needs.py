@@ -16,10 +16,19 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.core.redis_client import get_redis
-from app.models import CategoryAssignment, InterviewSlot, Need, NeedShortlist, NeedVersion, Offer, Participant
+from app.models import (
+    CategoryAssignment,
+    GradeConfirmation,
+    InterviewSlot,
+    Need,
+    NeedShortlist,
+    NeedVersion,
+    Offer,
+    Participant,
+)
 from app.services.matching import NeedSpec, anonymous_compare
 from app.services.search import cache as shortlist_cache
-from app.services.search.pipeline import _build_cards, score_pool, search_candidates
+from app.services.search.pipeline import _build_cards, score_pool, search_candidates, shown_category
 from app.services.skills import normalize_skill
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
@@ -270,6 +279,7 @@ async def _hydrate(db: AsyncSession, page: dict) -> dict:
         return page
     ordered = []
     have: dict[uuid.UUID, set[str]] = {}
+    scored: dict[uuid.UUID, tuple] = {}
     for item in items:
         try:
             pid = uuid.UUID(item["candidate_id"])
@@ -277,7 +287,9 @@ async def _hydrate(db: AsyncSession, page: dict) -> dict:
             continue
         ordered.append(pid)
         have[pid] = set(item.get("have") or [])
-    cards = await _build_cards(db, ordered, set(page.get("query_skills") or []), have, set(), None)
+        if item.get("scored_role"):
+            scored[pid] = (item.get("scored_role"), item.get("scored_grade"), item.get("scored_source"))
+    cards = await _build_cards(db, ordered, set(page.get("query_skills") or []), have, set(), None, None, scored)
     by_id = {card["candidate_id"]: card for card in cards}
     merged = []
     for item in items:
@@ -405,10 +417,25 @@ async def get_shortlist(need_id: uuid.UUID, current: dict = Depends(get_current_
     rows = [r for r in rows if (person := people.get(r.participant_id)) is not None and person.discoverable]
     cats = {c.participant_id: c for c in await db.scalars(select(CategoryAssignment).where(
         CategoryAssignment.participant_id.in_([r.participant_id for r in rows])))} if rows else {}
+    need_role = ((await _params(db, need)).params or {}).get("role")
+    confs = {}
+    if need_role and rows:
+        confs = {c.participant_id: c for c in await db.scalars(select(GradeConfirmation).where(
+            GradeConfirmation.participant_id.in_([r.participant_id for r in rows]),
+            GradeConfirmation.specialization == need_role))}
     funnel = {s: sum(1 for r in rows if r.status == s) for s in ("shortlisted", "invited", "rejected")}
-    return {"funnel": funnel, "items": [{
-        "candidate_id": str(r.participant_id), "status": r.status, "note": r.note, "score": r.score,
-        "picked_on_version": r.version, "added_at": r.added_at.isoformat(),
-        "role": cats[r.participant_id].primary_role if r.participant_id in cats else None,
-        "grade": cats[r.participant_id].grade if r.participant_id in cats else None,
-    } for r in rows]}
+    items = []
+    for r in rows:
+        cat = cats.get(r.participant_id)
+        conf = confs.get(r.participant_id)
+        role, grade, source, also = shown_category(
+            cat.primary_role if cat else None, cat.grade if cat else None,
+            cat.grade_source if cat else None,
+            conf.specialization if conf else None, conf.grade if conf else None,
+            "assessed" if conf else None)
+        items.append({
+            "candidate_id": str(r.participant_id), "status": r.status, "note": r.note, "score": r.score,
+            "picked_on_version": r.version, "added_at": r.added_at.isoformat(),
+            "role": role, "grade": grade, "grade_source": source, "also_primary": also,
+        })
+    return {"funnel": funnel, "items": items}
