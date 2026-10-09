@@ -81,7 +81,7 @@ function ExposureBars({ families, answers, target }: { families: FamilyRow[]; an
             <g key={row.family_id}>
               <rect data-family={row.family_id} data-answers={row.answers} x={x} y={y} width={barW} height={plotBottom - y}
                 fill="rgb(var(--accent))" rx="2" />
-              {i < 3 && barW >= 56 && (
+              {i < 3 && (
                 <text x={x + barW / 2} y={y - 4} textAnchor="middle" fill="rgb(var(--ink))" fontSize="12">
                   {shareLabel(shares[i])}
                 </text>

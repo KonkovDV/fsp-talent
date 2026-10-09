@@ -75,6 +75,27 @@ describe('страница методики', () => {
     expect(screen.getByText('50 % · 20 % · 20 %')).toBeInTheDocument()
   })
 
+  it('подписывает первые три столбца и когда семейств много', async () => {
+    const many = {
+      ...shown,
+      answers: 160,
+      families: Array.from({ length: 16 }, (_, index) => ({
+        family_id: `f${index}`,
+        title: `Семейство ${index}`,
+        answers: 16 - index,
+        cusum: 0,
+        quarantined: 0,
+        max_share: (16 - index) / 160,
+      })),
+    }
+    vi.mocked(itemPsychometrics).mockResolvedValue({ data: many } as never)
+    renderPage()
+    const chart = await screen.findByRole('img', { name: /Показы по семействам, максимум 10 %/ })
+    expect(chart.querySelectorAll('text')).toHaveLength(3)
+    expect([...chart.querySelectorAll('[data-family]')].slice(0, 3).map(node => node.getAttribute('data-family')))
+      .toEqual(['f0', 'f1', 'f2'])
+  })
+
   it('пишет долю на стенде, 34 % симуляции и цель 0,40', async () => {
     vi.mocked(itemPsychometrics).mockResolvedValue({ data: shown } as never)
     renderPage()
