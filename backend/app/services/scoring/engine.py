@@ -24,12 +24,12 @@ Per discipline (empirical-Bayes shrinkage to the population prior):
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
   lcb   = mu - sigma                               ranking key (conservative)
 
-A plain participation scores 0, so it does not lift the mean, and in this version it can lower it.
-The best-subset bound that does not fall is `lcb_star`. It was measured on the holdout seeds and
-not shipped: nDCG dropped past the allowed bound (docs/VALIDATION_MATCHING.md).
-Team results reduce evidence weight (wider sigma) instead of lowering the level; the team
-contribution is not separated (Q&A). The score composition is unchanged in v3.2.0. The rank is
-not computed here: it is a registry fact
+A plain participation scores 0. It does not lift the mean, and because a zero still
+enters the count it can lower the lower bound. The best-subset bound that does not fall
+is `lcb_star`. It was measured on the holdout seeds and not shipped: nDCG dropped past
+the allowed bound (docs/VALIDATION_MATCHING.md). Team results reduce evidence
+weight (wider sigma) instead of lowering the level; the team contribution is not separated (Q&A).
+The score composition is unchanged in v3.2.0. The rank is not computed here: it is a registry fact
 (discipline, rank, assignment date, order number) stored beside the score and it still does not enter it.
 All constants are expert priors; any change to the score must bump VERSION.
 """

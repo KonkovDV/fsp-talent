@@ -159,8 +159,30 @@ def require_method_figures(readme: str) -> None:
             raise SystemExit(f"README не содержит «{value}»")
 
 
+def forbid_stale_method_names() -> None:
+    """A point estimate of θ̂ is not an M-step. A participation that scores 0 can still lower the bound."""
+    roots = [ROOT / "backend" / "app", ROOT / "backend" / "tests", ROOT / "docs", ROOT / "README.md"]
+    files: list[Path] = []
+    for root in roots:
+        if root.is_file():
+            files.append(root)
+        else:
+            files.extend(path for path in root.rglob("*") if path.suffix in {".py", ".md"})
+    for path in files:
+        if path.name == "doc_numbers.py":
+            continue
+        if any(part in {".venv", "node_modules", "__pycache__"} for part in path.parts):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "M-step of MML-EM" in text:
+            raise SystemExit(f"{path} содержит «M-step of MML-EM»")
+        if "never lifts the mean" in text and "does not lower" not in text:
+            raise SystemExit(f"{path} содержит «never lifts the mean» без «does not lower»")
+
+
 def main() -> None:
     forbid_stale_discipline_claims()
+    forbid_stale_method_names()
     count = collected_tests()
     measured, total, services, api = coverage_parts()
     digest, precision = matching_report()
