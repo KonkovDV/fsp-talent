@@ -12,6 +12,7 @@ from app.core.security import (
     create_token,
     decode_token,
     hash_password,
+    password_matches,
     verify_password,
 )
 from app.models.participant import Participant
@@ -37,6 +38,25 @@ def test_expired_and_tampered_tokens_are_rejected():
     header, body, sig = raw.split(".")
     with pytest.raises(ValueError):
         decode_token(f"{header}.{body}.{'A' * len(sig)}")
+
+
+def test_a_missing_password_hash_still_runs_bcrypt(monkeypatch):
+    seen = []
+
+    def fake(plain: str, hashed: str) -> bool:
+        seen.append(hashed)
+        return True
+
+    monkeypatch.setattr("app.core.security.verify_password", fake)
+    assert password_matches("demo12345", None) is False
+    assert password_matches("demo12345", "") is False
+    assert seen and all(item.startswith("$2b$") for item in seen)
+
+
+def test_password_matches_the_stored_hash_only():
+    stored = hash_password("demo12345")
+    assert password_matches("demo12345", stored)
+    assert not password_matches("wrong-pass", stored)
 
 
 def test_bcrypt_does_not_store_the_password():

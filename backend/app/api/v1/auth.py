@@ -31,6 +31,7 @@ from app.core.security import (
     epochs_match,
     hash_password,
     next_refresh_nonce,
+    password_matches,
     verify_password,
 )
 from app.models import (
@@ -333,7 +334,8 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         raise ApiError(401, "invalid_credentials",
                        "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
     account = await _account(db, role, email)
-    if account is None or not account.password_hash or not verify_password(form.password, account.password_hash):
+    stored = account.password_hash if account is not None else None
+    if not password_matches(form.password, stored):
         raise ApiError(401, "invalid_credentials")
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
@@ -575,8 +577,14 @@ class FspSignUpIn(BaseModel):
     consents: list[str] = Field(default_factory=list, max_length=10)
 
 
-def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+def client_address(request: Request) -> str:
+    """The visitor's address. Behind the site proxy the socket peer is that proxy, one address for everyone."""
+    recorded = (request.headers.get("x-real-ip") or "").strip()
+    if recorded:
+        return recorded[:64]
+    if request.client is not None and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 async def _registry(fsp_id: str):
@@ -596,7 +604,7 @@ async def _linked(db: AsyncSession, fsp_id: str) -> Participant | None:
 @router.post("/fsp/authorize")
 async def fsp_signin_authorize(request: Request):
     """Start signing in by FSP ID: the address of the provider's login page. No platform session needed."""
-    await _limit("fsp-signin", _client_ip(request), limit=20)
+    await _limit("fsp-signin", client_address(request), limit=20)
     started = await fsp_identity.start_signin()
     return {"authorize_url": started.authorize_url, "provider": fsp_identity.get_fsp_id_provider().name}
 
