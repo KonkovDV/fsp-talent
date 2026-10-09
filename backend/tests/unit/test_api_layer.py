@@ -741,7 +741,10 @@ async def test_public_profile_credential_and_pdf(quiet):
     with pytest.raises(HTTPException) as huge:
         await public.verify_posted(_request(b"{" + b" " * 70_000), Bag())
     assert huge.value.status_code == 413
-    assert await public.demo_stand() == {"demo_mode": bool(settings.DEMO_MODE)}
+    assert await public.demo_stand() == {
+        "demo_mode": bool(settings.DEMO_MODE),
+        "mail_console": bool(settings.DEMO_MODE and settings.MAIL_MODE == "console"),
+    }
 
 
 async def test_data_export_for_both_roles(quiet):

@@ -12,6 +12,7 @@ import hmac
 import uuid
 
 from app.core.config import settings
+from app.core.demo_guard import is_protected
 
 MIN_AGE = 15
 
@@ -29,6 +30,19 @@ def guardian_token(participant_id: uuid.UUID, email: str) -> str:
 def consent_link(base: str, token: str) -> str:
     """The token rides in the fragment, so the access log and the Referer never see it."""
     return f"{base.rstrip('/')}/guardian#token={token}"
+
+
+def demo_consent_link(participant_id: uuid.UUID, email: str | None) -> str | None:
+    """The link on the participant's own screen, when the stand does not send letters.
+
+    Both demo flags are required, the same rule as the registration code. A protected demo
+    address does not get one: those accounts are shared, and the link would confirm consent.
+    """
+    if not email or not (settings.DEMO_MODE and settings.DEMO_SHOW_CODE):
+        return None
+    if is_protected(email):
+        return None
+    return consent_link(settings.PUBLIC_BASE_URL, guardian_token(participant_id, email))
 
 
 def token_participant(token: str) -> uuid.UUID | None:

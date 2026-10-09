@@ -1,16 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ShieldCheck } from 'lucide-react'
 import { apiError, askGuardian } from '../api/client'
 
 /** A candidate aged 15–17 names a legal representative; the card enters search after the guardian confirms. */
-export default function GuardianCard({ sentTo }: { sentTo: string | null }) {
+export default function GuardianCard({ sentTo, demoLink }: { sentTo: string | null; demoLink?: string | null }) {
   const qc = useQueryClient()
   const [email, setEmail] = useState(sentTo ?? '')
   const [note, setNote] = useState('')
+  const [link, setLink] = useState(demoLink ?? '')
+  useEffect(() => { setLink(demoLink ?? '') }, [demoLink])
   const send = useMutation({
-    mutationFn: () => askGuardian(email.trim()),
-    onSuccess: () => { setNote('Письмо отправлено. Карточка появится в поиске, когда представитель подтвердит согласие.'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
+    mutationFn: () => askGuardian(email.trim()).then(r => r.data),
+    onSuccess: (data) => {
+      setLink(data.demo_link ?? '')
+      setNote('Письмо отправлено. Карточка появится в поиске, когда представитель подтвердит согласие.')
+      qc.invalidateQueries({ queryKey: ['myProfile'] })
+    },
     onError: (e: unknown) => setNote(apiError(e)),
   })
   return (
@@ -29,6 +35,12 @@ export default function GuardianCard({ sentTo }: { sentTo: string | null }) {
         <button type="submit" className="btn-primary" disabled={!email.includes('@') || send.isPending}>{sentTo ? 'Отправить ещё раз' : 'Отправить запрос'}</button>
       </form>
       {(note || sentTo) && <p className="text-sm text-ink-2" role="status">{note || `Запрос отправлен на ${sentTo}. Ждём подтверждения.`}</p>}
+      {link && (
+        <p className="notice-info" role="status">
+          Демо-стенд: письма отсюда не уходят. Ссылка для представителя —{' '}
+          <a className="break-all font-medium text-accent" href={link}>{link}</a>
+        </p>
+      )}
     </section>
   )
 }
