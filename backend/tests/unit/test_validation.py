@@ -9,13 +9,29 @@ from app.validation.assessment import (
     Truth,
     _decision_consistency,
     _path_detail_lines,
+    cohort,
     multiclass_rudner,
+    population,
     reliability_curve,
     run,
+    sh_holdout,
+    sh_step,
     simulate_path,
     study_paths,
 )
 from app.validation.matching import _facts, _spec, make_dataset, overrated_parts, overrated_share, rank, sha256
+
+
+def test_sympson_hetter_step_shrinks_an_overexposed_key():
+    assert sh_step(1.0, 0.8, 0.40) == 0.5
+    assert sh_step(0.5, 0.1, 0.40) == 1.0
+    assert sh_step(0.4, 0.0, 0.40) == 0.4
+    people = population(8, random.Random(1))
+    truth = Truth.draw(random.Random(2))
+    _, sessions = cohort(people, truth, random.Random(3), by_spec=True, control={"py_eval:3": 0.3})
+    assert len(sessions) == 8
+    # The holdout command is the record of a rejected experiment. A tiny cohort only executes it.
+    assert sh_holdout(12) in (True, False)
 
 
 def test_assessment_validation_bounds():

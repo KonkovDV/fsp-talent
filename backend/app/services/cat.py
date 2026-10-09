@@ -258,7 +258,8 @@ class Choice:
 
 
 def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = None,
-           exposure: dict[str, float] | None = None, blocked: set[str] | None = None) -> Choice:
+           exposure: dict[str, float] | None = None, blocked: set[str] | None = None,
+           control: dict[str, float] | None = None) -> Choice:
     """Pick the next family and level.
 
     offsets: calibrated difficulty shift per item key; exposure: share of recent sessions that used the key;
@@ -294,10 +295,11 @@ def choose(state: State, rng: random.Random, offsets: dict[str, float] | None = 
     if not candidates:
         raise LookupError(f"no eligible items for {state.spec}")
     candidates.sort(key=lambda ch: -ch.score)
-    return sympson_hetter(candidates[:RANDOMESQUE], rng, exposure)
+    return sympson_hetter(candidates[:RANDOMESQUE], rng, exposure, control)
 
 
-def sympson_hetter(window: list[Choice], rng: random.Random, exposure: dict[str, float]) -> Choice:
+def sympson_hetter(window: list[Choice], rng: random.Random, exposure: dict[str, float],
+                   control: dict[str, float] | None = None) -> Choice:
     """Serve one item from the randomesque window.
 
     An empty exposure record keeps the uniform draw. Once a key's share is above the target,
@@ -306,6 +308,13 @@ def sympson_hetter(window: list[Choice], rng: random.Random, exposure: dict[str,
     """
     if not window:
         raise LookupError("empty item window")
+    # A calibrated Sympson–Hetter constant replaces the observed-rate rule. The last item is still certain.
+    if control is not None:
+        for choice in window[:-1]:
+            probability = control.get(item_key(choice.family, choice.level), 1.0)
+            if rng.random() < probability:
+                return choice
+        return window[-1]
     if not exposure or len(window) == 1:
         return rng.choice(window)
     for choice in window[:-1]:
