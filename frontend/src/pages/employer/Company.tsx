@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, getEmployerMe, updateEmployerMe } from '../../api/client'
+import { apiError, atsSandbox, getEmployerMe, updateEmployerMe } from '../../api/client'
 import AccountSecurity from '../../components/AccountSecurity'
 import { PageHeader } from '../../components/ui'
 
@@ -11,6 +11,8 @@ export default function EmployerCompany() {
   const [form, setForm] = useState({ company_name: '', inn: '', website: '', industry: '', description: '' })
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
+  const [slip, setSlip] = useState<{ signature: string; valid: boolean; delivered: boolean; event: { type: string } } | null>(null)
+  const [slipError, setSlipError] = useState('')
 
   useEffect(() => {
     if (!data) return
@@ -33,6 +35,12 @@ export default function EmployerCompany() {
     }),
     onSuccess: () => { setError(''); setNote('Сохранено'); qc.invalidateQueries({ queryKey: ['employerMe'] }) },
     onError: (e: unknown) => { setNote(''); setError(apiError(e, 'Не сохранилось')) },
+  })
+
+  const showSlip = useMutation({
+    mutationFn: () => atsSandbox().then(r => r.data),
+    onSuccess: (data) => { setSlipError(''); setSlip(data) },
+    onError: (e: unknown) => { setSlip(null); setSlipError(apiError(e, 'Квитанция не собрана')) },
   })
 
   const set = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -92,6 +100,18 @@ export default function EmployerCompany() {
         <p className="field-hint mt-2">Роль и зарплата в примере условные: в настоящем приглашении — те, что вы укажете.</p>
       </aside>
       </div>
+      <section className="card mt-6 max-w-xl space-y-3" aria-label="Квитанция ATS">
+        <h2 className="font-medium text-ink">Квитанция ATS</h2>
+        <p className="text-sm text-ink-2">Пример события «приглашение принято» подписывается на стенде. Контактов в нём нет, адрес наружу не вызывается.</p>
+        <button type="button" className="btn-secondary" disabled={showSlip.isPending} onClick={() => showSlip.mutate()}>Показать квитанцию</button>
+        {slipError && <p className="notice-error" role="alert">{slipError}</p>}
+        {slip && (
+          <p className="text-sm text-ink" role="status">
+            {slip.event.type}. Подпись {slip.valid ? 'сходится' : 'не сходится'}. {slip.delivered ? 'Отправлено.' : 'Никуда не отправлено.'}
+            <span className="mt-1 block break-all font-mono text-xs text-ink-3">{slip.signature}</span>
+          </p>
+        )}
+      </section>
       <div className="mt-6 max-w-xl">
         <AccountSecurity />
       </div>

@@ -215,6 +215,7 @@ export const downloadInterview = (offerId: string) =>
   api.get(`/offers/${offerId}/interview.ics`, { responseType: 'blob' })
 
 export const getEmployerMe = () => api.get('/employer/me')
+export const atsSandbox = () => api.post('/employer/ats-sandbox')
 export const updateEmployerMe = (data: object) => api.patch('/employer/me', data)
 export const getMyVacancies = () => api.get('/vacancies/mine', { params: { limit: 50 } })
 export const updateVacancy = (id: string, data: object) => api.put(`/vacancies/${id}`, data)
