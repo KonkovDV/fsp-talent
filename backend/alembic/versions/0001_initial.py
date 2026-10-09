@@ -339,6 +339,7 @@ CREATE TABLE public.participants (
     phone character varying(20),
     birth_date date,
     region character varying(100),
+    work_formats jsonb DEFAULT '[]'::jsonb NOT NULL,
     experience_years integer,
     declared_grade character varying(20),
     is_visible boolean DEFAULT true NOT NULL,
@@ -1222,6 +1223,30 @@ ALTER TABLE public.complaints ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY complaints_actor ON public.complaints USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
+
+
+CREATE TABLE public.grade_disputes (
+    id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT grade_disputes_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_grade_dispute_session UNIQUE (session_id),
+    CONSTRAINT grade_disputes_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE,
+    CONSTRAINT grade_disputes_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.test_sessions(id) ON DELETE CASCADE
+);
+
+
+
+CREATE INDEX ix_grade_disputes_participant ON public.grade_disputes USING btree (participant_id);
+
+
+
+ALTER TABLE public.grade_disputes ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY grade_disputes_actor ON public.grade_disputes USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
 
 
 
