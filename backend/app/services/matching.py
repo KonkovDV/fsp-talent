@@ -40,6 +40,9 @@ WEIGHTS = {
     "fsp": 0.50,
 }
 UNTESTED = 0.20
+# A passed grade must not sit under an unchecked one. Holdout 4001–4005: Δ nDCG 0, Δ Spearman 0.
+PASS_TEST_FLOOR = True
+PASS_FLOOR = UNTESTED + 0.05
 # Weight of the evidence next to the fit (fit has weight 1).
 EVIDENCE_WEIGHT = 0.40
 # Width of one fit tier, used only while USE_FIT_TIERS is on.
@@ -437,6 +440,9 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                 shown = min(shown, wilson)
             elif wilson is not None:
                 shown = wilson
+            if (PASS_TEST_FLOOR and c.grade_source == "assessed" and need.grade
+                    and c.grade == need.grade):
+                shown = max(shown, PASS_FLOOR)
             if shown != c.test_p:
                 _note(plus, reasons, "plus", "TEST_SCORE",
                       f"Тест: нижняя граница уровня {round(shown * 100)} % "
