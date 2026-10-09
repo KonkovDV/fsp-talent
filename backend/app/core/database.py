@@ -20,7 +20,9 @@ AsyncSessionLocal = async_sessionmaker(
 
 @event.listens_for(engine.sync_engine, "begin")
 def _apply_rls(conn) -> None:
-    # The pool hands back the login role. A superuser ignores row-level security.
+    # The pool hands back the login role. A superuser ignores row-level security,
+    # so that connection becomes fsp_app for the transaction. Production logs in
+    # as fsp_app already, and this branch does not run.
     is_super = conn.execute(text(
         "SELECT rolsuper FROM pg_roles WHERE rolname = current_user"
     )).scalar()

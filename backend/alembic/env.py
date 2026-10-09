@@ -6,12 +6,12 @@ from alembic import context
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from app.core.config import settings
+from app.core.config import migration_database_url
 from app.core.database import Base
 import app.models  # noqa: F401 -- register all ORM models
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", migration_database_url())
 if config.config_file_name:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata

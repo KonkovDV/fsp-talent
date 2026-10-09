@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Optional 32+ byte secret for contact encryption. Empty means the signing key is the HKDF input.
     FIELD_ENCRYPTION_KEY: str = ""
     DATABASE_URL: str = "postgresql+asyncpg://fsp:fsp@localhost:5432/fsp_talent"
+    # Superuser address used only by alembic and by the one statement that lets fsp_app log in.
+    # Empty on a local run: migrations use DATABASE_URL.
+    MIGRATE_DATABASE_URL: str = ""
+    # When set, the API, worker and beat log in as fsp_app. Empty keeps the superuser login.
+    APP_DB_PASSWORD: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
     DEBUG: bool = False
     # The six-item jury trial is offered only when this is on. The demo compose turns it on.
@@ -141,3 +146,8 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+def migration_database_url() -> str:
+    """Address of the database owner. Alembic cannot run as fsp_app."""
+    return settings.MIGRATE_DATABASE_URL or settings.DATABASE_URL

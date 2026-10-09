@@ -286,14 +286,47 @@ def test_offer_terms_stay_immutable_and_one_pending_pair_is_unique():
     assert "uq_offers_pending_pair" in migration.read_text(encoding="utf-8")
 
 
-def test_app_connections_leave_the_superuser_role():
+def test_app_connections_leave_the_superuser_role(monkeypatch):
+    import asyncio
     from pathlib import Path
 
-    migration = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0001_initial.py"
-    text = migration.read_text(encoding="utf-8")
-    assert "CREATE ROLE fsp_app NOLOGIN NOSUPERUSER NOBYPASSRLS" in text
-    engine = Path(__file__).resolve().parents[2] / "app" / "core" / "database.py"
-    assert "SET SESSION AUTHORIZATION fsp_app" in engine.read_text(encoding="utf-8")
+    from app.core import app_login
+    from app.core.config import migration_database_url, settings
+
+    root = Path(__file__).resolve().parents[3]
+    backend = Path(__file__).resolve().parents[2]
+    migration = (backend / "alembic" / "versions" / "0001_initial.py").read_text(encoding="utf-8")
+    assert "CREATE ROLE fsp_app NOLOGIN NOSUPERUSER NOBYPASSRLS" in migration
+    assert "SET SESSION AUTHORIZATION fsp_app" in (backend / "app" / "core" / "database.py").read_text(encoding="utf-8")
+    compose = (root / "deploy" / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    assert compose.count("postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent") == 3
+    assert compose.count("postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent") == 1
+    assert "python -m app.core.app_login" in (backend / "Dockerfile").read_text(encoding="utf-8")
+    monkeypatch.setattr(settings, "MIGRATE_DATABASE_URL", "postgresql+asyncpg://fsp:owner@db/fsp_talent")
+    monkeypatch.setattr(settings, "DATABASE_URL", "postgresql+asyncpg://fsp_app:app@db/fsp_talent")
+    assert migration_database_url() == "postgresql+asyncpg://fsp:owner@db/fsp_talent"
+    assert app_login.login_statement("ab" * 16).endswith("'" + ("ab" * 16) + "'")
+    monkeypatch.delenv("APP_DB_PASSWORD", raising=False)
+    asyncio.run(app_login.enable())
+    monkeypatch.setenv("APP_DB_PASSWORD", "cd" * 16)
+    monkeypatch.setenv("MIGRATE_DATABASE_URL", "postgresql+asyncpg://fsp:owner@db/fsp_talent")
+    done = {}
+
+    class Conn:
+        async def execute(self, statement):
+            done["sql"] = statement
+
+        async def close(self):
+            done["closed"] = True
+
+    async def connect(url):
+        done["url"] = url
+        return Conn()
+
+    monkeypatch.setitem(__import__("sys").modules, "asyncpg", type("M", (), {"connect": staticmethod(connect)}))
+    asyncio.run(app_login.enable())
+    assert done["url"] == "postgresql://fsp:owner@db/fsp_talent"
+    assert done["closed"] is True
 
 
 def test_settings_secret_is_the_signing_key():
