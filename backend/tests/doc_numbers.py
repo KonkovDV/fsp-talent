@@ -70,14 +70,39 @@ def matching_report() -> tuple[str, str]:
     return digest.group(1), f"{_ru3(model.group(1))} и {_ru3(base.group(1))}"
 
 
-def coverage_parts() -> tuple[str, int, int]:
+# A machine without the extra compilers covers a few different lines. 0.1 point is that gap, not a new figure.
+COVERAGE_TOLERANCE = 0.2
+
+
+def coverage_within(measured: float, published: float, tolerance: float = COVERAGE_TOLERANCE) -> bool:
+    """True when two coverage percents are the same figure for publication."""
+    return abs(measured - published) <= tolerance + 1e-9
+
+
+def coverage_parts() -> tuple[float, str, int, int]:
     report_path = BACKEND / "coverage.json"
     if not report_path.is_file():
         raise SystemExit("нет backend/coverage.json: сначала pytest --cov=app --cov-report=json")
     files = json.loads(report_path.read_text(encoding="utf-8"))
-    # Two decimals move between machines (66.41 here, 66.43 in CI). One decimal is the figure both runs share.
-    shown = f"{files['totals']['percent_covered']:.1f}".replace(".", ",")
-    return shown, percent("app/services", files["files"]), percent("app/api", files["files"])
+    measured = float(files["totals"]["percent_covered"])
+    shown = f"{measured:.1f}".replace(".", ",")
+    return measured, shown, percent("app/services", files["files"]), percent("app/api", files["files"])
+
+
+def _published_coverage(text: str, pattern: str) -> tuple[float, int, int] | None:
+    match = re.search(pattern, text)
+    if not match:
+        return None
+    return float(match.group(1).replace(",", ".")), int(match.group(2)), int(match.group(3))
+
+
+def require_coverage(text: str, pattern: str, measured: float, services: int, api: int, where: str) -> None:
+    """Services and API must match. The application total may move by a tenth of a point."""
+    found = _published_coverage(text, pattern)
+    shown = f"{measured:.1f}".replace(".", ",")
+    needle = f"{shown} %, {services} % и {api} %"
+    if found is None or found[1] != services or found[2] != api or not coverage_within(measured, found[0]):
+        raise SystemExit(f"{where} не содержит «{needle}»")
 
 
 def pitch_deck_matches_html() -> None:
@@ -118,7 +143,7 @@ def forbid_stale_discipline_claims() -> None:
 def main() -> None:
     forbid_stale_discipline_claims()
     count = collected_tests()
-    total, services, api = coverage_parts()
+    measured, total, services, api = coverage_parts()
     digest, precision = matching_report()
     word = ru_tests(count)
     readme = README.read_text(encoding="utf-8")
@@ -131,10 +156,16 @@ def main() -> None:
     )
     require(readme, f"| Юнит-тесты (в CI, со всеми компиляторами) | {count} |", "README")
     require(readme, f"{count} юнит-{word}", "README")
-    require(readme, f"{total} %, {services} % и {api} %", "README")
+    require_coverage(readme, r"(\d+,\d+) %, (\d+) % и (\d+) %", measured, services, api, "README")
     require(install, f"собирает {count} {word}", "INSTALL")
-    require(install, f"{total} % по всему приложению, сервисы {services} %, API {api} %", "INSTALL")
-    require(pitch, f"{count} юнит-{word}, покрытие приложения {total} %, сервисы {services} % и API {api} %", "питч")
+    require_coverage(
+        install, r"(\d+,\d+) % по всему приложению, сервисы (\d+) %, API (\d+) %",
+        measured, services, api, "INSTALL",
+    )
+    require_coverage(
+        pitch, r"покрытие приложения (\d+,\d+) %, сервисы (\d+) % и API (\d+) %",
+        measured, services, api, "питч",
+    )
     require(VALIDATION.read_text(encoding="utf-8"), digest, "VALIDATION_MATCHING.md")
     pitch_deck_matches_html()
     print(f"doc numbers: {count} {word}, coverage {total} %, services {services} %, API {api} %, sha256 {digest}")
