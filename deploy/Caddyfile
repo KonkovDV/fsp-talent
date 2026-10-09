@@ -9,13 +9,15 @@
 		X-Frame-Options SAMEORIGIN
 		Referrer-Policy strict-origin-when-cross-origin
 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
 
 	@api path /api/* /health /docs /docs/* /openapi.json
 	handle @api {
+		# A larger body is answered 413. The application caps a resume at 5 MB.
 		request_body {
-			max_size 6MB
+			max_size 10MB
 		}
 		reverse_proxy backend:8000 {
 			header_up X-Real-IP {remote_host}
