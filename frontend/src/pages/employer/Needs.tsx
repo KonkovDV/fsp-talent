@@ -312,12 +312,13 @@ export default function EmployerNeeds() {
                   {shortItems.length === 0 ? <Empty title="Шорт-лист пуст">Отмечайте кандидатов звёздочкой в подборке.</Empty> : (
                     <>
                     <ul className="space-y-3 sm:hidden">
-                      {shortItems.map((r: { candidate_id: string; role: string; grade: string; score: number; picked_on_version: number; added_at: string }) => (
+                      {shortItems.map((r: { candidate_id: string; role: string; grade: string; grade_source?: string | null; also_primary?: { role: string | null; grade: string | null; grade_source: string | null } | null; score: number; picked_on_version: number; added_at: string }) => (
                         <li key={r.candidate_id} className="card space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <CategoryPlate role={r.role} grade={r.grade} />
+                            <CategoryPlate role={r.role} grade={r.grade} source={r.grade_source} />
                             <span className="num text-lg font-semibold text-ink">{Math.round((r.score ?? 0) * 100)}</span>
                           </div>
+                          {r.also_primary?.role && <p className="text-xs text-ink-3">Основная категория: {ROLE_RU[r.also_primary.role] ?? r.also_primary.role}{r.also_primary.grade ? `, ${gradeRu(r.also_primary.grade)}` : ''}</p>}
                           <p className="text-sm text-ink-2">Выбран по версии {r.picked_on_version}{r.picked_on_version !== current.version && ' (до изменения)'}</p>
                           <p className="text-sm text-ink-2">Добавлен {date(r.added_at)}</p>
                           <button onClick={() => setOfferFor(r.candidate_id)} className="btn-invite-quiet btn-sm">Пригласить</button>
@@ -328,9 +329,12 @@ export default function EmployerNeeds() {
                       <table className="protocol">
                         <thead><tr><th>Категория</th><th className="text-right">Совпадение</th><th>Выбран по версии</th><th>Добавлен</th><th /></tr></thead>
                         <tbody>
-                          {shortItems.map((r: { candidate_id: string; role: string; grade: string; score: number; picked_on_version: number; added_at: string }) => (
+                          {shortItems.map((r: { candidate_id: string; role: string; grade: string; grade_source?: string | null; also_primary?: { role: string | null; grade: string | null } | null; score: number; picked_on_version: number; added_at: string }) => (
                             <tr key={r.candidate_id}>
-                              <td><CategoryPlate role={r.role} grade={r.grade} /></td>
+                              <td>
+                                <CategoryPlate role={r.role} grade={r.grade} source={r.grade_source} />
+                                {r.also_primary?.role && <p className="mt-1 text-xs text-ink-3">Основная категория: {ROLE_RU[r.also_primary.role] ?? r.also_primary.role}{r.also_primary.grade ? `, ${gradeRu(r.also_primary.grade)}` : ''}</p>}
+                              </td>
                               <td className="num text-right font-semibold text-ink">{Math.round((r.score ?? 0) * 100)}</td>
                               <td className="text-ink-2">версия {r.picked_on_version}{r.picked_on_version !== current.version && ' (до изменения)'}</td>
                               <td className="num text-ink-2">{date(r.added_at)}</td>

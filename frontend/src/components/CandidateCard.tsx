@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown, ClipboardList, Columns3, Star } from 'lucide-react'
-import { JOB_SEARCH_BADGE } from '../labels'
+import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 
 export interface CandidateCardData {
@@ -9,6 +9,7 @@ export interface CandidateCardData {
   role: string | null
   grade: string | null
   grade_source: string | null
+  also_primary?: { role: string | null; grade: string | null; grade_source: string | null } | null
   region: string | null
   experience_years: number | null
   stack: string[]
@@ -176,6 +177,13 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <CategoryPlate role={card.role} grade={card.grade} source={card.grade_source} />
+            {card.also_primary?.role && (
+              <span className="text-xs text-ink-3">
+                Основная категория: {ROLE_RU[card.also_primary.role] ?? card.also_primary.role}
+                {card.also_primary.grade ? `, ${gradeRu(card.also_primary.grade)}` : ''}
+                {card.also_primary.grade_source === 'assessed' ? ', подтверждена тестом' : ', не подтверждена'}
+              </span>
+            )}
             <span className="text-sm text-ink-2">
               {[card.region, card.experience_years != null ? (card.experience_years === 0 ? 'без опыта' : `опыт ${card.experience_years} ${years(card.experience_years)}`) : null].filter(Boolean).join(', ')}
             </span>

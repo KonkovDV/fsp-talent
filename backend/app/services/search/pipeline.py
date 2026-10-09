@@ -267,6 +267,28 @@ def _role_for_need(cat, need_role: str | None, confirmation) -> tuple[str | None
     return role, grade, source
 
 
+def shown_category(primary_role: str | None, primary_grade: str | None, primary_source: str | None,
+                   scored_role: str | None, scored_grade: str | None, scored_source: str | None,
+                   ) -> tuple[str | None, str | None, str | None, dict | None]:
+    """The card header is the pair that entered the score. The primary pair stays beside it."""
+    if scored_role and scored_role != primary_role:
+        also = None
+        if primary_role:
+            also = {"role": primary_role, "grade": primary_grade, "grade_source": primary_source}
+        return scored_role, scored_grade, scored_source, also
+    return primary_role, primary_grade, primary_source, None
+
+
+def _scored_roles(matches: dict, ids: list) -> dict:
+    out = {}
+    for pid in ids:
+        row = matches.get(pid)
+        facts = row.facts if row else None
+        if facts and facts.role:
+            out[pid] = (facts.role, facts.grade, facts.grade_source)
+    return out
+
+
 async def search_candidates(
     db: AsyncSession,
     role: str | None = None,
@@ -480,10 +502,14 @@ async def search_candidates(
         items = []
         for pid in ordered[:limit]:
             m = matches[pid]
+            facts = m.facts
             items.append({
                 "candidate_id": str(pid),
                 "have": sorted(have.get(pid, ())),
-                "skill_evidence": dict(m.facts.skills) if m.facts else {},
+                "skill_evidence": dict(facts.skills) if facts else {},
+                "scored_role": facts.role if facts else None,
+                "scored_grade": facts.grade if facts else None,
+                "scored_source": facts.grade_source if facts else None,
                 "match": _match_body(m, pid in cold_seats),
             })
         return {**header, "items": items}
@@ -492,7 +518,8 @@ async def search_candidates(
         pid: (matches[pid].facts.fsp_lcb, matches[pid].facts.fsp_kind, matches[pid].facts.fsp_discipline)
         for pid in ordered if matches.get(pid) and matches[pid].facts
     }
-    cards = await _build_cards(db, ordered, wanted, have, dense_hit, discipline, chosen)
+    cards = await _build_cards(
+        db, ordered, wanted, have, dense_hit, discipline, chosen, _scored_roles(matches, ordered))
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
         card["match"] = _match_body(m, uuid.UUID(card["candidate_id"]) in cold_seats)
@@ -664,7 +691,7 @@ async def _category_percentiles(db, cats: dict) -> dict:
 
 
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
-                       fsp_choice: dict | None = None) -> list[dict]:
+                       fsp_choice: dict | None = None, scored: dict | None = None) -> list[dict]:
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ordered)))}
@@ -708,8 +735,18 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
                                 "rank_assigned_at": ds.rank_assigned_at.isoformat() if ds.rank_assigned_at else None,
                                 "rank_order_ref": ds.rank_order_ref,
                                 "events_count": ds.events_count, "evidence": evidence})
-        if cat and cat.grade_source == "assessed":
-            why.append(f"Грейд {cat.grade} подтверждён тестом")
+        header_role = cat.primary_role if cat else None
+        header_grade = cat.grade if cat else None
+        header_source = cat.grade_source if cat else None
+        row = (scored or {}).get(pid)
+        header_role, header_grade, header_source, also_primary = shown_category(
+            header_role, header_grade, header_source,
+            row[0] if row else None, row[1] if row else None, row[2] if row else None)
+        if header_source == "assessed" and header_grade:
+            why.append(f"Грейд {header_grade} подтверждён тестом")
+        if also_primary and also_primary.get("role"):
+            state = "подтверждена тестом" if also_primary.get("grade_source") == "assessed" else "не подтверждена"
+            why.append(f"Основная категория: {also_primary['role']}, {also_primary['grade']}, {state}")
         if disciplines:
             picked = (fsp_choice or {}).get(pid)
             if discipline_filter:
@@ -744,9 +781,10 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             why.append(line)
         cards.append({
             "candidate_id": str(pid),
-            "role": cat.primary_role if cat else None,
-            "grade": cat.grade if cat else None,
-            "grade_source": cat.grade_source if cat else None,
+            "role": header_role,
+            "grade": header_grade,
+            "grade_source": header_source,
+            "also_primary": also_primary,
             "region": p.region,
             "experience_years": p.experience_years,
             "stack": cat.stack if cat else [],
