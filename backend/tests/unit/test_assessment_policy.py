@@ -391,6 +391,14 @@ def test_family_cusum_watches_share_and_time_and_does_not_grade():
     fast = note_family_cusum(fast, "py_eval", correct=True, elapsed=1.0, kind="code")
     assert fast["family_cusum_review"] == "py_eval"
     assert fast["family_pace"]["py_eval"]["time_cusum"] > fast["family_pace"]["py_eval"]["share_cusum"]
+    hot = {}
+    for _ in range(3):
+        hot = note_family_cusum(hot, "py_eval", correct=True, elapsed=40.0, kind="concept", expected_p=0.2)
+    assert hot["family_cusum_review"] == "py_eval"
+    calm = {}
+    for _ in range(3):
+        calm = note_family_cusum(calm, "py_eval", correct=True, elapsed=40.0, kind="concept", expected_p=0.95)
+    assert "family_cusum_review" not in calm
 
 
 def test_fast_correct_answers_roll_up_by_family():
