@@ -29,6 +29,12 @@
 		}
 	}
 
+	# These are not routes. The application page would answer 200 and look like a leaked file.
+	@hidden path /.env /.env.* /.git /.git/**
+	handle @hidden {
+		respond "Not Found" 404
+	}
+
 	handle {
 		reverse_proxy frontend:80
 	}
