@@ -14,7 +14,9 @@ import math
 import statistics
 from dataclasses import dataclass, field, replace
 
+from app.core.config import settings
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.grade_posterior import expected_rel, mass_assessed, mass_declared
 from app.services.scoring.engine import LCB0
 from app.services.survey import SPECIALIZATIONS
 
@@ -170,6 +172,8 @@ class CandidateFacts:
     salary_refusals: int = 0              # earlier declines whose reason was the pay band
     job_search: str = "open"              # active | open | not_looking; open multiplies P(accept) by 0.8
     interview_outcome: str | None = None  # passed | failed | no_show with this company; None leaves P(accept)
+    p_up: float | None = None             # P(θ ≥ cut of the next grade); used only by GRADE_MODEL=expected
+    fail_rate: float | None = None        # π for a declared grade; None keeps the legacy 0.85 factor
 
 
 @dataclass(frozen=True)
@@ -393,16 +397,31 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     if need.grade in GRADES and c.grade in GRADES:
         gap = GRADES.index(c.grade) - GRADES.index(need.grade)
         base = {0: 1.0, 1: 0.6, -1: 0.35}.get(gap, 0.0)
-        closeness *= base
         assessed = c.grade_source == "assessed"
-        values["grade"] = base * (1.0 if assessed or not use_test else DECLARED_GRADE)
+        expected = settings.GRADE_MODEL == "expected" and use_test and (assessed or c.fail_rate is not None)
+        if expected and assessed:
+            belief = mass_assessed(c.grade, c.test_p if c.test_p is not None else 1.0, c.p_up or 0.0)
+            grade_value = expected_rel(need.grade, belief)
+        elif expected and c.fail_rate is not None:
+            belief = mass_declared(c.grade, c.fail_rate)
+            grade_value = expected_rel(need.grade, belief)
+        else:
+            grade_value = base * (1.0 if assessed or not use_test else DECLARED_GRADE)
+        closeness *= grade_value if expected else base
+        values["grade"] = grade_value
         if gap == 0:
-            tail = " подтверждён тестом" if assessed else " указан кандидатом, тестом не подтверждён"
-            text = f"Грейд «{GRADE_RU[c.grade]}»{tail}"
-            if assessed:
-                _note(plus, reasons, "plus", "CATEGORY_MATCH", text)
-            else:
+            if expected and not assessed and c.fail_rate is not None:
+                passed = round((1.0 - c.fail_rate) * 100)
+                text = (f"Грейд заявлен; тест на этот грейд с первого раза сдают {passed} % "
+                        f"— вклад грейда ×{1.0 - c.fail_rate:.2f}")
                 _note(info, reasons, "info", "GRADE_DECLARED", text)
+            else:
+                tail = " подтверждён тестом" if assessed else " указан кандидатом, тестом не подтверждён"
+                text = f"Грейд «{GRADE_RU[c.grade]}»{tail}"
+                if assessed:
+                    _note(plus, reasons, "plus", "CATEGORY_MATCH", text)
+                else:
+                    _note(info, reasons, "info", "GRADE_DECLARED", text)
         elif gap > 0:
             _note(info, reasons, "info", "GRADE_ABOVE", f"Грейд выше запрошенного: {GRADE_RU[c.grade]}")
         else:

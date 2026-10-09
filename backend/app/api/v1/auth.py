@@ -612,6 +612,9 @@ def client_address(request: Request) -> str:
     return "unknown"
 
 
+_client_ip = client_address
+
+
 async def _registry(fsp_id: str):
     try:
         data = await get_fsp_adapter().fetch_participant(fsp_id)
