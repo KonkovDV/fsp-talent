@@ -7,7 +7,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test'
 const PASSWORD = 'demo12345'
 const BASE = process.env.E2E_BASE_URL || 'http://localhost'
 
-const screens: { name: string; path: string; heading: RegExp; account?: 'candidate' | 'employer' }[] = [
+const screens: { name: string; path: string; heading: RegExp; account?: 'candidate' | 'employer'; openInvite?: boolean }[] = [
   { name: 'главная', path: '/', heading: /Приглашайте разработчиков/ },
   { name: 'вход', path: '/login', heading: /^Вход$/ },
   { name: 'регистрация', path: '/register', heading: /^Регистрация$/ },
@@ -15,10 +15,13 @@ const screens: { name: string; path: string; heading: RegExp; account?: 'candida
   { name: 'жюри', path: '/jury', heading: /Режим жюри/ },
   { name: 'документы', path: '/legal', heading: /Документы и согласия/ },
   { name: 'кабинет кандидата', path: '/candidate', heading: /Здравствуйте|Кабинет/, account: 'candidate' },
+  { name: 'профиль кандидата', path: '/candidate/profile', heading: /.+/, account: 'candidate' },
   { name: 'тест', path: '/candidate/assessment', heading: /Тест на грейд/, account: 'candidate' },
   { name: 'приглашения кандидата', path: '/candidate/offers', heading: /^Приглашения$/, account: 'candidate' },
   { name: 'кабинет работодателя', path: '/employer', heading: /Кабинет работодателя/, account: 'employer' },
+  { name: 'потребности', path: '/employer/needs', heading: /^Потребности$/, account: 'employer' },
   { name: 'поиск', path: '/employer/search', heading: /Поиск кандидатов/, account: 'employer' },
+  { name: 'приглашение', path: '/employer/needs', heading: /^Потребности$/, account: 'employer', openInvite: true },
 ]
 
 const authDir = join(tmpdir(), 'fsp-a11y-auth')
@@ -74,6 +77,12 @@ for (const theme of ['light', 'dark'] as const) {
           await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
           await settle(page)
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+          if (screen.openInvite) {
+            const invite = page.getByRole('button', { name: 'Пригласить' }).first()
+            await expect(invite).toBeVisible()
+            await invite.click()
+            await expect(page.getByRole('heading', { name: 'Приглашение кандидату' })).toBeVisible()
+          }
           const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
           expect(fits, 'страница шире окна').toBe(true)
           const result = await new AxeBuilder({ page })
