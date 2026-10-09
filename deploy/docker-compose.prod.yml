@@ -22,7 +22,9 @@ services:
     build: ../backend
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
+      DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
+      MIGRATE_DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?}
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: https://${SITE_ADDRESS}
       CORS_ORIGINS: https://${SITE_ADDRESS}
@@ -49,7 +51,7 @@ services:
     build: ../backend
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
+      DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: https://${SITE_ADDRESS}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
@@ -74,7 +76,7 @@ services:
     build: ../backend
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
+      DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       DEMO_MODE: ${DEMO_MODE:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
