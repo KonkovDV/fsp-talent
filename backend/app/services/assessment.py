@@ -51,6 +51,7 @@ from app.services import cat
 from app.services.item_monitor import KeyStats, leave_family_out
 from app.services.person_fit import LZ_FLAG, person_fit
 from app.services.skills import normalize_skill
+from app.services.variant_mark import foreign_variant
 
 RETAKE_INTERVAL_DAYS = 7
 TIME_LIMIT_S = {"code": 180, "concept": 75}
@@ -489,6 +490,10 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     if current.timed_out:
         flags["timeouts"] = flags.get("timeouts", 0) + 1
     flags = note_pace(flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind)
+    if current.typed and current.answer_text and foreign_variant(
+            current.family_id, session.specialization, current.level,
+            str(current.options[current.correct_index]), current.answer_text):
+        flags["variant_review"] = current.family_id
     flags = note_family_cusum(
         flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind)
     session.flags = flags
