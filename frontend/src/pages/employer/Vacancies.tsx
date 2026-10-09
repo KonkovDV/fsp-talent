@@ -145,7 +145,24 @@ export default function EmployerVacancies() {
         {statusError && <p className="notice-error mt-3" role="alert">{statusError}</p>}
         {appsError ? <p className="notice-error mt-3" role="alert">{apiError(appsLoadError, 'Не удалось загрузить отклики')}</p>
           : applications.length === 0 ? <p className="mt-3 text-sm text-ink-2">Откликов пока нет.</p> : (
-          <div className="card mt-4 overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отклики на вакансию">
+          <>
+          <ul className="mt-4 space-y-3 sm:hidden">
+            {applications.map(a => (
+              <li key={a.id} className="card space-y-2">
+                <p className="font-medium text-ink">{a.vacancy_title}</p>
+                <p className="text-xs text-ink-3">{date(a.created_at)}</p>
+                <select className="select" value={a.status} aria-label={`Статус отклика ${a.vacancy_title}`}
+                  disabled={a.status === 'rejected' || a.status === 'accepted'}
+                  onChange={e => setAppStatus.mutate({ id: a.id, status: e.target.value })}>
+                  {Object.entries(APP_STATUS).filter(([k]) => k === a.status || k !== 'applied')
+                    .map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+                {contacts[a.id] ? <p className="text-sm text-ink">{contacts[a.id]}</p>
+                  : <button className="btn-secondary btn-sm" onClick={() => reveal.mutate(a.id)}>Показать контакты</button>}
+              </li>
+            ))}
+          </ul>
+          <div className="card mt-4 hidden overflow-x-auto p-0 sm:block" tabIndex={0} role="region" aria-label="Отклики на вакансию">
             <table className="protocol">
               <thead><tr><th>Вакансия</th><th>Дата</th><th>Статус</th><th>Контакты</th></tr></thead>
               <tbody>
@@ -168,6 +185,7 @@ export default function EmployerVacancies() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
     </div>

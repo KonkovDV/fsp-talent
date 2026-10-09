@@ -202,7 +202,7 @@ export default function MethodPage() {
             {data.answers > 0 && (
               <>
                 <p className="mt-1 text-xs text-ink-3">
-                  Всего ответов {data.answers}. Сумма CUSUM — накопленный избыток верных ответов над моделью; карантин по-прежнему решается по каждому ключу.
+                  Всего ответов {data.answers}. Сумма CUSUM — накопленный избыток верных ответов над моделью. Карантин решается по каждому ключу.
                 </p>
                 <ul className="mt-4 divide-y divide-line sm:hidden">
                   {data.families.filter(f => f.answers > 0).map(f => (

@@ -93,7 +93,39 @@ export default function EmployerOffers() {
       {isError && <p className="notice-error mb-4" role="alert">{apiError(loadError, 'Не удалось загрузить приглашения')}</p>}
       {!isLoading && !isError && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
       {offers.length > 0 && (
-        <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отправленные приглашения">
+        <>
+        <ul className="space-y-3 sm:hidden">
+          {offers.map(o => {
+            const [label, cls] = STATUS[stage(o)] ?? [o.status, 'badge-vc']
+            const c = contacts[o.id]
+            return (
+              <li key={o.id} className="card space-y-3" data-offer-id={o.id}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  {o.candidate?.role ? <CategoryPlate role={o.candidate.role} grade={o.candidate.grade ?? ''} source={o.candidate.grade_source ?? ''} /> : <span className="text-ink">{o.candidate?.label ?? '—'}</span>}
+                  <span className={cls}>{label}</span>
+                </div>
+                <p className="text-sm text-ink">{o.role}</p>
+                <p className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)} <span className="text-xs text-ink-3">до вычета НДФЛ</span></p>
+                <p className="text-xs text-ink-3">{date(o.created_at)}{o.contacts_revoked_at ? ' · контакты закрыты кандидатом' : ''}</p>
+                {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</p>}
+                <div className="flex flex-wrap gap-2">
+                  {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
+                  {o.status === 'accepted' && <button onClick={() => setMeeting(meeting === o.id ? null : o.id)} aria-expanded={meeting === o.id} className="btn-ghost btn-sm">Собеседование</button>}
+                  {o.status === 'accepted' && (
+                    <button onClick={() => toggleThread(o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
+                      <MessageSquare size={14} aria-hidden /> Переписка
+                      {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
+                    </button>
+                  )}
+                  {o.status === 'pending' && <button onClick={() => { if (window.confirm('Отозвать приглашение? Отменить это нельзя, кандидат получит уведомление.')) withdraw.mutate(o.id) }} className="btn-ghost btn-sm">Отозвать</button>}
+                </div>
+                {meeting === o.id && <InterviewSlots offerId={o.id} side="employer" listKey="employerOffers" />}
+                {thread === o.id && <MessageThread offerId={o.id} listKey="employerOffers" other="Кандидат" />}
+              </li>
+            )
+          })}
+        </ul>
+        <div className="card hidden overflow-x-auto p-0 sm:block" tabIndex={0} role="region" aria-label="Отправленные приглашения">
           <table className="protocol">
             <thead><tr><th>Кандидат</th><th>Должность</th><th className="text-right">До вычета НДФЛ</th><th>Отправлено</th><th>Статус</th><th /></tr></thead>
             <tbody>
@@ -136,6 +168,7 @@ export default function EmployerOffers() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   )

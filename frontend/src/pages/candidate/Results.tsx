@@ -53,7 +53,23 @@ export default function CandidateResults() {
         <Empty title="Протоколов пока нет">Привяжите ФСП ID в профиле — результаты подтянутся автоматически. Без них категория строится по опросу и тесту.</Empty>
       )}
       {rows.length > 0 && (
-        <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица результатов">
+        <>
+        <ul className="space-y-3 sm:hidden">
+          {rows.map(r => {
+            const protocol = protocolHref(r.protocol_url)
+            return (
+              <li key={r.id} className="card space-y-1">
+                <p className="text-sm text-ink-3"><span className="place text-base text-ink">{r.place}</span> из {r.total_participants}</p>
+                <p className="font-medium text-ink">{r.event_name}</p>
+                <p className="text-sm text-ink-2">{DISC_RU[r.discipline] ?? r.discipline_label}</p>
+                <p className="text-xs text-ink-3">{r.status_label}{r.is_team ? `, команда из ${r.team_size}` : ''} · {date(r.event_date)}</p>
+                <button type="button" className="inline-flex min-h-9 items-center text-sm font-medium text-accent underline" disabled={busy === r.id} onClick={() => openCard(r.id)}>Краткое удостоверение</button>
+                {protocol && <a href={protocol} target="_blank" rel="noreferrer" className="ml-3 inline-flex min-h-9 items-center text-sm text-accent">Протокол</a>}
+              </li>
+            )
+          })}
+        </ul>
+        <div className="card hidden overflow-x-auto p-0 sm:block" tabIndex={0} role="region" aria-label="Таблица результатов">
           <table className="protocol">
             <thead><tr>
               <th className="w-20 text-right">Место</th><th>Соревнование</th><th>Дисциплина</th><th className="text-right">Дата</th>
@@ -80,6 +96,7 @@ export default function CandidateResults() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   )
