@@ -200,6 +200,9 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
         <div className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 motion-safe:animate-rise">
           {card.match ? (
             <div data-testid="match">
+              {card.why.filter(line => line.startsWith('Подтверждено ФСП')).map(line => (
+                <p key={line} className="mb-2 text-ink-2" data-testid="fsp-line">{line}</p>
+              ))}
               {!!card.match.reasons?.length && (
                 <ul className="mb-2 flex flex-wrap gap-1.5">
                   {card.match.reasons.map(r => (
