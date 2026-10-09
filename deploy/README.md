@@ -18,4 +18,6 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T 
   pg_restore -U fsp -d fsp_talent --clean --if-exists < deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump
 ```
 
-Ключ подписи удостоверений лежит в томе `vc_keys`; его тоже нужно сохранить, иначе выданные удостоверения нельзя будет перевыпустить тем же ключом.
+Ключ подписи удостоверений лежит в томе `vc_keys` и должен принадлежать `appuser`. Том не удаляют: иначе выданные подписи нельзя проверить. `SECRET_KEY` и `FIELD_ENCRYPTION_KEY` на стенде с уже записанной почтой не меняют: шифр контактов от них зависит.
+
+Конфиг Caddy — каталог `deploy/caddy`. `/.env` и `/.git` отвечают 404. Тело больше 10 МБ получает от API ответ 413. При `DEMO_MODE` и `MAIL_MODE=console` экран «Забыли пароль?» сообщает, что письма не отправляются, и код сброса не показывает. Кнопка «Взять свободный аккаунт жюри» берёт адрес из `GET /api/v1/public/jury-free`.
