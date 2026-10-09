@@ -35,6 +35,7 @@ from app.models.profile import DisciplineScore
 from app.services.ai.assistant import parse_resume
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
+from app.services.employer_score import company_score
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
@@ -452,7 +453,8 @@ async def get_my_offers(
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
         "company_profile": {"industry": o.employer.industry, "website": o.employer.website,
-                            "about": o.employer.description, "inn_given": published_inn(o.employer.inn)},
+                            "about": o.employer.description, "inn_given": published_inn(o.employer.inn),
+                            "rating": company_score(o.employer.company_name)},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
