@@ -52,7 +52,9 @@ export default function CandidateDashboard() {
       <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name.split(' ')[0]}` : 'Кабинет'}
         lead="Так вас видит работодатель в поиске: без имени и контактов, по категории и подтверждениям." />
 
-      {p.is_minor && !p.minor_consent_given && <GuardianCard sentTo={p.guardian_email ?? null} />}
+      {p.is_minor && !p.minor_consent_given && (
+        <GuardianCard sentTo={p.guardian_email ?? null} demoLink={p.guardian_demo_link ?? null} />
+      )}
       {!p.survey_done && <SurveyCard profile={p} />}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">

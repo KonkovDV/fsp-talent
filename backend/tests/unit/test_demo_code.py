@@ -54,13 +54,17 @@ def test_demo_mode_alone_keeps_code_in_the_letter(sent):
     assert answer.demo_code is None
 
 
-def test_public_demo_reports_only_the_flag(monkeypatch):
+def test_public_demo_says_when_letters_do_not_leave(monkeypatch):
     from fastapi.testclient import TestClient
 
     from app.main import app
 
     client = TestClient(app)
     monkeypatch.setattr(settings, "DEMO_MODE", True)
-    assert client.get("/api/v1/public/demo").json() == {"demo_mode": True}
+    monkeypatch.setattr(settings, "MAIL_MODE", "console")
+    assert client.get("/api/v1/public/demo").json() == {"demo_mode": True, "mail_console": True}
+    monkeypatch.setattr(settings, "MAIL_MODE", "smtp")
+    assert client.get("/api/v1/public/demo").json() == {"demo_mode": True, "mail_console": False}
     monkeypatch.setattr(settings, "DEMO_MODE", False)
-    assert client.get("/api/v1/public/demo").json() == {"demo_mode": False}
+    monkeypatch.setattr(settings, "MAIL_MODE", "console")
+    assert client.get("/api/v1/public/demo").json() == {"demo_mode": False, "mail_console": False}

@@ -61,7 +61,8 @@ def _public_skill(s: Skill) -> dict:
 @router.get("/demo")
 async def demo_stand():
     """Whether this stand shows the jury trial and the jury accounts. No other settings."""
-    return {"demo_mode": bool(settings.DEMO_MODE)}
+    demo = bool(settings.DEMO_MODE)
+    return {"demo_mode": demo, "mail_console": demo and settings.MAIL_MODE == "console"}
 
 
 def free_jury_email(seen: dict[str, datetime | None]) -> str | None:

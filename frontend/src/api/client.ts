@@ -142,7 +142,7 @@ export type Role = 'participant' | 'employer'
 const form = (username: string, password: string) =>
   [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const
 
-export const publicDemo = () => api.get<{ demo_mode: boolean }>('/public/demo')
+export const publicDemo = () => api.get<{ demo_mode: boolean; mail_console: boolean }>('/public/demo')
 export const publicJuryFree = () => api.get<{ email: string }>('/public/jury-free')
 export const registerParticipant = (data: {
   email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; consents: string[]
@@ -194,7 +194,8 @@ export const updateVisibility = (is_visible: boolean) =>
 
 export const searchCandidates = (params: object) => api.get('/search/candidates', { params })
 export const searchBank = () => api.get('/search/bank')
-export const askGuardian = (guardian_email: string) => api.post('/candidates/me/guardian', { guardian_email })
+export const askGuardian = (guardian_email: string) =>
+  api.post<{ ok: boolean; guardian_email: string; demo_link: string | null }>('/candidates/me/guardian', { guardian_email })
 export const guardianConsent = (token: string) => api.post('/public/guardian-consent', { token })
 export const parseQuery = (q: string) => api.post('/ai/parse-query', { q })
 export const parseResume = (text: string) => api.post('/ai/parse-resume', { text })

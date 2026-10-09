@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { apiError, forgotPassword, resetPassword, type Role } from '../api/client'
+import { apiError, forgotPassword, publicDemo, resetPassword, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import AuthShell from '../components/AuthShell'
 import { passwordRule } from '../passwordRule'
@@ -16,6 +16,13 @@ export default function ForgotPasswordPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [mailConsole, setMailConsole] = useState(false)
+
+  useEffect(() => {
+    publicDemo()
+      .then(res => setMailConsole(Boolean(res.data.demo_mode && res.data.mail_console)))
+      .catch(() => setMailConsole(false))
+  }, [])
 
   const request = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true)
@@ -28,6 +35,15 @@ export default function ForgotPasswordPage() {
       setAuth(data.access_token, role)
       navigate(role === 'employer' ? '/employer' : '/candidate', { replace: true })
     } catch (err) { setError(apiError(err, 'Код не подошёл')) } finally { setBusy(false) }
+  }
+
+  if (mailConsole) {
+    return (
+      <AuthShell title="Сброс пароля" lead="На демо-стенде письма не отправляются, используйте демо-аккаунты."
+        aside={<Link to={`/login?role=${role}`} className="hover:text-accent">Ко входу</Link>}>
+        <p className="notice-info" role="status">На демо-стенде письма не отправляются, используйте демо-аккаунты.</p>
+      </AuthShell>
+    )
   }
 
   return (

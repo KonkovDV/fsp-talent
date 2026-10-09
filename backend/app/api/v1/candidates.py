@@ -41,7 +41,7 @@ from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
 from app.services.growth import growth_gaps, next_grade
-from app.services.guardian import consent_link, guardian_token
+from app.services.guardian import consent_link, demo_consent_link, guardian_token
 from app.services.identity import active_consent
 from app.services.inn import published_inn
 from app.services.mail import send_mail
@@ -129,6 +129,9 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile, "job_search": p.job_search,
         "is_minor": p.minor_now(), "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
+        "guardian_demo_link": (
+            demo_consent_link(p.id, p.guardian_email) if p.minor_now() and not p.minor_consent_given else None
+        ),
         "profile_version": p.profile_version,
         "salary_from": p.salary_from_gross, "salary_to": p.salary_to_gross,
         "discoverable": p.discoverable,
@@ -725,13 +728,14 @@ async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_par
     await db.commit()
     token = guardian_token(p.id, email)
     link = consent_link(settings.PUBLIC_BASE_URL, token)
+    shown = demo_consent_link(p.id, email)
     await send_mail(email, "Согласие законного представителя — ФСП Талант",
                     f"{p.display_name or 'Ваш ребёнок'} зарегистрировался на платформе подбора ФСП Талант.\n"
                     "Работодатели увидят анонимную карточку кандидата только после вашего согласия на обработку "
                     "его персональных данных. Текст согласия и кнопка подтверждения — по ссылке:\n"
                     f"{link}\n\nЕсли вы не знаете, о ком речь, просто не открывайте ссылку.",
                     {"purpose": "guardian", "token": token})
-    return {"ok": True, "guardian_email": email}
+    return {"ok": True, "guardian_email": email, "demo_link": shown}
 
 
 @router.get("/survey-options")
