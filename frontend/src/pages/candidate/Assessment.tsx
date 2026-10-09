@@ -258,9 +258,9 @@ export default function CandidateAssessment() {
               <p id="typed-hint" className="field-hint">Вариантов в этом задании нет. Enter отправляет ответ.</p>
             </form>
           ) : (
-            <div className="grid gap-2" role="radiogroup">
+            <div className="grid gap-2" role="radiogroup" aria-label="Варианты ответа">
               {item.options.map(o => (
-                <button key={o.index} role="radio" aria-checked={picked === o.index} onClick={() => setPicked(o.index)}
+                <button key={o.index} type="button" role="radio" aria-checked={picked === o.index} onClick={() => setPicked(o.index)}
                   className={`flex min-h-12 items-center gap-3 rounded-lg border px-4 py-3 text-left font-mono text-sm transition-colors ${picked === o.index ? 'border-accent bg-accent-soft text-ink' : 'border-line-strong bg-panel hover:border-accent/60'}`}>
                   <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 ${picked === o.index ? 'border-accent' : 'border-field'}`} aria-hidden>
                     {picked === o.index && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
