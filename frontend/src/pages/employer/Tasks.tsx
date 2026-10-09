@@ -87,7 +87,7 @@ function Submissions({ task }: { task: EmployerTask }) {
             </div>
             {s.answer_text && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-ink">{s.answer_text}</p>}
             {s.answer_index != null && <p className="mt-2 text-sm text-ink">Выбран вариант: {task.options[s.answer_index]}</p>}
-            {s.comment && <p className="mt-2 text-xs text-ink-2">Ваш комментарий: {s.comment}</p>}
+            {s.comment && <p className="mt-2 text-xs text-ink-2">{s.comment.startsWith('Пометка для разбора') ? 'Пометка системы' : 'Ваш комментарий'}: {s.comment}</p>}
             {s.status === 'review' && <ReviewForm s={s} onDone={refresh} />}
           </li>
         ))}

@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 CODE_LIMIT = 16 * 1024
@@ -112,6 +114,16 @@ def problem_public(problem_id: str) -> dict[str, str] | None:
     return {"id": problem_id, "title": row["title"], "statement": row["statement"]}
 
 
+def child_env() -> dict[str, str]:
+    """The practice process sees the interpreter, not the API's secrets."""
+    root = str(Path(__file__).resolve().parents[2])
+    env = {"PYTHONPATH": root, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
+    for key in ("PATH", "SYSTEMROOT", "WINDIR", "PATHEXT"):
+        if key in os.environ:
+            env[key] = os.environ[key]
+    return env
+
+
 def _run_once(source: str, args: list[Any]) -> tuple[bool, int | None]:
     """Run ``solve`` on one argument list. The expected value is not sent to the child."""
     payload = json.dumps({"source": source, "args": args}, ensure_ascii=False).encode("utf-8")
@@ -119,6 +131,7 @@ def _run_once(source: str, args: list[Any]) -> tuple[bool, int | None]:
         proc = subprocess.run(
             [sys.executable, "-m", "app.services.code_lab", "--child"],
             input=payload, capture_output=True, timeout=RUN_TIMEOUT_S, check=False,
+            env=child_env(),
         )
     except subprocess.TimeoutExpired:
         return False, None

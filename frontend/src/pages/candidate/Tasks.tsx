@@ -91,7 +91,9 @@ function TaskCard({ task, focused }: { task: CandidateTask; focused: boolean }) 
           <p className="text-ink-2">Ваш ответ от {date(s.submitted_at)}:{' '}
             <span className="whitespace-pre-wrap break-words text-ink">{s.answer_index != null ? task.options[s.answer_index]?.text : s.answer_text}</span></p>
           {task.reference != null && !s.passed && <p className="text-ink-2">Эталон: <span className="font-mono text-ink">{task.reference}</span></p>}
-          {s.comment && <p className="text-ink-2">Комментарий работодателя: <span className="text-ink">{s.comment}</span></p>}
+          {s.comment && (s.comment.startsWith('Пометка для разбора')
+            ? <p className="text-ink-2">Пометка системы, грейд не меняется: <span className="text-ink">{s.comment}</span></p>
+            : <p className="text-ink-2">Комментарий работодателя: <span className="text-ink">{s.comment}</span></p>)}
           {s.passed != null && <p className="text-xs text-ink-3">Результат виден работодателям в вашей карточке как свежий сигнал.</p>}
         </div>
       )}

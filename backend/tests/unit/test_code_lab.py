@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.models import EmployerTask
-from app.services.code_lab import LabError, guard, run_problem
+from app.services.code_lab import LabError, child_env, guard, run_problem
 from app.services.tasks import check_answer, validate_reference
 
 SOLVE = "def solve(xs):\n    return sum(x for x in xs if x > 0)\n"
@@ -25,6 +25,14 @@ def test_a_huge_number_or_a_power_is_refused_before_it_runs():
         guard("def solve(xs):\n    return 10 ** 8\n")
     with pytest.raises(LabError):
         guard("def solve(xs):\n    return [0] * 1000001\n")
+
+
+def test_the_practice_process_does_not_inherit_the_database_url(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://secret")
+    env = child_env()
+    assert "DATABASE_URL" not in env
+    assert "postgres://secret" not in env.values()
+    assert "PYTHONPATH" in env
 
 
 def test_imports_and_a_wrong_answer_do_not_pass():
