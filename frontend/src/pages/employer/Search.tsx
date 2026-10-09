@@ -161,7 +161,7 @@ export default function EmployerSearch() {
           )}
           {isLoading && <div className="space-y-4"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>}
           {data && !isError && cards.length === 0 && <Empty title="Никого не нашли">Ослабьте фильтры: например, уберите разряд или грейд. Кандидаты без истории ФСП тоже есть в базе.</Empty>}
-          <div className={`space-y-4 transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
+          <div className="space-y-4">
             {cards.map((card, i) => <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setInviteFor} onTask={setTaskFor} />)}
           </div>
         </section>

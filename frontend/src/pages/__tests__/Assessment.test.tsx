@@ -117,6 +117,19 @@ describe('тест на грейд', () => {
     expect(answerAssessment).toHaveBeenCalledWith('s1', 'tok-1', { answer_text: '42' })
   })
 
+  it('называет группу вариантов ответа', async () => {
+    activeAssessment.mockResolvedValue({ data: session({
+      item: {
+        ...item(),
+        answer_mode: 'choice',
+        options: [{ index: 0, text: 'четыре' }, { index: 1, text: 'пять' }],
+      },
+    }) })
+    renderPage(<CandidateAssessment />)
+    expect(await screen.findByRole('radiogroup', { name: 'Варианты ответа' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'четыре' })).toBeInTheDocument()
+  })
+
   it('показывает оставшееся время задания', async () => {
     activeAssessment.mockResolvedValue({ data: session() })
     renderPage(<CandidateAssessment />)
