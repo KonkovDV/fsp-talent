@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import secrets
 import uuid
@@ -54,6 +55,7 @@ def pkce_challenge(verifier: str) -> str:
 class Started:
     authorize_url: str
     state: str
+    binder: str = ""  # sign-in only: the browser must send this cookie back
 
 
 class FspIdProvider(Protocol):
@@ -69,10 +71,24 @@ async def _put(key: str, value: dict, ttl: int) -> None:
     await redis.set(key, json.dumps(value), ex=ttl)
 
 
+async def _peek(key: str) -> dict | None:
+    redis = await get_redis()
+    raw = await redis.get(key)
+    return json.loads(raw) if raw else None
+
+
 async def _take(key: str) -> dict | None:
     redis = await get_redis()
     raw = await redis.getdel(key)
     return json.loads(raw) if raw else None
+
+
+def _binder_matches(saved: dict, binder: str | None) -> bool:
+    expected = saved.get("binder_sha256")
+    if not isinstance(expected, str) or not binder:
+        return False
+    actual = hashlib.sha256(binder.encode()).hexdigest()
+    return hmac.compare_digest(expected, actual)
 
 
 class MockFspIdProvider:
@@ -199,15 +215,26 @@ async def start_signin(provider: FspIdProvider | None = None) -> Started:
     provider = provider or get_fsp_id_provider()
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
-    await _put(f"fspid:state:{state}", {"purpose": "signin", "verifier": verifier}, STATE_TTL_S)
-    return Started(provider.authorize_url(state, pkce_challenge(verifier), SIGNIN_CALLBACK_PATH), state)
+    binder = secrets.token_urlsafe(32)
+    digest = hashlib.sha256(binder.encode()).hexdigest()
+    await _put(f"fspid:state:{state}",
+               {"purpose": "signin", "verifier": verifier, "binder_sha256": digest}, STATE_TTL_S)
+    return Started(provider.authorize_url(state, pkce_challenge(verifier), SIGNIN_CALLBACK_PATH), state, binder)
 
 
-async def finish_signin(code: str, state: str, provider: FspIdProvider | None = None) -> str:
-    """The FSP ID confirmed by the provider. A linking state is refused here, and a sign-in state by finish()."""
+async def finish_signin(code: str, state: str, provider: FspIdProvider | None = None,
+                        binder: str | None = None) -> str:
+    """The FSP ID confirmed by the provider. The browser that started the login must present the cookie.
+
+    A wrong cookie does not burn the state, so the real browser can still finish. A linking state is refused.
+    """
     provider = provider or get_fsp_id_provider()
-    saved = await _take(f"fspid:state:{state}")
-    if saved is None or saved.get("purpose") != "signin":
+    key = f"fspid:state:{state}"
+    saved = await _peek(key)
+    if saved is None or saved.get("purpose") != "signin" or not _binder_matches(saved, binder):
+        raise FspIdError("state")
+    saved = await _take(key)
+    if saved is None or not _binder_matches(saved, binder):
         raise FspIdError("state")
     return await provider.exchange(code, saved["verifier"], SIGNIN_CALLBACK_PATH)
 

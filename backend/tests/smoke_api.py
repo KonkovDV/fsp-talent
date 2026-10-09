@@ -14,6 +14,7 @@ import urllib.request
 import uuid
 
 BASE = os.environ.get("SMOKE_BASE", "http://127.0.0.1:8010/api/v1")
+_SIGNIN_COOKIE = ""
 # The API must run with MAIL_MODE=file and the same MAIL_FILE_DIR, or deliver to Mailpit at MAILPIT_URL.
 MAIL_DIR = os.environ.get("MAIL_FILE_DIR", "/tmp/fsp-talent-mail")
 MAILPIT = os.environ.get("MAILPIT_URL", "").rstrip("/")
@@ -28,7 +29,17 @@ CANDIDATE = {"username": "fsp001@demo.talent", "password": "demo12345"}
 REQUIRED_CANDIDATE_CONSENTS = ["terms", "pd_candidate"]
 
 
-def call(method, path, body=None, token=None, form=None):
+def _note_signin_cookie(headers) -> None:
+    global _SIGNIN_COOKIE
+    raw = headers.get("Set-Cookie") or ""
+    if "fsp_signin=" not in raw:
+        return
+    pair = raw.split(";", 1)[0]
+    value = pair.split("=", 1)[1]
+    _SIGNIN_COOKIE = "" if not value or "Max-Age=0" in raw else pair
+
+
+def call(method, path, body=None, token=None, form=None, cookie=None):
     data = None
     headers = {}
     if form is not None:
@@ -39,15 +50,19 @@ def call(method, path, body=None, token=None, form=None):
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = "Bearer " + token
+    if cookie:
+        headers["Cookie"] = cookie
     req = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as response:
+            _note_signin_cookie(response.headers)
             raw = response.read().decode()
             payload = json.loads(raw) if raw else None
             if isinstance(payload, dict) and payload.get("demo_code"):
                 DEMO_CODES[payload["email"]] = payload["demo_code"]
             return response.status, payload
     except urllib.error.HTTPError as error:
+        _note_signin_cookie(error.headers)
         raw = error.read().decode()
         try:
             payload = json.loads(raw)
@@ -380,15 +395,17 @@ def check_employer_tasks(employer_token, participant_token, candidate_id):
 def _fsp_signin(fsp_id):
     status, started = call("POST", "/auth/fsp/authorize")
     assert status == 200, started
+    cookie = _SIGNIN_COOKIE
+    assert cookie.startswith("fsp_signin="), cookie
     query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(started["authorize_url"]).query).items()}
     assert query["redirect_uri"] == "/auth/fsp-callback", query
     status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": "test", **{
         k: query[k] for k in ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method")}})
     assert status == 200, login
     back = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(login["redirect_to"]).query).items()}
-    status, out = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]})
+    status, out = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]}, cookie=cookie)
     assert status == 200, out
-    status, replay = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]})
+    status, replay = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]}, cookie=cookie)
     assert status == 400 and replay["error"]["code"] == "fsp_invalid", replay
     return out
 

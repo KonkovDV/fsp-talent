@@ -168,3 +168,47 @@ def test_settings_secret_is_the_signing_key():
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     assert payload["type"] == "access"
     assert timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES).total_seconds() > 0
+
+
+def _request(path: str, token: str | None = None):
+    from starlette.requests import Request
+
+    headers = []
+    if token:
+        headers.append((b"authorization", f"Bearer {token}".encode()))
+    return Request({
+        "type": "http", "http_version": "1.1", "method": "GET", "scheme": "http",
+        "path": path, "raw_path": path.encode(), "query_string": b"", "headers": headers,
+        "client": ("127.0.0.1", 9), "server": ("test", 80),
+    })
+
+
+def test_export_keeps_the_participant_scope():
+    from app.core.rls import current, reset_rls
+    from app.main import _rls_token
+
+    token = create_access_token("person-1", "participant")
+    ctx = _rls_token(_request("/api/v1/auth/me/export", token))
+    try:
+        scope = current()
+        assert scope["bypass"] is False
+        assert scope["participant_id"] == "person-1"
+    finally:
+        reset_rls(ctx)
+
+
+def test_a_login_path_without_a_token_bypasses_and_a_future_auth_path_does_not():
+    from app.core.rls import current, reset_rls
+    from app.main import _rls_token
+
+    login = _rls_token(_request("/api/v1/auth/participant/token"))
+    try:
+        assert current()["bypass"] is True
+    finally:
+        reset_rls(login)
+    future = _rls_token(_request("/api/v1/auth/me/export"))
+    try:
+        assert current()["bypass"] is False
+        assert current()["participant_id"] == ""
+    finally:
+        reset_rls(future)

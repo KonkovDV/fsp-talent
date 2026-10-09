@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import Response
+from starlette.requests import Request
 
 from app.api.errors import ApiError
 from app.api.v1 import auth
@@ -18,6 +19,9 @@ class FakeRedis:
 
     async def set(self, key, value, ex=None):
         self.data[key] = value
+
+    async def get(self, key):
+        return self.data.get(key)
 
     async def getdel(self, key):
         return self.data.pop(key, None)
@@ -47,15 +51,28 @@ def _query(url: str) -> dict:
     return {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
 
 
+def _request(cookie: str | None = None) -> Request:
+    headers = []
+    if cookie is not None:
+        headers.append((b"cookie", f"fsp_signin={cookie}".encode()))
+    return Request({
+        "type": "http", "http_version": "1.1", "method": "POST", "scheme": "http",
+        "path": "/api/v1/auth/fsp/callback", "raw_path": b"/api/v1/auth/fsp/callback",
+        "query_string": b"", "headers": headers,
+        "client": ("127.0.0.1", 50000), "server": ("test", 80),
+    })
+
+
 async def _code_for(fsp_id: str, provider=None):
     provider = provider or identity.MockFspIdProvider()
-    q = _query((await identity.start_signin(provider)).authorize_url)
+    started = await identity.start_signin(provider)
+    q = _query(started.authorize_url)
     code = await provider.issue_code(fsp_id, q["client_id"], q["redirect_uri"], q["code_challenge"])
-    return q, code
+    return q, code, started.binder
 
 
 async def test_signin_returns_to_its_own_registered_address(redis):
-    q, _ = await _code_for("FSP2005")
+    q, _, _binder = await _code_for("FSP2005")
     assert q["redirect_uri"] == identity.SIGNIN_CALLBACK_PATH != identity.CALLBACK_PATH
     assert identity.SIGNIN_CALLBACK_PATH in identity.MockFspIdProvider.ALLOWED_REDIRECTS
     with pytest.raises(identity.FspIdError):
@@ -63,10 +80,10 @@ async def test_signin_returns_to_its_own_registered_address(redis):
 
 
 async def test_signin_state_is_single_use(redis):
-    q, code = await _code_for("FSP2005")
-    assert await identity.finish_signin(code, q["state"]) == "FSP2005"
+    q, code, binder = await _code_for("FSP2005")
+    assert await identity.finish_signin(code, q["state"], binder=binder) == "FSP2005"
     with pytest.raises(identity.FspIdError):
-        await identity.finish_signin(code, q["state"])
+        await identity.finish_signin(code, q["state"], binder=binder)
 
 
 async def test_linking_and_signin_states_do_not_mix(redis):
@@ -76,7 +93,7 @@ async def test_linking_and_signin_states_do_not_mix(redis):
     code = await provider.issue_code("FSP2005", link["client_id"], link["redirect_uri"], link["code_challenge"])
     with pytest.raises(identity.FspIdError):
         await identity.finish_signin(code, link["state"], provider)
-    q, code = await _code_for("FSP2006", provider)
+    q, code, _binder = await _code_for("FSP2006", provider)
     with pytest.raises(identity.FspIdError):
         await identity.finish(person, code, q["state"], provider)
 
@@ -84,26 +101,29 @@ async def test_linking_and_signin_states_do_not_mix(redis):
 async def test_code_issued_for_linking_is_refused_at_signin(redis):
     """The code is bound to its redirect address, as an OIDC provider binds it."""
     provider = identity.MockFspIdProvider()
-    q = _query((await identity.start_signin(provider)).authorize_url)
+    started = await identity.start_signin(provider)
+    q = _query(started.authorize_url)
     code = await provider.issue_code("FSP2005", q["client_id"], identity.CALLBACK_PATH, q["code_challenge"])
     with pytest.raises(identity.FspIdError):
-        await identity.finish_signin(code, q["state"], provider)
+        await identity.finish_signin(code, q["state"], provider, binder=started.binder)
 
 
 async def test_existing_linked_account_signs_in(redis):
-    q, code = await _code_for("FSP2005")
+    q, code, binder = await _code_for("FSP2005")
     account = Participant(id=uuid.uuid4(), fsp_id="FSP2005")
-    out = await auth.fsp_signin_callback(auth.FspSignInCallback(code=code, state=q["state"]),
-                                         response=Response(), db=FakeDb(account))
+    out = await auth.fsp_signin_callback(
+        auth.FspSignInCallback(code=code, state=q["state"]), _request(binder),
+        response=Response(), db=FakeDb(account))
     assert out["status"] == "signed_in"
     payload = decode_token(out["access_token"])
     assert payload["sub"] == str(account.id) and payload["role"] == "participant"
 
 
 async def test_new_person_must_accept_consents_before_an_account_exists(redis, monkeypatch):
-    q, code = await _code_for("FSP2007")
-    out = await auth.fsp_signin_callback(auth.FspSignInCallback(code=code, state=q["state"]),
-                                         response=Response(), db=FakeDb(None))
+    q, code, binder = await _code_for("FSP2007")
+    out = await auth.fsp_signin_callback(
+        auth.FspSignInCallback(code=code, state=q["state"]), _request(binder),
+        response=Response(), db=FakeDb(None))
     assert out["status"] == "needs_consent" and "access_token" not in out
     ticket = out["ticket"]
     # Without the required consents nothing is created, and the ticket is not spent.
@@ -113,6 +133,36 @@ async def test_new_person_must_accept_consents_before_an_account_exists(redis, m
     assert err.value.code == "consent_required"
     assert f"fspid:ticket:{ticket}" in redis.data
     assert await identity.take_ticket(ticket) == "FSP2007"
+
+
+async def test_callback_without_the_cookie_is_refused_and_keeps_the_state(redis, monkeypatch):
+    async def allow(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(auth, "_limit", allow)
+    q, code, binder = await _code_for("FSP2005")
+    with pytest.raises(ApiError) as missing:
+        await auth.fsp_signin_callback(
+            auth.FspSignInCallback(code=code, state=q["state"]), _request(None),
+            response=Response(), db=FakeDb(None))
+    assert missing.value.code == "fsp_invalid"
+    with pytest.raises(ApiError) as foreign:
+        await auth.fsp_signin_callback(
+            auth.FspSignInCallback(code=code, state=q["state"]), _request("someone-elses-cookie"),
+            response=Response(), db=FakeDb(None))
+    assert foreign.value.code == "fsp_invalid"
+    assert await identity.finish_signin(code, q["state"], binder=binder) == "FSP2005"
+
+
+async def test_authorize_sets_an_httponly_cookie(redis, monkeypatch):
+    async def allow(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(auth, "_limit", allow)
+    response = Response()
+    await auth.fsp_signin_authorize(_request(), response)
+    header = response.headers["set-cookie"]
+    assert "fsp_signin=" in header and "HttpOnly" in header and "Path=/api/v1/auth/fsp" in header
 
 
 async def test_ticket_is_single_use(redis):
