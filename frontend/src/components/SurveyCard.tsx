@@ -14,7 +14,8 @@ export interface SurveyHint {
 interface Props {
   profile: { specialization: string | null; industry: string | null; work_goal: string | null
     declared_grade: string | null; experience_years: number | null; survey_done: boolean
-    salary_from?: number | null; salary_to?: number | null }
+    salary_from?: number | null; salary_to?: number | null
+    region?: string | null; work_formats?: string[] }
   compact?: boolean
   hint?: SurveyHint | null
 }
@@ -36,6 +37,8 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
   const [years, setYears] = useState(profile.experience_years == null ? '' : String(profile.experience_years))
   const [payFrom, setPayFrom] = useState(profile.salary_from == null ? '' : String(profile.salary_from))
   const [payTo, setPayTo] = useState(profile.salary_to == null ? '' : String(profile.salary_to))
+  const [city, setCity] = useState(profile.region ?? '')
+  const [formats, setFormats] = useState<string[]>(profile.work_formats ?? [])
   const [note, setNote] = useState('')
   useEffect(() => {
     setSpec(profile.specialization ?? ''); setIndustry(profile.industry === 'any' ? '' : profile.industry ?? '')
@@ -52,7 +55,8 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
     mutationFn: () => saveSurvey({ specialization: spec, industry: industry || 'any', work_goal: goal, declared_grade: grade,
       experience_years: years === '' ? null : Number(years),
       salary_from_gross: payFrom === '' ? null : Number(payFrom),
-      salary_to_gross: payTo === '' ? null : Number(payTo) }),
+      salary_to_gross: payTo === '' ? null : Number(payTo),
+      work_formats: formats, region: city || null }),
     onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: (e: unknown) => setNote(apiError(e)),
   })
@@ -65,8 +69,8 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         <ListChecks className="text-accent shrink-0 mt-0.5" size={20} />
         <div>
           <p className="section-title">{profile.survey_done ? 'Направление и специализация' : 'Шаг 1. Направление и специализация'}</p>
-          {!compact && <p className="text-sm text-ink-2">Специализация задаёт категорию и состав теста:
-            задания из других направлений в ваш тест не попадут. В поиске видна одна категория. Грейд выбираете вы, подтверждает его только тест.</p>}
+            {!compact && <p className="text-sm text-ink-2">Специализация задаёт категорию и состав теста.
+            Грейд выбираете вы, подтверждает его только тест. Город и формат работы сужают поиск и в балл не входят.</p>}
         </div>
       </div>
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
@@ -110,6 +114,25 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
         <label>Ожидания по зарплате, от
           <input type="number" min={0} step={5000} value={payFrom} onChange={e => setPayFrom(e.target.value)} className="input mt-1 num" placeholder="до НДФЛ" />
         </label>
+        <label>Город
+          <select value={city} onChange={e => setCity(e.target.value)} className={select} aria-label="Город">
+            <option value="">не указан</option>
+            {(opts?.cities ?? []).map((name: string) => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <span className="field-hint">Фильтр выдачи. В оценку соответствия не входит.</span>
+        </label>
+        <fieldset>
+          <legend>Формат работы</legend>
+          <div className="mt-1 flex flex-wrap gap-3">
+            {entries(opts?.work_formats).map(([k, v]) => (
+              <label key={k} className="flex items-center gap-2">
+                <input type="checkbox" checked={formats.includes(k)} onChange={() => setFormats(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])} />
+                {v}
+              </label>
+            ))}
+          </div>
+          <span className="field-hint">Пустой список не отсекает вас из поиска.</span>
+        </fieldset>
         <label>Ожидания по зарплате, до
           <input type="number" min={0} step={5000} value={payTo} onChange={e => setPayTo(e.target.value)} className="input mt-1 num" placeholder="до НДФЛ" />
         </label>

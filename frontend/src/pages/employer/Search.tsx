@@ -30,6 +30,8 @@ export default function EmployerSearch() {
   const [assessedOnly, setAssessedOnly] = useState(false)
   const [hasFsp, setHasFsp] = useState('')
   const [internship, setInternship] = useState(false)
+  const [city, setCity] = useState('')
+  const [workFormat, setWorkFormat] = useState('')
   const [freshDays, setFreshDays] = useState<number | undefined>()
   const [inviteFor, setInviteFor] = useState<string | null>(null)
   const [taskFor, setTaskFor] = useState<string | null>(null)
@@ -40,6 +42,7 @@ export default function EmployerSearch() {
     q: q || undefined, role: role || undefined, grade: grade || undefined, discipline: discipline || undefined,
     min_rank: minRank || undefined, skills: skills || undefined, assessed_only: assessedOnly || undefined,
     has_fsp: hasFsp || undefined, work_goal: internship ? 'internship' : undefined,
+    city: city || undefined, work_format: workFormat || undefined,
     fresh_days: freshDays,
   }
   // Filters edit a draft; the list on screen changes only on «Найти» and stays visible while the new one loads.
@@ -133,6 +136,20 @@ export default function EmployerSearch() {
             <select id="f-fsp" value={hasFsp} onChange={e => setHasFsp(e.target.value)} className="select" aria-label="История ФСП">
               <option value="">Не важно</option><option value="true">Есть</option><option value="false">Нет</option>
             </select></div>
+          <div><label className={label} htmlFor="f-city">Город</label>
+            <select id="f-city" value={city} onChange={e => setCity(e.target.value)} className="select">
+              <option value="">Любой</option>
+              {['Москва', 'Санкт-Петербург', 'Новосибирск', 'Екатеринбург', 'Казань', 'Нижний Новгород', 'Челябинск', 'Самара', 'Омск', 'Ростов-на-Дону', 'Уфа', 'Красноярск', 'Пермь', 'Воронеж', 'Волгоград'].map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <p className="field-hint">Не входит в балл. Неназванный город остаётся в списке.</p></div>
+          <div><label className={label} htmlFor="f-format">Формат работы</label>
+            <select id="f-format" value={workFormat} onChange={e => setWorkFormat(e.target.value)} className="select">
+              <option value="">Любой</option>
+              <option value="remote">Удалённо</option>
+              <option value="hybrid">Гибрид</option>
+              <option value="office">Офис</option>
+            </select>
+            <p className="field-hint">Не входит в балл. Пустой выбор кандидата его не отсекает.</p></div>
           <fieldset className="space-y-2.5 pt-1 text-sm text-ink">
             <label className="flex items-center gap-2"><input type="checkbox" checked={assessedOnly} onChange={e => setAssessedOnly(e.target.checked)} />Только грейд, подтверждённый тестом</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={internship} onChange={e => setInternship(e.target.checked)} />Ищут стажировку или практику</label>

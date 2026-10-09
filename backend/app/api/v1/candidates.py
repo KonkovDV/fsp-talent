@@ -35,6 +35,7 @@ from app.models.profile import DisciplineScore
 from app.services.ai.assistant import parse_resume
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
+from app.services.cities import CITIES
 from app.services.employer_score import company_score
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
@@ -116,6 +117,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "telegram": p.telegram, "phone": p.phone,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
         "specialization": p.specialization, "industry": p.industry, "work_goal": p.work_goal,
+        "work_formats": list(p.work_formats or []),
         "survey_done": p.survey_at is not None,
         "confirmations": [{"specialization": c.specialization, "grade": c.grade, "p_pass": c.p_pass,
                            "confirmed_at": c.confirmed_at.isoformat(),
@@ -736,7 +738,8 @@ async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_par
 async def survey_options():
     """Choices for the survey; public, so the registration flow can show them before login."""
     return {"specializations": SPECIALIZATIONS, "industries": INDUSTRIES, "work_goals": WORK_GOALS,
-            "grades": list(GRADES)}
+            "grades": list(GRADES), "cities": list(CITIES),
+            "work_formats": {"office": "Офис", "hybrid": "Гибрид", "remote": "Удалённо"}}
 
 
 class SurveyIn(BaseModel):

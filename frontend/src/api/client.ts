@@ -264,6 +264,7 @@ export const surveyOptions = () => api.get('/candidates/survey-options')
 export const saveSurvey = (data: {
   specialization: string; industry: string; work_goal: string; declared_grade?: string | null; experience_years?: number | null
   salary_from_gross?: number | null; salary_to_gross?: number | null
+  work_formats?: string[]; region?: string | null
 }) => api.put('/candidates/me/survey', data)
 
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
