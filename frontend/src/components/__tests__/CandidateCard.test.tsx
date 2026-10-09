@@ -29,6 +29,29 @@ const card: CandidateCardData = {
 }
 
 describe('карточка кандидата', () => {
+  it('складывает вклады полос в оценку работодателя', () => {
+    const summed: CandidateCardData = {
+      ...card,
+      match: {
+        score: 0.4,
+        employer: 0.45,
+        accept: 0.8,
+        congestion: 0,
+        plus: [], minus: [], info: [],
+        factors: [
+          { key: 'skills', label: 'Навыки', weight: 0.5, value: 1, contrib: 0.2 },
+          { key: 'grade', label: 'Грейд', weight: 0.3, value: 1, contrib: 0.15 },
+          { key: 'test', label: 'Тест', weight: 0.5, value: 0.4, contrib: 0.1 },
+        ],
+      },
+    }
+    render(<CandidateCard card={summed} onOffer={() => undefined} />)
+    const shares = screen.getAllByTestId('factor-share').map(node => Number(node.textContent))
+    const employer = Number(screen.getByTestId('employer-score').textContent?.replace('Работодатель ', ''))
+    expect(shares.reduce((sum, part) => sum + part, 0)).toBeCloseTo(employer, 5)
+    expect(screen.getByText(/гармоническое среднее/)).toBeInTheDocument()
+  })
+
   it('показывает коды причин плашками и не печатает имя', async () => {
     render(<CandidateCard card={card} onOffer={() => undefined} />)
     await userEvent.click(screen.getByRole('button', { name: 'Почему в выдаче' }))

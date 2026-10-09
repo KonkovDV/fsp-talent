@@ -20,11 +20,14 @@ export interface CandidateCardData {
   match?: {
     score: number
     basis?: 'fit' | 'evidence'
+    employer?: number
+    accept?: number | null
+    congestion?: number
     plus: string[]
     minus: string[]
     info: string[]
     reasons?: { code: string; text: string; tone: string; source?: string | null; points?: number | null }[]
-    factors: { key: string; label: string; weight: number; value: number | null }[]
+    factors: { key: string; label: string; weight: number; value: number | null; contrib?: number | null }[]
   }
   disciplines: {
     label: string
@@ -48,6 +51,7 @@ const REASON_RU: Record<string, string> = {
   SKILL_GAP: 'Нет навыка',
   FSP_BONUS: 'Протокол ФСП',
   FSP_SCORE: 'Результаты ФСП',
+  COLD_SEAT: 'Место для кандидата без теста (правило разнообразия)',
   FSP_NEUTRAL: 'Без истории ФСП',
   FSP_RELEVANT: 'Профильная дисциплина',
   FSP_OTHER: 'Другая дисциплина',
@@ -94,6 +98,65 @@ function skillChip(name: string, evidence?: Record<string, string>): string {
  */
 // Fresh signals: what the candidate did recently. Shown even when the match lines replace «why».
 const FRESH = ['Задание работодателя', 'Короткая практика']
+
+function barShares(contribs: number[], employer: number): number[] {
+  const target = Math.round(employer * 1000) / 10
+  const shown = contribs.map(part => Math.round(part * 1000) / 10)
+  if (!shown.length) return shown
+  const drift = Math.round((target - shown.reduce((sum, part) => sum + part, 0)) * 10) / 10
+  shown[shown.length - 1] = Math.round((shown[shown.length - 1] + drift) * 10) / 10
+  return shown
+}
+
+function FactorBars({ match, active, idle }: {
+  match: NonNullable<CandidateCardData['match']>
+  active: NonNullable<CandidateCardData['match']>['factors']
+  idle: NonNullable<CandidateCardData['match']>['factors']
+}) {
+  const useShare = active.some(factor => factor.contrib != null) && match.employer != null
+  const shares = useShare ? barShares(active.map(factor => factor.contrib ?? 0), match.employer ?? 0) : []
+  const width = (factor: (typeof active)[number], index: number) => {
+    const part = useShare ? Math.max(shares[index], 0.4) : Math.max(factor.weight, 0.06)
+    return `minmax(4.5rem,${part.toFixed(3)}fr)`
+  }
+  return (
+    <div className="border-t border-line bg-sunken/50 px-5 py-3.5 sm:px-6">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 md:[grid-template-columns:var(--cols)]"
+        style={{ '--cols': active.map(width).join(' ') } as React.CSSProperties}
+        aria-label="Факторы скора">
+        {active.map((factor, index) => {
+          const caption = useShare
+            ? `вклад ${shares[index].toFixed(1)} из ${(Math.round((match.employer ?? 0) * 1000) / 10).toFixed(1)}`
+            : `вес ${Math.round(factor.weight * 100)} %`
+          return (
+            <div key={factor.key} title={`${factor.label}: ${caption}`}>
+              <Meter value={useShare ? (factor.contrib ?? 0) / Math.max(match.employer || 0, 1e-9) : factor.value}
+                ariaLabel={`${factor.label}: ${caption}`} />
+              <p className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px] leading-4 text-ink-3">
+                <span className="truncate">{factor.label}</span>
+                <span className="num shrink-0 font-medium text-ink-2" data-testid="factor-share">
+                  {useShare ? shares[index].toFixed(1) : Math.round((factor.value ?? 0) * 100)}
+                </span>
+              </p>
+            </div>
+          )
+        })}
+      </div>
+      {useShare && (
+        <p className="mt-2 text-xs text-ink-2">
+          <span data-testid="employer-score">Работодатель {(Math.round((match.employer ?? 0) * 1000) / 10).toFixed(1)}</span>
+          {match.accept == null ? '. Совпадения по вилке нет' : `. Совпадение по вилке ${(match.accept * 100).toFixed(1)}`}
+          {(match.congestion ?? 0) > 0 ? `. Очередь −${((match.congestion ?? 0) * 100).toFixed(1)}` : '. Очереди нет'}
+          . Итог — гармоническое среднее минус очередь.
+        </p>
+      )}
+      <p className="mt-2 text-2xs text-ink-3">
+        <span className="hidden md:inline">{useShare ? 'Ширина полосы — вклад в оценку работодателя. ' : 'Ширина полосы — вес фактора. '}</span>
+        {idle.length > 0 && <>Не учитываются: {idle.map(f => f.label === f.label.toUpperCase() ? f.label : f.label.toLowerCase()).join(', ')}</>}
+      </p>
+    </div>
+  )
+}
 
 export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, compare }: Props) {
   const [open, setOpen] = useState(false)
@@ -149,25 +212,7 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
       </div>
 
       {card.match && active.length > 0 && (
-        <div className="border-t border-line bg-sunken/50 px-5 py-3.5 sm:px-6">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 md:[grid-template-columns:var(--cols)]"
-            style={{ '--cols': active.map(f => `minmax(4.5rem,${Math.max(f.weight, 0.06).toFixed(3)}fr)`).join(' ') } as React.CSSProperties}
-            aria-label="Факторы скора">
-            {active.map(f => (
-              <div key={f.key} title={`${f.label}: ${Math.round((f.value ?? 0) * 100)} %; вес ${Math.round(f.weight * 100)} %`}>
-                <Meter value={f.value} ariaLabel={`${f.label}: ${Math.round((f.value ?? 0) * 100)} из 100, вес ${Math.round(f.weight * 100)} %`} />
-                <p className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px] leading-4 text-ink-3">
-                  <span className="truncate">{f.label}</span>
-                  <span className="num shrink-0 font-medium text-ink-2">{Math.round((f.value ?? 0) * 100)}</span>
-                </p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-2xs text-ink-3">
-            <span className="hidden md:inline">Ширина полосы — вес фактора. </span>
-            {idle.length > 0 && <>Не учитываются: {idle.map(f => f.label === f.label.toUpperCase() ? f.label : f.label.toLowerCase()).join(', ')}</>}
-          </p>
-        </div>
+        <FactorBars match={card.match} active={active} idle={idle} />
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3 sm:px-6">

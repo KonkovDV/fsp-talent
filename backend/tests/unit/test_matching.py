@@ -5,6 +5,7 @@ from app.services import matching as matching_mod
 from app.services.matching import (
     CandidateFacts,
     NeedSpec,
+    _harmonic,
     anonymous_compare,
     reason_source,
     recommended_categories,
@@ -543,6 +544,42 @@ def test_missing_fsp_does_not_change_the_fit_tier():
     assert without.fit == with_fsp.fit
     assert without.tier == with_fsp.tier
     assert without.score <= with_fsp.score
+
+
+def test_contributions_sum_to_the_employer_score():
+    rng = random.Random(3001)
+    roles = ("backend", "frontend", "ml")
+    grades = ("junior", "middle", "senior")
+    for _ in range(2000):
+        role = rng.choice(roles)
+        grade = rng.choice(grades)
+        need = NeedSpec(role=role, grade=grade, skills=("Python",),
+                        salary_from=150_000 if rng.random() < 0.7 else None,
+                        salary_to=220_000 if rng.random() < 0.7 else None)
+        facts = CandidateFacts(
+            role=role, grade=grade,
+            grade_source=rng.choice(("declared", "assessed")),
+            skills={"Python": rng.choice(("self_reported", "test_confirmed"))},
+            test_p=rng.random() if rng.random() < 0.6 else None,
+            test_spec=role,
+            fsp_lcb=rng.random() * 0.8 if rng.random() < 0.5 else None,
+            salary_from=180_000 if rng.random() < 0.6 else None,
+            open_invites=rng.choice((0, 0, 3, 6)),
+        )
+        result = score(need, facts)
+        parts = [f.contrib for f in result.factors if f.contrib is not None]
+        assert abs(sum(parts) - result.employer) < 1e-9
+        combined = result.employer if result.accept is None else _harmonic(result.employer, result.accept)
+        expected = max(0.0, combined - result.congestion)
+        assert abs(round(expected, 4) - result.score) < 1e-9
+
+
+def test_a_cold_seat_is_named_on_the_card():
+    from app.services.search.pipeline import PoolMatch, _match_body
+
+    body = _match_body(PoolMatch(0.5, [], [], [], [], None), True)
+    assert body["reasons"][0]["code"] == "COLD_SEAT"
+    assert "без теста" in body["reasons"][0]["text"]
 
 
 def test_compare_keeps_four_cards():
