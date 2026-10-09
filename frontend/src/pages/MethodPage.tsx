@@ -204,7 +204,17 @@ export default function MethodPage() {
                 <p className="mt-1 text-xs text-ink-3">
                   Всего ответов {data.answers}. Сумма CUSUM — накопленный избыток верных ответов над моделью; карантин по-прежнему решается по каждому ключу.
                 </p>
-                <div className="mt-4 w-0 min-w-full overflow-x-auto rounded-lg" tabIndex={0} role="region" aria-label="Таблица показов по семействам">
+                <ul className="mt-4 divide-y divide-line sm:hidden">
+                  {data.families.filter(f => f.answers > 0).map(f => (
+                    <li key={f.family_id} className="py-2">
+                      <p className="font-medium text-ink">{f.title}</p>
+                      <p className="num text-sm text-ink-2">
+                        Ответы {f.answers}. Доля самого частого {shareLabel(f.max_share)}. Сумма CUSUM {f.cusum.toFixed(2)}. В карантине {f.quarantined}.
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 hidden w-0 min-w-full overflow-x-auto rounded-lg sm:block" tabIndex={0} role="region" aria-label="Таблица показов по семействам">
                   <table className="protocol">
                     <thead>
                       <tr>
