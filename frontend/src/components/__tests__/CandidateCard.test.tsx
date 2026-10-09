@@ -40,6 +40,18 @@ describe('карточка кандидата', () => {
     expect(screen.getByTestId('candidate-card').textContent).not.toMatch(/@|Ирина|Смирнова/)
   })
 
+  it('называет дисциплину и цифру, которые вошли в балл', async () => {
+    render(<CandidateCard card={{
+      ...card,
+      why: ['Подтверждено ФСП: Робототехника, нижняя граница 0,30 (учтено с весом 0,5), уверенность 80%, событий 2'],
+    }} onOffer={() => undefined} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Почему в выдаче' }))
+    const line = screen.getByTestId('fsp-line')
+    expect(line.textContent).toContain('Робототехника')
+    expect(line.textContent).toContain('0,30')
+    expect(line.textContent).toContain('учтено с весом 0,5')
+  })
+
   it('без подтверждённого грейда не пишет, что тест его дал', () => {
     render(<CandidateCard card={{ ...card, grade_source: 'declared', match: undefined }} onOffer={() => undefined} />)
     expect(screen.getByText('Грейд не подтверждён')).toBeInTheDocument()

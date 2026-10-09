@@ -659,6 +659,9 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             why.append(
                 f"Подтверждено ФСП: {top['label']}, нижняя граница {shown_text}{weight_note}, "
                 f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
+            # The header and the evidence list follow the discipline that entered the score,
+            # not the highest lower bound in some other sport.
+            disciplines = [top] + [row for row in disciplines if row is not top]
         if pid in dense_hit:
             why.append("Смысловое совпадение с запросом")
         if p.practice_at is not None and p.practice_topic:
