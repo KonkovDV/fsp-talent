@@ -48,7 +48,7 @@ class Participant(Base):
     public_profile = Column(Boolean, nullable=False, default=False)
     is_minor = Column(Boolean, nullable=False, default=False)
     minor_consent_given = Column(Boolean, nullable=False, default=False)
-    # Legal representative of a candidate aged 15 to 17 (migration 0003): who confirmed and when.
+    # Legal representative of a candidate aged 15 to 17: who confirmed and when.
     guardian_email = Column(String(200))
     guardian_consent_at = Column(DateTime(timezone=True))
     grade_locked_until = Column(DateTime(timezone=True))

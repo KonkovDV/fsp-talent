@@ -51,7 +51,7 @@ export default function EmployerSearch() {
   }, [url])
   const { data, isFetching, isLoading, isError, error } = useQuery({
     queryKey: ['search', submitted],
-    queryFn: () => searchCandidates(submitted).then(r => r.data),
+    queryFn: () => searchCandidates({ ...submitted, limit: 50 }).then(r => r.data),
     placeholderData: keepPreviousData,
   })
   const draftChanged = JSON.stringify(submitted) !== JSON.stringify(params)
@@ -146,7 +146,7 @@ export default function EmployerSearch() {
           {parsed.isError && <p className="notice-error mb-4" role="alert">{apiError(parsed.error, 'Не удалось разобрать запрос')}</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{draftChanged && ' — фильтры изменены, список ещё прежний'}</p>
+              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{data.total > cards.length ? ` — на экране первые ${cards.length}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}</p>
               {data.recommended_categories?.length > 0 && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Сильнее всего:
                   {data.recommended_categories.filter((c: { candidates: number | null }) => (c.candidates ?? 0) >= 5).map((c: { role: string; grade: string; candidates: number }) => (

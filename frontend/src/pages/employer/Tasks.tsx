@@ -51,7 +51,12 @@ function Submissions({ task }: { task: EmployerTask }) {
     qc.invalidateQueries({ queryKey: ['taskSubmissions', task.id] })
     qc.invalidateQueries({ queryKey: ['employerTasks'] })
   }
-  const close = useMutation({ mutationFn: () => closeTask(task.id), onSuccess: refresh })
+  const [closeError, setCloseError] = useState('')
+  const close = useMutation({
+    mutationFn: () => closeTask(task.id),
+    onSuccess: () => { setCloseError(''); refresh() },
+    onError: e => setCloseError(apiError(e, 'Приём ответов не закрыт')),
+  })
   const subs = data?.submissions ?? []
   return (
     <section className="card space-y-4" aria-labelledby="task-detail">
@@ -62,6 +67,7 @@ function Submissions({ task }: { task: EmployerTask }) {
         </div>
         {task.is_open && <button onClick={() => close.mutate()} disabled={close.isPending} className="btn-ghost btn-sm">Закрыть приём ответов</button>}
       </div>
+      {closeError && <p className="notice-error" role="alert">{closeError}</p>}
       <p className="whitespace-pre-wrap text-sm text-ink">{task.statement}</p>
       {task.answer_type === 'number' && <p className="text-sm text-ink-2">Эталон: <b className="num text-ink">{task.reference_number}</b></p>}
       {task.answer_type === 'choice' && (
@@ -93,7 +99,7 @@ function Submissions({ task }: { task: EmployerTask }) {
 /** Tasks the employer writes (TZ 2.1, regular tasks): publish, see answers, review open ones. */
 export default function EmployerTasks() {
   const [params, setParams] = useSearchParams()
-  const { data: tasks = [], isLoading } = useQuery({ queryKey: ['employerTasks'], queryFn: () => myTasks().then(r => r.data) })
+  const { data: tasks = [], isLoading, isError, error } = useQuery({ queryKey: ['employerTasks'], queryFn: () => myTasks().then(r => r.data) })
   const [creating, setCreating] = useState(false)
   const selectedId = params.get('task') ?? tasks[0]?.id
   const selected = tasks.find(t => t.id === selectedId)
@@ -116,7 +122,8 @@ export default function EmployerTasks() {
         </dl>
       )}
       {isLoading && <Skeleton className="h-40" />}
-      {!isLoading && tasks.length === 0 && (
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить задания')}</p>}
+      {!isLoading && !isError && tasks.length === 0 && (
         <Empty title="Заданий пока нет" action={<button onClick={() => setCreating(true)} className="btn-primary">Написать задание</button>}>
           Опубликуйте задание для всех кандидатов специализации или отправьте его одному кандидату из поиска кнопкой «Дать задание».
         </Empty>

@@ -16,3 +16,8 @@ def inn_is_valid(inn: str) -> bool:
         n12 = _digit(inn[:11], [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8])
         return inn[10] == n11 and inn[11] == n12
     return False
+
+
+def published_inn(inn: str | None) -> bool:
+    """The candidate is told the tax id was checked only when the checksum holds."""
+    return bool(inn) and inn_is_valid(inn)

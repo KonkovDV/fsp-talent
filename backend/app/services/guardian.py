@@ -26,6 +26,11 @@ def guardian_token(participant_id: uuid.UUID, email: str) -> str:
     return f"{head}.{_mac(participant_id, email)}"
 
 
+def consent_link(base: str, token: str) -> str:
+    """The token rides in the fragment, so the access log and the Referer never see it."""
+    return f"{base.rstrip('/')}/guardian#token={token}"
+
+
 def token_participant(token: str) -> uuid.UUID | None:
     """The participant id inside the token, before the signature is checked against the stored email."""
     head, _, _ = (token or "").partition(".")

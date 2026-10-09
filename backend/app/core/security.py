@@ -26,6 +26,16 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
+# bcrypt of a password no account uses. A missing account still pays for one check.
+_UNKNOWN_PASSWORD_HASH = "$2b$12$h3Rtu69CJnqSEwJBpRHbV.Admw2z3syxXx/qsApVi5ZNEsMPQVc2m"
+
+
+def password_matches(plain: str, hashed: str | None) -> bool:
+    """True when this hash is the password. A missing hash still runs bcrypt, so the two cases take the same time."""
+    ok = verify_password(plain, hashed or _UNKNOWN_PASSWORD_HASH)
+    return bool(hashed) and ok
+
+
 def create_token(data: dict, expire_minutes: int) -> str:
     payload = data.copy()
     payload["exp"] = datetime.now(UTC) + timedelta(minutes=expire_minutes)

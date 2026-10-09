@@ -20,7 +20,7 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.models import Employer, InterviewSlot, Offer, Participant
 from app.models.interview import FORMATS, OUTCOMES
-from app.services.interviews import MSK, calendar_text, moscow_start, slot_view
+from app.services.interviews import MSK, calendar_text, moscow_start, slot_view, still_ahead
 from app.services.notify import Outbox, notify
 from app.services.search.cache import bump_bank_epoch
 
@@ -126,6 +126,8 @@ async def choose_slot(offer_id: uuid.UUID, slot_id: uuid.UUID, current: dict = D
     target = next((row for row in rows if row.id == slot_id), None)
     if target is None:
         raise ApiError(404, "not_found", "Такого времени нет")
+    if not still_ahead(target.starts_at):
+        raise ApiError(422, "validation_error", "Это время уже прошло")
     if any(row.chosen and row.id != target.id for row in rows):
         raise ApiError(409, "conflict", "Время уже выбрано")
     for row in rows:

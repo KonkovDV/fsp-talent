@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, apiErrorCode, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
+import { apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -28,7 +28,7 @@ const STATUS: Record<string, [string, string]> = {
 /** Sent invitations as a funnel: sent → viewed → accepted, with contacts after consent (TZ 2.2 п.3). */
 export default function EmployerOffers() {
   const qc = useQueryClient()
-  const { data: offers = [], isLoading } = useQuery<Offer[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
+  const { data: offers = [], isLoading, isError, error: loadError } = useQuery<Offer[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
   const market = useQuery({ queryKey: ['offerMarket'], queryFn: () => offerMarket().then(r => r.data as {
     reasons: { n: number; shares: Record<string, number> } | null
     salaries: { role: string; grade: string; p25: number; median: number; p75: number; n: number }[]
@@ -38,11 +38,16 @@ export default function EmployerOffers() {
   const reveal = useMutation({
     mutationFn: (id: string) => getOfferContacts(id).then(r => ({ id, data: r.data as Contacts })),
     onSuccess: ({ id, data }) => { setError(''); setContacts(c => ({ ...c, [id]: data })) },
-    onError: e => setError(apiErrorCode(e) === 'contacts_hidden' || !apiErrorCode(e)
-      ? 'Контакты откроются, когда кандидат примет приглашение.' : apiError(e)),
+    onError: e => setError(apiError(e, 'Не удалось открыть контакты')),
   })
-  const [params] = useSearchParams()
-  const [thread, setThread] = useState<string | null>(params.get('thread'))
+  const [params, setParams] = useSearchParams()
+  const thread = params.get('thread')
+  const toggleThread = (id: string) => {
+    const next = new URLSearchParams(params)
+    if (thread === id) next.delete('thread')
+    else next.set('thread', id)
+    setParams(next, { replace: true })
+  }
   const [meeting, setMeeting] = useState<string | null>(null)
   const withdraw = useMutation({
     mutationFn: withdrawOffer,
@@ -85,7 +90,8 @@ export default function EmployerOffers() {
       )}
       {error && <p className="notice-error mb-4" role="alert">{error}</p>}
       {isLoading && <Skeleton className="h-48" />}
-      {!isLoading && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
+      {isError && <p className="notice-error mb-4" role="alert">{apiError(loadError, 'Не удалось загрузить приглашения')}</p>}
+      {!isLoading && !isError && offers.length === 0 && <Empty title="Вы ещё никого не пригласили">Найдите кандидата в поиске или в подборке по потребности и нажмите «Пригласить».</Empty>}
       {offers.length > 0 && (
         <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Отправленные приглашения">
           <table className="protocol">
@@ -110,7 +116,7 @@ export default function EmployerOffers() {
                         <button onClick={() => setMeeting(meeting === o.id ? null : o.id)} aria-expanded={meeting === o.id} className="btn-ghost btn-sm">Собеседование</button>
                       )}
                       {o.status === 'accepted' && (
-                        <button onClick={() => setThread(thread === o.id ? null : o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
+                        <button onClick={() => toggleThread(o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
                           <MessageSquare size={14} aria-hidden /> Переписка
                           {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                         </button>

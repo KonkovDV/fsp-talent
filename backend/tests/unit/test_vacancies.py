@@ -1,7 +1,7 @@
 from datetime import date
 
 from app.models.participant import Participant
-from app.services.vacancies import match_vacancy
+from app.services.vacancies import match_vacancy, status_after_close
 
 
 def _candidate(**extra):
@@ -27,6 +27,14 @@ def test_match_counts_skills_and_rejects_a_minor_without_permission():
     assert hit is not None and hit["matched_skills"] == ["Python"] and "Go" in hit["missing_skills"]
     assert match_vacancy(_candidate(is_minor=True), _vacancy()) is None
     assert match_vacancy(_candidate(is_minor=True), _vacancy(allows_minors=True)) is not None
+
+
+def test_closing_a_vacancy_ends_an_open_application_and_keeps_a_refusal():
+    assert status_after_close("applied") == "closed"
+    assert status_after_close("reviewing") == "closed"
+    assert status_after_close("invited") == "closed"
+    assert status_after_close("rejected") is None
+    assert status_after_close("closed") is None
 
 
 def test_match_respects_role_grade_and_rank():

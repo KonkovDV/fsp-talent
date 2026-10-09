@@ -1,7 +1,7 @@
 """Guardian consent link: bound to the participant and to the exact email the minor named."""
 import uuid
 
-from app.services.guardian import guardian_token, token_participant, token_valid
+from app.services.guardian import consent_link, guardian_token, token_participant, token_valid
 
 
 def test_link_is_bound_to_the_person_and_the_email():
@@ -13,3 +13,9 @@ def test_link_is_bound_to_the_person_and_the_email():
     assert not token_valid(token, uuid.uuid4(), "mama@example.ru")
     assert not token_valid(token, pid, None)
     assert token_participant("garbage") is None
+
+
+def test_the_consent_link_keeps_the_token_out_of_the_query():
+    link = consent_link("https://talent.example", "abc.def")
+    assert link == "https://talent.example/guardian#token=abc.def"
+    assert "?" not in link

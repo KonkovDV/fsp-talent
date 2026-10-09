@@ -1,9 +1,9 @@
 """Interview times stay in Moscow on the calendar, and the outcome moves P(accept) only for that company."""
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
-from app.services.interviews import calendar_text, moscow_start
+from app.services.interviews import calendar_text, moscow_start, still_ahead
 from app.services.matching import CandidateFacts, NeedSpec, score
 
 
@@ -19,6 +19,13 @@ def test_calendar_writes_moscow_wall_time():
     poisoned = calendar_text(uuid.UUID("22222222-2222-2222-2222-222222222222"), start, "online",
                              "комната\r\nSUMMARY:чужая встреча", "Собеседование")
     assert sum(1 for line in poisoned.split("\r\n") if line.startswith("SUMMARY:")) == 1
+
+
+def test_a_meeting_that_already_started_cannot_be_chosen():
+    start = moscow_start("2026-10-15", "14:00")
+    assert still_ahead(start, datetime(2026, 10, 15, 10, 59, tzinfo=UTC))
+    assert not still_ahead(start, datetime(2026, 10, 15, 11, 0, tzinfo=UTC))
+    assert not still_ahead(start, datetime(2026, 10, 15, 12, 0, tzinfo=UTC))
 
 
 def test_a_failed_interview_lowers_accept_and_no_interview_leaves_it():
@@ -42,8 +49,10 @@ def test_a_failed_interview_lowers_accept_and_no_interview_leaves_it():
     assert all(r.code != "INTERVIEW_PASSED" for r in plain.reasons)
 
 
-def test_interview_migration_drops_the_table():
-    text = Path("alembic/versions/0006_interviews.py").read_text(encoding="utf-8")
-    down = text.split("def downgrade")[1]
-    assert 'drop_table("interview_slots")' in down
-    assert "DROP POLICY IF EXISTS interview_slots_actor" in down
+def test_interview_slots_live_in_the_initial_migration():
+    text = Path("alembic/versions/0001_initial.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE public.interview_slots" in text
+    assert "interview_slots_actor" in text
+    assert "uq_interview_slots_chosen" in text
+    down = text.split("def downgrade", 1)[1]
+    assert "DROP TABLE IF EXISTS" in down

@@ -29,7 +29,7 @@ from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
-from app.services.vacancies import match_vacancy
+from app.services.vacancies import match_vacancy, status_after_close
 from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
@@ -150,7 +150,7 @@ async def preview_exam(body: VacancyIn, current: dict = Depends(get_current_empl
 
 @router.get("/mine")
 async def my_vacancies(
-    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    limit: int = Query(_PAGE_SIZE_MAX, ge=1, le=_PAGE_SIZE_MAX),
     offset: int = Query(0, ge=0),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),
@@ -172,7 +172,20 @@ async def close_vacancy(vacancy_id: uuid.UUID, current: dict = Depends(get_curre
     if not vacancy or vacancy.employer_id != _uuid(current):
         raise HTTPException(404, "Вакансия не найдена")
     vacancy.is_open = False
+    apps = list(await db.scalars(select(Application).where(Application.vacancy_id == vacancy.id)))
+    employer = await db.get(Employer, vacancy.employer_id)
+    company = employer.company_name if employer else "Работодатель"
+    outbox = Outbox()
+    for application in apps:
+        if status_after_close(application.status) is None:
+            continue
+        application.status = "closed"
+        await notify(db, outbox, "participant", application.candidate_id, "application_status",
+                     f"Отклик на «{vacancy.title}»: {STATUS_RU['closed']}",
+                     f"{company} закрыла вакансию. Отклик больше не рассматривается.",
+                     "/candidate/vacancies")
     await db.commit()
+    await outbox.deliver()
     return {"is_open": False}
 
 
@@ -280,7 +293,7 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
 
 @router.get("/applications")
 async def my_applications(
-    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    limit: int = Query(_PAGE_SIZE_MAX, ge=1, le=_PAGE_SIZE_MAX),
     offset: int = Query(0, ge=0),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),
@@ -327,7 +340,7 @@ async def update_application_status(
     if not vacancy or vacancy.employer_id != _uuid(current):
         raise HTTPException(404, "Отклик не найден")
     if application.status in ("accepted", "rejected"):
-        raise HTTPException(409, f"Отклик уже закрыт кандидатом: {application.status}")
+        raise HTTPException(409, "Этот статус уже окончательный")
     changed = application.status != body.status
     application.status = body.status
     if application.viewed_at is None:

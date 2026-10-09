@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { apiError, resendVerification, verifyEmail, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import AuthShell from '../components/AuthShell'
+import { dropLetterToken, forgetLetterToken, letterToken, onceLetter } from '../lib/letterToken'
 
-/** Email confirmation: 6-digit code from the letter, or the link (?token=…) that fills it in. */
+/** Email confirmation: 6-digit code from the letter, or the link (#token=…) that fills it in. */
 export default function VerifyPage() {
   const [params] = useSearchParams()
   const email = params.get('email') ?? ''
   const role: Role = params.get('role') === 'employer' ? 'employer' : 'participant'
-  const token = params.get('token')
+  const [token] = useState(letterToken)
   const navigate = useNavigate()
   const setAuth = useAuthStore(s => s.setAuth)
   const location = useLocation()
@@ -20,7 +21,6 @@ export default function VerifyPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [cooldown, setCooldown] = useState(60)
-  const tried = useRef(false)
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -34,10 +34,12 @@ export default function VerifyPage() {
   }
 
   useEffect(() => {
-    if (!token || tried.current) return
-    tried.current = true
+    if (!token) return
+    dropLetterToken()
+    const job = onceLetter(token, () => verifyEmail({ token }).then(r => r.data))
+    if (!job) return
     setBusy(true)
-    verifyEmail({ token }).then(r => finish(r.data))
+    job.then(data => { forgetLetterToken(); finish(data) })
       .catch(e => setError(apiError(e, 'Ссылка не подошла. Введите код из письма.')))
       .finally(() => setBusy(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps

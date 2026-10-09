@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,6 +19,7 @@ from app.core.demo_guard import reject_protected
 from app.core.ratelimit import too_many
 from app.models import (
     AccessLog,
+    Application,
     CategoryAssignment,
     Complaint,
     ConsentLog,
@@ -38,8 +39,9 @@ from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
 from app.services.growth import growth_gaps, next_grade
-from app.services.guardian import guardian_token
+from app.services.guardian import consent_link, guardian_token
 from app.services.identity import active_consent
+from app.services.inn import published_inn
 from app.services.mail import send_mail
 from app.services.market import quartiles, salary_band
 from app.services.notify import Outbox, category_label, notify
@@ -423,17 +425,17 @@ async def revoke_credential(credential_id: uuid.UUID, current: dict = Depends(ge
 
 @router.get("/me/offers")
 async def get_my_offers(
-    limit: int = Query(20, ge=1, le=_PAGE_SIZE_MAX),
+    limit: int = Query(_PAGE_SIZE_MAX, ge=1, le=_PAGE_SIZE_MAX),
     offset: int = Query(0, ge=0),
     current: dict = Depends(get_current_participant),
     db: AsyncSession = Depends(get_db),
 ):
-    """Paginated list of offers sent to this candidate."""
+    """Offers sent to this candidate. A waiting one stays on the first page, ahead of newer closed ones."""
     rows = list(await db.scalars(
         select(Offer)
         .where(Offer.candidate_id == _pid(current))
         .options(selectinload(Offer.employer))
-        .order_by(Offer.created_at.desc())
+        .order_by(case((Offer.status == "pending", 0), else_=1), Offer.created_at.desc())
         .limit(limit).offset(offset)
     ))
     changed = expire_stale(rows)
@@ -450,7 +452,7 @@ async def get_my_offers(
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
         "company_profile": {"industry": o.employer.industry, "website": o.employer.website,
-                            "about": o.employer.description, "inn_given": bool(o.employer.inn)},
+                            "about": o.employer.description, "inn_given": published_inn(o.employer.inn)},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
@@ -489,6 +491,10 @@ async def file_complaint(body: ComplaintIn, current: dict = Depends(get_current_
     else:
         vacancy = await db.get(Vacancy, body.vacancy_id)
         if vacancy is None or not vacancy.is_open:
+            raise ApiError(404, "not_found", "Вакансия не найдена")
+        applied = await db.scalar(select(Application.id).where(
+            Application.vacancy_id == vacancy.id, Application.candidate_id == participant_id))
+        if applied is None:
             raise ApiError(404, "not_found", "Вакансия не найдена")
         employer_id = vacancy.employer_id
     row = Complaint(participant_id=participant_id, offer_id=body.offer_id, vacancy_id=body.vacancy_id,
@@ -714,7 +720,7 @@ async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_par
     db.add(ConsentLog(participant_id=p.id, event_type="guardian_requested", actor_id=p.id, meta={}))
     await db.commit()
     token = guardian_token(p.id, email)
-    link = f"{settings.PUBLIC_BASE_URL.rstrip('/')}/guardian?token={token}"
+    link = consent_link(settings.PUBLIC_BASE_URL, token)
     await send_mail(email, "Согласие законного представителя — ФСП Талант",
                     f"{p.display_name or 'Ваш ребёнок'} зарегистрировался на платформе подбора ФСП Талант.\n"
                     "Работодатели увидят анонимную карточку кандидата только после вашего согласия на обработку "

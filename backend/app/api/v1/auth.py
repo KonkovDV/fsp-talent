@@ -31,6 +31,7 @@ from app.core.security import (
     epochs_match,
     hash_password,
     next_refresh_nonce,
+    password_matches,
     verify_password,
 )
 from app.models import (
@@ -66,6 +67,7 @@ from app.services.identity import (
     normalize_email,
     send_code,
 )
+from app.services.inn import inn_is_valid
 from app.services.privacy import contacts_allowed
 from app.services.profile import ingest_from_fsp, rebuild_profile
 
@@ -127,17 +129,26 @@ def clear_signin_binder(response: Response) -> None:
     response.delete_cookie(FSP_SIGNIN_COOKIE, path=FSP_SIGNIN_PATH)
 
 
+def _refresh_cookie_flags() -> dict:
+    return {"path": "/api/v1/auth", "secure": settings.COOKIE_SECURE, "httponly": True, "samesite": "lax"}
+
+
 def attach_refresh(response: Response, token: str) -> None:
     """The refresh token lives in an HttpOnly cookie. JavaScript does not receive it."""
     response.set_cookie(
         key=REFRESH_COOKIE,
         value=token,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/api/v1/auth",
+        **_refresh_cookie_flags(),
     )
+
+
+def clear_refresh(response: Response) -> None:
+    """Remove the refresh cookie with the same flags it was stored with.
+
+    A deletion that leaves out Secure does not replace a Secure cookie, so the browser keeps it.
+    """
+    response.delete_cookie(REFRESH_COOKIE, **_refresh_cookie_flags())
 
 
 def browser_tokens(tokens: TokenOut) -> TokenOut:
@@ -173,6 +184,16 @@ def _password_hash(password: str) -> str:
         return hash_password(password)
     except ValueError as e:
         raise ApiError(422, "validation_error", "Пароль длиннее 72 байт") from e
+
+
+def repeat_registration(account) -> bool:
+    """The address already has an account, and the mailbox has not confirmed it yet.
+
+    A later registration must not replace the password or the profile. The letter is delivered
+    to that mailbox either way, so the person who opens it would otherwise confirm a password
+    chosen by someone else.
+    """
+    return account is not None and account.email_verified_at is None
 
 
 async def _account(db: AsyncSession, role: str, email: str):
@@ -213,12 +234,11 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     p = await _account(db, "participant", email)
     if p is not None and p.email_verified_at is not None:
         raise ApiError(409, "email_taken")
-    if p is not None:
+    if repeat_registration(p):
         await check_resend_allowed(email, "verify")
-    if p is None:
-        p = Participant(email=email, is_visible=True, public_profile=False)
-        db.add(p)
-    # An unconfirmed account belongs to nobody yet: the latest registration sets the password.
+        return await _send_verification(db, "participant", p, email)
+    p = Participant(email=email, is_visible=True, public_profile=False)
+    db.add(p)
     p.password_hash = _password_hash(body.password)
     p.display_name = (body.display_name or "").strip() or p.display_name
     p.is_minor = not body.is_adult
@@ -250,14 +270,15 @@ async def register_employer(body: EmployerRegister, request: Request, db: AsyncS
     employer = await _account(db, "employer", email)
     if employer is not None and employer.email_verified_at is not None:
         raise ApiError(409, "email_taken")
-    if employer is not None:
+    if repeat_registration(employer):
         await check_resend_allowed(email, "verify")
+        return await _send_verification(db, "employer", employer, email)
+    if body.inn is not None and not inn_is_valid(body.inn):
+        raise ApiError(422, "validation_error", "ИНН не проходит контрольную сумму")
     password_hash = _password_hash(body.password)
-    if employer is None:
-        employer = Employer(company_name=body.company_name, email=email, password_hash=password_hash)
-        db.add(employer)
-    employer.company_name, employer.password_hash = body.company_name, password_hash
-    employer.inn, employer.website = body.inn, body.website
+    employer = Employer(company_name=body.company_name, email=email, password_hash=password_hash,
+                        inn=body.inn, website=body.website)
+    db.add(employer)
     try:
         await db.flush()
     except IntegrityError as e:   # a parallel registration of the same email won the race
@@ -332,7 +353,8 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         raise ApiError(401, "invalid_credentials",
                        "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
     account = await _account(db, role, email)
-    if account is None or not account.password_hash or not verify_password(form.password, account.password_hash):
+    stored = account.password_hash if account is not None else None
+    if not password_matches(form.password, stored):
         raise ApiError(401, "invalid_credentials")
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
@@ -501,7 +523,7 @@ async def logout(response: Response, request: Request, db: AsyncSession = Depend
             ):
                 account.refresh_nonce = int(account.refresh_nonce or 0) + 1
                 await db.commit()
-    response.delete_cookie(REFRESH_COOKIE, path="/api/v1/auth")
+    clear_refresh(response)
     return {"status": "signed_out"}
 
 
@@ -580,12 +602,14 @@ class FspSignUpIn(BaseModel):
     consents: list[str] = Field(default_factory=list, max_length=10)
 
 
-def _client_ip(request: Request) -> str:
-    """The address nginx put in X-Real-IP. The first X-Forwarded-For hop is the client's own header."""
-    real = (request.headers.get("x-real-ip") or "").strip()
-    if real:
-        return real
-    return request.client.host if request.client else "unknown"
+def client_address(request: Request) -> str:
+    """The visitor's address. Behind the site proxy the socket peer is that proxy, one address for everyone."""
+    recorded = (request.headers.get("x-real-ip") or "").strip()
+    if recorded:
+        return recorded[:64]
+    if request.client is not None and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 async def _registry(fsp_id: str):
@@ -605,7 +629,7 @@ async def _linked(db: AsyncSession, fsp_id: str) -> Participant | None:
 @router.post("/fsp/authorize")
 async def fsp_signin_authorize(request: Request, response: Response):
     """Start signing in by FSP ID: the address of the provider's login page. No platform session needed."""
-    await _limit("fsp-signin", _client_ip(request), limit=20)
+    await _limit("fsp-signin", client_address(request), limit=20)
     started = await fsp_identity.start_signin()
     attach_signin_binder(response, started.binder)
     return {"authorize_url": started.authorize_url, "provider": fsp_identity.get_fsp_id_provider().name}
