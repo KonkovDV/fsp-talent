@@ -53,6 +53,8 @@
 /api/v1/legal/documents/{kind}
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
+/api/v1/moderation/complaints
+/api/v1/moderation/vacancies/{vacancy_id}/close
 /api/v1/needs
 /api/v1/needs/{need_id}
 /api/v1/needs/{need_id}/compare
@@ -90,6 +92,7 @@
 /api/v1/search/candidates
 /api/v1/tasks/
 /api/v1/tasks/for-me
+/api/v1/tasks/lab
 /api/v1/tasks/mine
 /api/v1/tasks/submissions/{submission_id}/review
 /api/v1/tasks/{task_id}/answer
