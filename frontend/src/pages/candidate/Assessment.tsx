@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Info, Lock, XCircle } from 'lucide-react'
 import {
   abandonAssessment, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
-  disputeGrade, getMyProfile, leaveAssessment, reviewAssessment, startAssessment,
+  disputeGrade, getMyProfile, leaveAssessment, noteAssessmentCopy, reviewAssessment, startAssessment,
 } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
 import { Meter, PageHeader, plural } from '../../components/ui'
@@ -165,8 +165,13 @@ export default function CandidateAssessment() {
     const onHide = () => {
       if (document.visibilityState === 'hidden') void leaveAssessment(id).catch(() => undefined)
     }
+    const onCopy = () => { void noteAssessmentCopy(id).catch(() => undefined) }
     document.addEventListener('visibilitychange', onHide)
-    return () => document.removeEventListener('visibilitychange', onHide)
+    document.addEventListener('copy', onCopy)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      document.removeEventListener('copy', onCopy)
+    }
   }, [state])
   const review = useQuery({
     queryKey: ['review', state?.session_id], enabled: showReview && !!state?.result,
@@ -325,7 +330,7 @@ export default function CandidateAssessment() {
             Ответ нельзя изменить. Отвечено: {state.progress.answered}.{' '}
             {state.progress.min_items === state.progress.max_items
               ? `Это пробный проход из ${state.progress.max_items} заданий: шкала уверенности видна, но грейд не меняется.`
-              : `Тест закончится, когда уверенность дойдёт до 90 % или упадёт ниже 10 %, не раньше ${state.progress.min_items}-го и не позже ${state.progress.max_items}-го задания. Сворачивание вкладки записывается и на грейд не влияет.`}
+              : `Тест закончится, когда уверенность дойдёт до 90 % или упадёт ниже 10 %, не раньше ${state.progress.min_items}-го и не позже ${state.progress.max_items}-го задания. Сворачивание вкладки и копирование текста записываются и на грейд не влияют.`}
           </p>
         </div>
       )}

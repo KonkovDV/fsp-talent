@@ -247,6 +247,7 @@ export const answerAssessment = (sessionId: string, item_token: string,
   })
 export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
 export const leaveAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/leave`)
+export const noteAssessmentCopy = (sessionId: string) => api.post(`/assessment/${sessionId}/copy`)
 export const disputeGrade = (sessionId: string) =>
   api.post<{ text: string }>(`/assessment/${sessionId}/dispute`)
 export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
