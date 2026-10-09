@@ -110,10 +110,12 @@ def test_a_vacancy_without_an_application_is_not_found():
     raise AssertionError("вакансия без отклика нашлась")
 
 
-def test_complaints_migration_downgrades():
+def test_complaints_live_in_the_initial_migration():
     from pathlib import Path
 
-    text = Path("alembic/versions/0005_complaints.py").read_text(encoding="utf-8")
+    text = Path("alembic/versions/0001_initial.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE public.complaints" in text
+    assert "invites_paused_at" in text
+    assert "ck_complaints_one_object" in text
     downgrade = text.split("def downgrade", 1)[1]
-    assert "drop_table(\"complaints\")" in downgrade
-    assert "invites_paused_at" in downgrade
+    assert "DROP TABLE IF EXISTS" in downgrade

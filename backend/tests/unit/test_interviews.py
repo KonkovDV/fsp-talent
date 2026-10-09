@@ -49,8 +49,10 @@ def test_a_failed_interview_lowers_accept_and_no_interview_leaves_it():
     assert all(r.code != "INTERVIEW_PASSED" for r in plain.reasons)
 
 
-def test_interview_migration_drops_the_table():
-    text = Path("alembic/versions/0006_interviews.py").read_text(encoding="utf-8")
-    down = text.split("def downgrade")[1]
-    assert 'drop_table("interview_slots")' in down
-    assert "DROP POLICY IF EXISTS interview_slots_actor" in down
+def test_interview_slots_live_in_the_initial_migration():
+    text = Path("alembic/versions/0001_initial.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE public.interview_slots" in text
+    assert "interview_slots_actor" in text
+    assert "uq_interview_slots_chosen" in text
+    down = text.split("def downgrade", 1)[1]
+    assert "DROP TABLE IF EXISTS" in down

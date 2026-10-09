@@ -1,16 +1,14 @@
-"""Current database in one step.
+"""The whole schema in one step.
 
 Revision ID: 0001_initial
 Revises:
 
-The chain of small upgrades is folded into the schema the stand already has:
-tables, checks, partial indexes, the answer-count function, and row-level
-policies. Extensions are created here, and fsp_app is created or stripped of
-superuser rights.
+Tables, checks, partial indexes, the answer-count function and row-level
+policies. Extensions are created here. The role fsp_app is created, or stripped
+of superuser rights if it already exists.
 
-A database that already has these tables must be stamped onto this revision.
-Running upgrade there tries to create the objects again and the transaction
-rolls back.
+A database that already has this schema must be stamped onto this revision.
+upgrade there tries to create the objects again and the transaction rolls back.
 """
 from __future__ import annotations
 
@@ -130,6 +128,8 @@ CREATE TABLE public.discipline_scores (
     events_count integer DEFAULT 0 NOT NULL,
     team_events_count integer DEFAULT 0 NOT NULL,
     best_rank character varying(10),
+    rank_assigned_at date,
+    rank_order_ref character varying(64),
     top_event_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
     scoring_version character varying(20) NOT NULL,
     computed_at timestamp with time zone DEFAULT now()
@@ -190,7 +190,8 @@ CREATE TABLE public.employers (
     industry character varying(200),
     email_verified_at timestamp with time zone,
     token_epoch integer DEFAULT 0 NOT NULL,
-    refresh_nonce integer DEFAULT 0 NOT NULL
+    refresh_nonce integer DEFAULT 0 NOT NULL,
+    invites_paused_at timestamp with time zone
 );
 
 
@@ -321,6 +322,7 @@ CREATE TABLE public.offers (
     candidate_viewed_at timestamp with time zone,
     decline_reason character varying(20),
     contacts_revoked_at timestamp with time zone,
+    responded_at timestamp with time zone,
     CONSTRAINT ck_offer_decline_reason CHECK (((decline_reason IS NULL) OR ((decline_reason)::text = ANY ((ARRAY['salary'::character varying, 'format'::character varying, 'stack'::character varying, 'not_looking'::character varying, 'other'::character varying])::text[]))))
 );
 
@@ -343,6 +345,9 @@ CREATE TABLE public.participants (
     public_profile boolean DEFAULT false NOT NULL,
     is_minor boolean DEFAULT false NOT NULL,
     minor_consent_given boolean DEFAULT false NOT NULL,
+    guardian_email character varying(200),
+    guardian_consent_at timestamp with time zone,
+    job_search character varying(20) DEFAULT 'open'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone,
     grade_locked_until timestamp with time zone,
@@ -367,7 +372,8 @@ CREATE TABLE public.participants (
     employer_task_passed boolean,
     employer_task_at timestamp with time zone,
     refresh_nonce integer DEFAULT 0 NOT NULL,
-    CONSTRAINT ck_participants_assessed_grade CHECK (((assessed_grade IS NULL) OR ((assessed_grade)::text = ANY ((ARRAY['intern'::character varying, 'junior'::character varying, 'middle'::character varying, 'senior'::character varying, 'lead'::character varying])::text[]))))
+    CONSTRAINT ck_participants_assessed_grade CHECK (((assessed_grade IS NULL) OR ((assessed_grade)::text = ANY ((ARRAY['intern'::character varying, 'junior'::character varying, 'middle'::character varying, 'senior'::character varying, 'lead'::character varying])::text[])))),
+    CONSTRAINT ck_participants_job_search CHECK (((job_search)::text = ANY ((ARRAY['active'::character varying, 'open'::character varying, 'not_looking'::character varying])::text[])))
 );
 
 
@@ -953,6 +959,10 @@ CREATE INDEX ix_verifiable_credentials_participant_id ON public.verifiable_crede
 
 
 
+CREATE INDEX ix_offers_pair_rejected ON public.offers USING btree (employer_id, candidate_id) WHERE ((status)::text = 'rejected'::text);
+
+
+
 CREATE UNIQUE INDEX uix_one_active_session ON public.test_sessions USING btree (participant_id) WHERE ((status)::text = 'in_progress'::text);
 
 
@@ -1182,6 +1192,73 @@ ALTER TABLE public.test_sessions ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY test_sessions_actor ON public.test_sessions USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)) OR (current_setting('app.employer_id'::text, true) <> ''::text)));
+
+
+
+CREATE TABLE public.complaints (
+    id uuid NOT NULL,
+    offer_id uuid,
+    vacancy_id uuid,
+    participant_id uuid NOT NULL,
+    reason character varying(32) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT complaints_pkey PRIMARY KEY (id),
+    CONSTRAINT ck_complaints_one_object CHECK ((((offer_id IS NOT NULL) AND (vacancy_id IS NULL)) OR ((offer_id IS NULL) AND (vacancy_id IS NOT NULL)))),
+    CONSTRAINT ck_complaints_reason CHECK (((reason)::text = ANY ((ARRAY['не_вакансия'::character varying, 'сбор_данных'::character varying, 'зарплата_не_та'::character varying, 'оскорбление'::character varying, 'другое'::character varying])::text[]))),
+    CONSTRAINT uq_complaints_participant_offer UNIQUE (participant_id, offer_id),
+    CONSTRAINT uq_complaints_participant_vacancy UNIQUE (participant_id, vacancy_id),
+    CONSTRAINT complaints_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES public.offers(id),
+    CONSTRAINT complaints_vacancy_id_fkey FOREIGN KEY (vacancy_id) REFERENCES public.vacancies(id),
+    CONSTRAINT complaints_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id)
+);
+
+
+
+CREATE INDEX ix_complaints_participant_id ON public.complaints USING btree (participant_id);
+
+
+
+ALTER TABLE public.complaints ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY complaints_actor ON public.complaints USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
+
+
+CREATE TABLE public.interview_slots (
+    id uuid NOT NULL,
+    offer_id uuid NOT NULL,
+    starts_at timestamp with time zone NOT NULL,
+    format character varying(20) NOT NULL,
+    place text,
+    chosen boolean DEFAULT false NOT NULL,
+    outcome character varying(20),
+    outcome_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT interview_slots_pkey PRIMARY KEY (id),
+    CONSTRAINT ck_interview_format CHECK (((format)::text = ANY ((ARRAY['online'::character varying, 'office'::character varying, 'phone'::character varying])::text[]))),
+    CONSTRAINT ck_interview_outcome CHECK (((outcome IS NULL) OR (chosen AND ((outcome)::text = ANY ((ARRAY['passed'::character varying, 'failed'::character varying, 'no_show'::character varying])::text[]))))),
+    CONSTRAINT interview_slots_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES public.offers(id) ON DELETE CASCADE
+);
+
+
+
+CREATE INDEX ix_interview_slots_offer_id ON public.interview_slots USING btree (offer_id);
+
+
+
+CREATE UNIQUE INDEX uq_interview_slots_chosen ON public.interview_slots USING btree (offer_id) WHERE chosen;
+
+
+
+ALTER TABLE public.interview_slots ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY interview_slots_actor ON public.interview_slots USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (offer_id IN ( SELECT offers.id
+   FROM public.offers
+  WHERE (((offers.employer_id)::text = current_setting('app.employer_id'::text, true)) OR ((offers.candidate_id)::text = current_setting('app.participant_id'::text, true))))))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (offer_id IN ( SELECT offers.id
+   FROM public.offers
+  WHERE (((offers.employer_id)::text = current_setting('app.employer_id'::text, true)) OR ((offers.candidate_id)::text = current_setting('app.participant_id'::text, true)))))));
 
 """
 

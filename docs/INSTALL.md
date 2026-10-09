@@ -174,6 +174,8 @@ docker compose exec -T backend python -m app.validation.matching --seed 7
 | Журнал API | `make logs` или `docker compose logs -f backend` |
 | Консоль базы | `docker compose exec postgres psql -U fsp fsp_talent` |
 
+Схема ставится одной миграцией `0001_initial`. Том, в котором уже есть эти таблицы, новой командой `upgrade` не переписывается: объекты создадутся второй раз и транзакция откатится. Такой том помечают `docker compose exec backend alembic stamp 0001_initial`. Чистая база — `make reset`, затем `make demo`.
+
 ## 8. Что входит в стенд
 
 | Контейнер | Образ | Назначение |
