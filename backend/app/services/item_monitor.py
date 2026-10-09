@@ -62,6 +62,43 @@ def is_alarm(n: int, correct: int, expected: float, variance: float) -> bool:
     return KeyStats(n, correct, expected, variance).alarm
 
 
+def one_sided_p(z: float) -> float:
+    """Upper tail of a standard normal: P(Z ≥ z). The drift statistic is already one-sided."""
+    return 0.5 * math.erfc(z / math.sqrt(2.0))
+
+
+def bh_reject(p_values: list[float], alpha: float = 0.05) -> list[bool]:
+    """Benjamini–Hochberg step-up. True means that null is rejected at the given alpha.
+
+    Sort the p-values and take the largest rank k with p(k) ≤ (k / m) · alpha.
+    Every p-value at or below that p(k) is rejected. An empty list rejects nothing.
+
+    The product does not call this. A key is quarantined when its own z reaches
+    Z_ALARM or its CUSUM reaches CUSUM_H. Feeding this threshold into that decision
+    would change which keys are served, and that change has not been measured.
+    Repeated looks at the same key (alpha spending over time) are not applied either.
+    """
+    if not 0 < alpha <= 1:
+        raise ValueError("alpha must be in (0, 1]")
+    m = len(p_values)
+    rejected = [False] * m
+    if m == 0:
+        return rejected
+    order = sorted(range(m), key=lambda i: p_values[i])
+    cutoff: float | None = None
+    for rank, index in enumerate(order, start=1):
+        p = p_values[index]
+        if p != p or p < 0.0 or p > 1.0:
+            raise ValueError("p-value out of range")
+        if p <= (rank / m) * alpha:
+            cutoff = p
+    if cutoff is None:
+        return rejected
+    for index, p in enumerate(p_values):
+        rejected[index] = p <= cutoff
+    return rejected
+
+
 def leave_family_out(rows: list[tuple[str, str, float, float, float, bool]], prior_mean: float
                      ) -> list[tuple[str, float, bool]]:
     """Model-expected P(correct) for each answered item, with ability estimated WITHOUT the item's family.
