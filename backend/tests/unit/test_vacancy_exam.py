@@ -22,6 +22,14 @@ def test_named_skills_pull_the_blueprint_toward_those_topics():
     assert any(q["skill"] == "PostgreSQL" and "PostgreSQL" in q["evidence"] for q in exam["quotes"])
 
 
+def test_a_named_skill_without_a_family_is_listed_as_uncovered():
+    exam = form_exam("Очереди", "Нужны Python и Kafka", [], "backend", "middle")
+    assert "Python" not in exam["uncovered"]
+    assert exam["uncovered"] == ["Kafka"]
+    assert "Kafka" in exam["why"]
+    assert all("correct" not in sample for sample in exam["samples"])
+
+
 def test_the_same_vacancy_forms_the_same_samples():
     args = ("Платежи", "Python и PostgreSQL", ["Python"], "backend", "senior")
     assert form_exam(*args)["samples"] == form_exam(*args)["samples"]

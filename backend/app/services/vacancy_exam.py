@@ -111,6 +111,7 @@ def form_exam(title: str, description: str = "", skills: list[str] | None = None
     spec = role if role in BLUEPRINTS else "backend"
     grade = grade if grade in GRADE_LEVEL else "middle"
     named = _named_skills(title, description or "", skills or [])
+    uncovered = [skill for skill in named if skill not in SKILL_TOPIC]
     topics: Counter = Counter(SKILL_TOPIC[s] for s in named if s in SKILL_TOPIC)
     shares = _shares(spec, topics)
     pulled = sorted(topics, key=lambda t: -topics[t])
@@ -119,10 +120,13 @@ def form_exam(title: str, description: str = "", skills: list[str] | None = None
         why = f"В описании названы: {labels}. Эти темы занимают большую долю теста, остальное — план специализации."
     else:
         why = "В описании нет навыков из словаря, поэтому тест идёт по плану специализации."
+    if uncovered:
+        why += " Без заданий в банке: " + ", ".join(uncovered) + "."
     return {
         "specialization": spec,
         "target_grade": grade,
         "skills": named,
+        "uncovered": uncovered,
         "topics": [
             {"topic": t, "label": TOPIC_LABELS.get(t, t), "share": shares[t]}
             for t in sorted(shares, key=lambda k: -shares[k])

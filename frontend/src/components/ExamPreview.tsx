@@ -3,7 +3,7 @@ export interface ExamSample {
   topic: string; topic_label?: string; family: string; stem: string; code?: string | null; language?: string | null
   answer_mode?: 'choice' | 'number'
 }
-export interface Exam { why: string; topics: ExamTopic[]; samples: ExamSample[]; quotes?: { skill: string; evidence: string }[] }
+export interface Exam { why: string; topics: ExamTopic[]; samples: ExamSample[]; quotes?: { skill: string; evidence: string }[]; uncovered?: string[] }
 
 // One hue, stepped by order: the bar shows parts of a whole, the labels carry the names.
 const STEPS = ['bg-accent', 'bg-accent/80', 'bg-accent/60', 'bg-accent/45', 'bg-accent/35', 'bg-accent/25']
@@ -27,6 +27,9 @@ export default function ExamPreview({ exam }: { exam: Exam }) {
           ))}
         </ul>
       </div>
+      {exam.uncovered && exam.uncovered.length > 0 && (
+        <p className="text-sm text-ink-2">В банке нет заданий: {exam.uncovered.join(', ')}. Эти навыки в тест не войдут.</p>
+      )}
       {exam.quotes && exam.quotes.length > 0 && (
         <div>
           <p className="field-label">Откуда темы</p>
