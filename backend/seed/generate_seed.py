@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select
 
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
 from app.legal import documents
@@ -556,8 +557,8 @@ async def main(extra_candidates: int | None = None) -> None:
 
 
 def _refuse_production() -> None:
-    if os.environ.get("ENV", "").lower() == "production":
-        raise SystemExit("Демо-данные не загружаются, когда ENV=production")
+    if os.environ.get("ENV", "").lower() == "production" or not settings.DEMO_MODE:
+        raise SystemExit("Демо-данные не загружаются вне демо-стенда")
 
 
 if __name__ == "__main__":
