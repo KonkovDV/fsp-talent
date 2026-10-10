@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege by default (audit 2026-10, N-6): every job gets a read-only GITHUB_TOKEN unless it
+# asks for more itself (sign-sbom asks for id-token). https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -261,21 +266,7 @@ jobs:
           script: |
             cd /opt/fsp-talent
             git pull origin main
-            # Model names only. The key already lives in deploy/.env and is not printed.
-            if [ -f deploy/.env ]; then
-              if grep -q '^YANDEX_MODEL=' deploy/.env; then
-                sed -i 's|^YANDEX_MODEL=.*|YANDEX_MODEL=yandexgpt-5.1/latest|' deploy/.env
-              else
-                printf '\nYANDEX_MODEL=yandexgpt-5.1/latest\n' >> deploy/.env
-              fi
-              if grep -q '^YANDEX_CHECK_MODEL=' deploy/.env; then
-                sed -i 's|^YANDEX_CHECK_MODEL=.*|YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest|' deploy/.env
-              else
-                printf 'YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest\n' >> deploy/.env
-              fi
-              if grep -q '^YANDEX_API_KEY=.' deploy/.env && grep -q '^AI_ENABLED=' deploy/.env; then
-                sed -i 's|^AI_ENABLED=.*|AI_ENABLED=true|' deploy/.env
-              fi
-            fi
+            # The server env file is the operator's and changes only by hand (deploy/README.md). The pipeline never
+            # rewrites it: turning on the language model changes the processing of personal data and needs review.
             docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"
