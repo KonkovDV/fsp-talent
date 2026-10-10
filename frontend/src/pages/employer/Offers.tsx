@@ -119,7 +119,7 @@ export default function EmployerOffers() {
                 {o.returned_interest && <p className="text-sm text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
                 {o.practice_stage && (
                   <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}
-                    {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}
+                    {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" data-testid="practice-advance" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}
                   </p>
                 )}
                 <p className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)} <span className="text-xs text-ink-3">до вычета НДФЛ</span></p>
@@ -156,7 +156,14 @@ export default function EmployerOffers() {
                   <tr data-offer-id={o.id}>
                     <td>{o.candidate?.role ? <CategoryPlate role={o.candidate.role} grade={o.candidate.grade ?? ''} source={o.candidate.grade_source ?? ''} /> : (o.candidate?.label ?? '—')}
                       {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</div>}</td>
-                    <td className="text-ink">{o.role}</td>
+                    <td className="text-ink">{o.role}
+                      {o.returned_interest && <p className="text-xs text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
+                      {o.practice_stage && (
+                        <p className="text-xs text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}
+                          {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" data-testid="practice-advance" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}
+                        </p>
+                      )}
+                    </td>
                     <td className="num whitespace-nowrap text-right text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</td>
                     <td className="num text-ink-2">{date(o.created_at)}</td>
                     <td><span className={cls}>{label}</span>
@@ -176,7 +183,10 @@ export default function EmployerOffers() {
                     </td>
                   </tr>
                   {meeting === o.id && (
-                    <tr><td colSpan={6} className="!whitespace-normal"><InterviewSlots offerId={o.id} side="employer" listKey="employerOffers" /></td></tr>
+                    <tr><td colSpan={6} className="!whitespace-normal">
+                      <InterviewSlots offerId={o.id} side="employer" listKey="employerOffers" />
+                      <CodeInterview offerId={o.id} side="employer" />
+                    </td></tr>
                   )}
                   {thread === o.id && (
                     <tr><td colSpan={6} className="!whitespace-normal"><MessageThread offerId={o.id} listKey="employerOffers" other="Кандидат" /></td></tr>
