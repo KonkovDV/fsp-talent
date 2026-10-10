@@ -64,6 +64,11 @@
 /api/v1/legal/documents/{kind}
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
+/api/v1/moderation/ai-providers
+/api/v1/moderation/ai-providers/deactivate
+/api/v1/moderation/ai-providers/{provider_id}
+/api/v1/moderation/ai-providers/{provider_id}/activate
+/api/v1/moderation/ai-providers/{provider_id}/check
 /api/v1/moderation/complaints
 /api/v1/moderation/item-drafts
 /api/v1/moderation/item-drafts/{draft_id}/review

@@ -1,3 +1,4 @@
+from app.models.ai_provider import AiProvider
 from app.models.assessment import (
     GradeConfirmation,
     GradeDispute,
@@ -39,6 +40,7 @@ __all__ = [
     "GradeConfirmation",
     "GradeDispute",
     "InterviewSlot",
+    "AiProvider",
     "ItemDraft",
     "ItemStat",
     "Need",

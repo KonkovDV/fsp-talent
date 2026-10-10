@@ -1,6 +1,7 @@
 """Resume fields come only from a verbatim quote: a job title is not a name, a study span is not tenure."""
 import asyncio
 
+from app.core.config import settings
 from app.services.ai import assistant
 from app.services.ai.assistant import extract_resume_fields, for_model, parse_resume
 from app.services.skills import is_grounded
@@ -61,8 +62,8 @@ def test_parse_resume_sends_the_model_the_redacted_text(monkeypatch):
         return [{"skill": "PostgreSQL", "quote": "этой цитаты нет в тексте"}]
 
     monkeypatch.setattr(assistant, "_llm_skills", fake)
-    monkeypatch.setattr(assistant.settings, "AI_ENABLED", True)
-    monkeypatch.setattr(assistant.settings, "GIGACHAT_CREDENTIALS", "demo")
+    monkeypatch.setattr(settings, "AI_ENABLED", True)
+    monkeypatch.setattr(settings, "GIGACHAT_CREDENTIALS", "demo")
     result = asyncio.run(parse_resume(TEXT))
     assert "example.com" not in seen["text"] and "Иванов" not in seen["text"]
     assert result["llm_rejected"] == 1

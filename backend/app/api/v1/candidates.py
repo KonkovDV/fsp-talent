@@ -33,6 +33,7 @@ from app.models import (
 from app.models.complaint import REASONS
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
+from app.services.ai import providers
 from app.services.ai.assistant import parse_resume
 from app.services.assessment import sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
@@ -691,6 +692,7 @@ async def upload_resume(file: UploadFile = File(...), current: dict = Depends(ge
         raise ApiError(422, "validation_error", "Нужен обычный PDF не больше 5 МБ") from e
     if not text:
         raise ApiError(422, "validation_error", "В PDF не нашлось текста")
+    await providers.refresh()
     parsed = await parse_resume(text)
     return {"text": text[:4000], **with_resume_token(str(_pid(current)), parsed)}
 
