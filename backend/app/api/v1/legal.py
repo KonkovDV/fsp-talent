@@ -11,6 +11,7 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.legal import documents, get_document
 from app.models import Consent, Participant
+from app.services.consent_effects import planned_effects
 from app.services.identity import give_consent, withdraw_consent
 from app.services.search.cache import bump_bank_epoch
 
@@ -58,6 +59,7 @@ async def my_consents(current: dict = Depends(get_any_auth), db: AsyncSession = 
             "given_at": active.given_at.isoformat() if active else None,
             "accepted_version": active.version if active else None,
             "outdated": bool(active and active.sha256 != doc.sha256),
+            "if_withdrawn": planned_effects(role, doc.kind),
             "history": [{"version": r.version, "given_at": r.given_at.isoformat(),
                          "withdrawn_at": r.withdrawn_at.isoformat() if r.withdrawn_at else None}
                         for r in rows if r.kind == doc.kind],
@@ -89,17 +91,21 @@ async def withdraw(kind: str, request: Request, current: dict = Depends(get_any_
     if get_document(kind) is None:
         raise ApiError(404, "consent_unknown")
     consent = await withdraw_consent(db, role, subject_id, kind, request)
-    effects: list[str] = []
+    effect_items: list[dict[str, str]] = []
     if role == "participant":
         p = await db.get(Participant, subject_id)
         if p is not None and kind in ("pd_distribution", "pd_candidate") and p.public_profile:
             p.public_profile = False
-            effects.append("Публичная страница выключена")
+            effect_items.append({"code": "public_page_off", "text": "Публичная страница выключена."})
         if p is not None and kind == "pd_candidate":
             p.is_visible = False
-            effects.append("Карточка скрыта из поиска; данные будут удалены в течение 30 дней "
-                           "(ч. 5 ст. 21 152-ФЗ), если их хранение не требует закон")
+            effect_items.extend(item for item in planned_effects(role, kind) if item["code"] != "public_page_off")
+    elif consent is not None:
+        effect_items = planned_effects(role, kind)
+    if consent is not None and not effect_items and kind == "terms":
+        effect_items = planned_effects(role, kind)
     await db.commit()
-    if effects:
+    if any(item["code"] in {"hide_card", "public_page_off"} for item in effect_items):
         await bump_bank_epoch()
-    return {"kind": kind, "withdrawn": consent is not None, "effects": effects}
+    return {"kind": kind, "withdrawn": consent is not None, "effects": [item["text"] for item in effect_items],
+            "effect_items": effect_items}

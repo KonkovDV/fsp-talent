@@ -4,9 +4,11 @@ import { ShieldCheck } from 'lucide-react'
 import { apiError, myConsents, withdrawConsent } from '../api/client'
 import { LegalDocModal } from './LegalConsents'
 
+interface Effect { code: string; text: string }
 interface ConsentRow {
   kind: string; title: string; version: string; required: boolean; active: boolean
   given_at: string | null; accepted_version: string | null; outdated: boolean
+  if_withdrawn?: Effect[]
 }
 
 /** The person's consents with the exact version accepted; any of them can be withdrawn here. */
@@ -17,8 +19,9 @@ export default function ConsentsPanel() {
   const { data = [] } = useQuery<ConsentRow[]>({ queryKey: ['myConsents'], queryFn: () => myConsents().then(r => r.data) })
   const withdraw = useMutation({
     mutationFn: (kind: string) => withdrawConsent(kind).then(r => r.data),
-    onSuccess: (res: { effects: string[] }) => {
-      setNote(res.effects.join('. ') || 'Согласие отозвано')
+    onSuccess: (res: { effects?: string[]; effect_items?: Effect[] }) => {
+      const lines = res.effect_items?.map(item => item.text) ?? res.effects ?? []
+      setNote(lines.join(' ') || 'Согласие отозвано')
       qc.invalidateQueries({ queryKey: ['myConsents'] }); qc.invalidateQueries({ queryKey: ['myProfile'] })
     },
     onError: (e: unknown) => setNote(apiError(e)),
@@ -37,8 +40,8 @@ export default function ConsentsPanel() {
             </span>
             {row.active && (
               <button onClick={() => {
-                if (!row.required || window.confirm('Без этого согласия карточка будет скрыта, а данные удалены в течение 30 дней. Отозвать?'))
-                  withdraw.mutate(row.kind)
+                const lines = (row.if_withdrawn ?? []).map(item => item.text).join('\n')
+                if (window.confirm(lines || 'Отозвать согласие?')) withdraw.mutate(row.kind)
               }} className="inline-flex min-h-6 items-center text-xs font-medium text-danger hover:underline">Отозвать</button>
             )}
           </li>
