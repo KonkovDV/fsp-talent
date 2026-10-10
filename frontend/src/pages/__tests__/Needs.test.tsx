@@ -6,13 +6,14 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EmployerNeeds from '../employer/Needs'
 
-const { listNeeds, getNeed, updateNeed, createNeed, restoreNeed, needMatches } = vi.hoisted(() => ({
+const { listNeeds, getNeed, updateNeed, createNeed, restoreNeed, needMatches, needShortlist } = vi.hoisted(() => ({
   listNeeds: vi.fn(),
   getNeed: vi.fn(),
   updateNeed: vi.fn(),
   createNeed: vi.fn(),
   restoreNeed: vi.fn(),
   needMatches: vi.fn(),
+  needShortlist: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
@@ -22,7 +23,7 @@ vi.mock('../../api/client', async () => {
     listNeeds, getNeed, updateNeed, createNeed, restoreNeed,
     surveyOptions: vi.fn(() => Promise.resolve({ data: { specializations: { backend: 'Бэкенд' }, grades: ['middle'], industries: {} } })),
     needMatches,
-    needShortlist: vi.fn(() => Promise.resolve({ data: { items: [] } })),
+    needShortlist,
     compareNeed: vi.fn(),
     needExam: vi.fn(),
     setShortlist: vi.fn(),
@@ -51,6 +52,7 @@ beforeEach(() => {
   createNeed.mockResolvedValue({ data: { ...need, id: 'need-2', version: 1, title: 'Новая' } })
   restoreNeed.mockResolvedValue({ data: { ...need, version: 1 } })
   needMatches.mockResolvedValue({ data: { items: [], recommended_categories: [] } })
+  needShortlist.mockResolvedValue({ data: { items: [], funnel: { shortlisted: 0, invited: 0, rejected: 0 } } })
 })
 
 describe('потребность', () => {
@@ -77,6 +79,18 @@ describe('потребность', () => {
     renderPage(<EmployerNeeds />)
     await userEvent.click(await screen.findByRole('button', { name: 'Вернуть версию 1' }))
     expect(restoreNeed).toHaveBeenCalledWith('need-1', 1)
+  })
+
+  it('шорт-лист можно сузить до одного шага воронки', async () => {
+    needShortlist.mockResolvedValue({ data: {
+      funnel: { shortlisted: 2, invited: 1, rejected: 0 },
+      items: [{ candidate_id: 'c1', role: 'backend', grade: 'middle', score: 0.8, picked_on_version: 2, added_at: '2026-01-01T00:00:00Z', status: 'invited' }],
+    } })
+    renderPage(<EmployerNeeds />)
+    await userEvent.click(await screen.findByRole('tab', { name: /Шорт-лист/ }))
+    expect(screen.getByText('Отобрано 2, приглашено 1, отказ 0.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Приглашено 1' }))
+    expect(needShortlist).toHaveBeenCalledWith('need-1', 'invited')
   })
 
   it('показывает, сколько условий оставили из банка', async () => {
