@@ -52,7 +52,11 @@ services:
       SANDBOX_SOCKET: /run/sandbox/sandbox.sock
       SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
       SANDBOX_REQUIRED: "true"
-    volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox, ../models:/models:ro]
+      # CPU and 8 GB. A local pair model or embedding model would not fit next to Postgres.
+      CROSS_ENCODER_MODE: "off"
+      CROSS_ENCODER_DEVICE: cpu
+      EMBEDDINGS_MODE: "off"
+    volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
@@ -79,7 +83,9 @@ services:
       SMTP_PORT: ${SMTP_PORT:-1025}
       DEMO_MODE: ${DEMO_MODE:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q scoring,embeddings,maintenance --concurrency=2
+      CROSS_ENCODER_MODE: "off"
+      EMBEDDINGS_MODE: "off"
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q scoring,embeddings,maintenance --concurrency=1
     volumes: [vc_keys:/secrets]
     depends_on:
       backend: {condition: service_healthy}

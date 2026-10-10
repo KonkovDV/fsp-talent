@@ -3,7 +3,10 @@
 # The volume vc_keys holds the credential signing key and, unless SECRET_KEY is set in .env, the JWT key.
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        INSTALL_RERANKER: "1"
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent

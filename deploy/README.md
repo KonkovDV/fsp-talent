@@ -10,6 +10,8 @@
 
 Снаружи открыт только Caddy. База и Redis не публикуются. Миграции применяются при старте backend.
 
+Публичный стенд — процессор и 8 ГБ. Образ backend не ставит sentence-transformers и torch: аргумент `INSTALL_RERANKER` по умолчанию выключен. Compose держит `CROSS_ENCODER_MODE=off` и `EMBEDDINGS_MODE=off`, воркер — один процесс. Локальная машина с видеокартой собирает backend с `INSTALL_RERANKER=1`. Ключи `SECRET_KEY` и `FIELD_ENCRYPTION_KEY` и том `vc_keys` при этом обновлении не трогают.
+
 После срока сдачи код на сервере не меняется: упавший контейнер поднимают заново, показ возвращают командой из пункта 5.
 
 **Бэкап.** Контейнер `backup` каждую ночь в 03:30 делает `pg_dump` в `deploy/backups/` и хранит 14 последних. Вручную: `docker compose ... exec backup sh /backup.sh`. Перед восстановлением файл проверяют без записи в базу: `python deploy/verify_backup.py deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump`. Восстановление заменяет данные в базе и не запускается, пока в команде нет `CONFIRM=restore`. Тома Docker оно не удаляет.

@@ -4,9 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY pyproject.toml requirements.lock ./
 COPY app ./app
 # requirements.lock pins the versions the test suite passed on, so a rebuild months later gets the same stack.
-# sentence-transformers brings a CUDA torch. Weights stay outside the image, in /models.
+# The pair model is a local extra. The jury stand is a CPU machine with 8 GB, so its image skips it.
+ARG INSTALL_RERANKER=0
 RUN pip install --no-cache-dir -c requirements.lock ".[test]" \
-    && pip install --no-cache-dir sentence-transformers
+    && if [ "$INSTALL_RERANKER" = "1" ]; then pip install --no-cache-dir sentence-transformers; fi
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY seed ./seed
