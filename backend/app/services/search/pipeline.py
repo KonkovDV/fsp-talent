@@ -59,6 +59,7 @@ from app.services.matching import (
 )
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
+from app.services.scoring.elo_stretch import elo_stretch
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
 from app.services.session_marks import latest_grade_flags, penalised
 from app.services.skills import extract_skills, normalize_skill
@@ -331,7 +332,7 @@ def visible_card(stack: list, experience, disciplines: list, why: list[str], *,
         experience = None
     if not show_fsp:
         disciplines = []
-        why = [line for line in why if not line.startswith(("Подтверждено ФСП", "Присвоенный разряд"))]
+        why = [line for line in why if not line.startswith(("Подтверждено ФСП", "Присвоенный разряд", "Разброс шкалы"))]
     return stack, experience, disciplines, why
 
 
@@ -859,7 +860,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             ]
             disciplines.append({"discipline": ds.discipline,
                                 "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),
-                                "score": ds.score, "lcb": ds.lcb, "confidence": ds.confidence,
+                                "score": ds.score, "sigma": ds.sigma, "lcb": ds.lcb, "confidence": ds.confidence,
                                 "best_rank": ds.best_rank,
                                 "rank_assigned_at": ds.rank_assigned_at.isoformat() if ds.rank_assigned_at else None,
                                 "rank_order_ref": ds.rank_order_ref,
@@ -897,6 +898,10 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             why.append(
                 f"Подтверждено ФСП: {top['label']}, нижняя граница {shown_text}{weight_note}, "
                 f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
+            span = elo_stretch(float(top["score"]), float(top.get("sigma") or 0))
+            low = f"{span['low']:.2f}".replace(".", ",")
+            high = f"{span['high']:.2f}".replace(".", ",")
+            why.append(f"Разброс шкалы {low}–{high}. Нижняя граница в балле не заменяется.")
             # The header and the evidence list follow the discipline that entered the score,
             # not the highest lower bound in some other sport.
             disciplines = [top] + [row for row in disciplines if row is not top]
