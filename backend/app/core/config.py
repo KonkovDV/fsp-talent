@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     SMTP_STARTTLS: bool = False
     SMTP_SSL: bool = False
     EMAIL_CODE_TTL_MINUTES: int = 30
+    # Floor for a monthly gross fork. 22 440 ₽ is the minimum wage from 1 January 2025.
+    # Raise it when the owner confirms the figure for the current year.
+    MIN_MONTHLY_GROSS: int = 22_440
 
     # FSP registry API (FSP_MODE=real): the contract we propose is in docs/FSP_INTEGRATION.md
     FSP_API_URL: str = ""

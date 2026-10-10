@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.api.errors import ApiError
 from app.api.v1.messages import unread_counts
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.idempotency import (
     IdempotencyConflict,
@@ -33,6 +35,7 @@ from app.services.salary_net import as_gross
 from app.services.trust_level import invite_limit, next_step, trust_level
 
 router = APIRouter(prefix="/offers", tags=["offers"])
+_CONTACT_LINK = re.compile(r"https?://|www\.", re.IGNORECASE)
 
 
 def _eid(current: dict) -> uuid.UUID:
@@ -59,6 +62,11 @@ class OfferCreate(BaseModel):
         self.salary_to_gross = as_gross(self.salary_to_gross, self.salary_basis)
         if self.salary_to_gross < self.salary_from_gross:
             raise ValueError("Верхняя граница зарплаты меньше нижней")
+        floor = settings.MIN_MONTHLY_GROSS
+        if self.salary_from_gross < floor or self.salary_to_gross < floor:
+            raise ValueError(f"Вилка не ниже {floor} ₽ в месяц до вычета НДФЛ")
+        if _CONTACT_LINK.search(self.contact_method):
+            raise ValueError("Ссылку в способ связи писать нельзя: укажите почту, телефон или Telegram")
         self.perks = clean_perks(self.perks)
         return self
 
