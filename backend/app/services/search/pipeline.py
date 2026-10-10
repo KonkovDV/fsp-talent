@@ -247,6 +247,8 @@ def _in_search(adult):
         Participant.suspended_at.is_(None),
         Participant.guest_until.is_(None),
         Participant.job_search != "not_looking",
+        # Consent of a representative does not replace a birth date.
+        Participant.birth_date.is_not(None),
         or_(adult, Participant.minor_consent_given.is_(True)),
         graded,
     )
