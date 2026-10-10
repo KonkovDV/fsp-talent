@@ -53,6 +53,13 @@ LIMIT_NOTE = (
 )
 
 
+def case_note(outcome: dict) -> str:
+    """How many examples passed. Hidden inputs and expected values stay on the server."""
+    public = outcome.get("public_ok") or []
+    return (f"Пометка системы: открытые примеры {sum(1 for ok in public if ok)} из {len(public)}, "
+            f"скрытые {outcome.get('hidden_passed', 0)} из {outcome.get('hidden_total', 0)}.")
+
+
 def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int | None) -> Checked:
     """Number and choice are checked against the reference now; an open answer waits for the employer.
 
@@ -77,7 +84,7 @@ def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int 
         except LabError as exc:
             raise ValueError(str(exc)) from exc
         return Checked("checked", bool(outcome["passed"]), text, None,
-                       LIMIT_NOTE if outcome.get("timed_out") else None)
+                       LIMIT_NOTE if outcome.get("timed_out") else case_note(outcome))
     text = (answer_text or "").strip()
     if not text or len(text) > MAX_ANSWER:
         raise ValueError("answer")
