@@ -90,6 +90,17 @@ def letter(role: str, purpose: str, code: str, token: str) -> tuple[str, str]:
     return subject, text
 
 
+async def send_already_registered(email: str, role: str) -> None:
+    """Tell the mailbox the address is taken. The HTTP answer stays the same as a new registration."""
+    who = "кандидата" if role == "participant" else "работодателя"
+    await send_mail(
+        email,
+        "Аккаунт уже есть",
+        f"На этот адрес уже зарегистрирован аккаунт {who}. Войдите или восстановите пароль. "
+        "Новый пароль не записан.",
+    )
+
+
 async def send_code(email: str, role: str, purpose: str, code: str, token: str) -> None:
     subject, text = letter(role, purpose, code, token)
     await send_mail(email, subject, text, meta={"purpose": purpose, "role": role, "code": code, "token": token})

@@ -251,7 +251,10 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     await _charge_registration(request, email, "participant")
     p = await _account(db, "participant", email)
     if p is not None and p.email_verified_at is not None:
-        raise ApiError(409, "email_taken")
+        from app.services.identity import send_already_registered
+        await send_already_registered(email, "participant")
+        return VerificationSent(email=email, role="participant",
+                                expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
     if repeat_registration(p):
         await check_resend_allowed(email, "verify")
         return await _send_verification(db, "participant", p, email)
@@ -287,7 +290,10 @@ async def register_employer(body: EmployerRegister, request: Request, db: AsyncS
     await _charge_registration(request, email, "employer")
     employer = await _account(db, "employer", email)
     if employer is not None and employer.email_verified_at is not None:
-        raise ApiError(409, "email_taken")
+        from app.services.identity import send_already_registered
+        await send_already_registered(email, "employer")
+        return VerificationSent(email=email, role="employer",
+                                expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
     if repeat_registration(employer):
         await check_resend_allowed(email, "verify")
         return await _send_verification(db, "employer", employer, email)

@@ -143,7 +143,7 @@ def check_registration():
         status, again = call("POST", "/auth/verify-email", {"token": letter["token"]})
         assert status == 400 and again["error"]["code"] == "verification_invalid", again
     status, taken = call("POST", "/auth/participant/register", {**body, "consents": REQUIRED_CANDIDATE_CONSENTS})
-    assert status == 409 and taken["error"]["code"] == "email_taken", taken
+    assert status == 202 and taken["status"] == "verification_sent" and taken.get("demo_code") in (None, ""), taken
     status, login = call("POST", "/auth/participant/token", form={"username": email, "password": "smoke-pass-1"})
     assert status == 200, login
     token = login["access_token"]
