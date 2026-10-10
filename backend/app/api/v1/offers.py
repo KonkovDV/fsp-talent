@@ -25,6 +25,7 @@ from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.models import AccessLog, CategoryAssignment, Employer, Offer, OfferFlag, Participant
 from app.services.market import market_flag, quartiles, reason_shares, role_median, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
+from app.services.offer_perks import PERKS, clean_perks
 from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.privacy import contacts_allowed
 from app.services.salary_net import as_gross
@@ -48,6 +49,7 @@ class OfferCreate(BaseModel):
     # TZ 2.2 п.2: how the candidate reaches the company (email, Telegram, phone of the recruiter).
     contact_method: str = Field(min_length=3, max_length=300)
     salary_basis: Literal["gross", "net"] = "gross"
+    perks: list[str] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
     def _range(self):
@@ -55,6 +57,7 @@ class OfferCreate(BaseModel):
         self.salary_to_gross = as_gross(self.salary_to_gross, self.salary_basis)
         if self.salary_to_gross < self.salary_from_gross:
             raise ValueError("Верхняя граница зарплаты меньше нижней")
+        self.perks = clean_perks(self.perks)
         return self
 
 
@@ -66,6 +69,7 @@ def _offer_out(o: Offer) -> dict:
         "status": o.status, "created_at": o.created_at.isoformat(),
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contact_method": o.contact_method,
+        "perks": [{"code": code, "label": PERKS[code]} for code in (o.perks or []) if code in PERKS],
         "candidate_viewed_at": o.candidate_viewed_at.isoformat() if o.candidate_viewed_at else None,
         "contacts_available": o.status == "accepted" and o.contacts_revoked_at is None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
@@ -189,7 +193,7 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
         employer_id=employer.id, candidate_id=candidate.id,
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         currency=body.currency, role=body.role, work_format=body.work_format, message=body.message,
-        contact_method=body.contact_method.strip(),
+        contact_method=body.contact_method.strip(), perks=body.perks,
         status="pending", expires_at=datetime.now(UTC) + timedelta(days=14),
     )
     db.add(offer)

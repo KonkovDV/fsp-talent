@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -19,6 +19,8 @@ class Offer(Base):
     role = Column(String(100), nullable=False)
     work_format = Column(String(20), nullable=False)
     message = Column(Text)
+    # Codes from offer_perks.PERKS. Empty means the invitation names no extras.
+    perks = Column(JSONB, nullable=False, default=list, server_default="[]")
     # TZ 2.2 п.2: the invitation carries the way to reach the company. Nullable only for rows created
     # before migration 0010; the API requires it for every new offer.
     contact_method = Column(Text)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiError, createOffer, previewOffer } from '../api/client'
+import { PERK_RU } from '../labels'
 import { grossForNet, netLine, netMonthly } from '../money'
 import Modal from './Modal'
 
@@ -11,7 +12,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
 }) {
   const qc = useQueryClient()
   const [form, setForm] = useState({
-    role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '',
+    role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '', perks: [] as string[],
   })
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
@@ -20,7 +21,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const [idem] = useState(() => crypto.randomUUID())
 
   const send = useMutation({
-    mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis }, idem),
+    mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis, perks: form.perks }, idem),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employerOffers'] }); onSent?.(); onClose() },
     onError: e => setError(apiError(e, 'Приглашение не отправлено')),
   })
@@ -92,6 +93,19 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
             <div><label className="field-label" htmlFor="inv-contact">Как связаться с вами</label>
               <input id="inv-contact" value={form.contact_method} onChange={set('contact_method')} className="input" placeholder="Telegram или email" /></div>
           </div>
+          <fieldset>
+            <legend className="field-label">Условия, если есть</legend>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(PERK_RU).map(([code, label]) => (
+                <button type="button" key={code} aria-pressed={form.perks.includes(code)}
+                  className={form.perks.includes(code) ? 'chip-active' : 'chip-default'}
+                  onClick={() => setForm(prev => ({
+                    ...prev,
+                    perks: prev.perks.includes(code) ? prev.perks.filter(item => item !== code) : [...prev.perks, code],
+                  }))}>{label}</button>
+              ))}
+            </div>
+          </fieldset>
           <div><label className="field-label" htmlFor="inv-msg">Сообщение, если нужно</label>
             <textarea id="inv-msg" value={form.message} onChange={set('message')} rows={3} className="input resize-none"
               placeholder="Чем будет заниматься, почему пишем именно ему" /></div>
