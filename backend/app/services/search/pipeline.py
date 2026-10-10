@@ -14,6 +14,7 @@ do not enter it.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -61,7 +62,7 @@ from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.elo_stretch import elo_stretch
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
-from app.services.search.cross_rank import blend_pair, cross_enabled, scorer
+from app.services.search.cross_rank import blend_pair, cross_enabled, rank_pairs
 from app.services.session_marks import latest_grade_flags, penalised
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
@@ -523,14 +524,14 @@ async def search_candidates(
     # Words and meaning only. The test and the FSP axis stay out of the «Запрос» factor.
     text_fused = fuse_text(lex_order, dense_order or None, lex_of)
     pair_order = None
-    ranker = scorer() if q and cross_enabled() else None
-    if ranker is not None and ids_set:
-        sample = list(ids_set)[:30]
+    if q and cross_enabled() and ids_set:
+        sample = [pid for pid in lex_order if pid in ids_set][:30]
+        if not sample:
+            sample = sorted(ids_set, key=str)[:30]
         found = (await db.execute(
             select(ProfileSearchIndex.participant_id, ProfileSearchIndex.skills_text)
             .where(ProfileSearchIndex.participant_id.in_(sample)))).all()
-        found.sort(key=lambda row: (-ranker((q, row[1] or "")), str(row[0])))
-        pair_order = [row[0] for row in found]
+        pair_order = await asyncio.to_thread(rank_pairs, found, q)
     text_fused = blend_pair(text_fused, pair_order)
 
     # Sort ties still see the test and the discipline rule. The FSP list uses the need's

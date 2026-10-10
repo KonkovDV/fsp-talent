@@ -71,10 +71,10 @@ class Settings(BaseSettings):
     GIGACHAT_VERIFY_SSL: bool = True
 
     # YandexGPT (Yandex AI Studio), used when GIGACHAT_CREDENTIALS is empty. API key of a service account
-    # with ai.languageModels.user on the folder; models are names inside the folder, e.g. yandexgpt/latest.
+    # with ai.languageModels.user on the folder. yandexgpt/latest is the older Pro 5 alias.
     YANDEX_API_KEY: str = ""
     YANDEX_FOLDER_ID: str = ""
-    YANDEX_MODEL: str = "yandexgpt/latest"
+    YANDEX_MODEL: str = "yandexgpt-5.1/latest"
     YANDEX_CHECK_MODEL: str = ""
 
     # Embeddings

@@ -217,8 +217,9 @@ docker compose exec -T backend python -m app.validation.matching --seed 7
 | `FSP_MODE` | mock | `mock` — тестовый реестр ФСП, `real` — HTTP-клиент по контракту из [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |
 | `FSP_ID_MODE` | mock | `mock` — демо-страница провайдера, `oidc` — Keycloak Федерации (`FSP_ID_ISSUER`, `FSP_ID_CLIENT_ID`, `FSP_ID_CLIENT_SECRET`) |
 | `AI_ENABLED`, `GIGACHAT_CREDENTIALS` | true, пусто | Без ключа модели резюме разбирается правилами. С ключом модель добавляет навыки с дословной цитатой, пишет черновики заданий для модератора и мнение по карточке; балл и порядок она не меняет |
-| `YANDEX_API_KEY`, `YANDEX_FOLDER_ID`, `YANDEX_MODEL`, `YANDEX_CHECK_MODEL` | пусто, пусто, yandexgpt/latest, пусто | YandexGPT вместо GigaChat, если `GIGACHAT_CREDENTIALS` пуст. Ключ сервисного аккаунта с ролью `ai.languageModels.user`; запросы уходят с `x-data-logging-enabled: false`. Для черновиков заданий нужна вторая модель, например `yandexgpt-lite/latest` |
+| `YANDEX_API_KEY`, `YANDEX_FOLDER_ID`, `YANDEX_MODEL`, `YANDEX_CHECK_MODEL` | пусто, пусто, yandexgpt-5.1/latest, пусто | YandexGPT вместо GigaChat, если `GIGACHAT_CREDENTIALS` пуст. Основная модель — YandexGPT Pro 5.1. Псевдоним `yandexgpt/latest` — это Pro 5, его не используют. Ключ сервисного аккаунта с ролью `ai.languageModels.user`; запросы уходят с `x-data-logging-enabled: false`. Для черновиков заданий нужна вторая модель, `yandexgpt-5-lite/latest` |
 | `EMBEDDINGS_MODE` | off | `model` включает смысловой поиск по эмбеддингам. Нужны зависимости `.[ai]` (sentence-transformers и torch), в демо-образ они не входят |
+| `CROSS_ENCODER_MODE`, `CROSS_ENCODER_MODEL` | off, пусто | Локальная модель пары двигает только сигнал запроса на 10 %. Пока режим выключен или нет файла весов, порядок прежний. Балл и ось ФСП она не заменяет |
 | `MAIL_MODE`, `SMTP_*` | smtp → Mailpit | Настоящий SMTP на стенде |
 
 ## 10. Запуск без Docker (для разработки)
