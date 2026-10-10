@@ -20,6 +20,7 @@ const EMPLOYER_LINKS = [
   { to: '/employer', label: 'Обзор', end: true },
   { to: '/employer/needs', label: 'Потребности', end: false },
   { to: '/employer/search', label: 'Поиск', end: false },
+  { to: '/employer/favorites', label: 'Избранное', end: false },
   { to: '/employer/tasks', label: 'Задания', end: false },
   { to: '/employer/offers', label: 'Приглашения', end: false },
   { to: '/employer/vacancies', label: 'Вакансии', end: false },

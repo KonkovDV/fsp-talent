@@ -9,6 +9,7 @@ from app.models.assessment import (
 from app.models.audit import AccessLog, ConsentLog
 from app.models.complaint import Complaint
 from app.models.employer import Employer
+from app.models.favorite import EmployerFavorite
 from app.models.identity import Consent, EmailVerification
 from app.models.interview import InterviewSlot
 from app.models.item_draft import ItemDraft
@@ -31,6 +32,7 @@ __all__ = [
     "DisciplineScore",
     "EmailVerification",
     "Employer",
+    "EmployerFavorite",
     "EmployerTask",
     "GradeConfirmation",
     "GradeDispute",

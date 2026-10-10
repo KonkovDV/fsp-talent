@@ -256,6 +256,24 @@ CREATE TABLE public.item_drafts (
 CREATE INDEX ix_item_drafts_status ON public.item_drafts USING btree (status);
 
 
+CREATE TABLE public.employer_favorites (
+    id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT employer_favorites_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_employer_favorites_pair UNIQUE (employer_id, participant_id),
+    CONSTRAINT employer_favorites_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE,
+    CONSTRAINT employer_favorites_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.employer_favorites FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.employer_favorites ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY employer_favorites_actor ON public.employer_favorites USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
+
+
 
 CREATE TABLE public.need_shortlist (
     id uuid NOT NULL,

@@ -6,6 +6,7 @@ import {
   apiError, compareNeed, needExam, createNeed, getNeed, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
+import { useFavorites } from '../../hooks/useFavorites'
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
@@ -73,6 +74,7 @@ export default function EmployerNeeds() {
     },
     onError: (e: unknown) => setError(apiError(e)),
   })
+  const fav = useFavorites()
   const toggle = useMutation({
     mutationFn: ({ id, on }: { id: string; on: boolean }) => on ? setShortlist(selected!, id) : removeShortlist(selected!, id),
     onSuccess: () => {
@@ -290,6 +292,7 @@ export default function EmployerNeeds() {
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
                     <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}
+                      favorite={{ on: fav.has(card.candidate_id), toggle: fav.toggle }}
                       compare={{
                         on: picked.includes(card.candidate_id), full: picked.length >= 4,
                         toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 4 ? prev : [...prev, card.candidate_id]),

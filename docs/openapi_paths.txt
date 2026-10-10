@@ -52,6 +52,8 @@
 /api/v1/candidates/me/visibility
 /api/v1/candidates/survey-options
 /api/v1/employer/ats-sandbox
+/api/v1/employer/favorites
+/api/v1/employer/favorites/{participant_id}
 /api/v1/employer/me
 /api/v1/fsp-id-demo/login
 /api/v1/legal/documents
