@@ -517,8 +517,16 @@ async def unshortlist(need_id: uuid.UUID, candidate_id: uuid.UUID, current: dict
     return {"removed": row is not None}
 
 
+def shortlist_page(items: list[dict], status: str | None) -> list[dict]:
+    """Funnel counts stay on the full list. The page can show one status."""
+    if status is None:
+        return items
+    return [item for item in items if item.get("status") == status]
+
+
 @router.get("/{need_id}/shortlist")
-async def get_shortlist(need_id: uuid.UUID, current: dict = Depends(get_current_employer),
+async def get_shortlist(need_id: uuid.UUID, status: Literal["shortlisted", "invited", "rejected"] | None = None,
+                        current: dict = Depends(get_current_employer),
                         db: AsyncSession = Depends(get_db)):
     need = await _own(db, need_id, current)
     rows = list(await db.scalars(select(NeedShortlist).where(NeedShortlist.need_id == need.id)
@@ -551,4 +559,4 @@ async def get_shortlist(need_id: uuid.UUID, current: dict = Depends(get_current_
             "picked_on_version": r.version, "added_at": r.added_at.isoformat(),
             "role": role, "grade": grade, "grade_source": source, "also_primary": also,
         })
-    return {"funnel": funnel, "items": items}
+    return {"funnel": funnel, "items": shortlist_page(items, status)}

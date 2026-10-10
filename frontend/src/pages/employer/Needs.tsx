@@ -39,6 +39,7 @@ export default function EmployerNeeds() {
   const [offerFor, setOfferFor] = useState<string | null>(null)
   const [taskFor, setTaskFor] = useState<string | null>(null)
   const [tab, setTab] = useState<'matches' | 'shortlist' | 'exam'>('matches')
+  const [shortStatus, setShortStatus] = useState('')
   const [picked, setPicked] = useState<string[]>([])
   const [showHidden, setShowHidden] = useState(false)
   const [sent, setSent] = useState(false)
@@ -46,7 +47,7 @@ export default function EmployerNeeds() {
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const { data: needs = [], isLoading: needsLoading, isError: needsError, error: needsLoadError } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
   useEffect(() => { if (!selected && needs.length) setSelected(needs[0].id) }, [needs, selected])
-  useEffect(() => { setPicked([]); setSent(false); setShowHidden(false) }, [selected])
+  useEffect(() => { setPicked([]); setSent(false); setShowHidden(false); setShortStatus('') }, [selected])
   const current = needs.find(n => n.id === selected) ?? null
   const matches = useQuery({ queryKey: ['needMatches', selected, current?.version, showHidden], enabled: !!selected,
     queryFn: () => needMatches(selected!, showHidden).then(r => r.data) })
@@ -57,8 +58,8 @@ export default function EmployerNeeds() {
   })
   const exam = useQuery({ queryKey: ['needExam', selected, current?.version], enabled: !!selected && tab === 'exam',
     queryFn: () => needExam(selected!).then(r => r.data as Exam) })
-  const shortlist = useQuery({ queryKey: ['needShortlist', selected], enabled: !!selected,
-    queryFn: () => needShortlist(selected!).then(r => r.data) })
+  const shortlist = useQuery({ queryKey: ['needShortlist', selected, shortStatus], enabled: !!selected,
+    queryFn: () => needShortlist(selected!, shortStatus || undefined).then(r => r.data) })
 
   const detail = useQuery({ queryKey: ['need', selected], enabled: !!selected,
     queryFn: () => getNeed(selected!).then(r => r.data as Need & { versions: { version: number; params: NeedParams }[] }) })
@@ -137,6 +138,8 @@ export default function EmployerNeeds() {
   }
   const field = 'field-label'
   const shortItems = shortlist.data?.items ?? []
+  const funnel = shortlist.data?.funnel as { shortlisted: number; invited: number; rejected: number } | undefined
+  const shortCount = funnel ? funnel.shortlisted + funnel.invited + funnel.rejected : shortItems.length
 
   return (
     <div>
@@ -281,7 +284,7 @@ export default function EmployerNeeds() {
               )}
 
               <div className="tabs mt-6" role="tablist" aria-label="Разделы потребности">
-                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortItems.length}`], ['exam', 'Как проверим']] as const).map(([key, title]) => (
+                {([['matches', 'Подборка'], ['shortlist', `Шорт-лист ${shortCount}`], ['exam', 'Как проверим']] as const).map(([key, title]) => (
                   <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
                     className="tab">{title}</button>
                 ))}
@@ -375,10 +378,23 @@ export default function EmployerNeeds() {
 
               {tab === 'shortlist' && (
                 <div className="mt-5">
-                  {shortlist.data && (
-                    <p className="mb-4 text-sm text-ink-2">Отобрано {shortlist.data.funnel.shortlisted}, приглашено {shortlist.data.funnel.invited}, отказ {shortlist.data.funnel.rejected}.</p>
+                  {funnel && (
+                    <p className="mb-4 text-sm text-ink-2">Отобрано {funnel.shortlisted}, приглашено {funnel.invited}, отказ {funnel.rejected}.</p>
                   )}
-                  {shortItems.length === 0 ? <Empty title="Шорт-лист пуст">Отмечайте кандидатов звёздочкой в подборке.</Empty> : (
+                  <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Шаг воронки">
+                    {([
+                      ['', 'Все'],
+                      ['shortlisted', 'Отобрано'],
+                      ['invited', 'Приглашено'],
+                      ['rejected', 'Отказ'],
+                    ] as const).map(([value, label]) => (
+                      <button type="button" key={label} aria-pressed={shortStatus === value} onClick={() => setShortStatus(value)}
+                        className={shortStatus === value ? 'chip-active' : 'chip-default'}>
+                        {label}{value && funnel ? ` ${funnel[value]}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                  {shortItems.length === 0 ? <Empty title={shortStatus ? 'На этом шаге никого' : 'Шорт-лист пуст'}>{shortStatus ? 'Выберите другой шаг воронки.' : 'Отмечайте кандидатов звёздочкой в подборке.'}</Empty> : (
                     <>
                     <ul className="space-y-3 sm:hidden">
                       {shortItems.map((r: { candidate_id: string; role: string; grade: string; grade_source?: string | null; also_primary?: { role: string | null; grade: string | null; grade_source: string | null } | null; score: number; picked_on_version: number; added_at: string }) => (

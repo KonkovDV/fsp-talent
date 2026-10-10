@@ -370,7 +370,8 @@ export const needMatches = (id: string, showHidden = false) =>
   api.get(`/needs/${id}/matches`, { params: { limit: 50, show_hidden: showHidden } })
 export const hideCandidate = (id: string, candidateId: string) => api.put(`/needs/${id}/hidden/${candidateId}`)
 export const unhideCandidate = (id: string, candidateId: string) => api.delete(`/needs/${id}/hidden/${candidateId}`)
-export const needShortlist = (id: string) => api.get(`/needs/${id}/shortlist`)
+export const needShortlist = (id: string, status?: string) =>
+  api.get(`/needs/${id}/shortlist`, { params: status ? { status } : {} })
 export const setShortlist = (id: string, candidateId: string, status = 'shortlisted') =>
   api.put(`/needs/${id}/shortlist/${candidateId}`, { status })
 export const removeShortlist = (id: string, candidateId: string) => api.delete(`/needs/${id}/shortlist/${candidateId}`)
