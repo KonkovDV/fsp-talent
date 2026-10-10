@@ -208,7 +208,7 @@ def check_erasure(employer_token):
     assert status == 403 and closed["error"]["code"] == "consent_withdrawn", closed
     status, wrong = call("DELETE", "/candidates/me", {"confirm": "да"}, token=token)
     assert status == 422 and wrong["error"]["code"] == "delete_confirm", wrong
-    status, gone = call("DELETE", "/candidates/me", {"confirm": "удалить"}, token=token)
+    status, gone = call("DELETE", "/candidates/me", {"confirm": "удалить", "password": "smoke-pass-1"}, token=token)
     assert status == 200 and gone["deleted"], gone
     status, login = call("POST", "/auth/participant/token", form={"username": email, "password": "smoke-pass-1"})
     assert status == 401, login

@@ -235,7 +235,8 @@ export const updateMyProfile = (data: object) => api.put('/candidates/me/profile
 export const listNotifications = () => api.get('/notifications')
 export const readNotification = (id: string) => api.post(`/notifications/${id}/read`)
 export const readAllNotifications = () => api.post('/notifications/read-all')
-export const deleteMyAccount = (confirm: string) => api.delete('/candidates/me', { data: { confirm } })
+export const deleteMyAccount = (confirm: string, password = '') =>
+  api.delete('/candidates/me', { data: { confirm, password } })
 export const getMyResults = () => api.get('/candidates/me/results')
 export const getMyOffers = () => api.get('/candidates/me/offers', { params: { limit: 50 } })
 export const respondToOffer = (offerId: string, action: 'accept' | 'reject', reason?: string) =>

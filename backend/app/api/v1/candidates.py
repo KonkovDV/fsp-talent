@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.demo_guard import reject_protected
 from app.core.ratelimit import too_many
+from app.core.security import verify_password
 from app.models import (
     AccessLog,
     Application,
@@ -35,6 +36,7 @@ from app.models import (
 from app.models.complaint import REASONS
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
+from app.services.account_close import close_allowed
 from app.services.ai import providers
 from app.services.ai.assistant import parse_resume
 from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
@@ -405,18 +407,25 @@ async def update_visibility(body: VisibilityUpdate, current: dict = Depends(get_
 
 class DeleteAccountIn(BaseModel):
     confirm: str = Field(..., max_length=20)
+    password: str = Field("", max_length=72)
 
 
 @router.delete("/me")
 async def delete_my_account(body: DeleteAccountIn, current: dict = Depends(get_current_participant),
                             db: AsyncSession = Depends(get_db)):
     """Erase the account now (152-FZ, art. 21): contacts, name, FSP link and skills are removed,
-    pending invitations are withdrawn. Anonymous sport results and the consent log stay."""
-    if body.confirm.strip().lower() != "удалить":
-        raise ApiError(422, "delete_confirm")
+    pending invitations are withdrawn. Anonymous sport results and the consent log stay.
+    The word stops a stray click. An account with a password also has to type it."""
     p = await db.get(Participant, _pid(current))
     if not p or p.deleted_at is not None:
         raise HTTPException(404, "Профиль не найден")
+    has_password = bool(p.password_hash)
+    password_ok = has_password and verify_password(body.password, p.password_hash)
+    problem = close_allowed(body.confirm, has_password, password_ok)
+    if problem == "word":
+        raise ApiError(422, "delete_confirm")
+    if problem == "password":
+        raise ApiError(401, "invalid_credentials", "Пароль не подошёл")
     reject_protected(p.email)
     await erase_participant(db, p, reason="account_deleted")
     await db.commit()
