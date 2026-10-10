@@ -31,6 +31,7 @@ from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.category_rank import rank_scores
 from app.services.field_cipher import blind_index
+from app.services.formula_sheet import formula_sheet
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.guardian import token_participant, token_valid
 from app.services.matching import GRADES
@@ -83,6 +84,15 @@ async def demo_stand():
     """Whether this stand shows the jury trial and the jury accounts. No other settings."""
     demo = bool(settings.DEMO_MODE)
     return {"demo_mode": demo, "mail_console": demo and settings.MAIL_MODE == "console"}
+
+
+@router.get("/method/weights")
+async def method_weights():
+    """Match weights for the jury stand. Hidden when the stand is not a demo."""
+    sheet = formula_sheet(bool(settings.DEMO_MODE))
+    if sheet is None:
+        raise ApiError(404, "not_found", "Список весов скрыт")
+    return sheet
 
 
 def free_jury_email(seen: dict[str, datetime | None]) -> str | None:

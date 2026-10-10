@@ -34,6 +34,9 @@ const shown = {
 
 vi.mock('../../api/client', () => ({
   itemPsychometrics: vi.fn(() => Promise.resolve({ data: empty })),
+  methodWeights: vi.fn(() => Promise.reject(new Error('hidden'))),
+  previewPublicExam: vi.fn(),
+  apiError: () => 'ошибка',
 }))
 
 function renderPage() {
