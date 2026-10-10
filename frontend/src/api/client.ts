@@ -358,7 +358,10 @@ export const updateNeed = (id: string, data: object) => api.put(`/needs/${id}`, 
 export const getNeed = (id: string) => api.get(`/needs/${id}`)
 export const restoreNeed = (id: string, version: number) => api.post(`/needs/${id}/versions/${version}/restore`)
 export const archiveNeed = (id: string) => api.delete(`/needs/${id}`)
-export const needMatches = (id: string) => api.get(`/needs/${id}/matches`, { params: { limit: 50 } })
+export const needMatches = (id: string, showHidden = false) =>
+  api.get(`/needs/${id}/matches`, { params: { limit: 50, show_hidden: showHidden } })
+export const hideCandidate = (id: string, candidateId: string) => api.put(`/needs/${id}/hidden/${candidateId}`)
+export const unhideCandidate = (id: string, candidateId: string) => api.delete(`/needs/${id}/hidden/${candidateId}`)
 export const needShortlist = (id: string) => api.get(`/needs/${id}/shortlist`)
 export const setShortlist = (id: string, candidateId: string, status = 'shortlisted') =>
   api.put(`/needs/${id}/shortlist/${candidateId}`, { status })

@@ -79,6 +79,7 @@
 /api/v1/needs/{need_id}/candidates/{candidate_id}/ai-note
 /api/v1/needs/{need_id}/compare
 /api/v1/needs/{need_id}/exam
+/api/v1/needs/{need_id}/hidden/{candidate_id}
 /api/v1/needs/{need_id}/matches
 /api/v1/needs/{need_id}/shortlist
 /api/v1/needs/{need_id}/shortlist/{candidate_id}

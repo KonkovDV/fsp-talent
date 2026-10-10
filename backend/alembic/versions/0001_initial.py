@@ -317,6 +317,24 @@ CREATE POLICY candidate_resumes_search ON public.candidate_resumes FOR SELECT US
 
 CREATE POLICY employer_favorites_actor ON public.employer_favorites USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
 
+CREATE TABLE public.need_hidden (
+    id uuid NOT NULL,
+    need_id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    version integer NOT NULL,
+    hidden_at timestamp with time zone NOT NULL,
+    CONSTRAINT need_hidden_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_need_hidden UNIQUE (need_id, participant_id),
+    CONSTRAINT need_hidden_need_id_fkey FOREIGN KEY (need_id) REFERENCES public.needs(id) ON DELETE CASCADE,
+    CONSTRAINT need_hidden_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.need_hidden FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.need_hidden ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY need_hidden_actor ON public.need_hidden USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (need_id IN ( SELECT needs.id FROM public.needs)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (need_id IN ( SELECT needs.id FROM public.needs))));
+
 
 
 CREATE TABLE public.need_shortlist (
