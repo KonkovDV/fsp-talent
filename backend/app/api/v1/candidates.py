@@ -20,6 +20,7 @@ from app.core.ratelimit import too_many
 from app.models import (
     AccessLog,
     Application,
+    CandidateResume,
     CategoryAssignment,
     Complaint,
     ConsentLog,
@@ -791,6 +792,9 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
         raise HTTPException(404, "Профиль не найден")
     p.specialization, p.industry, p.work_goal = body.specialization, body.industry, body.work_goal
     p.declared_grade = body.declared_grade
+    # The survey specialization is the main resume; an extra one in the same specialization goes.
+    await db.execute(delete(CandidateResume).where(
+        CandidateResume.participant_id == p.id, CandidateResume.specialization == p.specialization))
     if "salary_from_gross" in body.model_fields_set or "salary_to_gross" in body.model_fields_set:
         if body.salary_from_gross and body.salary_to_gross and body.salary_from_gross > body.salary_to_gross:
             raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")

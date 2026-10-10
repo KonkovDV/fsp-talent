@@ -48,6 +48,8 @@
 /api/v1/candidates/me/results
 /api/v1/candidates/me/results/{result_id}/presentation
 /api/v1/candidates/me/resume
+/api/v1/candidates/me/resumes
+/api/v1/candidates/me/resumes/{resume_id}
 /api/v1/candidates/me/salary-market
 /api/v1/candidates/me/survey
 /api/v1/candidates/me/visibility

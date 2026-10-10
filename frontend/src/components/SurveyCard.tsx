@@ -57,7 +57,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
       salary_from_gross: payFrom === '' ? null : Number(payFrom),
       salary_to_gross: payTo === '' ? null : Number(payTo),
       work_formats: formats, region: city || null }),
-    onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
+    onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }); qc.invalidateQueries({ queryKey: ['resumes'] }) },
     onError: (e: unknown) => setNote(apiError(e)),
   })
   const select = 'select mt-1'

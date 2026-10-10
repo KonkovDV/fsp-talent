@@ -272,6 +272,28 @@ ALTER TABLE ONLY public.employer_favorites FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE public.employer_favorites ENABLE ROW LEVEL SECURITY;
 
+CREATE TABLE public.candidate_resumes (
+    id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    specialization character varying(30) NOT NULL,
+    grade character varying(20) NOT NULL,
+    stack text[] DEFAULT '{}'::text[] NOT NULL,
+    summary text,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT candidate_resumes_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_candidate_resumes_spec UNIQUE (participant_id, specialization),
+    CONSTRAINT candidate_resumes_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.candidate_resumes FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.candidate_resumes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY candidate_resumes_owner ON public.candidate_resumes USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
+CREATE POLICY candidate_resumes_search ON public.candidate_resumes FOR SELECT USING ((current_setting('app.employer_id'::text, true) <> ''::text));
+
 CREATE POLICY employer_favorites_actor ON public.employer_favorites USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
 
 
