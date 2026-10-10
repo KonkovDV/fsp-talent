@@ -44,7 +44,7 @@ KINDS: dict[str, Kind] = {
     "gigachat": Kind("GigaChat (Сбер)", ("ngw.devices.sberbank.ru", "gigachat.devices.sberbank.ru"), ("scope",),
                      "Ключ авторизации из личного кабинета GigaChat API"),
     "yandex": Kind("YandexGPT (Yandex AI Studio)", ("llm.api.cloud.yandex.net",), ("folder_id",),
-                   "API-ключ сервисного аккаунта с ролью ai.languageModels.user; модель вида yandexgpt/latest"),
+                   "API-ключ сервисного аккаунта с ролью ai.languageModels.user; модель вида yandexgpt-5.1/latest"),
     "cloudru": Kind("Cloud.ru Foundation Models", ("foundation-models.api.cloud.ru",), (),
                     "API-ключ сервисного аккаунта для Foundation Models; модель вида ai-sage/GigaChat3-10B-A1.8B"),
     "mws": Kind("MWS GPT (МТС)", ("gpt.mwsapis.ru",), ("project",),

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 
 def elo_stretch(mu: float, sigma: float) -> dict:
+    sigma = abs(float(sigma))
     low = max(0.0, min(1.0, mu - sigma))
     high = max(0.0, min(1.0, mu + sigma))
     if high < low:

@@ -9,6 +9,7 @@ from __future__ import annotations
 from app.core.config import settings
 
 PAIR_SHARE = 0.10
+_loaded: tuple[str, object] | None = None
 
 
 def cross_enabled() -> bool:
@@ -26,14 +27,18 @@ def blend_pair(fused: dict, pair_order: list | None) -> dict:
 
 
 def scorer():
-    """The pair model, or None. Never raises into the search."""
+    """The pair model, or None. Loaded once. Never raises into the search."""
+    global _loaded
     if not cross_enabled():
         return None
-    try:
-        from sentence_transformers import CrossEncoder
-        model = CrossEncoder(settings.CROSS_ENCODER_MODEL.strip())
-    except Exception:
-        return None
+    name = settings.CROSS_ENCODER_MODEL.strip()
+    if _loaded is None or _loaded[0] != name:
+        try:
+            from sentence_transformers import CrossEncoder
+            _loaded = (name, CrossEncoder(name))
+        except Exception:
+            return None
+    model = _loaded[1]
 
     def score(pair: tuple[str, str]) -> float:
         try:
@@ -42,3 +47,12 @@ def scorer():
             return 0.0
 
     return score
+
+
+def rank_pairs(rows: list, query: str) -> list | None:
+    """Order by the pair model. None means the model is absent and the list stays."""
+    ranker = scorer()
+    if ranker is None:
+        return None
+    ranked = sorted(rows, key=lambda row: (-ranker((query, row[1] or "")), str(row[0])))
+    return [row[0] for row in ranked]

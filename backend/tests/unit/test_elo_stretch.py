@@ -8,6 +8,7 @@ def test_the_span_widens_with_uncertainty_and_stays_inside_zero_and_one():
     assert tight["high"] - tight["low"] < wide["high"] - wide["low"]
     assert elo_stretch(0.1, 0.5)["low"] == 0.0
     assert elo_stretch(0.9, 0.5)["high"] == 1.0
+    assert elo_stretch(0.5, -0.05) == tight
 
 
 def test_the_match_score_does_not_read_the_span():

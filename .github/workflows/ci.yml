@@ -261,5 +261,21 @@ jobs:
           script: |
             cd /opt/fsp-talent
             git pull origin main
+            # Model names only. The key already lives in deploy/.env and is not printed.
+            if [ -f deploy/.env ]; then
+              if grep -q '^YANDEX_MODEL=' deploy/.env; then
+                sed -i 's|^YANDEX_MODEL=.*|YANDEX_MODEL=yandexgpt-5.1/latest|' deploy/.env
+              else
+                printf '\nYANDEX_MODEL=yandexgpt-5.1/latest\n' >> deploy/.env
+              fi
+              if grep -q '^YANDEX_CHECK_MODEL=' deploy/.env; then
+                sed -i 's|^YANDEX_CHECK_MODEL=.*|YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest|' deploy/.env
+              else
+                printf 'YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest\n' >> deploy/.env
+              fi
+              if grep -q '^YANDEX_API_KEY=.' deploy/.env && grep -q '^AI_ENABLED=' deploy/.env; then
+                sed -i 's|^AI_ENABLED=.*|AI_ENABLED=true|' deploy/.env
+              fi
+            fi
             docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"
