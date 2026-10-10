@@ -185,9 +185,10 @@ def category_band(role: str | None, grade: str | None,
 
 
 FSP_FULL_LCB = 0.6     # LCB at which the FSP factor saturates
-# "boost": a history can only raise the evidence above the test. "mean" is the previous
-# average of the two factors, kept so the holdout can print before and after.
-FSP_LIFT = "mean"
+# "boost" (shipped since the 2026-10 audit): a history can only raise the evidence above the test,
+# so taking part in FSP competitions never moves a candidate down. "mean" is the old average of the
+# two factors: a weak FSP line pulled a good test down. Kept only so the holdout prints before/after.
+FSP_LIFT = "boost"
 FSP_OMEGA = WEIGHTS["fsp"] / (WEIGHTS["test"] + WEIGHTS["fsp"])
 # Pending invitations a candidate may hold before the list steps them down. The step is small
 # and capped, so a strong fit is not buried by a busy inbox.
@@ -389,11 +390,24 @@ def _contributions(factors: list[Factor], evidence: float | None, closeness: flo
     ev_rows = [f for f in factors if f.key in EVIDENCE_KEYS and f.value is not None]
     w_fit = sum(f.weight for f in fit_rows)
     w_ev = sum(f.weight for f in ev_rows)
+    parts = None
+    if FSP_LIFT == "boost":
+        by_key = {f.key: f.value for f in ev_rows}
+        parts = _evidence_parts(by_key.get("test"), by_key.get("fsp"))
     out = []
     for f in factors:
         share = None
         if f.value is None:
             out.append(f)
+            continue
+        if parts is not None and f.key in EVIDENCE_KEYS:
+            # Boost: the evidence is test + ω·(fsp − test)⁺, so each bar carries its own part of it.
+            part = parts.get(f.key, 0.0)
+            if basis == "evidence":
+                share = part
+            elif evidence is not None:
+                share = lam * closeness * part / (1.0 + lam)
+            out.append(replace(f, contrib=share))
             continue
         if basis == "evidence":
             if f.key in EVIDENCE_KEYS and w_ev:

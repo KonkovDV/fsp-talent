@@ -21,7 +21,7 @@ def test_security_need_ranks_a_security_result_above_a_stronger_other_discipline
     def facts(picked):
         lcb, kind, disc = picked
         return CandidateFacts(role="security", grade="middle", grade_source="assessed",
-                              skills={"Python": "test_confirmed"}, test_p=0.9, test_spec="security",
+                              skills={"Python": "test_confirmed"}, test_p=0.3, test_spec="security",
                               fsp_lcb=lcb, fsp_kind=kind, fsp_discipline=disc)
 
     left = score(need, facts(security))

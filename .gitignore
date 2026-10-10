@@ -37,3 +37,4 @@ docs/tools/node_modules/
 docs/assets/pitch-slides/
 frontend/test-results/
 frontend/playwright-report/
+.hypothesis/
