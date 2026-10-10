@@ -200,7 +200,8 @@ CREATE TABLE public.employers (
     guest_until timestamp with time zone,
     totp_secret text,
     totp_last_step bigint,
-    totp_verified_at timestamp with time zone
+    totp_verified_at timestamp with time zone,
+    fsp_partner boolean DEFAULT false NOT NULL
 );
 
 

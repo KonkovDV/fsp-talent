@@ -76,6 +76,7 @@ export default function EmployerCompany() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-ink">Backend-разработчик</p>
               <p className="text-sm text-ink-2">{form.company_name || 'Название компании'}{form.industry ? `, ${form.industry}` : ''}</p>
+              {data?.trust_label && <p className="text-xs text-ink-3">Уровень доверия {data.trust_level}: {data.trust_label}. Уровень считает платформа, в форме его нет.</p>}
             </div>
             <p className="text-right font-display text-sm font-bold text-ink num">180 000 ₽<span className="block text-xs font-normal text-ink-3">до 240 000 ₽</span></p>
           </div>

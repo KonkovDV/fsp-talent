@@ -27,10 +27,9 @@ from app.services.market import market_flag, quartiles, reason_shares, role_medi
 from app.services.notify import Outbox, notify, salary
 from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.privacy import contacts_allowed
+from app.services.trust_level import invite_limit, next_step, trust_level
 
 router = APIRouter(prefix="/offers", tags=["offers"])
-
-_OFFERS_PER_DAY = 50
 
 
 def _eid(current: dict) -> uuid.UUID:
@@ -168,9 +167,10 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
     # Count only an invitation that passed the checks. A 404 or 409 must not spend the daily cap.
     # Redis down refuses the invite instead of opening the cap.
     try:
-        if await too_many(f"offers:create:{employer.id}", limit=_OFFERS_PER_DAY, window_seconds=86_400,
-                          fail_closed=True):
-            raise HTTPException(429, "Лимит приглашений на сегодня исчерпан")
+        level = trust_level(employer)
+        cap = invite_limit(level)
+        if await too_many(f"offers:create:{employer.id}", limit=cap, window_seconds=86_400, fail_closed=True):
+            raise HTTPException(429, f"Лимит приглашений на сегодня исчерпан ({cap}). {next_step(level)}")
     except RateLimitUnavailable as e:
         raise HTTPException(503, "Лимит приглашений сейчас недоступен") from e
     offer = Offer(

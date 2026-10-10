@@ -90,16 +90,38 @@ async def release_invites(inn: str) -> int:
         return len(rows)
 
 
+async def set_partner(email: str, on: bool) -> bool:
+    """Mark or clear the FSP partner flag. Returns whether a company with this email exists."""
+    from app.core.database import AsyncSessionLocal
+    from app.core.rls import bypass_rls
+    from app.models import Employer
+    from app.services.field_cipher import blind_index
+
+    bypass_rls()
+    async with AsyncSessionLocal() as db:
+        employer = await db.scalar(select(Employer).where(Employer.email_bindex == blind_index(email.strip().lower())))
+        if employer is None:
+            return False
+        employer.fsp_partner = on
+        await db.commit()
+        return True
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Снять паузу приглашений после проверки")
-    parser.add_argument("command", choices=("release",))
-    parser.add_argument("inn")
+    parser = argparse.ArgumentParser(description="Пауза приглашений и уровень партнёра ФСП")
+    parser.add_argument("command", choices=("release", "partner"))
+    parser.add_argument("value", help="ИНН для release, почта для partner")
+    parser.add_argument("--off", action="store_true")
     args = parser.parse_args()
-    found = asyncio.run(release_invites(args.inn))
-    if found:
-        print(f"Приглашения снова можно отправлять: компаний {found}, ИНН {args.inn.strip()}")
-    else:
-        print(f"Компания с ИНН {args.inn.strip()} не стоит на проверке")
+    if args.command == "release":
+        found = asyncio.run(release_invites(args.value))
+        if found:
+            print(f"Приглашения снова можно отправлять: компаний {found}, ИНН {args.value.strip()}")
+        else:
+            print(f"Компания с ИНН {args.value.strip()} не стоит на проверке")
+        return
+    found = asyncio.run(set_partner(args.value, not args.off))
+    print("Уровень партнёра обновлён" if found else f"Компания {args.value.strip()} не найдена")
 
 
 if __name__ == "__main__":
