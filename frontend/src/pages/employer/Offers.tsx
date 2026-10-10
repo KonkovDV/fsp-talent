@@ -13,7 +13,7 @@ interface Offer {
   id: string; role: string; salary_from: number; salary_to: number; work_format: string; status: string
   contacts_available: boolean; contact_method: string | null; candidate_viewed_at: string | null
   contacts_revealed_at: string | null; created_at: string
-  expires_at: string | null; practice_stage?: string | null; candidate: { role: string | null; grade: string | null; grade_source: string | null; label?: string | null } | null
+  expires_at: string | null; practice_stage?: string | null; returned_interest?: boolean; candidate: { role: string | null; grade: string | null; grade_source: string | null; label?: string | null } | null
   contacts_revoked_at?: string | null; unread_messages?: number
 }
 interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; region: string | null }
@@ -115,6 +115,7 @@ export default function EmployerOffers() {
                   <span className={cls}>{label}</span>
                 </div>
                 <p className="text-sm text-ink">{o.role}</p>
+                {o.returned_interest && <p className="text-sm text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
                 {o.practice_stage && (
                   <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}
                     {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}

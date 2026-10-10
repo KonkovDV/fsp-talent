@@ -377,6 +377,10 @@ export const updateResume = (id: string, body: ResumeBody) => api.put<ResumesDat
 export const deleteResume = (id: string) => api.delete<ResumesData>(`/candidates/me/resumes/${id}`)
 
 export const listFavorites = () => api.get('/employer/favorites')
+export const setFavoriteInterest = (id: string, interest: 'saved' | 'priority') =>
+  api.put(`/employer/favorites/${id}`, { interest })
+export const markCompanyInterest = (employerId: string, on: boolean) =>
+  on ? api.post(`/candidates/me/interests/${employerId}`) : api.delete(`/candidates/me/interests/${employerId}`)
 export const setFavorite = (id: string, on: boolean) =>
   on ? api.post(`/employer/favorites/${id}`) : api.delete(`/employer/favorites/${id}`)
 

@@ -20,10 +20,12 @@ from app.core.ratelimit import too_many
 from app.models import (
     AccessLog,
     Application,
+    CandidateInterest,
     CandidateResume,
     CategoryAssignment,
     Complaint,
     ConsentLog,
+    Employer,
     GradeConfirmation,
     Offer,
     Participant,
@@ -523,6 +525,8 @@ async def get_my_offers(
     for offer in rows:
         if offer.employer_id not in reputations:
             reputations[offer.employer_id] = await company_reputation(db, offer.employer)
+    marked = set(await db.scalars(select(CandidateInterest.employer_id).where(
+        CandidateInterest.participant_id == _pid(current))))
     return [{
         "id": str(o.id), "company": o.employer.company_name, "company_id": str(o.employer_id), "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
@@ -538,11 +542,40 @@ async def get_my_offers(
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
         "perks": list(o.perks or []),
         "practice_stage": o.practice_stage,
+        "company_interest": o.employer_id in marked,
         "status": o.status, "created_at": o.created_at.isoformat(),
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "unread_messages": unread.get(o.id, 0),
     } for o in rows]
+
+
+@router.post("/me/interests/{employer_id}", status_code=201)
+async def mark_company_interest(employer_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                                db: AsyncSession = Depends(get_db)):
+    """The specialist marks a company. The row stores two ids and no name."""
+    employer = await db.get(Employer, employer_id)
+    if employer is None or employer.suspended_at is not None:
+        raise ApiError(404, "not_found", "Компания не найдена")
+    pid = _pid(current)
+    existing = await db.scalar(select(CandidateInterest.id).where(
+        CandidateInterest.participant_id == pid, CandidateInterest.employer_id == employer_id))
+    if existing is None:
+        db.add(CandidateInterest(participant_id=pid, employer_id=employer_id, created_at=datetime.now(UTC)))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+    return {"employer_id": str(employer_id), "interest": True}
+
+
+@router.delete("/me/interests/{employer_id}")
+async def clear_company_interest(employer_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                                 db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(CandidateInterest).where(
+        CandidateInterest.participant_id == _pid(current), CandidateInterest.employer_id == employer_id))
+    await db.commit()
+    return {"employer_id": str(employer_id), "interest": False}
 
 
 class ComplaintIn(BaseModel):

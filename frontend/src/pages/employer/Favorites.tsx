@@ -37,8 +37,16 @@ export default function EmployerFavorites() {
       )}
       <div className="space-y-4">
         {items.map(card => (
-          <CandidateCard key={card.candidate_id} card={card} onOffer={setInviteFor} onTask={setTaskFor}
-            favorite={{ on: true, toggle: fav.toggle }} />
+          <div key={card.candidate_id} className="space-y-2">
+            {card.returned_interest && (
+              <p className="text-sm text-ink-2">Специалист отметил интерес к компании. Имени на карточке нет.</p>
+            )}
+            <button type="button" className="btn-ghost btn-sm" onClick={() => fav.setInterest(card.candidate_id, card.interest === 'priority' ? 'saved' : 'priority')}>
+              {card.interest === 'priority' ? 'В приоритете' : 'Сделать приоритетом'}
+            </button>
+            <CandidateCard card={card} onOffer={setInviteFor} onTask={setTaskFor}
+              favorite={{ on: true, toggle: fav.toggle }} />
+          </div>
         ))}
       </div>
       {taskFor && <TaskDialog candidateId={taskFor} onClose={() => setTaskFor(null)} />}
