@@ -39,6 +39,7 @@ from app.services.matching import (
     pay_counterfactual,
     reason_source,
     recommended_categories,
+    reply_outlook,
     skill_counterfactual,
 )
 from app.services.matching import score as match_score
@@ -548,6 +549,7 @@ def _match_body(m: PoolMatch, cold_seat: bool) -> dict:
     return {
         "score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
         "employer": m.employer, "accept": m.accept, "congestion": m.congestion,
+        "reply": m.reply,
         "reasons": reasons,
         "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value,
                      "contrib": f.contrib} for f in m.factors],
@@ -570,6 +572,7 @@ class PoolMatch:
     employer: float = 0.0
     accept: float | None = None
     congestion: float = 0.0
+    reply: dict | None = None
 
 
 async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: list[uuid.UUID]) -> dict:
@@ -665,7 +668,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         )
         m = match_score(need, facts)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,
-                             m.fit, m.tier, m.confirmed, m.employer, m.accept, m.congestion)
+                             m.fit, m.tier, m.confirmed, m.employer, m.accept, m.congestion,
+                             reply_outlook(need, facts))
     return out
 
 

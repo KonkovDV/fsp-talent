@@ -642,6 +642,37 @@ def accept_probability(offer_from: int | None, offer_to: int | None,
     return max(0.0, 1.0 - ((floor - ceiling) / floor) / 0.40)
 
 
+def reply_outlook(need: NeedSpec, person: CandidateFacts) -> dict | None:
+    """Chance they answer this need. Shown before the invite. Not an input of the score.
+
+    A named salary on both sides is required: without it the figure would be a guess, and the
+    list order must not move when the figure appears. Format and city enter only when the need
+    names them. A city the candidate left blank is not a penalty. Looking now counts more than
+    "will consider".
+    """
+    pay = accept_probability(need.salary_from, need.salary_to, person.salary_from, person.salary_to)
+    if pay is None:
+        return None
+    z = -0.15 + 1.8 * (pay - 0.5)
+    if need.work_format:
+        have = tuple(person.work_formats or ())
+        if not have or need.work_format in have:
+            fmt = 1.0
+        elif "hybrid" in have or need.work_format == "hybrid":
+            fmt = 0.6
+        else:
+            fmt = 0.0
+        z += 0.9 * (fmt - 0.5)
+    if need.city and (person.city or "").strip():
+        same = person.city.strip().casefold() == need.city.strip().casefold()
+        z += 0.6 * ((1.0 if same else 0.0) - 0.5)
+    activity = {"active": 1.0, "open": 0.55}.get(person.job_search, 0.2)
+    z += 0.8 * (activity - 0.5)
+    p = round(min(0.99, max(0.01, 1.0 / (1.0 + math.exp(-z)))), 3)
+    label = "высокая" if p >= 0.7 else "средняя" if p >= 0.4 else "низкая"
+    return {"p": p, "label": label}
+
+
 def _harmonic(left: float, right: float) -> float:
     """Harmonic mean. A zero on either side is a zero: one side unwilling ends the match."""
     left = min(1.0, max(0.0, left))

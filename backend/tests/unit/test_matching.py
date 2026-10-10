@@ -299,6 +299,27 @@ def test_the_demo_ceiling_hints_when_wishes_straddle_it():
     assert hint is not None and hint["known"] >= 5 and hint["gained"] >= 1
 
 
+def test_reply_outlook_is_shown_apart_from_the_score():
+    """The chance they answer is for the invite button. It does not move the score."""
+    from app.services.matching import reply_outlook
+    need = NeedSpec(role="backend", salary_from=200_000, salary_to=280_000,
+                    work_format="remote", city="Казань")
+    keen = _cand(salary_from=220_000, salary_to=260_000, work_formats=("remote",),
+                 city="Казань", job_search="active")
+    cold = _cand(salary_from=400_000, work_formats=("office",), city="Москва", job_search="open")
+    high = reply_outlook(need, keen)
+    low = reply_outlook(need, cold)
+    assert high is not None and high["label"] == "высокая" and high["p"] >= 0.7
+    assert low is not None and low["label"] == "низкая" and low["p"] < high["p"]
+    unnamed = reply_outlook(need, _cand(salary_from=220_000, work_formats=("remote",),
+                                         city=None, job_search="active"))
+    assert unnamed is not None and unnamed["p"] > low["p"]
+    assert reply_outlook(NeedSpec(role="backend"), keen) is None
+    ranked = score(need, keen).score
+    reply_outlook(need, keen)
+    assert score(need, keen).score == ranked
+
+
 def test_pay_counterfactual_starts_at_five_named_wishes():
     from app.services.matching import pay_counterfactual
     need = NeedSpec(salary_from=150_000, salary_to=200_000)

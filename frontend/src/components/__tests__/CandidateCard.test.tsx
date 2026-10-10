@@ -45,7 +45,11 @@ describe('карточка кандидата', () => {
         ],
       },
     }
-    render(<CandidateCard card={summed} onOffer={() => undefined} />)
+    render(<CandidateCard card={{
+      ...summed,
+      match: { ...summed.match!, reply: { p: 0.87, label: 'высокая' } },
+    }} onOffer={() => undefined} />)
+    expect(screen.getByTestId('reply-chance')).toHaveTextContent('Ответят: высокая, 87 %')
     const shares = screen.getAllByTestId('factor-share').map(node => Number(node.textContent))
     const employer = Number(screen.getByTestId('employer-score').textContent?.replace('Работодатель ', ''))
     expect(shares.reduce((sum, part) => sum + part, 0)).toBeCloseTo(employer, 5)
