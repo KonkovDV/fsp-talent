@@ -42,3 +42,13 @@ def test_the_sandbox_client_reads_outputs_and_treats_failures_as_unavailable():
         _runner(down).languages()
     assert _runner(lambda r: httpx.Response(200, json={"ok": True, "languages": ["python", "javascript"]})
                    ).languages() == ("python", "javascript")
+
+
+def test_a_required_sandbox_without_a_token_does_not_start(monkeypatch):
+    from app.core.config import settings
+    from app.services.sandbox import get_runner
+    monkeypatch.setattr(settings, "SANDBOX_REQUIRED", True)
+    monkeypatch.setattr(settings, "SANDBOX_TOKEN", "")
+    monkeypatch.setattr(settings, "SANDBOX_SOCKET", "/run/sandbox/sandbox.sock")
+    with pytest.raises(SandboxUnavailable):
+        get_runner()
