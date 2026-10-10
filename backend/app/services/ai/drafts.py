@@ -24,14 +24,21 @@ from app.services.ai.assistant import has_identity
 logger = logging.getLogger(__name__)
 
 _WRITER = (
-    "Составь одно учебное задание. В запросе нет резюме и нет персональных данных. "
-    'Верни только JSON {"stem": "условие", "key": "короткий ответ"}. '
-    "Не указывай имя, почту и телефон."
+    "Составь одно учебное задание с закрытым ответом. В запросе нет резюме и нет персональных данных. "
+    "У задания ровно один правильный ответ: число, одно слово или одна строка вывода фрагмента кода, "
+    "не длиннее 30 символов. Если нужен код, приведи его в условии и спроси, что он выведет. "
+    "Не проси написать программу, функцию или запрос. Не указывай имя, почту и телефон. "
+    'Верни только JSON {"stem": "условие", "key": "ответ"}.'
 )
 _CHECKER = (
-    "Дан текст задания. Правильный ответ в нём не назван. "
-    'Верни только JSON {"key": "короткий ответ"}.'
+    "Реши задание. Правильный ответ в нём не назван. Ответ — одно число, слово или строка вывода, без пояснений. "
+    'Верни только JSON {"key": "ответ"}.'
 )
+KEY_MAX = 30
+
+
+def _same(key: str) -> str:
+    return " ".join(key.casefold().split()).rstrip(".")
 _OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
 
@@ -54,9 +61,9 @@ def judge(stem: str, writer_key: str, checker_key: str) -> Verdict:
     left, right = writer_key.strip(), checker_key.strip()
     if not stem or has_identity(stem) or has_identity(left) or has_identity(right):
         return Verdict(False, "identity")
-    if not left or left != right:
+    if not left or len(left) > KEY_MAX or _same(left) != _same(right):
         return Verdict(False, "disagree")
-    if left in stem:
+    if _same(left) in _same(stem):
         return Verdict(False, "leaked_in_stem")
     return Verdict(True, "agree")
 
