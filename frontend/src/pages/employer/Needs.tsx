@@ -22,7 +22,7 @@ interface NeedParams {
 }
 interface PayHint { known: number; covered: number; proposed_to: number; covered_if_raised: number; gained: number }
 interface SkillHint { skill: string; gained: number; pool: number }
-interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number }
+interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number; flags?: { code: string; label: string }[] }
 
 const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '' }
 const PRESETS = [
@@ -89,7 +89,7 @@ export default function EmployerNeeds() {
     mutationFn: () => draftNeed(form.paste).then(r => r.data as {
       title: string; role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
       salary_from: number | null; salary_to: number | null; work_format: string | null; city: string | null
-      industry: string | null; work_goal: string | null; notes: string[]
+      industry: string | null; work_goal: string | null; notes: string[]; flags?: { code: string; label: string }[]
     }),
     onSuccess: (d) => {
       setError('')
@@ -161,6 +161,7 @@ export default function EmployerNeeds() {
               placeholder="Вставьте текст. Сайт вакансий не открывается: разбираются только эти строки." className="input" aria-label="Текст вакансии" />
             <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate()}>Разобрать текст</button>
             {draftNotes.length > 0 && <ul className="mt-2 text-sm text-ink-2">{draftNotes.map(line => <li key={line}>{line}</li>)}</ul>}
+            {(parsed.data?.flags ?? []).length > 0 && <p className="mt-2 text-sm text-warn">В тексте: {parsed.data!.flags!.map(flag => flag.label.toLowerCase()).join('; ')}. Потребность всё равно можно сохранить.</p>}
           </div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Готовые потребности">
             {PRESETS.map(preset => (
@@ -241,6 +242,7 @@ export default function EmployerNeeds() {
                     className={`relative w-full rounded-lg px-3.5 py-2.5 text-left transition-colors ${n.id === selected ? 'bg-panel shadow-xs ring-1 ring-line-strong before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-accent' : 'hover:bg-panel/70'}`}>
                     <span className="block text-sm font-medium text-ink">{n.title}</span>
                     <span className="mt-0.5 block text-xs text-ink-3">версия {n.version}, в шорт-листе {n.shortlist_count}</span>
+                    {(n.flags ?? []).length > 0 && <span className="mt-1 block text-xs text-warn">{n.flags!.map(flag => flag.label).join('; ')}</span>}
                   </button>
                 </li>
               ))}

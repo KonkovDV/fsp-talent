@@ -41,6 +41,7 @@ from app.services.search.pipeline import _build_cards, score_pool, search_candid
 from app.services.skills import normalize_skill
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
+from app.services.vacancy_flags import vacancy_flags
 
 router = APIRouter(prefix="/needs", tags=["needs"])
 logger = logging.getLogger(__name__)
@@ -104,8 +105,10 @@ async def _params(db: AsyncSession, need: Need, version: int | None = None) -> N
 
 
 def _out(need: Need, ver: NeedVersion, shortlist: int = 0) -> dict:
+    params = ver.params or {}
     return {"id": str(need.id), "title": need.title, "version": need.version, "archived": need.archived,
-            "params": ver.params, "shortlist_count": shortlist, "updated_at": need.updated_at.isoformat()}
+            "params": params, "shortlist_count": shortlist, "updated_at": need.updated_at.isoformat(),
+            "flags": vacancy_flags(need.title, params.get("q") or "")}
 
 
 class DraftIn(BaseModel):
