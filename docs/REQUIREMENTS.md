@@ -175,7 +175,7 @@
 | Одна команда приёмки по таблице требований | ✅ сверх ТЗ | `make accept`, [requirements_trace.md](requirements_trace.md) | `python -m app.validation.accept` |
 | Проверка дампа базы и восстановление только с явным подтверждением | ✅ сверх ТЗ | [deploy/README.md](../deploy/README.md) | `deploy/verify_backup.py`, `deploy/restore_db.sh` |
 | 3.4 Сопроводительная документация по восьми пунктам | ✅ | [SOLUTION.md](SOLUTION.md) |
-| 3.5 Открытый код и открытые библиотеки | ✅ | [LICENSE](../LICENSE) (MIT), таблица лицензий в [SOLUTION.md, гл. 8](SOLUTION.md#8-библиотеки-и-компоненты) |
+| 3.5 Открытый код и открытые библиотеки | ✅ | Публичный репозиторий, [LICENSE](../LICENSE) (MIT), таблица лицензий в [SOLUTION.md, гл. 8](SOLUTION.md#8-библиотеки-и-компоненты) |
 | 3.5 Frontend, Backend и слой хранения разделены | ✅ | `frontend/`, `backend/`, PostgreSQL |
 | 3.5 Docker, Dockerfile, docker-compose.yml | ✅ | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, проверка в CI |
 | 3.5 OpenAPI: запросы, ответы, коды ошибок | ✅ | `/docs`, `/openapi.json`, [API_ERRORS.md](API_ERRORS.md) |
@@ -193,6 +193,7 @@
 
 | Что сдаётся | Где |
 |---|---|
-| Репозиторий с кодом | этот репозиторий |
+| Репозиторий с кодом | публичный репозиторий https://github.com/KonkovDV/fsp-talent |
 | Сопроводительная документация в doc или pdf | [docs/FSP_Talent_documentation.pdf](FSP_Talent_documentation.pdf) — сборка всех документов, `make docs-pdf` |
+| Презентация | [docs/pitch.pdf](pitch.pdf), [docs/pitch.pptx](pitch.pptx) — 16 слайдов |
 | Инструкция локального запуска | [INSTALL.md](INSTALL.md) |
