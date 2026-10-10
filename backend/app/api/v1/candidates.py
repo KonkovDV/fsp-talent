@@ -35,7 +35,7 @@ from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
 from app.services.ai import providers
 from app.services.ai.assistant import parse_resume
-from app.services.assessment import sync_assessed_grade
+from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
 from app.services.employer_score import company_score
@@ -125,6 +125,8 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "specialization": p.specialization, "industry": p.industry, "work_goal": p.work_goal,
         "work_formats": list(p.work_formats or []),
         "survey_done": p.survey_at is not None,
+        "calibration_until": calibration_until(p.category_opened_at).isoformat()
+        if calibration_open(p.category_opened_at, datetime.now(UTC)) else None,
         "confirmations": [{"specialization": c.specialization, "grade": c.grade, "p_pass": c.p_pass,
                            "confirmed_at": c.confirmed_at.isoformat(),
                            "locked_until": c.locked_until.isoformat() if c.locked_until else None}
@@ -868,6 +870,8 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
         if named is None:
             raise ApiError(422, "validation_error", "Город выберите из справочника")
         p.region = named
+    if p.category_opened_at is None:
+        p.category_opened_at = datetime.now(UTC)
     p.profile_version = (p.profile_version or 0) + 1
     if body.experience_years is not None:
         p.experience_years = body.experience_years

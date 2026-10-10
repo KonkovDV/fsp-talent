@@ -50,6 +50,7 @@ from app.services.assessment import (
     abandon,
     accept_lower,
     answer_item,
+    calibration_open,
     check_cooldown,
     check_retake_interval,
     confirmation,
@@ -377,7 +378,8 @@ async def _start_test(body: StartIn, current: dict, db: AsyncSession) -> Session
     if not express and not unlimited and \
             await too_many(f"assessment_start:{participant_id}", limit=3, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Не больше трёх попыток в час")
-    if not express and not unlimited:
+    fresh = calibration_open(getattr(participant, "category_opened_at", None), datetime.now(UTC))
+    if not express and not unlimited and not (fresh and body.vacancy_id is None):
         locked = await check_cooldown(db, participant_id, spec)
         conf = await confirmation(db, participant_id, spec)
         if locked and conf and GRADE_ORDER.index(body.target_grade) > GRADE_ORDER.index(conf.grade):

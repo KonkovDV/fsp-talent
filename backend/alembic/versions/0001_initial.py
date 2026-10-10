@@ -513,6 +513,7 @@ CREATE TABLE public.participants (
     show_stack boolean DEFAULT true NOT NULL,
     show_fsp boolean DEFAULT true NOT NULL,
     show_experience boolean DEFAULT true NOT NULL,
+    category_opened_at timestamp with time zone,
     work_formats jsonb DEFAULT '[]'::jsonb NOT NULL,
     experience_years integer,
     declared_grade character varying(20),

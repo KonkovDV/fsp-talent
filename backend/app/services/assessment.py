@@ -159,6 +159,22 @@ def jury_unlimited(email: str | None) -> bool:
     return bool(settings.DEMO_MODE) and (email or "").strip().lower() in JURY_EMAILS
 
 
+CALIBRATION_HOURS = 24
+
+
+def calibration_until(opened: datetime | None) -> datetime | None:
+    """End of the first day after the category appeared. None when it never opened."""
+    if opened is None:
+        return None
+    return opened + timedelta(hours=CALIBRATION_HOURS)
+
+
+def calibration_open(opened: datetime | None, now: datetime) -> bool:
+    """Inside this day a wrong self-assessment can be retested without the 7-day or 90-day wait."""
+    until = calibration_until(opened)
+    return until is not None and now < until
+
+
 def trial_decision() -> GradeDecision:
     return GradeDecision(None, False, False, None, "trial")
 
