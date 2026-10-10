@@ -38,6 +38,7 @@ CODE_CLASS: dict[str, str] = {
     "fsp_ticket_invalid": "E01",
     "fsp_invalid": "E01",
     "forbidden": "E02",
+    "account_suspended": "E02",
     "csrf_invalid": "E02",
     "contacts_hidden": "E02",
     "contacts_revoked": "E02",

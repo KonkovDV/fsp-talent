@@ -85,6 +85,8 @@ class Participant(Base):
     employer_task_at = Column(DateTime(timezone=True))
     # Set when identifying fields were erased: on account deletion or 30 days after consent withdrawal.
     deleted_at = Column(DateTime(timezone=True))
+    # Set from the moderation desk. Login stops and the card leaves search; the row stays.
+    suspended_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),

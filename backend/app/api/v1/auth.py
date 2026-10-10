@@ -370,6 +370,8 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         account.password_hash = hash_password(form.password)
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
+    if getattr(account, "suspended_at", None) is not None:
+        raise ApiError(403, "account_suspended")
     if role == "participant":
         account.last_login_at = datetime.now(UTC)
     return _account_tokens(account, role)
@@ -499,7 +501,12 @@ class RefreshIn(BaseModel):
 
 def account_can_refresh(account) -> bool:
     """A refresh token dies with the account. An erased profile must not mint a new access token."""
-    return account is not None and getattr(account, "deleted_at", None) is None and not guest_expired(account)
+    return (
+        account is not None
+        and getattr(account, "deleted_at", None) is None
+        and getattr(account, "suspended_at", None) is None
+        and not guest_expired(account)
+    )
 
 
 def _grace_key(role: str, subject: str) -> str:

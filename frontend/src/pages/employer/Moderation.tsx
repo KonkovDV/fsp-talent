@@ -75,6 +75,32 @@ function SalaryFlags() {
 
 function Desk() {
   const qc = useQueryClient()
+  const stats = useQuery({
+    queryKey: ['moderation-stats'],
+    queryFn: () => api.get<{ participants: number; employers: number; suspended: number; complaints: number; open_vacancies: number }>('/moderation/stats').then(r => r.data),
+  })
+  const [role, setRole] = useState<'employer' | 'participant'>('employer')
+  const [q, setQ] = useState('')
+  const accounts = useQuery({
+    queryKey: ['moderation-accounts', role, q],
+    queryFn: () => api.get<{ id: string; role: string; label: string; suspended: boolean }[]>('/moderation/accounts', { params: { role, q } }).then(r => r.data),
+  })
+  const toggle = useMutation({
+    mutationFn: (row: { id: string; suspended: boolean }) => api.post(`/moderation/accounts/${row.id}`, { role, active: row.suspended }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['moderation-accounts'] })
+      qc.invalidateQueries({ queryKey: ['moderation-stats'] })
+    },
+  })
+  const download = async () => {
+    const file = await api.get('/moderation/complaints.csv', { responseType: 'blob' })
+    const url = URL.createObjectURL(file.data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'complaints.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
   const list = useQuery({
     queryKey: ['moderation'],
     queryFn: () => api.get<Row[]>('/moderation/complaints').then(r => r.data),
@@ -85,7 +111,38 @@ function Desk() {
   })
   return (
     <div>
-      <PageHeader title="Модерация" lead="Демо-стол: жалобы на вакансии и черновики заданий. Закрытие вакансии не банит человека и не прячет банк кандидатов." />
+      <PageHeader title="Модерация" lead="Демо-стол: сводка, жалобы и выключение входа. Закрытие вакансии не банит человека. Выключенный вход не удаляет строку." />
+      {stats.data?.participants != null && (
+        <p className="mb-6 text-sm text-ink-2">
+          Кандидатов {stats.data.participants}, компаний {stats.data.employers}, вход закрыт у {stats.data.suspended}, жалоб {stats.data.complaints}, открытых вакансий {stats.data.open_vacancies}.
+        </p>
+      )}
+      <div className="mb-8 card space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="field-label" htmlFor="desk-role">Кого искать</label>
+            <select id="desk-role" className="select" value={role} onChange={e => setRole(e.target.value as 'employer' | 'participant')}>
+              <option value="employer">Компании</option>
+              <option value="participant">Кандидаты</option>
+            </select>
+          </div>
+          <div className="min-w-48 flex-1">
+            <label className="field-label" htmlFor="desk-q">Имя</label>
+            <input id="desk-q" className="input" value={q} onChange={e => setQ(e.target.value)} aria-label="Имя" />
+          </div>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => { void download() }}>Скачать жалобы CSV</button>
+        </div>
+        <ul className="space-y-2">
+          {(Array.isArray(accounts.data) ? accounts.data : []).map(row => (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="text-ink">{row.label}{row.suspended ? ' — вход закрыт' : ''}</span>
+              <button type="button" className="btn-ghost btn-sm" disabled={toggle.isPending} onClick={() => toggle.mutate(row)}>
+                {row.suspended ? 'Вернуть вход' : 'Закрыть вход'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
       <h2 className="mb-3 font-display text-xl font-bold text-ink">Жалобы</h2>
       {list.isLoading && <Skeleton className="h-40" />}
       {list.isError && <p className="notice-error" role="alert">{apiError(list.error, 'Список недоступен')}</p>}
