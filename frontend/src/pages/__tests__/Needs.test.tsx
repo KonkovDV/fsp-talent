@@ -6,12 +6,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EmployerNeeds from '../employer/Needs'
 
-const { listNeeds, getNeed, updateNeed, createNeed, restoreNeed } = vi.hoisted(() => ({
+const { listNeeds, getNeed, updateNeed, createNeed, restoreNeed, needMatches } = vi.hoisted(() => ({
   listNeeds: vi.fn(),
   getNeed: vi.fn(),
   updateNeed: vi.fn(),
   createNeed: vi.fn(),
   restoreNeed: vi.fn(),
+  needMatches: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
@@ -20,7 +21,7 @@ vi.mock('../../api/client', async () => {
     ...actual,
     listNeeds, getNeed, updateNeed, createNeed, restoreNeed,
     surveyOptions: vi.fn(() => Promise.resolve({ data: { specializations: { backend: 'Бэкенд' }, grades: ['middle'], industries: {} } })),
-    needMatches: vi.fn(() => Promise.resolve({ data: { items: [], recommended_categories: [] } })),
+    needMatches,
     needShortlist: vi.fn(() => Promise.resolve({ data: { items: [] } })),
     compareNeed: vi.fn(),
     needExam: vi.fn(),
@@ -49,6 +50,7 @@ beforeEach(() => {
   updateNeed.mockResolvedValue({ data: { ...need, version: 3 } })
   createNeed.mockResolvedValue({ data: { ...need, id: 'need-2', version: 1, title: 'Новая' } })
   restoreNeed.mockResolvedValue({ data: { ...need, version: 1 } })
+  needMatches.mockResolvedValue({ data: { items: [], recommended_categories: [] } })
 })
 
 describe('потребность', () => {
@@ -75,6 +77,12 @@ describe('потребность', () => {
     renderPage(<EmployerNeeds />)
     await userEvent.click(await screen.findByRole('button', { name: 'Вернуть версию 1' }))
     expect(restoreNeed).toHaveBeenCalledWith('need-1', 1)
+  })
+
+  it('показывает, сколько условий оставили из банка', async () => {
+    needMatches.mockResolvedValue({ data: { items: [], total: 12, base_total: 60, recommended_categories: [] } })
+    renderPage(<EmployerNeeds />)
+    expect(await screen.findByText('По условиям этой потребности 12 из 60 в банке.')).toBeInTheDocument()
   })
 
   it('не предлагает вернуть единственную версию', async () => {
