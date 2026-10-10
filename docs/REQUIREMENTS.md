@@ -160,6 +160,7 @@
 | 3.5 OpenAPI: запросы, ответы, коды ошибок | ✅ | `/docs`, `/openapi.json`, [API_ERRORS.md](API_ERRORS.md) |
 | Ошибка API в форме RFC 9457: класс E01–E20 и прежний код | ✅ сверх ТЗ | `GET /api/v1/problems`, [API_ERRORS.md](API_ERRORS.md) | `app/api/problems.py` |
 | 3.5 152-ФЗ, согласия, роли, защита паролей и токенов | ✅ | [SOLUTION.md, гл. 10](SOLUTION.md#10-безопасность-и-152-фз) |
+| Пароли Argon2id, refresh в HttpOnly-cookie, двойная cookie против подделки запроса | ✅ сверх ТЗ | Вход и обновление сессии | `app/core/security.py`, `app/core/csrf.py` |
 | 3.5 Совместимость с Keycloak | ✅ | OIDC-клиент, [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |
 | 3.5 Кроссплатформенность, адаптивная вёрстка | ✅ | Все экраны от 390 px, светлая и тёмная темы ([DESIGN.md](DESIGN.md#проверка-интерфейса)) |
 | 3.5 Десятки пользователей одновременно | ✅ | 40 пользователей, 0 ошибок ([LOAD_TEST.md](LOAD_TEST.md)) |

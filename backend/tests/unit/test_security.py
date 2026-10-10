@@ -40,7 +40,7 @@ def test_expired_and_tampered_tokens_are_rejected():
         decode_token(f"{header}.{body}.{'A' * len(sig)}")
 
 
-def test_a_missing_password_hash_still_runs_bcrypt(monkeypatch):
+def test_a_missing_password_hash_still_runs_the_hasher(monkeypatch):
     seen = []
 
     def fake(plain: str, hashed: str) -> bool:
@@ -50,7 +50,7 @@ def test_a_missing_password_hash_still_runs_bcrypt(monkeypatch):
     monkeypatch.setattr("app.core.security.verify_password", fake)
     assert password_matches("demo12345", None) is False
     assert password_matches("demo12345", "") is False
-    assert seen and all(item.startswith("$2b$") for item in seen)
+    assert seen and all(item.startswith("$argon2id$") for item in seen)
 
 
 def test_password_matches_the_stored_hash_only():
@@ -59,12 +59,37 @@ def test_password_matches_the_stored_hash_only():
     assert not password_matches("wrong-pass", stored)
 
 
-def test_bcrypt_does_not_store_the_password():
+def test_argon2id_does_not_store_the_password():
     first, second = hash_password("demo12345"), hash_password("demo12345")
-    assert first != "demo12345" and first != second
+    assert first.startswith("$argon2id$") and first != second
     assert verify_password("demo12345", first)
     assert not verify_password("wrong-pass", first)
-    assert not verify_password("x" * 80, first)
+    with pytest.raises(ValueError):
+        hash_password("x" * 2000)
+
+
+def test_an_old_bcrypt_hash_still_matches_and_asks_to_be_rewritten():
+    import bcrypt
+
+    from app.core.security import password_needs_rehash
+
+    old = bcrypt.hashpw(b"demo12345", bcrypt.gensalt()).decode()
+    assert verify_password("demo12345", old)
+    assert not verify_password("wrong-pass", old)
+    assert password_needs_rehash(old)
+    assert not password_needs_rehash(hash_password("demo12345"))
+
+
+def test_a_cookie_refresh_needs_the_same_csrf_token():
+    from app.api.errors import ApiError
+    from app.core.csrf import check_csrf
+
+    check_csrf("same-token", "same-token")
+    with pytest.raises(ApiError) as caught:
+        check_csrf("same-token", "other")
+    assert caught.value.code == "csrf_invalid"
+    with pytest.raises(ApiError):
+        check_csrf(None, "same-token")
 
 
 def test_discoverable_hides_minors_without_consent_and_hidden_profiles():

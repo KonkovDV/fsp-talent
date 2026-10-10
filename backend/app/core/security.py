@@ -2,21 +2,41 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerificationError, VerifyMismatchError
 from jwt import PyJWTError as JWTError
 
 from app.core.config import settings
 
 _BCRYPT_MAX_BYTES = 72
+_PASSWORD_MAX_BYTES = 1024
+# OWASP: Argon2id, 19 MiB, two passes, one lane. New passwords use this. Old bcrypt hashes still verify.
+_HASHER = PasswordHasher(time_cost=2, memory_cost=19_456, parallelism=1)
+# Argon2id of a password no account uses. A missing account still pays for one check.
+_UNKNOWN_PASSWORD_HASH = (
+    "$argon2id$v=19$m=19456,t=2,p=1$oJI0NxI3WdDWOTxk9NCu3A$GczMb2RkJnjYXtHOK13P4T6jC49WbDTxUAbOBzfV5DA"
+)
 
 
 def hash_password(password: str) -> str:
-    pw = password.encode()
-    if len(pw) > _BCRYPT_MAX_BYTES:
+    if len(password.encode()) > _PASSWORD_MAX_BYTES:
         raise ValueError("Password too long")
-    return bcrypt.hashpw(pw, bcrypt.gensalt()).decode()
+    return _HASHER.hash(password)
+
+
+def password_needs_rehash(hashed: str | None) -> bool:
+    """True for a bcrypt hash and for Argon2id written with older parameters."""
+    if not hashed or not hashed.startswith("$argon2"):
+        return bool(hashed)
+    return _HASHER.check_needs_rehash(hashed)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    if hashed.startswith("$argon2"):
+        try:
+            return _HASHER.verify(hashed, plain)
+        except (VerifyMismatchError, VerificationError):
+            return False
     pw = plain.encode()
     if len(pw) > _BCRYPT_MAX_BYTES:
         return False
@@ -24,10 +44,6 @@ def verify_password(plain: str, hashed: str) -> bool:
         return bcrypt.checkpw(pw, hashed.encode())
     except ValueError:
         return False
-
-
-# bcrypt of a password no account uses. A missing account still pays for one check.
-_UNKNOWN_PASSWORD_HASH = "$2b$12$h3Rtu69CJnqSEwJBpRHbV.Admw2z3syxXx/qsApVi5ZNEsMPQVc2m"
 
 
 def password_matches(plain: str, hashed: str | None) -> bool:
