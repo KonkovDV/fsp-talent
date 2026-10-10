@@ -138,6 +138,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
                           for c in await db.scalars(select(GradeConfirmation).where(
                               GradeConfirmation.participant_id == p.id))],
         "assessed_grade": p.assessed_grade,
+        "certificate_grade": getattr(p, "certificate_grade", None),
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile, "show_city": p.show_city,
@@ -554,7 +555,7 @@ async def import_protocols(file: UploadFile = File(...), current: dict = Depends
                            db: AsyncSession = Depends(get_db)):
     """A protocol file when the registry is silent. The grade and the match score stay put."""
     from app.services.profile import rebuild_profile
-    from app.services.protocol_file import parse_protocol_text, text_of_pdf, text_of_xlsx
+    from app.services.protocol_file import certificate_grade, parse_protocol_text, text_of_pdf, text_of_xlsx
 
     if await too_many(f"protocols:{_pid(current)}", limit=10, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Слишком много файлов. Подождите час.")
@@ -575,7 +576,10 @@ async def import_protocols(file: UploadFile = File(...), current: dict = Depends
     except Exception as exc:
         raise ApiError(422, "validation_error", "Файл не читается") from exc
     parsed = parse_protocol_text(text)
-    if not parsed:
+    named = certificate_grade(text)
+    if named:
+        person.certificate_grade = named
+    if not parsed and not named:
         raise ApiError(422, "validation_error", "В файле нет строк протокола: дисциплина, дата, место, всего")
     known = set(await db.scalars(select(Result.event_id).where(Result.participant_id == person.id)))
     added = 0
@@ -593,7 +597,8 @@ async def import_protocols(file: UploadFile = File(...), current: dict = Depends
     if added:
         await rebuild_profile(db, person)
     await db.commit()
-    return {"added": added, "read": len(parsed), "grade_unchanged": True}
+    return {"added": added, "read": len(parsed),
+            "certificate_grade": getattr(person, "certificate_grade", None), "grade_unchanged": True}
 
 
 @router.post("/me/results/{result_id}/presentation")

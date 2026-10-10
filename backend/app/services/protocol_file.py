@@ -64,6 +64,17 @@ def _date(text: str) -> date | None:
     return None
 
 
+_CERT_GRADE = {"J": "junior", "M": "middle", "S": "senior"}
+
+
+def certificate_grade(text: str) -> str | None:
+    """The letter in a certificate number. It is not a grade and is not written into one."""
+    match = re.search(r"\d{8}-\d+-([JMSjms])-\d+", text or "")
+    if not match:
+        return None
+    return _CERT_GRADE[match.group(1).upper()]
+
+
 def parse_protocol_text(text: str) -> list[FSPResult]:
     found: list[FSPResult] = []
     seen: set[str] = set()
