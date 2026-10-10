@@ -275,6 +275,23 @@ def test_jury_pairs_file_is_scored(tmp_path):
     assert data["labels"]["n"]["c0"] == 3
     assert any(row.method == "full" for row in evaluate(data))
 
+    import pytest
+
+    from app.validation.matching import public_report
+    report = public_report(path.read_text(encoding="utf-8"))
+    assert report["pairs"] == 3 and report["judged_needs"] == 1
+    assert [row["method"] for row in report["rows"]] == ["full", "keyword", "random"]
+    assert report["rows"][0]["ndcg10"] == 1.0 and len(report["sha256"]) == 64
+    bad = {"": "хотя бы одну", "{oops": "не JSON", '{"need": {}, "candidate": {}, "label": 1}': "поля",
+           "\n".join([path.read_text(encoding="utf-8").splitlines()[0].replace('"label": 3', '"label": 7')] * 2):
+           "от 0 до 3"}
+    for text, words in bad.items():
+        with pytest.raises(ValueError, match=words):
+            public_report(text)
+    zeros = path.read_text(encoding="utf-8").replace('"label": 3', '"label": 1')
+    with pytest.raises(ValueError, match="2 или 3"):
+        public_report(zeros)
+
 
 def test_salary_changes_rank_only_when_both_sides_named_a_band():
     plain = score(NEED, _cand())
