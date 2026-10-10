@@ -95,6 +95,24 @@ ROLE_NEIGHBOURS = {
 }
 
 
+def near_pairs(role: str, grade: str) -> list[tuple[str, str]]:
+    """The asked category, one grade step on the same role, and a neighbour role at the same grade.
+
+    Two steps away stay out. The score still explains a neighbour and sorts the exact pair first.
+    """
+    if grade not in GRADES:
+        return [(role, grade)]
+    index = GRADES.index(grade)
+    pairs = [(role, grade)]
+    if index > 0:
+        pairs.append((role, GRADES[index - 1]))
+    if index + 1 < len(GRADES):
+        pairs.append((role, GRADES[index + 1]))
+    for neighbour in sorted(ROLE_NEIGHBOURS.get(role, ())):
+        pairs.append((neighbour, grade))
+    return pairs
+
+
 def category_band(role: str | None, grade: str | None,
                   need_role: str | None, need_grade: str | None) -> int:
     """0 exact category, 1 one step away or a neighbour at the exact grade, 2 the rest.

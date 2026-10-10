@@ -123,7 +123,9 @@ export default function EmployerSearch() {
           <div><label className={label} htmlFor="f-grade">Грейд</label>
             <select id="f-grade" value={grade} onChange={e => setGrade(e.target.value)} className="select">
               <option value="">Любой</option>{GRADES.map(v => <option key={v} value={v}>{gradeRu(v)}</option>)}
-            </select></div>
+            </select>
+            {role && grade && <p className="field-hint">В списке также соседний грейд этой специализации и смежные специализации этого грейда. Точное совпадение выше, причина написана на карточке.</p>}
+            </div>
           <div><label className={label} htmlFor="f-skills">Навыки</label>
             <input id="f-skills" value={skills} onChange={e => setSkills(e.target.value)} placeholder="Через запятую" className="input" /></div>
           <div><label className={label} htmlFor="f-disc">Дисциплина ФСП</label>
