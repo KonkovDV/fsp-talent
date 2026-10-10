@@ -11,6 +11,12 @@ vi.mock('../../api/client', async () => {
   return { ...actual, api: { ...actual.api, get, post }, assessmentBlueprint }
 })
 
+const AI = { kinds: [], items: [], can_edit: false, in_use: null }
+const reply = (factor: object) => (url: string) => Promise.resolve({
+  data: url === '/moderation/totp' ? factor
+    : url === '/moderation/complaints' ? [] : url === '/moderation/ai-providers' ? AI : { model_ready: false, items: [] },
+})
+
 function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><Moderation /></QueryClientProvider>)
@@ -19,10 +25,7 @@ function show() {
 describe('второй фактор стола модерации', () => {
   it('пока код не введён, стол не запрашивает жалобы; после кода открывается', async () => {
     assessmentBlueprint.mockResolvedValue({ data: { specializations: {} } })
-    get.mockImplementation((url: string) => Promise.resolve({
-      data: url === '/moderation/totp' ? { enrolled: true, unlocked: false, unlocked_until: null }
-        : url === '/moderation/complaints' ? [] : { model_ready: false, items: [] },
-    }))
+    get.mockImplementation(reply({ enrolled: true, unlocked: false, unlocked_until: null }))
     post.mockResolvedValue({ data: { enrolled: true, unlocked: true, unlocked_until: '2026-10-10T09:15:00Z' } })
     show()
     await userEvent.type(await screen.findByLabelText('Код из приложения'), '12a3456')
@@ -34,10 +37,7 @@ describe('второй фактор стола модерации', () => {
   })
 
   it('без включённого фактора стол открыт сразу', async () => {
-    get.mockImplementation((url: string) => Promise.resolve({
-      data: url === '/moderation/totp' ? { enrolled: false, unlocked: false, unlocked_until: null }
-        : url === '/moderation/complaints' ? [] : { model_ready: false, items: [] },
-    }))
+    get.mockImplementation(reply({ enrolled: false, unlocked: false, unlocked_until: null }))
     show()
     expect(await screen.findByText('Жалоб нет')).toBeInTheDocument()
     expect(screen.queryByTestId('totp-form')).not.toBeInTheDocument()

@@ -10,7 +10,6 @@ import json
 import logging
 import re
 
-from app.core.config import settings
 from app.services.categorization import GRADES
 from app.services.skills import ROLES, extract_skills, is_grounded, normalize_skill
 
@@ -219,38 +218,22 @@ def parse_query(q: str) -> dict:
 
 
 async def _llm_skills(text: str) -> list[dict]:
-    from gigachat import GigaChat
+    from app.services.ai import providers
 
-    giga = GigaChat(
-        credentials=settings.GIGACHAT_CREDENTIALS,
-        scope=settings.GIGACHAT_SCOPE,
-        model=settings.GIGACHAT_MODEL,
-        verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL,
-        timeout=30,
-    )
-    try:
-        resp = await giga.achat(
-            {
-                "messages": [
-                    {"role": "system", "content": _RESUME_PROMPT},
-                    {"role": "user", "content": for_model(text)[:8000]},
-                ],
-                "temperature": 0.1,
-            }
-        )
-    finally:
-        close = getattr(giga, "aclose", None)
-        if close:
-            await close()
-    content = resp.choices[0].message.content
+    provider = providers.active()
+    if provider is None:
+        return []
+    content = await providers.chat(provider, provider.model, _RESUME_PROMPT, text, temperature=0.1)
     match = re.search(r"\[.*\]", content, re.DOTALL)
     return json.loads(match.group(0)) if match else []
 
 
 async def parse_resume(text: str) -> dict:
+    from app.services.ai import providers
+
     found = {e.skill: {"name": e.skill, "source_quote": e.evidence, "source": "rules"} for e in extract_skills(text)}
     llm_used, rejected = False, 0
-    if settings.AI_ENABLED and settings.GIGACHAT_CREDENTIALS:
+    if providers.active() is not None:
         try:
             for item in await _llm_skills(for_model(text)):
                 name, quote = normalize_skill(str(item.get("skill", ""))), str(item.get("quote", ""))
@@ -260,7 +243,7 @@ async def parse_resume(text: str) -> dict:
                     rejected += 1
             llm_used = True
         except Exception:
-            logger.exception("GigaChat call failed, rules-only result returned")
+            logger.exception("Model call failed, rules-only result returned")
     return {
         "skills": sorted(found.values(), key=lambda s: s["name"]),
         "llm_used": llm_used,

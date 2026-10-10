@@ -260,6 +260,24 @@ CREATE TABLE public.item_drafts (
 CREATE INDEX ix_item_drafts_status ON public.item_drafts USING btree (status);
 
 
+CREATE TABLE public.ai_providers (
+    id uuid NOT NULL,
+    kind character varying(20) NOT NULL,
+    label character varying(80) NOT NULL,
+    model character varying(100) NOT NULL,
+    check_model character varying(100),
+    params jsonb NOT NULL,
+    secret text NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    activated_at timestamp with time zone,
+    CONSTRAINT ai_providers_pkey PRIMARY KEY (id),
+    CONSTRAINT ck_ai_providers_kind CHECK (((kind)::text = ANY ((ARRAY['gigachat'::character varying, 'yandex'::character varying, 'cloudru'::character varying, 'mws'::character varying])::text[])))
+);
+
+CREATE UNIQUE INDEX uq_ai_providers_active ON public.ai_providers USING btree (is_active) WHERE is_active;
+
+
 CREATE TABLE public.employer_favorites (
     id uuid NOT NULL,
     employer_id uuid NOT NULL,

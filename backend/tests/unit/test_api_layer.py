@@ -378,7 +378,7 @@ async def test_moderation_desk_lists_and_closes(quiet, monkeypatch):
         await moderation.complaints(current, db)
     assert hidden.value.status_code == 404
 
-    from app.services.ai import drafts
+    from app.services.ai import drafts, providers
 
     async def agree(model, system, user):
         return '{"stem": "Сколько раз выполнится цикл?", "key": "6"}' if model == "writer" else '{"key": "6"}'
@@ -386,7 +386,7 @@ async def test_moderation_desk_lists_and_closes(quiet, monkeypatch):
     monkeypatch.setattr(drafts, "_chat", agree)
     for name, value in (("AI_ENABLED", True), ("GIGACHAT_CREDENTIALS", "present"),
                         ("GIGACHAT_MODEL", "writer"), ("GIGACHAT_CHECK_MODEL", "checker")):
-        monkeypatch.setattr(drafts.settings, name, value)
+        monkeypatch.setattr(providers.settings, name, value)
     db = Bag()
     db.gets = [company]
     with pytest.raises(ApiError) as wrong:
@@ -415,7 +415,7 @@ async def test_moderation_desk_lists_and_closes(quiet, monkeypatch):
     lost = await moderation.request_draft(moderation.DraftIn(spec="backend", topic="python", level=2), current, db)
     assert lost == {"accepted": False, "reason": "disagree", "draft": None} and not db.added
 
-    monkeypatch.setattr(drafts.settings, "GIGACHAT_CHECK_MODEL", "")
+    monkeypatch.setattr(providers.settings, "GIGACHAT_CHECK_MODEL", "")
     db.gets = [company]
     listed_off = await moderation.item_drafts("pending", current, db)
     assert listed_off["model_ready"] is False

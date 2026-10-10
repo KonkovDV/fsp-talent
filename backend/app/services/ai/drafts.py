@@ -15,10 +15,10 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.items import LEVEL_B
 from app.items.registry import BLUEPRINTS
 from app.models.item_draft import ItemDraft
+from app.services.ai import providers
 from app.services.ai.assistant import has_identity
 
 logger = logging.getLogger(__name__)
@@ -73,35 +73,18 @@ def _object(content: str) -> dict:
 
 
 async def _chat(model: str, system: str, user: str) -> str:
-    from gigachat import GigaChat
-
-    giga = GigaChat(
-        credentials=settings.GIGACHAT_CREDENTIALS,
-        scope=settings.GIGACHAT_SCOPE,
-        model=model,
-        verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL,
-        timeout=30,
-    )
-    try:
-        resp = await giga.achat({
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user[:4000]},
-            ],
-            "temperature": 0.0,
-        })
-    finally:
-        close = getattr(giga, "aclose", None)
-        if close:
-            await close()
-    return str(resp.choices[0].message.content or "")
+    provider = providers.active()
+    if provider is None:
+        raise providers.ProviderError("model_off")
+    return await providers.chat(provider, model, system, user, limit=4000)
 
 
 def ready() -> str | None:
     """None when two different models are configured, otherwise why drafts are off."""
-    if not (settings.AI_ENABLED and settings.GIGACHAT_CREDENTIALS and settings.GIGACHAT_CHECK_MODEL):
+    provider = providers.active()
+    if provider is None or not provider.check_model:
         return "model_off"
-    if settings.GIGACHAT_CHECK_MODEL == settings.GIGACHAT_MODEL:
+    if provider.check_model == provider.model:
         return "same_model"
     return None
 
@@ -111,13 +94,14 @@ async def propose(spec: str, topic: str, level: int) -> Verdict:
     blocked = ready()
     if blocked:
         return Verdict(False, blocked)
+    provider = providers.active()
     brief = f"Специализация: {spec}. Тема: {topic}. Уровень: {level}."
     try:
-        written = _object(await _chat(settings.GIGACHAT_MODEL, _WRITER, brief))
+        written = _object(await _chat(provider.model, _WRITER, brief))
         stem, key = str(written.get("stem") or ""), str(written.get("key") or "")
         if not stem or not key:
             return Verdict(False, "model_error")
-        checked = _object(await _chat(settings.GIGACHAT_CHECK_MODEL, _CHECKER, stem))
+        checked = _object(await _chat(provider.check_model, _CHECKER, stem))
     except Exception:
         logger.exception("Item draft was not accepted")
         return Verdict(False, "model_error")
