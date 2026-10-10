@@ -499,7 +499,7 @@ async def get_my_offers(
         if offer.employer_id not in reputations:
             reputations[offer.employer_id] = await company_reputation(db, offer.employer)
     return [{
-        "id": str(o.id), "company": o.employer.company_name, "role": o.role,
+        "id": str(o.id), "company": o.employer.company_name, "company_id": str(o.employer_id), "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
         "company_profile": {"industry": o.employer.industry, "website": o.employer.website,
                             "about": o.employer.description, "inn_given": published_inn(o.employer.inn),

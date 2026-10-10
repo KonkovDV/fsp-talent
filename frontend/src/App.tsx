@@ -34,6 +34,7 @@ const GuardianPage = page(() => import('./pages/GuardianPage'))
 const ForgotPasswordPage = page(() => import('./pages/ForgotPasswordPage'))
 const LeaderboardPage = page(() => import('./pages/LeaderboardPage'))
 const PublicProfile = page(() => import('./pages/PublicProfile'))
+const CompanyPage = page(() => import('./pages/CompanyPage'))
 const NotFoundPage = page(() => import('./pages/NotFoundPage'))
 const LegalPage = page(() => import('./pages/LegalPage'))
 const FspIdDemoPage = page(() => import('./pages/FspIdDemoPage'))
@@ -104,6 +105,7 @@ export default function App() {
         <Route path="/evaluate" element={<EvaluatePage />} />
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
+        <Route path="/companies/:id" element={<CompanyPage />} />
         <Route path="/fsp-id/authorize" element={<FspIdDemoPage />} />
         <Route path="/auth/fsp-callback" element={<FspSignInCallback />} />
 

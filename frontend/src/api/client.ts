@@ -338,6 +338,7 @@ export const saveSurvey = (data: {
 }) => api.put('/candidates/me/survey', data)
 
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
+export const getPublicCompany = (id: string) => api.get(`/public/companies/${id}`)
 export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)

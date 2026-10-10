@@ -14,7 +14,7 @@ from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import Consent, ConsentLog, Participant, Skill, VerifiableCredential
+from app.models import Consent, ConsentLog, Employer, Participant, Skill, Vacancy, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
@@ -215,6 +215,42 @@ class VacancyPreviewIn(BaseModel):
     description: str = Field("", max_length=4000)
     role: str | None = Field(None, max_length=30)
     grade: str | None = Field(None, max_length=20)
+
+
+@router.get("/companies/{employer_id}")
+async def company_page(employer_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    """The company's public card: name, open vacancies, trust. No email and no candidate names."""
+    from app.api.v1.auth import client_address
+    from app.services.employer_score import company_score
+    from app.services.inn import published_inn
+    from app.services.reputation import for_employer
+    from app.services.trust_level import LABELS, trust_level
+
+    if await too_many(f"public:company:{client_address(request)}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    company = await db.get(Employer, employer_id)
+    if company is None or company.suspended_at is not None or company.guest_until is not None:
+        raise ApiError(404, "not_found", "Страница компании не опубликована")
+    vacancies = list(await db.scalars(select(Vacancy).where(
+        Vacancy.employer_id == company.id, Vacancy.is_open.is_(True)).limit(20)))
+    level = trust_level(company)
+    return {
+        "id": str(company.id),
+        "name": company.company_name,
+        "industry": company.industry,
+        "website": company.website,
+        "about": company.description,
+        "inn_given": published_inn(company.inn),
+        "trust_level": level,
+        "trust_label": LABELS[level],
+        "rating": company_score(company.company_name),
+        "reputation": await for_employer(db, company),
+        "vacancies": [{
+            "id": str(row.id), "title": row.title, "role": row.role, "grade": row.grade,
+            "work_format": row.work_format, "salary_from": row.salary_from_gross,
+            "salary_to": row.salary_to_gross,
+        } for row in vacancies],
+    }
 
 
 @router.post("/vacancy-preview")
