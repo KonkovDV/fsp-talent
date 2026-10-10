@@ -24,7 +24,16 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import GradeConfirmation, InterviewSlot, Offer, Participant, Result, Skill, TestSession
+from app.models import (
+    CandidateResume,
+    GradeConfirmation,
+    InterviewSlot,
+    Offer,
+    Participant,
+    Result,
+    Skill,
+    TestSession,
+)
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
@@ -268,13 +277,19 @@ def passes_role_grade(primary_role: str | None, primary_grade: str | None,
     return True
 
 
-def _role_for_need(cat, need_role: str | None, confirmation) -> tuple[str | None, str | None, str | None]:
-    """Use the confirmation that matches the need when it is not the primary category."""
+def _role_for_need(cat, need_role: str | None, confirmation,
+                   resume=None) -> tuple[str | None, str | None, str | None]:
+    """Use the confirmation that matches the need when it is not the primary category.
+
+    Without one, an extra resume in that specialization gives a declared grade.
+    """
     role = cat.primary_role if cat else None
     grade = cat.grade if cat else None
     source = cat.grade_source if cat else None
     if need_role and confirmation is not None and confirmation.specialization == need_role and role != need_role:
         return confirmation.specialization, confirmation.grade, "assessed"
+    if need_role and resume is not None and resume.specialization == need_role and role != need_role:
+        return resume.specialization, resume.grade, "declared"
     return role, grade, source
 
 
@@ -382,14 +397,20 @@ async def search_candidates(
         # Filtering only by the stored primary grade would hide a junior confirmation on another role.
         confirmed_pair = select(GradeConfirmation.participant_id).where(
             GradeConfirmation.specialization == role, GradeConfirmation.grade == grade)
+        resume_pair = select(CandidateResume.participant_id).where(
+            CandidateResume.specialization == role, CandidateResume.grade == grade,
+            CandidateResume.participant_id.not_in(select(GradeConfirmation.participant_id).where(
+                GradeConfirmation.specialization == role)))
         stmt = stmt.where(or_(
             and_(PSI.role == role, PSI.grade == grade),
             Participant.id.in_(confirmed_pair),
+            Participant.id.in_(resume_pair),
         ))
     elif role:
         confirmed_here = select(GradeConfirmation.participant_id).where(
             GradeConfirmation.specialization == role)
-        stmt = stmt.where(or_(PSI.role == role, Participant.id.in_(confirmed_here)))
+        resume_here = select(CandidateResume.participant_id).where(CandidateResume.specialization == role)
+        stmt = stmt.where(or_(PSI.role == role, Participant.id.in_(confirmed_here), Participant.id.in_(resume_here)))
     elif grade:
         stmt = stmt.where(PSI.grade == grade)
     if discipline or min_rank:
@@ -627,6 +648,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             by_discipline.setdefault(pid, {})[disc] = float(value or 0.0)
     confs = {(c.participant_id, c.specialization): c for c in await db.scalars(
         select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ids)))}
+    extra = {(r.participant_id, r.specialization): r for r in await db.scalars(
+        select(CandidateResume).where(CandidateResume.participant_id.in_(ids)))} if need.role else {}
     pending = {pid: n for pid, n in await db.execute(
         select(Offer.candidate_id, func.count()).where(
             Offer.candidate_id.in_(ids), Offer.status == "pending").group_by(Offer.candidate_id))}
@@ -656,7 +679,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             fsp_lcb, fsp_kind, fsp_discipline = lcb_for_need(need.role, by_discipline.get(pid, {}), discipline)
         else:
             fsp_lcb, fsp_kind, fsp_discipline = None, None, None
-        role_name, grade_name, grade_source = _role_for_need(cat, need.role, conf)
+        role_name, grade_name, grade_source = _role_for_need(cat, need.role, conf, extra.get((pid, need.role)))
         facts = CandidateFacts(
             role=role_name, grade=grade_name,
             grade_source=grade_source, skills=skills.get(pid, {}),
@@ -731,6 +754,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
     ]
     results = {r.id: r for r in await db.scalars(select(Result).where(Result.id.in_(event_ids)))} if event_ids else {}
     percentiles = await _category_percentiles(db, cats)
+    resumes = {(r.participant_id, r.specialization): r for r in await db.scalars(
+        select(CandidateResume).where(CandidateResume.participant_id.in_(ordered)))} if scored else {}
 
     cards = []
     for pid in ordered:
@@ -765,6 +790,9 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
         header_role, header_grade, header_source, also_primary = shown_category(
             header_role, header_grade, header_source,
             row[0] if row else None, row[1] if row else None, row[2] if row else None)
+        resume = resumes.get((pid, header_role)) if also_primary else None
+        if resume is not None and header_source == "declared":
+            why.append(f"Дополнительное резюме: {header_role}, {header_grade}, грейд заявлен")
         if header_source == "assessed" and header_grade:
             why.append(f"Грейд {header_grade} подтверждён тестом")
         if also_primary and also_primary.get("role"):
@@ -810,7 +838,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             "also_primary": also_primary,
             "region": shown_region(p.region, bool(p.show_city)),
             "experience_years": p.experience_years,
-            "stack": cat.stack if cat else [],
+            "stack": list(resume.stack or []) if resume is not None else (cat.stack if cat else []),
+            "resume_summary": resume.summary if resume is not None else None,
             "matched_skills": matched,
             "missing_skills": sorted(wanted - set(matched)),
             "disciplines": disciplines,

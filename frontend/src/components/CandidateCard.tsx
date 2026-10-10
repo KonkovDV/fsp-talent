@@ -13,6 +13,8 @@ export interface CandidateCardData {
   region: string | null
   experience_years: number | null
   stack: string[]
+  /** The note of the extra resume this card was found by. */
+  resume_summary?: string | null
   matched_skills: string[]
   missing_skills: string[]
   skill_evidence?: Record<string, string>
@@ -204,6 +206,9 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
               {card.missing_skills.map(s => <span key={s} className="chip-missing">нет {s}</span>)}
               {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default">{skillChip(s, card.skill_evidence)}</span>)}
             </div>
+          )}
+          {card.resume_summary && (
+            <p className="text-sm text-ink-2" data-testid="resume-summary">{card.resume_summary}</p>
           )}
           {employerTask && (
             <p className="flex items-start gap-1.5 text-xs text-ink-2" data-testid="task-signal">

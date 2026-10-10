@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Application,
+    CandidateResume,
     CategoryAssignment,
     Consent,
     ConsentLog,
@@ -55,6 +56,7 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
     participant.token_epoch = (participant.token_epoch or 0) + 1
     pid = participant.id
     await db.execute(delete(Skill).where(Skill.participant_id == pid))
+    await db.execute(delete(CandidateResume).where(CandidateResume.participant_id == pid))
     await db.execute(delete(ProfileEmbedding).where(ProfileEmbedding.participant_id == pid))
     await db.execute(delete(ProfileSearchIndex).where(ProfileSearchIndex.participant_id == pid))
     await db.execute(delete(CategoryAssignment).where(CategoryAssignment.participant_id == pid))

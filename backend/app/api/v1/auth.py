@@ -72,6 +72,8 @@ from app.services.identity import (
 from app.services.inn import inn_is_valid
 from app.services.privacy import contacts_allowed
 from app.services.profile import ingest_from_fsp, rebuild_profile
+from app.services.resumes import extras as resume_extras
+from app.services.resumes import out as resume_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -627,6 +629,7 @@ async def export_my_data(current: dict = Depends(get_any_auth), db: AsyncSession
                 selectinload(AccessLog.employer)))).all())
         payload = participant_record(
             person, skills, category, consents, offers, results, applications, tasks, access)
+        payload["resumes"] = [resume_out(row) for row in await resume_extras(db, person.id)]
         filename = "moi-dannye.json"
     elif role == "employer":
         company = await db.get(Employer, subject)

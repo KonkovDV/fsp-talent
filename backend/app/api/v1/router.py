@@ -19,6 +19,7 @@ from app.api.v1 import (
     notifications,
     offers,
     public,
+    resumes,
     search,
     tasks,
     vacancies,
@@ -57,6 +58,7 @@ api_router.include_router(public.router)
 api_router.include_router(assessment.router)
 api_router.include_router(employer.router)
 api_router.include_router(favorites.router)
+api_router.include_router(resumes.router)
 api_router.include_router(legal.router)
 api_router.include_router(needs.router)
 api_router.include_router(notifications.router)

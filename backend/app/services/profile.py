@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models import Participant, Result, Skill, VerifiableCredential
+from app.models import CandidateResume, Participant, Result, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services.ai.embedder import embed, profile_text
 from app.services.categorization import DISCIPLINE_LABELS, assign_category
@@ -166,7 +166,9 @@ async def rebuild_profile(db: AsyncSession, p: Participant, ranks: list[Registry
         db.add(CategoryAssignment(participant_id=p.id, **cat))
 
     disc_labels = [DISCIPLINE_LABELS[d] for d in by_disc if d in DISCIPLINE_LABELS]
-    skills_text = " ".join(skills + list(by_disc) + disc_labels) or "-"
+    resume_stack = [name for stack in await db.scalars(
+        select(CandidateResume.stack).where(CandidateResume.participant_id == p.id)) for name in (stack or [])]
+    skills_text = " ".join(skills + [s for s in resume_stack if s not in skills] + list(by_disc) + disc_labels) or "-"
     psi = await db.get(ProfileSearchIndex, p.id)
     if psi:
         psi.skills_text, psi.role, psi.grade, psi.region = skills_text, cat["primary_role"], cat["grade"], p.region

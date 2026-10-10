@@ -18,6 +18,7 @@ from app.models.notification import Notification
 from app.models.offer import Offer, OfferMessage
 from app.models.participant import Participant, Qualification, Result, Skill
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
+from app.models.resume import CandidateResume
 from app.models.task import EmployerTask, TaskSubmission
 from app.models.vacancy import Application, Vacancy
 from app.models.vc import VerifiableCredential
@@ -33,6 +34,7 @@ __all__ = [
     "EmailVerification",
     "Employer",
     "EmployerFavorite",
+    "CandidateResume",
     "EmployerTask",
     "GradeConfirmation",
     "GradeDispute",

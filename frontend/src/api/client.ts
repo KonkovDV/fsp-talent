@@ -289,6 +289,17 @@ export const evaluatePairs = (text: string) =>
 export const credentialStatus = (id: string) => api.get(`/public/credentials/${id}/status`)
 export const presentResult = (id: string) => api.post(`/candidates/me/results/${id}/presentation`)
 
+export interface ResumeRow {
+  id: string | null; specialization: string; label: string; grade: string | null
+  stack?: string[]; summary?: string | null; grade_source?: string; primary?: boolean
+}
+export interface ResumesData { primary: ResumeRow | null; extras: ResumeRow[]; extra_max: number }
+export interface ResumeBody { specialization: string; grade: string; stack: string[]; summary: string | null }
+export const listResumes = () => api.get<ResumesData>('/candidates/me/resumes')
+export const addResume = (body: ResumeBody) => api.post<ResumesData>('/candidates/me/resumes', body)
+export const updateResume = (id: string, body: ResumeBody) => api.put<ResumesData>(`/candidates/me/resumes/${id}`, body)
+export const deleteResume = (id: string) => api.delete<ResumesData>(`/candidates/me/resumes/${id}`)
+
 export const listFavorites = () => api.get('/employer/favorites')
 export const setFavorite = (id: string, on: boolean) =>
   on ? api.post(`/employer/favorites/${id}`) : api.delete(`/employer/favorites/${id}`)
