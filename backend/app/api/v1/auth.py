@@ -189,6 +189,13 @@ async def _limit(bucket: str, identity: str, limit: int = 5) -> None:
         raise ApiError(429, "rate_limited", "Слишком много попыток. Подождите минуту.")
 
 
+async def _charge_registration(request: Request, email: str, role: str) -> None:
+    """Per address and per IP. A shared counter is not used: one script must not close the form."""
+    from app.services.identity import visitor_ip
+    await _limit(f"register:{role}", email)
+    await _limit("register-ip", visitor_ip(request), limit=10)
+
+
 def _password_hash(password: str) -> str:
     try:
         return hash_password(password)
@@ -238,11 +245,10 @@ class ParticipantRegister(BaseModel):
 async def register_participant(body: ParticipantRegister, request: Request, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
     reject_reserved(email)
-    await _limit("register:participant", email)
-    await _limit("register-site", "all", limit=30)
     if not body.is_adult and not body.age_15_17:
         raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
     check_required_consents("participant", body.consents)
+    await _charge_registration(request, email, "participant")
     p = await _account(db, "participant", email)
     if p is not None and p.email_verified_at is not None:
         raise ApiError(409, "email_taken")
@@ -277,9 +283,8 @@ class EmployerRegister(BaseModel):
 async def register_employer(body: EmployerRegister, request: Request, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
     reject_reserved(email)
-    await _limit("register:employer", email)
-    await _limit("register-site", "all", limit=30)
     check_required_consents("employer", body.consents)
+    await _charge_registration(request, email, "employer")
     employer = await _account(db, "employer", email)
     if employer is not None and employer.email_verified_at is not None:
         raise ApiError(409, "email_taken")
