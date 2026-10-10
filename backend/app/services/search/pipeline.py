@@ -50,6 +50,7 @@ from app.services.matching import (
     recommended_categories,
     reply_outlook,
     skill_counterfactual,
+    standing_line,
 )
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
@@ -759,7 +760,7 @@ async def _category_percentiles(db, cats: dict) -> dict:
             others = [item for other, item in members if other != pid]
             pct = category_percentile(value, others)
             if pct is not None:
-                out[pid] = f"Лучше {pct} % кандидатов категории {label}"
+                out[pid] = standing_line(pct, label)
     return out
 
 
