@@ -107,3 +107,6 @@ def test_a_code_task_is_checked_and_does_not_ask_for_a_grade():
     )
     checked = check_answer(task, SOLVE, None)
     assert checked.status == "checked" and checked.passed is True
+    assert checked.note == "Пометка системы: открытые примеры 2 из 2, скрытые 3 из 3."
+    wrong = check_answer(task, "def solve(xs):\n    return 0\n", None)
+    assert wrong.passed is False and "скрытые" in (wrong.note or "") and "100" not in (wrong.note or "")

@@ -87,6 +87,11 @@ def test_create_payload_needs_an_audience():
                    deadline=datetime.now(UTC) - timedelta(hours=1))
     ok = TaskCreate(**common, visibility="addressed", candidate_id=uuid.uuid4())
     assert ok.visibility == "addressed"
+    code = {**common, "answer_type": "code"}
+    lab = TaskCreate(**code, reference_number="sum_positive", visibility="public", specialization="backend")
+    assert lab.answer_type == "code" and lab.reference_number == "sum_positive"
+    with pytest.raises(ValidationError):
+        TaskCreate(**code, reference_number="missing", visibility="public", specialization="backend")
 
 
 # --- access -----------------------------------------------------------------------------------------
