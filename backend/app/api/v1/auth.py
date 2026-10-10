@@ -72,6 +72,7 @@ from app.services.identity import (
     send_code,
 )
 from app.services.inn import inn_is_valid
+from app.services.login_lock import next_failure, still_locked
 from app.services.privacy import contacts_allowed
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.resumes import extras as resume_extras
@@ -363,9 +364,18 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
         raise ApiError(401, "invalid_credentials",
                        "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
     account = await _account(db, role, email)
+    now = datetime.now(UTC)
+    if account is not None and still_locked(account.locked_until, now):
+        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после нескольких неверных паролей.")
     stored = account.password_hash if account is not None else None
     if not password_matches(form.password, stored):
+        if account is not None:
+            account.failed_logins, account.locked_until = next_failure(account.failed_logins or 0, now)
+            await db.commit()
         raise ApiError(401, "invalid_credentials")
+    if account is not None and (account.failed_logins or account.locked_until):
+        account.failed_logins = 0
+        account.locked_until = None
     if password_needs_rehash(stored):
         account.password_hash = hash_password(form.password)
     if account.email_verified_at is None:

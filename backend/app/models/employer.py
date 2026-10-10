@@ -15,6 +15,8 @@ class Employer(Base):
     email = Column(Text, nullable=False)
     email_bindex = Column(String(64), unique=True)
     password_hash = Column(String(200), nullable=False)
+    failed_logins = Column(Integer, nullable=False, default=0, server_default="0")
+    locked_until = Column(DateTime(timezone=True))
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
     # Bumped when a refresh token is exchanged. The new refresh carries the new number.
     refresh_nonce = Column(Integer, nullable=False, default=0, server_default="0")

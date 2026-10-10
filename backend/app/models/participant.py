@@ -19,6 +19,8 @@ class Participant(Base):
     email = Column(Text)
     email_bindex = Column(String(64), unique=True)
     password_hash = Column(String(200))
+    failed_logins = Column(Integer, nullable=False, default=0, server_default="0")
+    locked_until = Column(DateTime(timezone=True))
     # Bumped on password reset. Tokens carry the same number and die when it moves.
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")
     # Bumped when a refresh token is exchanged. The new refresh carries the new number.
