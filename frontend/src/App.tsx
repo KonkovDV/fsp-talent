@@ -41,6 +41,7 @@ const FspSignInCallback = page(() => import('./pages/FspSignInCallback'))
 const EvaluatePage = page(() => import('./pages/EvaluatePage'))
 const MethodPage = page(() => import('./pages/MethodPage'))
 const BadgePage = page(() => import('./pages/BadgePage'))
+const PassportPage = page(() => import('./pages/PassportPage'))
 const JuryPage = page(() => import('./pages/JuryPage'))
 
 const CandidateDashboard = page(() => import('./pages/candidate/Dashboard'))
@@ -97,6 +98,7 @@ export default function App() {
         <Route path="/method" element={<MethodPage />} />
         <Route path="/jury" element={<JuryPage />} />
         <Route path="/badge" element={<BadgePage />} />
+        <Route path="/passport/:id" element={<PassportPage />} />
         <Route path="/evaluate" element={<EvaluatePage />} />
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
