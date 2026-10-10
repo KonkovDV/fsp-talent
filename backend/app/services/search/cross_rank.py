@@ -1,14 +1,19 @@
-"""Optional pair score for the query and the skill text.
+"""Optional pair model for the query and the skill text.
 
-Off unless CROSS_ENCODER_MODE=model and CROSS_ENCODER_MODEL names a local model.
-A missing library or a missing weight file leaves the list as it was.
-The match total is not replaced: only the query signal moves, and only then.
+Off unless CROSS_ENCODER_MODE=model and CROSS_ENCODER_MODEL names a local model,
+for example BAAI/bge-reranker-v2-m3. A missing library or a missing weight file
+leaves the list as it was.
+
+When it is on, it reorders the first 50 of the query ranking. Everyone else keeps
+the first-stage order behind that head. Skills, grade, role and the FSP axis
+are not arguments of this map.
 """
 from __future__ import annotations
 
 from app.core.config import settings
 
-PAIR_SHARE = 0.10
+RERANK_HEAD = 50
+_RRF_K = 60
 _loaded: tuple[str, object] | None = None
 
 
@@ -16,14 +21,19 @@ def cross_enabled() -> bool:
     return settings.CROSS_ENCODER_MODE == "model" and bool(settings.CROSS_ENCODER_MODEL.strip())
 
 
-def blend_pair(fused: dict, pair_order: list | None) -> dict:
+def rerank_text(fused: dict, pair_order: list | None) -> dict:
+    """Query order after the pair model. No pair order leaves the map unchanged."""
     if not pair_order:
         return fused
-    ranks = {pid: index for index, pid in enumerate(pair_order)}
-    out = {pid: (1.0 - PAIR_SHARE) * weight for pid, weight in fused.items()}
-    for pid, index in ranks.items():
-        out[pid] = out.get(pid, 0.0) + PAIR_SHARE * (1.0 / (60 + index + 1))
-    return out
+    seen: set = set()
+    head = []
+    for pid in pair_order:
+        if pid in seen:
+            continue
+        seen.add(pid)
+        head.append(pid)
+    tail = sorted((pid for pid in fused if pid not in seen), key=lambda pid: (-fused[pid], str(pid)))
+    return {pid: 1.0 / (_RRF_K + index + 1) for index, pid in enumerate(head + tail)}
 
 
 def scorer():
@@ -42,7 +52,7 @@ def scorer():
 
     def score(pair: tuple[str, str]) -> float:
         try:
-            return float(model.predict([pair])[0])
+            return float(model.predict([(pair[0], pair[1])])[0])
         except Exception:
             return 0.0
 

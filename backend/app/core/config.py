@@ -47,7 +47,8 @@ class Settings(BaseSettings):
     FSP_MODE: str = "mock"   # mock | real
     AI_ENABLED: bool = True
     EMBEDDINGS_MODE: str = "off"   # off | model (sentence-transformers, see [ai] extra)
-    # off | model. A local cross-encoder name is required for model. Empty stays off.
+    # off | model. A local cross-encoder name is required for model, e.g. BAAI/bge-reranker-v2-m3.
+    # Empty stays off: the demo image has no weights, and the published list order stays.
     CROSS_ENCODER_MODE: str = "off"
     CROSS_ENCODER_MODEL: str = ""
     # legacy: a declared grade counts as 0.85 of a confirmed one.
