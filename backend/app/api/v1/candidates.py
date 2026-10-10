@@ -124,7 +124,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
         "display_name": p.display_name, "region": p.region,
         "email": p.email, "email_verified": p.email_verified_at is not None,
-        "telegram": p.telegram, "phone": p.phone,
+        "telegram": p.telegram, "phone": p.phone, "github": p.github,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
         "specialization": p.specialization, "industry": p.industry, "work_goal": p.work_goal,
         "work_formats": list(p.work_formats or []),
@@ -288,6 +288,7 @@ class ProfileUpdate(BaseModel):
     region: str | None = Field(None, max_length=100)
     telegram: str | None = Field(None, max_length=64)
     phone: str | None = Field(None, max_length=20)
+    github: str | None = Field(None, max_length=40)
     public_profile: bool | None = None
     is_visible: bool | None = None
     show_city: bool | None = None
@@ -341,6 +342,12 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     for field in ("telegram", "phone"):
         if field in data:
             setattr(p, field, data[field] or None)
+    if "github" in data:
+        from app.services.code_profile import clean_github
+        try:
+            p.github = clean_github(data["github"])
+        except ValueError as exc:
+            raise ApiError(422, "validation_error", str(exc)) from exc
     if data.get("display_name"):
         p.display_name = data["display_name"].strip()
     if "region" in data and p.fsp_id is None:

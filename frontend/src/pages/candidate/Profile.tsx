@@ -32,6 +32,7 @@ export default function CandidateProfile() {
   const [newSkill, setNewSkill] = useState('')
   const [skills, setSkills] = useState<SkillRow[]>([])
   const [telegram, setTelegram] = useState('')
+  const [github, setGithub] = useState('')
   const [phone, setPhone] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [publicProfile, setPublicProfile] = useState(false)
@@ -46,6 +47,7 @@ export default function CandidateProfile() {
     if (!profile) return
     setSkills(profile.skills ?? [])
     setTelegram(profile.telegram ?? '')
+    setGithub(profile.github ?? '')
     setPhone(profile.phone ?? '')
     setDisplayName(profile.display_name ?? '')
     setPublicProfile(profile.public_profile)
@@ -56,6 +58,7 @@ export default function CandidateProfile() {
       skills,
       resume_tokens: resumeTokens,
       telegram: telegram || null,
+      github: github || null,
       phone: phone || null,
       public_profile: publicProfile,
       ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
@@ -264,6 +267,9 @@ export default function CandidateProfile() {
                 <input id="name" value={displayName} onChange={e => setDisplayName(e.target.value)} className="input" autoComplete="name" /></div>
               <div><label className="field-label" htmlFor="tg">Telegram</label>
                 <input id="tg" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" className="input" /></div>
+              <div><label className="field-label" htmlFor="gh">Публичный код</label>
+                <input id="gh" value={github} onChange={e => setGithub(e.target.value)} placeholder="логин, без ссылки" className="input" />
+                <p className="field-hint">На карточке до согласия только пометка. Сам логин — вместе с контактами.</p></div>
               <div><label className="field-label" htmlFor="phone">Телефон</label>
                 <input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7" className="input" /></div>
             </div>

@@ -17,7 +17,7 @@ interface Offer {
   expires_at: string | null; practice_stage?: string | null; returned_interest?: boolean; candidate: { role: string | null; grade: string | null; grade_source: string | null; label?: string | null } | null
   contacts_revoked_at?: string | null; unread_messages?: number
 }
-interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; region: string | null }
+interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; github?: string | null; region: string | null }
 
 const REASON_RU: Record<string, string> = {
   salary: 'зарплата', format: 'формат', stack: 'стек', not_looking: 'не ищет', other: 'другое',
@@ -125,7 +125,7 @@ export default function EmployerOffers() {
                 <p className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)} <span className="text-xs text-ink-3">до вычета НДФЛ</span></p>
                 <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
                 <p className="text-xs text-ink-3">{date(o.created_at)}{o.contacts_revoked_at ? ' · контакты закрыты кандидатом' : ''}</p>
-                {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</p>}
+                {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}</p>}
                 <div className="flex flex-wrap gap-2">
                   {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
                   {o.status === 'accepted' && <button onClick={() => setMeeting(meeting === o.id ? null : o.id)} aria-expanded={meeting === o.id} className="btn-ghost btn-sm">Собеседование</button>}
@@ -155,7 +155,7 @@ export default function EmployerOffers() {
                   <Fragment key={o.id}>
                   <tr data-offer-id={o.id}>
                     <td>{o.candidate?.role ? <CategoryPlate role={o.candidate.role} grade={o.candidate.grade ?? ''} source={o.candidate.grade_source ?? ''} /> : (o.candidate?.label ?? '—')}
-                      {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</div>}</td>
+                      {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}</div>}</td>
                     <td className="text-ink">{o.role}
                       {o.returned_interest && <p className="text-xs text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
                       {o.practice_stage && (

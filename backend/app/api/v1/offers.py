@@ -323,6 +323,6 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
     return {
         "candidate_id": str(candidate.id), "display_name": candidate.display_name,
         "email": candidate.email, "telegram": candidate.telegram,
-        "phone": candidate.phone, "region": candidate.region,
+        "phone": candidate.phone, "github": candidate.github, "region": candidate.region,
         "contacts_revealed_at": offer.contacts_revealed_at.isoformat(),
     }

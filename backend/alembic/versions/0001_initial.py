@@ -549,6 +549,7 @@ CREATE TABLE public.participants (
     email text,
     email_bindex character varying(64),
     telegram text,
+    github text,
     phone text,
     birth_date date,
     region character varying(100),
