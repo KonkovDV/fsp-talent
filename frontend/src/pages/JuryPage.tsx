@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, FileCheck2, UserRound } from 'lucide-react'
-import { apiError, telegramAchievements, telegramVacancies } from '../api/client'
+import { apiError, categoryRanking, telegramAchievements, telegramVacancies } from '../api/client'
+import { GRADES, ROLE_RU, gradeRu } from '../labels'
 import PublicShell from '../components/PublicShell'
 import { PageHeader } from '../components/ui'
 
@@ -18,6 +19,9 @@ const ROUTE = [
 export default function JuryPage() {
   const [fspId, setFspId] = useState('FSP001')
   const [note, setNote] = useState('')
+  const [rankRole, setRankRole] = useState('backend')
+  const [rankGrade, setRankGrade] = useState('middle')
+  const [ranks, setRanks] = useState<{ place: number; test: number }[] | null>(null)
   const [busy, setBusy] = useState(false)
   const show = async (kind: 'achievements' | 'vacancies') => {
     setBusy(true)
@@ -88,6 +92,27 @@ export default function JuryPage() {
           <button type="button" className="btn-secondary" disabled={busy} onClick={() => { void show('vacancies') }}>Вакансии</button>
         </div>
         {note && <pre className="whitespace-pre-wrap text-sm text-ink-2" role="status">{note}</pre>}
+        <h2 className="font-display text-lg font-bold text-ink">Порядок внутри категории</h2>
+        <p className="text-sm text-ink-2">Места по подтверждающему тесту. Имени и номера аккаунта в списке нет.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm text-ink-2">Специализация
+            <select className="select mt-1" value={rankRole} onChange={e => setRankRole(e.target.value)} aria-label="Специализация для порядка">
+              {Object.entries(ROLE_RU).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-ink-2">Грейд
+            <select className="select mt-1" value={rankGrade} onChange={e => setRankGrade(e.target.value)} aria-label="Грейд для порядка">
+              {GRADES.map(code => <option key={code} value={code}>{gradeRu(code)}</option>)}
+            </select>
+          </label>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={() => {
+            setBusy(true)
+            void categoryRanking(rankRole, rankGrade).then(r => setRanks(r.data.items)).catch(error => setNote(apiError(error, 'Порядок не открылся'))).finally(() => setBusy(false))
+          }}>Показать порядок</button>
+        </div>
+        {ranks && (ranks.length === 0
+          ? <p className="text-sm text-ink-2">В этой категории подтверждённых тестом нет.</p>
+          : <ol className="text-sm text-ink">{ranks.map(row => <li key={row.place}>{row.place}. тест {Math.round(row.test * 100)} %</li>)}</ol>)}
       </section>
 
       <p className="mt-6 text-sm text-ink-2">
