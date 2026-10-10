@@ -1600,10 +1600,66 @@ def _statements(script: str) -> list[str]:
     return parts
 
 
+_INLINE_FK = re.compile(r"^\s*CONSTRAINT (\w+) FOREIGN KEY .*?(?=,?$)", re.M)
+_CREATE_TABLE = re.compile(r"^CREATE TABLE (public\.\w+) \(", re.M)
+
+
+def _defer_inline_foreign_keys(statements: list[str]) -> tuple[list[str], list[str]]:
+    """Move `CONSTRAINT … FOREIGN KEY …` lines out of CREATE TABLE into ALTER TABLE statements."""
+    kept: list[str] = []
+    deferred: list[str] = []
+    for statement in statements:
+        table = _CREATE_TABLE.match(statement.lstrip())
+        if table is None or "FOREIGN KEY" not in statement:
+            kept.append(statement)
+            continue
+        lines = statement.splitlines()
+        body: list[str] = []
+        for line in lines:
+            if _INLINE_FK.match(line):
+                deferred.append(f"ALTER TABLE ONLY {table.group(1)} ADD {line.strip().rstrip(',')}")
+            else:
+                body.append(line)
+        # The column list may now end with a comma before the closing parenthesis.
+        for i in range(len(body) - 1, 0, -1):
+            if body[i].strip().startswith(")"):
+                j = i - 1
+                while j > 0 and not body[j].strip():
+                    j -= 1
+                body[j] = body[j].rstrip().rstrip(",")
+                break
+        kept.append("\n".join(body))
+    return kept, deferred
+
+
+_FIRST = ("CREATE SCHEMA", "CREATE TYPE", "CREATE SEQUENCE", "CREATE DOMAIN")
+
+
+def _dependency_order(statements: list[str]) -> list[str]:
+    """Types and sequences, then every table, then the rest in dump order (keys, indexes, functions, policies).
+
+    The hand-merged dump has tables after policies and functions that read them. A stable partition keeps
+    the relative order inside each group, so nothing else moves.
+    """
+    def group(statement: str) -> int:
+        head = statement.lstrip().upper()
+        if head.startswith(_FIRST):
+            return 0
+        if head.startswith("CREATE TABLE"):
+            return 1
+        return 2
+    return sorted(statements, key=group)
+
+
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-    for statement in _statements(_SCHEMA):
+    statements, foreign_keys = _defer_inline_foreign_keys(_statements(_SCHEMA))
+    for statement in _dependency_order(statements):
+        op.execute(statement)
+    # Inline foreign keys may name a table whose primary key is added later in the dump
+    # (employer_favorites → employers). PostgreSQL refuses that, so they run after every table and key.
+    for statement in foreign_keys:
         op.execute(statement)
     op.execute("REVOKE ALL ON FUNCTION public.app_answer_counts(uuid[]) FROM PUBLIC")
     # CREATE ROLE is rejected inside Alembic's transaction.
