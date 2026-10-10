@@ -164,9 +164,60 @@ async def _shortlist_user(client, token, need_ids, stats, until, rng):
         await asyncio.sleep(rng.uniform(3.0, 3.6))   # under the 30 searches a minute limit
 
 
+def single_winner(codes: list[int]) -> bool:
+    """One request stored the row. The others found it already taken."""
+    return codes.count(200) == 1 and all(code in (200, 409) for code in codes)
+
+
+async def _race_codes(client, token: str, method: str, path: str, body: dict, n: int = 8) -> list[int]:
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async def once():
+        try:
+            response = await client.request(method, path, headers=headers, json=body)
+        except httpx.HTTPError:
+            return 0
+        return response.status_code
+
+    return list(await asyncio.gather(*[once() for _ in range(n)]))
+
+
+async def _races(client) -> None:
+    """Parallel draft saves and one invite answer. Needs a disposable session and offer.
+
+    LOAD_SESSION_ID, LOAD_ITEM_TOKEN, LOAD_DRAFT_VERSION — an unfinished test that can be overwritten.
+    LOAD_OFFER_ID — a pending invite that this run will answer. Demo invites are left alone when unset.
+    """
+    token = await _login(client, "participant", os.environ.get("LOAD_EMAIL", "fsp001@demo.talent"))
+    session_id = os.environ.get("LOAD_SESSION_ID")
+    item_token = os.environ.get("LOAD_ITEM_TOKEN")
+    if session_id and item_token:
+        version = int(os.environ.get("LOAD_DRAFT_VERSION", "0"))
+        codes = await _race_codes(client, token, "PUT", f"/assessment/{session_id}/draft", {
+            "item_token": item_token, "version": version, "answer_index": 0,
+        })
+        print("Черновик:", codes)
+        if not single_winner(codes):
+            raise SystemExit("Гонка черновика оставила не одного победителя")
+    else:
+        print("Гонка черновика пропущена: задайте LOAD_SESSION_ID и LOAD_ITEM_TOKEN.")
+    offer_id = os.environ.get("LOAD_OFFER_ID")
+    if offer_id:
+        codes = await _race_codes(client, token, "POST", f"/candidates/me/offers/{offer_id}/respond",
+                                  {"action": "accept", "reason": None}, n=2)
+        print("Приглашение:", codes)
+        if not single_winner(codes):
+            raise SystemExit("Гонка ответа на приглашение оставила не одного победителя")
+    else:
+        print("Гонка приглашения пропущена: задайте LOAD_OFFER_ID с одноразовым приглашением.")
+
+
 async def main(users: int, seconds: int, scenario: str, reuse: bool, note: str) -> None:
     limits = httpx.Limits(max_connections=max(users, 40) * 2, max_keepalive_connections=max(users, 40) * 2)
     async with httpx.AsyncClient(base_url=BASE, timeout=60, limits=limits) as client:
+        if scenario == "races":
+            await _races(client)
+            return
         if scenario == "shortlist":
             tokens_e = []
             for i in range(20):
@@ -220,7 +271,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--users", type=int, default=int(os.environ.get("LOAD_USERS", 40)))
     parser.add_argument("--seconds", type=int, default=60)
-    parser.add_argument("--scenario", choices=("mixed", "shortlist"), default="mixed")
+    parser.add_argument("--scenario", choices=("mixed", "shortlist", "races"), default="mixed")
     parser.add_argument("--reuse", action="store_true")
     parser.add_argument("--note", default="")
     args = parser.parse_args()
