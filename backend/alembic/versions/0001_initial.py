@@ -187,6 +187,7 @@ CREATE TABLE public.employers (
     email text NOT NULL,
     email_bindex character varying(64),
     password_hash character varying(200) NOT NULL,
+    hiring_practice jsonb,
     failed_logins integer DEFAULT 0 NOT NULL,
     locked_until timestamp with time zone,
     inn character varying(12),

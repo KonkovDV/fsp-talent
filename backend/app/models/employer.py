@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -15,6 +15,8 @@ class Employer(Base):
     email = Column(Text, nullable=False)
     email_bindex = Column(String(64), unique=True)
     password_hash = Column(String(200), nullable=False)
+    # Yes/no hiring practice. The derived gate is not part of the profile the company reads.
+    hiring_practice = Column(JSONB)
     failed_logins = Column(Integer, nullable=False, default=0, server_default="0")
     locked_until = Column(DateTime(timezone=True))
     token_epoch = Column(Integer, nullable=False, default=0, server_default="0")

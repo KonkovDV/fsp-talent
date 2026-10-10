@@ -16,6 +16,7 @@ from app.api.deps import get_current_employer
 from app.core.database import get_db
 from app.models.employer import Employer
 from app.services.ats_sandbox import receipt
+from app.services.hiring_practice import clean_answers
 from app.services.inn import inn_is_valid, published_inn
 from app.services.reputation import for_employer
 from app.services.trust_level import LABELS, trust_level
@@ -62,6 +63,25 @@ async def get_me(
         inn_checked=published_inn(emp.inn),
         trust_level=trust_level(emp), trust_label=LABELS[trust_level(emp)],
     )
+
+
+class HiringPracticeIn(BaseModel):
+    feedback: bool = False
+    platform_interview: bool = False
+    task_review: bool = False
+    salary_written: bool = False
+
+
+@router.post("/me/hiring-practice")
+async def save_hiring_practice(body: HiringPracticeIn, current: dict = Depends(get_current_employer),
+                               db: AsyncSession = Depends(get_db)):
+    """Store the answers. The response has no level and no count."""
+    emp = await db.get(Employer, uuid.UUID(current["sub"]))
+    if emp is None:
+        raise HTTPException(404, "Работодатель не найден")
+    emp.hiring_practice = clean_answers(body.model_dump())
+    await db.commit()
+    return {"saved": True}
 
 
 @router.patch("/me", response_model=EmployerProfileOut)

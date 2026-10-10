@@ -71,6 +71,7 @@
 /api/v1/employer/integrations/{endpoint_id}
 /api/v1/employer/integrations/{endpoint_id}/rotate
 /api/v1/employer/me
+/api/v1/employer/me/hiring-practice
 /api/v1/employer/reputation
 /api/v1/fsp-id-demo/login
 /api/v1/guide/ask

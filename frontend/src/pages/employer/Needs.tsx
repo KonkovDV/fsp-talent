@@ -308,7 +308,7 @@ export default function EmployerNeeds() {
                 <div className="mt-5 space-y-4">
                   <p className="text-sm text-ink-3">Балл расставляет карточки и никого из них не выбрасывает. Приглашение отправляет человек.</p>
                   {matches.data?.base_total != null && (
-                    <p className="text-sm text-ink-2">По условиям этой потребности {matches.data.total ?? 0} из {matches.data.base_total} в банке.</p>
+                    <p className="text-sm text-ink-2">По условиям этой потребности {matches.data.total ?? 0} из {matches.data.base_total} в банке.{(matches.data.platform_held ?? 0) > 0 ? ` Площадка не показала ${matches.data.platform_held}. Уровень компании здесь не пишется.` : ''}</p>
                   )}
                   {matches.data?.pay_hint?.gained > 0 && (
                     <p className="text-sm text-ink-2">

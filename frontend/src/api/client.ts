@@ -289,6 +289,9 @@ export const getEmployerMe = () => api.get('/employer/me')
 export const getReputation = () => api.get('/employer/reputation')
 export const atsSandbox = () => api.post('/employer/ats-sandbox')
 export const updateEmployerMe = (data: object) => api.patch('/employer/me', data)
+export const saveHiringPractice = (body: {
+  feedback: boolean; platform_interview: boolean; task_review: boolean; salary_written: boolean
+}) => api.post('/employer/me/hiring-practice', body)
 export const getMyVacancies = () => api.get('/vacancies/mine', { params: { limit: 50 } })
 export const updateVacancy = (id: string, data: object) => api.put(`/vacancies/${id}`, data)
 export const updateApplicationStatus = (id: string, status: string) =>
