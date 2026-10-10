@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { apiError, itemPsychometrics, previewPublicExam } from '../api/client'
+import { apiError, itemPsychometrics, methodWeights, previewPublicExam } from '../api/client'
 import ExamPreview, { type Exam } from '../components/ExamPreview'
 import PublicShell from '../components/PublicShell'
 import { PageHeader, Skeleton } from '../components/ui'
@@ -111,6 +111,11 @@ export default function MethodPage() {
   const demo = useMutation({
     mutationFn: () => previewPublicExam({ description: vacancy, role: spec, grade: 'middle' }).then(r => r.data as Exam),
   })
+  const weights = useQuery({
+    queryKey: ['methodWeights'],
+    queryFn: () => methodWeights().then(r => r.data),
+    retry: false,
+  })
   const { data, isLoading, isError } = useQuery<Report>({
     queryKey: ['psychometrics', spec],
     queryFn: () => itemPsychometrics(spec).then(r => r.data),
@@ -126,6 +131,16 @@ export default function MethodPage() {
           </select>
         }
       />
+      {weights.data && (
+        <section className="card mb-6 p-5">
+          <h2 className="font-display text-lg font-bold text-ink">Веса балла на этом стенде</h2>
+          <p className="mt-1 text-sm text-ink-2">{weights.data.note} Вне демо этот блок скрыт. Грейд этими весами не ставится.</p>
+          <ul className="mt-3 text-sm text-ink">
+            {weights.data.fit.map(item => <li key={item.key}>{item.label}: {item.weight}</li>)}
+          </ul>
+          <p className="mt-2 text-sm text-ink-2">Рядом с соответствием свидетельство с весом {weights.data.evidence_weight}: {weights.data.evidence.map(item => `${item.label} ${item.weight}`).join(', ')}.</p>
+        </section>
+      )}
       {isLoading && <Skeleton className="h-64" />}
       {isError && <p className="text-sm text-ink-2">Сводка банка сейчас недоступна.</p>}
       {data && (

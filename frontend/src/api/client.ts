@@ -342,6 +342,12 @@ export const answerPractice = (id: string, body: { answer_index?: number; answer
 export const myApplications = () => api.get('/vacancies/my-applications')
 export const itemHealth = () => api.get('/public/assessment/items')
 export const itemPsychometrics = (spec: string) => api.get('/public/assessment/psychometrics', { params: { spec } })
+export const methodWeights = () => api.get<{
+  fit: { key: string; label: string; weight: number }[]
+  evidence: { key: string; label: string; weight: number }[]
+  evidence_weight: number
+  note: string
+}>('/public/method/weights')
 
 export const surveyOptions = () => api.get('/candidates/survey-options')
 export const saveSurvey = (data: {
