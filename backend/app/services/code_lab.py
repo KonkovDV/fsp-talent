@@ -138,15 +138,29 @@ _PROBLEMS: dict[str, dict[str, Any]] = {
 }
 
 
+# Expected values come from the Python functions above, so every language is checked against the same answer.
+LANGUAGES = {"python": "Python", "javascript": "JavaScript"}
+
+
 def problem_ids() -> list[str]:
     return list(_PROBLEMS)
 
 
-def problem_public(problem_id: str) -> dict[str, str] | None:
+def problem_public(problem_id: str) -> dict[str, Any] | None:
     row = _PROBLEMS.get(problem_id)
     if row is None:
         return None
-    return {"id": problem_id, "title": row["title"], "statement": row["statement"]}
+    return {"id": problem_id, "title": row["title"], "statement": row["statement"], "languages": list(LANGUAGES)}
+
+
+def js_guard(source: str) -> None:
+    """A clear message for the candidate. Isolation is the sandbox container, not this check."""
+    if len(source.encode("utf-8")) > CODE_LIMIT:
+        raise LabError("Код длиннее 16 КиБ")
+    from app.services.code_mark import source_language
+
+    if source_language(source) != "javascript":
+        raise LabError("Нужна функция solve: function solve(...) { ... }")
 
 
 # Network calls the practice process must not make. Numbers are the Linux syscall table.
@@ -269,7 +283,7 @@ def _run_cases(source: str, cases: list[list[Any]]) -> tuple[list[int | None], b
     return out, False
 
 
-def run_problem(problem_id: str, source: str) -> dict[str, Any]:
+def run_problem(problem_id: str, source: str, language: str = "python") -> dict[str, Any]:
     """Check public and hidden cases. Hidden expected numbers are not in the result.
 
     SandboxUnavailable passes through: the caller stores nothing and answers 503.
@@ -279,10 +293,15 @@ def run_problem(problem_id: str, source: str) -> dict[str, Any]:
     row = _PROBLEMS.get(problem_id)
     if row is None:
         raise LabError("Такого задания в лаборатории нет")
-    guard(source)
+    if language not in LANGUAGES:
+        raise LabError("Этот язык в лаборатории недоступен")
+    if language == "python":
+        guard(source)
+    else:
+        js_guard(source)
     public_cases = [list(args) for args, _fn in row["public"]]
     hidden_cases = [list(args) for args, _fn in row["hidden"]]
-    run = get_runner().run("python", source, public_cases + hidden_cases)
+    run = get_runner().run(language, source, public_cases + hidden_cases)
     got, timed_out = run.outputs, run.timed_out
     if len(got) != len(public_cases) + len(hidden_cases):
         got = [None] * (len(public_cases) + len(hidden_cases))

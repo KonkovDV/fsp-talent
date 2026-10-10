@@ -115,6 +115,23 @@ def test_a_code_task_is_checked_and_does_not_ask_for_a_grade(monkeypatch):
     from app.services.sandbox.local import LocalRunner
     with pytest.raises(SandboxUnavailable):
         LocalRunner().run("javascript", "function solve(xs) { return 0 }", [[[]]])
+    js = "function solve(xs) { return xs.filter(x => x > 0).reduce((a, b) => a + b, 0) }"
+    with pytest.raises(SandboxUnavailable):
+        check_answer(task, js, None, "javascript")
+    with pytest.raises(ValueError):
+        check_answer(task, "def solve(xs):\n    return 0\n", None, "javascript")
+    with pytest.raises(ValueError):
+        check_answer(task, js, None, "ruby")
+
+    class Echo:
+        def run(self, language, source, cases):
+            from app.services.sandbox import RunResult
+            assert language == "javascript" and source == js
+            return RunResult([sum(x for x in c[0] if x > 0) for c in cases])
+
+    monkeypatch.setattr("app.services.sandbox.get_runner", lambda: Echo())
+    assert check_answer(task, js, None, "javascript").passed is True
+    monkeypatch.undo()
     monkeypatch.setattr(settings, "SANDBOX_REQUIRED", True)
     with pytest.raises(SandboxUnavailable):
         check_answer(task, SOLVE, None)

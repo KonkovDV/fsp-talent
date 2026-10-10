@@ -60,7 +60,8 @@ def case_note(outcome: dict) -> str:
             f"скрытые {outcome.get('hidden_passed', 0)} из {outcome.get('hidden_total', 0)}.")
 
 
-def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int | None) -> Checked:
+def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int | None,
+                 language: str = "python") -> Checked:
     """Number and choice are checked against the reference now; an open answer waits for the employer.
 
     ValueError means the answer does not fit the task type (the API turns it into 422).
@@ -80,7 +81,7 @@ def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int 
         if not text or len(text) > MAX_CODE:
             raise ValueError("answer")
         try:
-            outcome = run_problem(task.reference_number or "", text)
+            outcome = run_problem(task.reference_number or "", text, language)
         except LabError as exc:
             raise ValueError(str(exc)) from exc
         return Checked("checked", bool(outcome["passed"]), text, None,
@@ -133,6 +134,8 @@ def candidate_view(task: EmployerTask, company: str | None, mine: TaskSubmission
         "accepts_answers": accepts_answers(task, now) and mine is None,
         "submission": submission_view(mine) if mine else None,
         "practice_only": task.answer_type == "code",
+        "languages": (problem_public(task.reference_number or "") or {}).get("languages", [])
+        if task.answer_type == "code" else [],
     }
     if mine is not None and mine.status == "checked":
         out["reference"] = (task.reference_number if task.answer_type == "number"

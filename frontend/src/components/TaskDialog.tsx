@@ -165,7 +165,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
                 {problems.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
               </select>
               <p className="field-hint">{problems.find(p => p.id === form.lab_id)?.statement}</p>
-              <p className="field-hint">Скрытые примеры кандидату не показываются. Грейд и подбор не меняются.</p>
+              <p className="field-hint">Кандидат пишет на Python или JavaScript. Скрытые примеры ему не показываются. Грейд и подбор не меняются.</p>
             </div>
           )}
           {form.answer_type === 'choice' && (

@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, answerTask, tasksForMe, type CandidateTask } from '../../api/client'
+import { apiError, answerTask, tasksForMe, type CandidateTask, type CodeLanguage } from '../../api/client'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 
 const CHECK: Record<string, string> = {
   number: 'Ответ — целое число. Проверит система сразу.',
   choice: 'Один вариант из списка. Проверит система сразу.',
   open: 'Решение или подход к решению, до 4000 знаков. Проверит работодатель.',
-  code: 'Функция solve. Скрытые проверки. Грейд и подбор не меняются.',
+  code: 'Функция solve на Python или JavaScript. Скрытые проверки. Грейд и подбор не меняются.',
+}
+
+const LANG: Record<CodeLanguage, { label: string; template: string }> = {
+  python: { label: 'Python', template: 'def solve(xs):\n    return 0' },
+  javascript: { label: 'JavaScript', template: 'function solve(xs) {\n  return 0\n}' },
 }
 
 export function TaskResult({ task }: { task: CandidateTask }) {
@@ -22,9 +27,12 @@ function AnswerForm({ task }: { task: CandidateTask }) {
   const qc = useQueryClient()
   const [text, setText] = useState('')
   const [choice, setChoice] = useState<number | null>(null)
+  const languages = task.languages?.length ? task.languages : (['python'] as CodeLanguage[])
+  const [language, setLanguage] = useState<CodeLanguage>(languages[0])
   const [error, setError] = useState('')
   const send = useMutation({
-    mutationFn: () => answerTask(task.id, task.answer_type === 'choice' ? { answer_index: choice ?? -1 } : { answer_text: text }),
+    mutationFn: () => answerTask(task.id, task.answer_type === 'choice' ? { answer_index: choice ?? -1 }
+      : task.answer_type === 'code' ? { answer_text: text, language } : { answer_text: text }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasksForMe'] }); qc.invalidateQueries({ queryKey: ['myProfile'] }) },
     onError: e => setError(apiError(e, 'Ответ не отправлен')),
   })
@@ -49,10 +57,18 @@ function AnswerForm({ task }: { task: CandidateTask }) {
         </fieldset>
       )}
       {task.answer_type === 'code' && (
-        <div><label className="field-label" htmlFor={id}>Функция solve</label>
-          <textarea id={id} value={text} onChange={e => setText(e.target.value)} rows={8} maxLength={16384}
-            className="input resize-y font-mono text-[13px]" placeholder={'def solve(xs):\n    return 0'} />
-          <p className="field-hint">Результат практики. Грейд не меняется.</p></div>
+        <div className="space-y-3">
+          {languages.length > 1 && (
+            <div><label className="field-label" htmlFor={`${id}-lang`}>Язык</label>
+              <select id={`${id}-lang`} value={language} onChange={e => setLanguage(e.target.value as CodeLanguage)} className="select w-48">
+                {languages.map(l => <option key={l} value={l}>{LANG[l].label}</option>)}
+              </select></div>
+          )}
+          <div><label className="field-label" htmlFor={id}>Функция solve</label>
+            <textarea id={id} value={text} onChange={e => setText(e.target.value)} rows={8} maxLength={16384}
+              className="input resize-y font-mono text-[13px]" placeholder={LANG[language].template} />
+            <p className="field-hint">Решение запускается в изолированной среде без сети. Результат практики, грейд не меняется.</p></div>
+        </div>
       )}
       {task.answer_type === 'open' && (
         <div><label className="field-label" htmlFor={id}>Решение или подход к решению</label>

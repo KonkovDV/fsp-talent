@@ -310,7 +310,9 @@ export interface CandidateTask {
   id: string; title: string; statement: string; answer_type: TaskAnswerType; options: { index: number; text: string }[]
   company: string | null; addressed: boolean; vacancy_id: string | null; deadline: string | null; created_at: string | null
   accepts_answers: boolean; submission: TaskSubmission | null; reference?: string | null
+  languages?: CodeLanguage[]
 }
+export type CodeLanguage = 'python' | 'javascript'
 export interface EmployerTask {
   id: string; title: string; statement: string; answer_type: TaskAnswerType; options: string[]; correct_index: number | null
   reference_number: string | null; visibility: 'public' | 'addressed'; specialization: string | null
@@ -319,7 +321,8 @@ export interface EmployerTask {
   submissions: number; passed: number; awaiting_review: number
 }
 export type ReviewedSubmission = TaskSubmission & { candidate_id: string; candidate: string }
-export const labProblems = () => api.get<{ id: string; title: string; statement: string }[]>('/tasks/lab')
+export const labProblems = () =>
+  api.get<{ id: string; title: string; statement: string; languages: CodeLanguage[] }[]>('/tasks/lab')
 export const createTask = (data: object) => api.post<EmployerTask>('/tasks/', data)
 export const myTasks = () => api.get<EmployerTask[]>('/tasks/mine')
 export const taskSubmissions = (id: string) =>
@@ -328,7 +331,7 @@ export const closeTask = (id: string) => api.post(`/tasks/${id}/close`)
 export const reviewSubmission = (id: string, passed: boolean, comment: string) =>
   api.post(`/tasks/submissions/${id}/review`, { passed, comment: comment || null })
 export const tasksForMe = () => api.get<CandidateTask[]>('/tasks/for-me')
-export const answerTask = (id: string, body: { answer_text?: string; answer_index?: number }) =>
+export const answerTask = (id: string, body: { answer_text?: string; answer_index?: number; language?: CodeLanguage }) =>
   api.post<CandidateTask>(`/tasks/${id}/answer`, body)
 
 // Contacts closed for one company, and messages after an accepted invitation.
