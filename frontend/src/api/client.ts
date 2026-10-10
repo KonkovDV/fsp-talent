@@ -68,6 +68,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+function readCookie(name: string): string | undefined {
+  if (typeof document === 'undefined') return undefined
+  const prefix = `${name}=`
+  const found = document.cookie.split('; ').find(part => part.startsWith(prefix))
+  return found ? decodeURIComponent(found.slice(prefix.length)) : undefined
+}
+
+function csrfHeader(): Record<string, string> {
+  const token = readCookie('fsp_csrf')
+  return token ? { 'X-CSRF-Token': token } : {}
+}
+
 let inflight: Promise<string | null> | null = null
 let renewTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -88,7 +100,7 @@ export function renewAccess(): Promise<string | null> {
       await useAuthStore.persist.rehydrate()
       const now = useAuthStore.getState().token
       if (now && now !== before && !isTokenExpired(now)) return now
-      const response = await api.post('/auth/refresh', {})
+      const response = await api.post('/auth/refresh', {}, { headers: csrfHeader() })
       const token = response.data?.access_token as string | undefined
       const role = useAuthStore.getState().userRole
       if (token && role) {
@@ -165,7 +177,7 @@ api.interceptors.response.use(
 )
 
 export async function signOut() {
-  try { await api.post('/auth/logout') } catch { /* the cookie may already be gone */ }
+  try { await api.post('/auth/logout', {}, { headers: csrfHeader() }) } catch { /* the cookie may already be gone */ }
   useAuthStore.getState().logout()
 }
 

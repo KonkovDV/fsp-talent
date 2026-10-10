@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_any_auth
 from app.api.errors import ApiError
 from app.core.config import settings
+from app.core.csrf import CSRF_COOKIE, attach_csrf, check_csrf, clear_csrf
 from app.core.database import get_db
 from app.core.demo_guard import is_protected, reject_protected
 from app.core.ratelimit import RateLimitUnavailable, too_many
@@ -33,6 +34,7 @@ from app.core.security import (
     hash_password,
     next_refresh_nonce,
     password_matches,
+    password_needs_rehash,
     verify_password,
 )
 from app.models import (
@@ -162,6 +164,7 @@ def browser_tokens(tokens: TokenOut) -> TokenOut:
 
 def deliver(response: Response, tokens: TokenOut) -> TokenOut:
     attach_refresh(response, tokens.refresh_token)
+    attach_csrf(response)
     return browser_tokens(tokens)
 
 
@@ -363,6 +366,8 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
     stored = account.password_hash if account is not None else None
     if not password_matches(form.password, stored):
         raise ApiError(401, "invalid_credentials")
+    if password_needs_rehash(stored):
+        account.password_hash = hash_password(form.password)
     if account.email_verified_at is None:
         raise ApiError(403, "email_not_verified", details={"email": email, "role": role})
     if role == "participant":
@@ -522,7 +527,10 @@ async def remember_refresh(role: str, subject: str) -> None:
 async def refresh(response: Response, request: Request, body: RefreshIn | None = None,
                   db: AsyncSession = Depends(get_db)):
     """Обновить access-токен. Браузер присылает HttpOnly-cookie, клиент API — тело запроса."""
-    raw = presented_refresh(None if body is None else body.refresh_token, request.cookies.get(REFRESH_COOKIE))
+    body_token = None if body is None else body.refresh_token
+    raw = presented_refresh(body_token, request.cookies.get(REFRESH_COOKIE))
+    if raw and not (body_token or "").strip():
+        check_csrf(request.cookies.get(CSRF_COOKIE), request.headers.get("x-csrf-token"))
     if not raw:
         raise ApiError(401, "unauthorized")
     try:
@@ -569,6 +577,7 @@ async def logout(response: Response, request: Request, db: AsyncSession = Depend
     """
     raw = presented_refresh(None, request.cookies.get(REFRESH_COOKIE))
     if raw:
+        check_csrf(request.cookies.get(CSRF_COOKIE), request.headers.get("x-csrf-token"))
         try:
             payload = decode_refresh_token(raw)
         except ValueError:
@@ -588,6 +597,7 @@ async def logout(response: Response, request: Request, db: AsyncSession = Depend
                 account.refresh_nonce = int(account.refresh_nonce or 0) + 1
                 await db.commit()
     clear_refresh(response)
+    clear_csrf(response)
     return {"status": "signed_out"}
 
 
