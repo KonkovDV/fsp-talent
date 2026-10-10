@@ -174,6 +174,25 @@ export default function CandidateProfile() {
         </div>
       </section>
 
+      <section className="card mb-6" aria-labelledby="soft-h">
+        <h2 id="soft-h" className="section-title">Мягкие навыки</h2>
+        <p className="mt-1 text-sm text-ink-2">Печатаются на карточке. В балл подбора не входят.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {['Коммуникация', 'Командная работа', 'Наставничество', 'Лидерство', 'Публичные выступления'].map(name => {
+            const on = (profile.soft_skills ?? []).includes(name)
+            return (
+              <button key={name} type="button" aria-pressed={on} className={on ? 'chip-active' : 'chip-default'}
+                onClick={() => {
+                  const next = on ? (profile.soft_skills ?? []).filter((item: string) => item !== name) : [...(profile.soft_skills ?? []), name]
+                  updateMyProfile({ soft_skills: next, ...(profile.profile_version != null ? { expected_version: profile.profile_version } : {}) })
+                    .then(() => qc.invalidateQueries({ queryKey: ['myProfile'] }))
+                    .catch((error: unknown) => setNote(apiError(error)))
+                }}>{name}</button>
+            )
+          })}
+        </div>
+      </section>
+
       <div className="grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">
         <div className="space-y-6">
           <section className="card space-y-5" aria-labelledby="skills-h">

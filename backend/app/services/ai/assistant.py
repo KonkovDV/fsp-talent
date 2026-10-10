@@ -12,6 +12,7 @@ import re
 
 from app.services.categorization import GRADES
 from app.services.skills import ROLES, extract_skills, is_grounded, normalize_skill
+from app.services.soft_skills import ITEMS as _SOFT_SKILLS
 
 logger = logging.getLogger(__name__)
 
@@ -99,13 +100,6 @@ _NAME_STOP = {
     "python", "java", "javascript", "backend", "frontend", "fullstack", "devops", "mobile",
     "senior", "junior", "middle", "lead", "intern", "москва", "петербург", "санкт", "россия",
 }
-_SOFT_SKILLS = (
-    ("Коммуникация", ("коммуникац", "коммуникабельн")),
-    ("Командная работа", ("командн", "в команде")),
-    ("Наставничество", ("наставни", "ментор")),
-    ("Лидерство", ("лидерств",)),
-    ("Публичные выступления", ("презентац", "выступлен")),
-)
 
 
 def _quoted(text: str, match: re.Match[str]) -> dict:
