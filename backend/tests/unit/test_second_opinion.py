@@ -100,6 +100,11 @@ class _Redis:
         self.data[key] = value
 
 
+class _Db:
+    async def get(self, *_args, **_kwargs):
+        return None
+
+
 def _wire(monkeypatch, *, provider=True, items=(CARD,), limited=False):
     need = SimpleNamespace(id=uuid.uuid4(), version=1, employer_id=uuid.uuid4())
     redis, calls = _Redis(), []
@@ -113,7 +118,7 @@ def _wire(monkeypatch, *, provider=True, items=(CARD,), limited=False):
     async def matches(db, n, p, limit, offset):
         return {"items": [dict(c) for c in items]}
 
-    async def hydrate(db, page):
+    async def hydrate(db, page, **_extra):
         return page
 
     async def refresh(db=None):
@@ -141,8 +146,8 @@ def _wire(monkeypatch, *, provider=True, items=(CARD,), limited=False):
 async def test_endpoint_caches_the_note(monkeypatch):
     calls = _wire(monkeypatch)
     current = {"sub": str(uuid.uuid4())}
-    first = await needs.ai_note(uuid.uuid4(), _cid(), current, None)
-    second = await needs.ai_note(uuid.uuid4(), _cid(), current, None)
+    first = await needs.ai_note(uuid.uuid4(), _cid(), current, _Db())
+    second = await needs.ai_note(uuid.uuid4(), _cid(), current, _Db())
     assert first["cached"] is False and second["cached"] is True
     assert calls == [str(_cid())]
 
@@ -155,5 +160,5 @@ def _cid():
 async def test_endpoint_refuses(monkeypatch, kw, status):
     _wire(monkeypatch, **kw)
     with pytest.raises(ApiError) as e:
-        await needs.ai_note(uuid.uuid4(), _cid(), {"sub": "e1"}, None)
+        await needs.ai_note(uuid.uuid4(), _cid(), {"sub": "e1"}, _Db())
     assert e.value.status_code == status

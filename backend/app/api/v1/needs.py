@@ -325,7 +325,7 @@ async def _company_offers(db: AsyncSession, employer_id: uuid.UUID, ids: list[uu
     return found
 
 
-async def _hydrate(db: AsyncSession, page: dict) -> dict:
+async def _hydrate(db: AsyncSession, page: dict, *, full_card: bool = True) -> dict:
     """Turn a cached ranking into cards for this page only."""
     items = page.get("items") or []
     if not items or "have" not in items[0]:
@@ -342,7 +342,9 @@ async def _hydrate(db: AsyncSession, page: dict) -> dict:
         have[pid] = set(item.get("have") or [])
         if item.get("scored_role"):
             scored[pid] = (item.get("scored_role"), item.get("scored_grade"), item.get("scored_source"))
-    cards = await _build_cards(db, ordered, set(page.get("query_skills") or []), have, set(), None, None, scored)
+    cards = await _build_cards(
+        db, ordered, set(page.get("query_skills") or []), have, set(), None, None, scored,
+        full_card=full_card)
     by_id = {card["candidate_id"]: card for card in cards}
     merged = []
     for item in items:
@@ -350,6 +352,9 @@ async def _hydrate(db: AsyncSession, page: dict) -> dict:
         if card is None:
             continue
         card["match"] = item.get("match")
+        if not full_card and isinstance(card["match"], dict):
+            card["match"]["info"] = [line for line in (card["match"].get("info") or [])
+                                     if "признаков роста" not in line]
         card["skill_evidence"] = item.get("skill_evidence") or {}
         merged.append(card)
     page["items"] = merged
@@ -377,7 +382,10 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
     hidden = {str(pid) for pid in await db.scalars(
         select(NeedHidden.participant_id).where(NeedHidden.need_id == need.id))}
     page_items, total = visible_page(ranked.get("items") or [], hidden, offset, limit, show=show_hidden)
-    result = await _hydrate(db, {**ranked, "items": page_items, "total": total})
+    company = await db.get(Employer, need.employer_id)
+    result = await _hydrate(
+        db, {**ranked, "items": page_items, "total": total},
+        full_card=sees_senior(company.hiring_practice if company is not None else None))
     listed = {str(pid) for pid in await db.scalars(
         select(NeedShortlist.participant_id).where(NeedShortlist.need_id == need.id))}
     ids = []
@@ -474,7 +482,10 @@ async def ai_note(need_id: uuid.UUID, candidate_id: uuid.UUID,
     if await providers.refresh(db) is None:
         raise ApiError(503, "unavailable", "ИИ-помощник не подключён")
     p = NeedParams(**(await _params(db, need)).params)
-    page = await _hydrate(db, await _matches_cached(db, need, p, 50, 0))
+    company = await db.get(Employer, need.employer_id)
+    page = await _hydrate(
+        db, await _matches_cached(db, need, p, 50, 0),
+        full_card=sees_senior(company.hiring_practice if company is not None else None))
     card = next((c for c in page["items"] if c.get("candidate_id") == str(candidate_id)), None)
     if card is None:
         raise ApiError(404, "not_found", "Кандидата нет в подборке по этой потребности")
