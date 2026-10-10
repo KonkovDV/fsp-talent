@@ -11,6 +11,7 @@ vi.mock('../../api/client', () => ({
   tasksForMe: () => Promise.resolve({ data: [] }),
   getMySalaryMarket: () => Promise.resolve({ data: { role: 'backend', grade: 'middle', cell: null, band: null } }),
   getMyGrowth: () => Promise.resolve({ data: { role: 'backend', grade: 'middle', next_grade: null, people: null, gaps: [], next_market: null } }),
+  myCareer: () => Promise.resolve({ data: { skill: 'PostgreSQL', gained: 2, vacancies: 4 } }),
   getMyProfile: () => Promise.resolve({
     data: {
       display_name: 'Аня Тестова', email_verified: true, survey_done: true, grade_source: 'declared',

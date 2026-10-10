@@ -37,6 +37,7 @@
 /api/v1/candidates/me
 /api/v1/candidates/me/blocks
 /api/v1/candidates/me/blocks/{employer_id}
+/api/v1/candidates/me/career
 /api/v1/candidates/me/complaints
 /api/v1/candidates/me/credentials/{credential_id}/revoke
 /api/v1/candidates/me/exclusions

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CalendarClock, Check, Circle, ClipboardList } from 'lucide-react'
-import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, tasksForMe, weeklyTask } from '../../api/client'
+import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, myCareer, tasksForMe, weeklyTask } from '../../api/client'
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
@@ -29,6 +29,7 @@ export default function CandidateDashboard() {
   const profile = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data) })
   const offersQ = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const { data: weekly } = useQuery<Weekly | null>({ queryKey: ['weeklyTask'], queryFn: () => weeklyTask().then(r => r.data) })
+  const career = useQuery({ queryKey: ['myCareer'], queryFn: () => myCareer().then(r => r.data) })
   const { data: tasks = [], isError: tasksError, error: tasksLoadError } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
   const market = useQuery<SalaryMarket>({ queryKey: ['salaryMarket'], queryFn: () => getMySalaryMarket().then(r => r.data) })
   const growth = useQuery<Growth>({ queryKey: ['growth'], queryFn: () => getMyGrowth().then(r => r.data) })
@@ -110,6 +111,9 @@ export default function CandidateDashboard() {
               </li>
             ))}
           </ul>
+          {(career.data?.gained ?? 0) > 0 && (
+            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, закроется ещё {career.data?.gained} открытых вакансий. Грейд от этого сам не вырастет.</p>
+          )}
           <p className="mt-4 text-xs text-ink-3">
             {p.has_fsp ? 'ФСП ID привязан.' : 'ФСП ID не привязан: на заполненность это не влияет.'}
             {' '}{p.discoverable ? 'Карточка видна работодателям.' : 'Карточка скрыта из поиска.'}

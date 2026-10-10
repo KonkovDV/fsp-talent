@@ -168,6 +168,31 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
     }
 
 
+@router.get("/me/career")
+async def my_career(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """One confirmed skill that would close the most open vacancies. The grade does not move."""
+    from app.models import Employer
+    from app.services.career_gap import career_gap
+    from app.services.skills import extract_skills, normalize_skill
+
+    pid = _pid(current)
+    have = {name for name in await db.scalars(select(Skill.name).where(
+        Skill.participant_id == pid, Skill.confirmed.is_(True)))}
+    found = (await db.execute(
+        select(Vacancy).join(Employer, Employer.id == Vacancy.employer_id).where(
+            Vacancy.is_open.is_(True), Employer.suspended_at.is_(None), Employer.guest_until.is_(None))
+        .limit(40)
+    )).scalars().all()
+    vacancies = []
+    for vacancy in found:
+        names = {n for raw in (vacancy.skills or []) if (n := normalize_skill(raw))}
+        names |= {item.skill for item in extract_skills(f"{vacancy.title}\n{vacancy.description or ''}")}
+        if names:
+            vacancies.append(names)
+    hint = career_gap(have, vacancies)
+    return hint or {"skill": None, "gained": 0, "vacancies": len(vacancies)}
+
+
 @router.get("/me/salary-market")
 async def my_salary_market(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
     """Quartiles of named wishes in the candidate's own category.
