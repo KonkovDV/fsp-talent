@@ -10,7 +10,11 @@ are not arguments of this map.
 """
 from __future__ import annotations
 
+import logging
+
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 RERANK_HEAD = 50
 _RRF_K = 60
@@ -36,33 +40,59 @@ def rerank_text(fused: dict, pair_order: list | None) -> dict:
     return {pid: 1.0 / (_RRF_K + index + 1) for index, pid in enumerate(head + tail)}
 
 
-def scorer():
-    """The pair model, or None. Loaded once. Never raises into the search."""
+def _open(name: str, device: str):
+    import torch
+    from sentence_transformers import CrossEncoder
+
+    extra = {"model_kwargs": {"torch_dtype": torch.float16}} if device == "cuda" else {}
+    try:
+        return CrossEncoder(name, device=device, **extra)
+    except TypeError:
+        model = CrossEncoder(name, device=device)
+        if device == "cuda":
+            model.model.half()
+        return model
+
+
+def load_model():
+    """The pair model, or None. GPU first, half precision: the 1650 has 4 GB. Never raises."""
     global _loaded
     if not cross_enabled():
         return None
     name = settings.CROSS_ENCODER_MODEL.strip()
-    if _loaded is None or _loaded[0] != name:
+    if _loaded is not None and _loaded[0] == name:
+        return _loaded[1]
+    try:
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         try:
-            from sentence_transformers import CrossEncoder
-            _loaded = (name, CrossEncoder(name))
+            model = _open(name, device)
         except Exception:
-            return None
-    model = _loaded[1]
-
-    def score(pair: tuple[str, str]) -> float:
-        try:
-            return float(model.predict([(pair[0], pair[1])])[0])
-        except Exception:
-            return 0.0
-
-    return score
+            if device != "cuda":
+                raise
+            logger.exception("pair model did not fit on the GPU, loading on CPU")
+            model = _open(name, "cpu")
+            device = "cpu"
+    except Exception:
+        logger.exception("pair model was not loaded")
+        return None
+    _loaded = (name, model)
+    logger.info("pair model loaded on %s from %s", device, name)
+    return model
 
 
 def rank_pairs(rows: list, query: str) -> list | None:
     """Order by the pair model. None means the model is absent and the list stays."""
-    ranker = scorer()
-    if ranker is None:
+    model = load_model()
+    if model is None:
         return None
-    ranked = sorted(rows, key=lambda row: (-ranker((query, row[1] or "")), str(row[0])))
-    return [row[0] for row in ranked]
+    if not rows:
+        return []
+    pairs = [(query, row[1] or "") for row in rows]
+    try:
+        scores = model.predict(pairs, batch_size=4, show_progress_bar=False)
+    except Exception:
+        logger.exception("pair model did not score")
+        return None
+    order = sorted(range(len(rows)), key=lambda i: (-float(scores[i]), str(rows[i][0])))
+    return [rows[i][0] for i in order]

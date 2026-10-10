@@ -30,11 +30,25 @@ def _digest(value: str) -> str:
     return hmac.new(settings.SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()
 
 
+def visitor_ip(request) -> str:
+    """Client address. The proxy header counts only when the socket peer is the proxy itself."""
+    import ipaddress
+
+    peer = request.client.host if request.client is not None and request.client.host else ""
+    recorded = (request.headers.get("x-real-ip") or "").strip()
+    try:
+        address = ipaddress.ip_address(peer) if peer else None
+    except ValueError:
+        address = None
+    if recorded and address is not None and not address.is_global:
+        return recorded[:64]
+    return peer or "unknown"
+
+
 def client_fingerprint(request: Request | None) -> tuple[str | None, str | None]:
     if request is None:
         return None, None
-    ip = (request.headers.get("x-real-ip") or "").strip() or (
-        request.client.host if request.client else "")
+    ip = visitor_ip(request)
     ua = (request.headers.get("user-agent") or "")[:300] or None
     return (_digest(f"ip:{ip}") if ip else None), ua
 

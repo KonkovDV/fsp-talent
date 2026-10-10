@@ -4,7 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY pyproject.toml requirements.lock ./
 COPY app ./app
 # requirements.lock pins the versions the test suite passed on, so a rebuild months later gets the same stack.
-RUN pip install --no-cache-dir -c requirements.lock ".[test]"
+# sentence-transformers brings a CUDA torch. Weights stay outside the image, in /models.
+RUN pip install --no-cache-dir -c requirements.lock ".[test]" \
+    && pip install --no-cache-dir sentence-transformers
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY seed ./seed

@@ -31,6 +31,7 @@ redis_data/
 *.log
 sbom.cdx.json
 deploy/backups/
+models/
 dump.rdb
 docs/tools/node_modules/
 docs/assets/pitch-slides/

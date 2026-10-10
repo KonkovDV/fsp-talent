@@ -7,7 +7,7 @@ import { MobileMenu, SiteFooter, ThemeToggle, type NavItem } from './chrome'
 const PUBLIC_LINKS: NavItem[] = [
   { to: '/method', label: 'Как устроен тест' },
   { to: '/leaderboard', label: 'Рейтинг' },
-  { to: '/badge', label: 'Проверка удостоверения' },
+  { to: '/badge', label: 'Удостоверение' },
   { to: '/jury', label: 'Жюри' },
 ]
 
@@ -21,7 +21,7 @@ export function PublicHeader({ onBrand = false }: { onBrand?: boolean }) {
         <Brand />
         <nav className="flex items-center gap-1" aria-label="Главное меню">
           <ul className="mr-1 hidden items-center gap-0.5 md:flex">
-            {PUBLIC_LINKS.filter(l => l.to !== '/badge').map(l => (
+            {PUBLIC_LINKS.map(l => (
               <li key={l.to}>
                 <NavLink to={l.to} className={({ isActive }) => `btn-nav ${isActive ? 'bg-sunken text-ink' : ''}`}>{l.label}</NavLink>
               </li>

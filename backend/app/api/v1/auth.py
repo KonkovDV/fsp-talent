@@ -70,6 +70,7 @@ from app.services.identity import (
     issue_code,
     normalize_email,
     send_code,
+    visitor_ip,
 )
 from app.services.inn import inn_is_valid
 from app.services.login_lock import next_failure, still_locked
@@ -695,13 +696,8 @@ class FspSignUpIn(BaseModel):
 
 
 def client_address(request: Request) -> str:
-    """The visitor's address. X-Real-IP is set by the proxy (nginx or Caddy) and replaces a client header."""
-    recorded = (request.headers.get("x-real-ip") or "").strip()
-    if recorded:
-        return recorded[:64]
-    if request.client is not None and request.client.host:
-        return request.client.host
-    return "unknown"
+    """The visitor's address. A public socket ignores X-Real-IP, so the header cannot spoof the limit."""
+    return visitor_ip(request)
 
 
 _client_ip = client_address

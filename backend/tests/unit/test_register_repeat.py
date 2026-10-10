@@ -22,6 +22,11 @@ def test_fsp_signin_limit_uses_the_address_the_proxy_recorded():
     assert client_address(request) == "203.0.113.9"
 
 
+def test_a_public_socket_ignores_a_spoofed_proxy_header():
+    request = SimpleNamespace(headers={"x-real-ip": "198.51.100.1"}, client=SimpleNamespace(host="1.1.1.1"))
+    assert client_address(request) == "1.1.1.1"
+
+
 def test_without_a_proxy_header_the_socket_address_is_used():
     request = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
     assert client_address(request) == "127.0.0.1"
