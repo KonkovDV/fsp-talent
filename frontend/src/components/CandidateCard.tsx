@@ -30,6 +30,8 @@ export interface CandidateCardData {
     accept?: number | null
     congestion?: number
     reply?: { p: number; label: string } | null
+    mutual?: number | null
+    rejected_by?: string[]
     plus: string[]
     minus: string[]
     info: string[]
@@ -162,6 +164,12 @@ function FactorBars({ match, active, idle }: {
           {match.accept == null ? '. Совпадения по вилке нет' : `. Совпадение по вилке ${(match.accept * 100).toFixed(1)}`}
           {(match.congestion ?? 0) > 0 ? `. Очередь −${((match.congestion ?? 0) * 100).toFixed(1)}` : '. Очереди нет'}
           . Итог — гармоническое среднее минус очередь.
+        </p>
+      )}
+      {match.mutual != null && (
+        <p className="mt-2 text-xs text-ink-2" data-testid="mutual-fit">
+          Взаимно {Math.round(match.mutual * 100)}. Слабая вилка или формат не вытягиваются навыками.
+          {(match.rejected_by ?? []).length > 0 && ` Не сходится: ${(match.rejected_by ?? []).map(code => code === 'salary' ? 'вилка' : 'формат').join(', ')}.`}
         </p>
       )}
       <p className="mt-2 text-2xs text-ink-3">

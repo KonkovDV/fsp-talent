@@ -224,6 +224,9 @@ class MatchResult:
     employer: float = 0.0             # sum of the bar contributions, before the pay match and the queue
     accept: float | None = None       # pay-band match, after refusals and the job-search factor
     congestion: float = 0.0           # points taken off for a busy invitation queue
+    # Geometric mutual fit. Shown beside the score. It does not replace the score or the FSP axis.
+    mutual: float | None = None
+    rejected_by: list[str] = field(default_factory=list)
 
 
 def reason_source(code: str) -> str | None:
@@ -617,9 +620,55 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         if USE_FIT_TIERS:
             _note(info, reasons, "info", "FIT_TIER", f"Ярус соответствия {tier} из {tier_ceiling()}")
     confirmed = 1 if c.grade_source == "assessed" else 0
+    qualification = fit if fit is not None else employer
+    opportunity, blocked = _opportunity(need, c, accept)
+    mutual = mutual_fit(qualification, opportunity, _intent(c.job_search))
     return MatchResult(round(total, 4), factors, plus, minus, info, basis, reasons,
                        fit=None if fit is None else round(fit, 4), tier=tier, confirmed=confirmed,
-                       employer=employer, accept=accept, congestion=congestion)
+                       employer=employer, accept=accept, congestion=congestion,
+                       mutual=mutual, rejected_by=blocked)
+
+
+Q_POWER, O_POWER, I_POWER = 0.55, 0.30, 0.15
+
+
+def mutual_fit(qualification: float, opportunity: float, intent: float) -> float:
+    """Qualification × opportunity × intent. A zero opportunity is a zero: skills do not rescue it.
+
+    The powers sum to 1. This number is not the list order and does not read the FSP lower bound.
+    """
+    q = min(1.0, max(0.0, qualification))
+    o = min(1.0, max(0.0, opportunity))
+    i = min(1.0, max(0.0, intent))
+    return round((q ** Q_POWER) * (o ** O_POWER) * (i ** I_POWER), 4)
+
+
+def _intent(job_search: str | None) -> float:
+    return {"active": 1.0, "open": 0.75}.get(job_search or "open", 0.35)
+
+
+def _opportunity(need: NeedSpec, person: CandidateFacts, accept: float | None) -> tuple[float, list[str]]:
+    """Pay and format. An unnamed side is not a block. A hard miss zeroes the opportunity."""
+    parts: list[float] = []
+    blocked: list[str] = []
+    if accept is not None:
+        parts.append(accept)
+        if accept < 0.5:
+            blocked.append("salary")
+    if need.work_format:
+        have = tuple(person.work_formats or ())
+        if not have or need.work_format in have:
+            parts.append(1.0)
+        elif "hybrid" in have or need.work_format == "hybrid":
+            parts.append(0.6)
+        else:
+            parts.append(0.0)
+            blocked.append("format")
+    if not parts:
+        return 1.0, blocked
+    if any(part == 0.0 for part in parts):
+        return 0.0, blocked
+    return sum(parts) / len(parts), blocked
 
 
 def accept_probability(offer_from: int | None, offer_to: int | None,
