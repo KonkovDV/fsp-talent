@@ -242,8 +242,8 @@ export const getAiNote = (needId: string, candidateId: string) =>
   api.get<AiNote>(`/needs/${needId}/candidates/${candidateId}/ai-note`)
 export const createOffer = (data: object, idempotencyKey?: string) =>
   api.post('/offers/', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined)
-export const previewOffer = (candidate_id: string, salary_to_gross: number, salary_from_gross?: number) =>
-  api.post('/offers/preview', { candidate_id, salary_to_gross, salary_from_gross })
+export const previewOffer = (candidate_id: string, salary_to_gross: number, salary_from_gross?: number, salary_basis?: 'gross' | 'net') =>
+  api.post('/offers/preview', { candidate_id, salary_to_gross, salary_from_gross, salary_basis })
 export const offerMarket = () => api.get('/offers/market')
 export const getMyEmployerOffers = () => api.get('/offers/')
 export const getOfferContacts = (id: string) => api.get(`/offers/${id}/contacts`)

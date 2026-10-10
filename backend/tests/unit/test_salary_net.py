@@ -1,4 +1,5 @@
-from app.services.salary_net import annual_tax, gross_for_net, net_monthly
+from app.api.v1.offers import OfferCreate
+from app.services.salary_net import annual_tax, as_gross, gross_for_net, net_monthly
 
 
 def test_scale_edges():
@@ -13,6 +14,16 @@ def test_round_trip_stays_within_a_hundred():
     for net in (100_000, 174_000, 250_000, 400_000):
         back = net_monthly(gross_for_net(net))
         assert 0 <= back - net <= 100
+
+
+def test_an_invite_typed_take_home_is_stored_before_tax():
+    gross = as_gross(174_000, "net")
+    offer = OfferCreate(
+        candidate_id="00000000-0000-0000-0000-000000000001", role="Backend",
+        salary_from_gross=174_000, salary_to_gross=174_000, salary_basis="net",
+        contact_method="почта hr@example.ru")
+    assert offer.salary_from_gross == gross
+    assert as_gross(180_000, "gross") == 180_000
 
 
 def test_zero_and_order():

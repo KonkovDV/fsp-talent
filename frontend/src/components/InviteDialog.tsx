@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiError, createOffer, previewOffer } from '../api/client'
-import { netLine } from '../money'
+import { grossForNet, netLine, netMonthly } from '../money'
 import Modal from './Modal'
 
 /** The invitation: role, salary range in roubles (mandatory, TZ 2.2), format and how to reach the employer. */
@@ -16,10 +16,11 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
   const [market, setMarket] = useState('')
+  const [basis, setBasis] = useState<'gross' | 'net'>('gross')
   const [idem] = useState(() => crypto.randomUUID())
 
   const send = useMutation({
-    mutationFn: () => createOffer({ ...form, candidate_id: candidateId }, idem),
+    mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis }, idem),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employerOffers'] }); onSent?.(); onClose() },
     onError: e => setError(apiError(e, 'Приглашение не отправлено')),
   })
@@ -35,7 +36,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     setForm({ ...form, [k]: k.startsWith('salary') ? Number(e.target.value) : e.target.value })
   const rangeReady = form.salary_from_gross > 0 && form.salary_to_gross >= form.salary_from_gross
   const look = () => {
-    previewOffer(candidateId, form.salary_to_gross, form.salary_from_gross).then(r => {
+    previewOffer(candidateId, form.salary_to_gross, form.salary_from_gross, basis).then(r => {
       setHint(r.data.salary_hint || '')
       const flag = r.data.market_flag as string | null
       const median = r.data.market_median as number | null
@@ -61,13 +62,25 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
           <div><label className="field-label" htmlFor="inv-role">Должность</label>
             <input id="inv-role" value={form.role} onChange={set('role')} className="input" placeholder="Backend-разработчик" autoFocus /></div>
           <fieldset>
-            <legend className="field-label">Зарплата до вычета НДФЛ, ₽ в месяц</legend>
+            <legend className="field-label">Зарплата, ₽ в месяц</legend>
+            <select value={basis} aria-label="До НДФЛ или на руки" className="select mb-3" onChange={e => {
+              const next = e.target.value as 'gross' | 'net'
+              const conv = next === 'net' ? netMonthly : grossForNet
+              setForm(prev => ({ ...prev, salary_from_gross: conv(prev.salary_from_gross), salary_to_gross: conv(prev.salary_to_gross) }))
+              setBasis(next)
+              setHint('')
+              setMarket('')
+            }}>
+              <option value="gross">до вычета НДФЛ</option>
+              <option value="net">на руки</option>
+            </select>
             <div className="grid grid-cols-2 gap-3">
               <input type="number" min={0} step={5000} value={form.salary_from_gross} onChange={set('salary_from_gross')} className="input num" aria-label="От" />
               <input type="number" min={0} step={5000} value={form.salary_to_gross} onBlur={look}
                 onChange={e => { set('salary_to_gross')(e); setHint('') }} className="input num" aria-label="До" />
             </div>
-            {rangeReady && <p className="mt-2 text-sm text-ink-3">{netLine(form.salary_from_gross, form.salary_to_gross)}</p>}
+            {rangeReady && basis === 'gross' && <p className="mt-2 text-sm text-ink-3">{netLine(form.salary_from_gross, form.salary_to_gross)}</p>}
+            {rangeReady && basis === 'net' && <p className="mt-2 text-sm text-ink-3">до НДФЛ ≈ {grossForNet(form.salary_from_gross).toLocaleString('ru-RU')}–{grossForNet(form.salary_to_gross).toLocaleString('ru-RU')} ₽</p>}
             {market && <p className="mt-2 text-sm text-warn" role="status">{market}</p>}
             {hint && <p className="mt-2 text-sm text-ink-2" role="status">{hint} Отправить приглашение всё равно можно.</p>}
           </fieldset>

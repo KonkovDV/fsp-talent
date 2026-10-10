@@ -41,6 +41,13 @@ def net_monthly(gross_monthly: int) -> int:
     return int(round(monthly / 100) * 100)
 
 
+def as_gross(amount: int, basis: str) -> int:
+    """Store and compare a fork before tax. A take-home figure is converted first."""
+    if basis == "net":
+        return gross_for_net(amount)
+    return amount
+
+
 def gross_for_net(net: int) -> int:
     """Smallest gross whose take-home, after rounding, is at least `net`."""
     if net <= 0:
