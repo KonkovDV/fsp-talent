@@ -37,6 +37,7 @@ from app.models import (
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
+from app.services.ambition import ambition_note
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.fsp.relevance import lcb_for_need
@@ -762,6 +763,9 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         if note:
             m.score = adjusted
             m.info.append(note)
+        growth = ambition_note(facts.grade, facts.job_search, facts.skills, p.work_goal if p else None)
+        if growth:
+            m.info.append(growth)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,
                              m.fit, m.tier, m.confirmed, m.employer, m.accept, m.congestion,
                              reply_outlook(need, facts), m.mutual, list(m.rejected_by or []))
