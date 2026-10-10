@@ -154,6 +154,7 @@
 | 3.3 Ссылка на стенд или видео и инструкция локального запуска | ✅ | https://89-124-65-102.sslip.io, [INSTALL.md](INSTALL.md), [deploy/README.md](../deploy/README.md) |
 | 3.3 Сквозной сценарий и объяснение механик | ✅ | [README: сквозной сценарий](../README.md#сквозной-сценарий-из-тз-33) |
 | Одна команда приёмки по таблице требований | ✅ сверх ТЗ | `make accept`, [requirements_trace.md](requirements_trace.md) | `python -m app.validation.accept` |
+| Проверка дампа базы и восстановление только с явным подтверждением | ✅ сверх ТЗ | [deploy/README.md](../deploy/README.md) | `deploy/verify_backup.py`, `deploy/restore_db.sh` |
 | 3.4 Сопроводительная документация по восьми пунктам | ✅ | [SOLUTION.md](SOLUTION.md) |
 | 3.5 Открытый код и открытые библиотеки | ✅ | [LICENSE](../LICENSE) (MIT), таблица лицензий в [SOLUTION.md, гл. 8](SOLUTION.md#8-библиотеки-и-компоненты) |
 | 3.5 Frontend, Backend и слой хранения разделены | ✅ | `frontend/`, `backend/`, PostgreSQL |
