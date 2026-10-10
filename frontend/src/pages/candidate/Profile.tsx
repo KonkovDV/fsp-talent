@@ -154,7 +154,7 @@ export default function CandidateProfile() {
 
       <section className="card mb-6" aria-labelledby="city-h">
         <h2 id="city-h" className="section-title">Что видно на анонимной карточке</h2>
-        <p className="mt-1 text-sm text-ink-2">Выключенное поле не печатается. Навыки, которые совпали с запросом работодателя, и балл остаются.</p>
+        <p className="mt-1 text-sm text-ink-2">Выключенное поле не печатается. Скрытый город не входит в балл: иначе его можно было бы вычислить фильтром. Навыки, которые совпали с запросом, остаются.</p>
         <div className="mt-4 flex flex-col gap-2">
           {([
             ['show_city', 'Город виден работодателям', 'Город скрыт'],
