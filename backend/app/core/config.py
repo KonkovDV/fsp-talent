@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     FSP_MODE: str = "mock"   # mock | real
     AI_ENABLED: bool = True
     EMBEDDINGS_MODE: str = "off"   # off | model (sentence-transformers, see [ai] extra)
+    # off | model. A local cross-encoder name is required for model. Empty stays off.
+    CROSS_ENCODER_MODE: str = "off"
+    CROSS_ENCODER_MODEL: str = ""
     # legacy: a declared grade counts as 0.85 of a confirmed one.
     # expected: the grade factor is the expected relevance under the posterior of the true grade.
     # The default stays legacy until a three-seed run meets the acceptance rule.
