@@ -31,7 +31,7 @@ from app.models import (
 )
 from app.services.identity import active_consent
 from seed.demo_activity import restore_pending_invites
-from seed.generate_seed import DEMO_PASSWORD
+from seed.generate_seed import DEMO_PASSWORD, JURY_BIRTH
 
 
 def refuse_outside_demo() -> None:
@@ -95,6 +95,9 @@ async def reset_demo() -> None:
             person.refresh_nonce = int(person.refresh_nonce or 0) + 1
             await _restore_consents(db, person, now)
             if (person.email or "").startswith("jury") and person.email.endswith("@demo.talent"):
+                if person.birth_date is None:
+                    person.birth_date = JURY_BIRTH
+                    person.is_minor = False
                 await _clear_jury(db, person)
                 jury += 1
         companies = 0
