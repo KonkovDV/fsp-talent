@@ -148,6 +148,8 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 
 Методика и полные таблицы: [проверка теста](docs/VALIDATION_ASSESSMENT.md), [проверка подбора](docs/VALIDATION_MATCHING.md), [ось ФСП](docs/FSP_INTEGRATION.md#4-как-результат-становится-доказательством), [нагрузка](docs/LOAD_TEST.md). Жюри может проверить подбор на своей разметке: `python -m app.validation.matching --import pairs.json`.
 
+Сквозные сценарии Playwright (`frontend/e2e/journeys.spec.ts`) сами читают код подтверждения из Mailpit на http://localhost:8025: регистрация, письмо, вход. Почта наружу не уходит. Запуск: `npx playwright test e2e/journeys.spec.ts` в `frontend/` при поднятом `make demo`.
+
 ## Механика тестирования
 
 ТЗ отвергает единый набор заданий (ответы разойдутся) и генерацию нейросетью (сложность несравнима). Мы используем третий путь — **параметрические семейства**: шаблон задания, параметры и код, который вычисляет правильный ответ.
