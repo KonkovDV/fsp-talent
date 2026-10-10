@@ -94,15 +94,22 @@ def test_register_buckets_are_role_specific():
     tree = ast.parse(source)
 
     limit_buckets: list[str] = []
+    register_roles: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name) and func.id == "_limit":
-                if node.args and isinstance(node.args[0], ast.Constant):
-                    limit_buckets.append(node.args[0].value)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "_limit" and node.args and isinstance(node.args[0], ast.Constant):
+                limit_buckets.append(node.args[0].value)
+            if node.func.id == "_limit" and node.args and isinstance(node.args[0], ast.JoinedStr):
+                limit_buckets.append("".join(
+                    part.value if isinstance(part, ast.Constant) else "{role}"
+                    for part in node.args[0].values))
+            if node.func.id == "_charge_registration" and len(node.args) >= 3:
+                role = node.args[2]
+                if isinstance(role, ast.Constant):
+                    register_roles.append(role.value)
 
-    assert "register:participant" in limit_buckets
-    assert "register:employer" in limit_buckets
+    assert register_roles == ["participant", "employer"]
+    assert "register:{role}" in limit_buckets
     # Generic ambiguous bucket must not be present
     assert "register" not in limit_buckets, (
         "Generic 'register' bucket causes cross-role rate-limit counter collision"
