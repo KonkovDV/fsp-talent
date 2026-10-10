@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
 import { advancePractice, apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
+import CodeInterview from '../../components/CodeInterview'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -137,6 +138,7 @@ export default function EmployerOffers() {
                   {o.status === 'pending' && <button onClick={() => { if (window.confirm('Отозвать приглашение? Отменить это нельзя, кандидат получит уведомление.')) withdraw.mutate(o.id) }} className="btn-ghost btn-sm">Отозвать</button>}
                 </div>
                 {meeting === o.id && <InterviewSlots offerId={o.id} side="employer" listKey="employerOffers" />}
+                {meeting === o.id && <CodeInterview offerId={o.id} side="employer" />}
                 {thread === o.id && <MessageThread offerId={o.id} listKey="employerOffers" other="Кандидат" />}
               </li>
             )

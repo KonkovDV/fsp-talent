@@ -1510,6 +1510,32 @@ CREATE POLICY interview_slots_actor ON public.interview_slots USING (((current_s
    FROM public.offers
   WHERE (((offers.employer_id)::text = current_setting('app.employer_id'::text, true)) OR ((offers.candidate_id)::text = current_setting('app.participant_id'::text, true)))))));
 
+
+CREATE TABLE public.interview_code (
+    id uuid NOT NULL,
+    offer_id uuid NOT NULL,
+    problem_id character varying(40),
+    prompt text DEFAULT ''::text NOT NULL,
+    draft text DEFAULT ''::text NOT NULL,
+    draft_version integer DEFAULT 0 NOT NULL,
+    snapshots jsonb DEFAULT '[]'::jsonb NOT NULL,
+    dispute text,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT interview_code_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_interview_code_offer UNIQUE (offer_id),
+    CONSTRAINT interview_code_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES public.offers(id) ON DELETE CASCADE
+);
+
+
+ALTER TABLE public.interview_code ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY interview_code_actor ON public.interview_code USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (offer_id IN ( SELECT offers.id
+   FROM public.offers
+  WHERE (((offers.employer_id)::text = current_setting('app.employer_id'::text, true)) OR ((offers.candidate_id)::text = current_setting('app.participant_id'::text, true))))))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (offer_id IN ( SELECT offers.id
+   FROM public.offers
+  WHERE (((offers.employer_id)::text = current_setting('app.employer_id'::text, true)) OR ((offers.candidate_id)::text = current_setting('app.participant_id'::text, true)))))));
+
 """
 
 

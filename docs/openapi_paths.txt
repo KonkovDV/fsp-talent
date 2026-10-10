@@ -114,6 +114,8 @@
 /api/v1/offers/
 /api/v1/offers/market
 /api/v1/offers/preview
+/api/v1/offers/{offer_id}/code
+/api/v1/offers/{offer_id}/code/dispute
 /api/v1/offers/{offer_id}/contacts
 /api/v1/offers/{offer_id}/interview.ics
 /api/v1/offers/{offer_id}/interview/outcome
