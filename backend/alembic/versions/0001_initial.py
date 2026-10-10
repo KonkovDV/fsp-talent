@@ -335,6 +335,21 @@ ALTER TABLE public.need_hidden ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY need_hidden_actor ON public.need_hidden USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (need_id IN ( SELECT needs.id FROM public.needs)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (need_id IN ( SELECT needs.id FROM public.needs))));
 
+CREATE TABLE public.offer_flags (
+    id uuid NOT NULL,
+    offer_id uuid NOT NULL,
+    flag character varying(20) NOT NULL,
+    company_name character varying(200) NOT NULL,
+    role_title character varying(100) NOT NULL,
+    salary_from_gross integer NOT NULL,
+    salary_to_gross integer NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT offer_flags_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_offer_flags UNIQUE (offer_id, flag),
+    CONSTRAINT ck_offer_flags_flag CHECK (((flag)::text = ANY ((ARRAY['below_market'::character varying, 'suspicious'::character varying])::text[]))),
+    CONSTRAINT offer_flags_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES public.offers(id) ON DELETE CASCADE
+);
+
 
 
 CREATE TABLE public.need_shortlist (

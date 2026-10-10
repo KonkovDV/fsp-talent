@@ -20,7 +20,7 @@ from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import AiProvider, Complaint, Employer, ItemDraft, Vacancy
+from app.models import AiProvider, Complaint, Employer, ItemDraft, OfferFlag, Vacancy
 from app.models.ai_provider import open_secret, seal_secret
 from app.services import totp
 from app.services.ai import drafts, providers
@@ -97,6 +97,18 @@ async def complaints(current: dict = Depends(get_current_employer), db: AsyncSes
         "reason": LABELS.get(row.reason, "other"),
         "vacancy_id": str(row.vacancy_id) if row.vacancy_id else None,
         "offer_id": str(row.offer_id) if row.offer_id else None,
+        "created_at": row.created_at.isoformat(),
+    } for row in rows]
+
+
+@router.get("/salary-flags")
+async def salary_flags(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Forks far from the category median. The row has no candidate, so the desk reads it directly."""
+    await _desk(current, db)
+    rows = list(await db.scalars(select(OfferFlag).order_by(OfferFlag.created_at.desc()).limit(100)))
+    return [{
+        "id": str(row.id), "flag": row.flag, "company": row.company_name, "role": row.role_title,
+        "salary_from": row.salary_from_gross, "salary_to": row.salary_to_gross,
         "created_at": row.created_at.isoformat(),
     } for row in rows]
 

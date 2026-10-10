@@ -10,6 +10,7 @@ import { netLine } from '../../money'
 
 interface Offer {
   id: string; company: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
+  market_flag?: string | null
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
     rating?: { score: number; label: string; demo: boolean; note: string } }
@@ -120,6 +121,7 @@ export default function CandidateOffers() {
                   <p className="num font-display text-xl font-bold text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</p>
                   <p className="text-xs text-ink-3">до вычета НДФЛ</p>
                   <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
+                  {o.market_flag === 'below_market' && <p className="text-xs text-warn">вилка ниже рынка категории</p>}
                   <span className={`${cls} mt-2`}>{label}</span>
                 </div>
               </div>

@@ -40,6 +40,19 @@ class Offer(Base):
     candidate = relationship("Participant", back_populates="offers", foreign_keys=[candidate_id])
 
 
+class OfferFlag(Base):
+    """A fork far from the category median. No candidate data: the desk can read it without the offer row."""
+    __tablename__ = "offer_flags"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offer_id = Column(UUID(as_uuid=True), ForeignKey("offers.id", ondelete="CASCADE"), nullable=False)
+    flag = Column(String(20), nullable=False)
+    company_name = Column(String(200), nullable=False)
+    role_title = Column(String(100), nullable=False)
+    salary_from_gross = Column(Integer, nullable=False)
+    salary_to_gross = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
 class OfferMessage(Base):
     """A message in the thread of an accepted invitation. Either side writes; the other reads."""
     __tablename__ = "offer_messages"

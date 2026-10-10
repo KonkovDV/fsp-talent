@@ -72,6 +72,7 @@
 /api/v1/moderation/complaints
 /api/v1/moderation/item-drafts
 /api/v1/moderation/item-drafts/{draft_id}/review
+/api/v1/moderation/salary-flags
 /api/v1/moderation/totp
 /api/v1/moderation/vacancies/{vacancy_id}/close
 /api/v1/needs

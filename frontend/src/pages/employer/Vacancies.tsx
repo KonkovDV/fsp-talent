@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
-import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, previewVacancyExam, updateApplicationStatus, updateVacancy, vacancyApplications } from '../../api/client'
+import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, offerMarket, previewVacancyExam, updateApplicationStatus, updateVacancy, vacancyApplications } from '../../api/client'
 import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, date, rub } from '../../components/ui'
-import { netLine } from '../../money'
+import { marketFlag, netLine } from '../../money'
 
 const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
@@ -29,6 +29,9 @@ export default function EmployerVacancies() {
   const [contacts, setContacts] = useState<Record<string, string>>({})
   const { data: vacancies = [], isError: vacanciesError, error: vacanciesLoadError } = useQuery<Vacancy[]>({ queryKey: ['myVacancies'], queryFn: () => getMyVacancies().then(r => r.data) })
   const { data: applications = [], isError: appsError, error: appsLoadError } = useQuery<Application[]>({ queryKey: ['applications'], queryFn: () => vacancyApplications().then(r => r.data) })
+  const market = useQuery({ queryKey: ['offerMarket'], queryFn: () => offerMarket().then(r => r.data as { salaries?: { role: string; grade: string; median: number }[] }) })
+  const cell = market.data?.salaries?.find(s => s.role === form.role && s.grade === form.grade)
+  const forkFlag = marketFlag(Number(form.salary_from_gross), Number(form.salary_to_gross), cell?.median)
   const payload = () => ({ ...form, skills: form.skills.split(',').map(s => s.trim()).filter(Boolean),
     discipline: form.discipline || null, min_rank: form.min_rank || null, description: form.description || null })
   const create = useMutation({
@@ -95,6 +98,8 @@ export default function EmployerVacancies() {
               <input id="v-to" type="number" step={5000} className="input num" value={form.salary_to_gross} onChange={set('salary_to_gross')} /></div>
           </div>
           <p className="text-xs text-ink-3">{netLine(Number(form.salary_from_gross), Number(form.salary_to_gross))}</p>
+          {forkFlag === 'below_market' && <p className="text-sm text-warn">Вилка ниже рынка этой категории. Опубликовать всё равно можно.</p>}
+          {forkFlag === 'suspicious' && <p className="text-sm text-warn">Вилка в несколько раз выше рынка этой категории.</p>}
           <div className="grid gap-4 sm:grid-cols-3">
             <div><label className="field-label" htmlFor="v-disc">Дисциплина ФСП, если важна</label>
               <select id="v-disc" className="select" value={form.discipline} onChange={set('discipline')}>

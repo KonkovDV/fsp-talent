@@ -47,7 +47,7 @@ from app.services.guardian import consent_link, demo_consent_link, guardian_toke
 from app.services.identity import active_consent
 from app.services.inn import published_inn
 from app.services.mail import send_mail
-from app.services.market import quartiles, salary_band
+from app.services.market import market_flag, quartiles, role_median, salary_band
 from app.services.notify import Outbox, category_label, notify
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
@@ -475,6 +475,8 @@ async def get_my_offers(
     if changed:
         await db.commit()
     unread = await unread_counts(db, [o.id for o in rows if o.status == "accepted"], "participant")
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == _pid(current)))
+    median = await role_median(db, cat.primary_role if cat else None, cat.grade if cat else None)
     return [{
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
@@ -483,6 +485,7 @@ async def get_my_offers(
                             "rating": company_score(o.employer.company_name)},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
+        "market_flag": market_flag(o.salary_from_gross, o.salary_to_gross, median),
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
         "status": o.status, "created_at": o.created_at.isoformat(),
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
