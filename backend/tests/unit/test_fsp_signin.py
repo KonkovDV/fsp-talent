@@ -27,6 +27,14 @@ class FakeRedis:
         return self.data.pop(key, None)
 
 
+@pytest.fixture(autouse=True)
+def fsp_id_is_the_mock(monkeypatch):
+    """These tests drive the built-in provider. CI defaults FSP_ID_MODE to oidc."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    monkeypatch.setattr(settings, "FSP_ID_MODE", "mock")
+
+
 @pytest.fixture
 def redis(monkeypatch):
     fake = FakeRedis()

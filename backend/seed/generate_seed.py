@@ -557,7 +557,9 @@ async def main(extra_candidates: int | None = None) -> None:
 
 
 def _refuse_production() -> None:
-    if os.environ.get("ENV", "").lower() == "production" or not settings.DEMO_MODE:
+    if os.environ.get("ENV", "").lower() == "production":
+        raise SystemExit("Демо-данные не загружаются при ENV=production")
+    if not settings.DEMO_MODE:
         raise SystemExit("Демо-данные не загружаются вне демо-стенда")
 
 

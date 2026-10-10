@@ -33,6 +33,8 @@ def test_a_wish_is_placed_only_when_the_cell_is_shown():
 
 
 def test_demo_seed_refuses_production(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
     monkeypatch.setenv("ENV", "production")
     from seed.generate_seed import _refuse_production
     try:
