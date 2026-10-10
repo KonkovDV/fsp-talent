@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 import jwt
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.core.config import settings
 from app.core.security import (
@@ -16,7 +17,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.participant import Participant
-from app.services.profile import adult_cutoff, born_adult
+from app.services.profile import adult_cutoff, age_confirmed_adult, born_adult
 
 
 def test_access_token_round_trip_and_refresh_is_rejected():
@@ -92,11 +93,21 @@ def test_a_cookie_refresh_needs_the_same_csrf_token():
         check_csrf(None, "same-token")
 
 
+def test_search_ignores_the_adult_checkbox_without_a_birth_date():
+    sql = str(age_confirmed_adult().compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "birth_date IS NOT NULL" in sql
+    assert "is_minor" not in sql
+
+
 def test_discoverable_hides_minors_without_consent_and_hidden_profiles():
-    assert Participant(is_visible=True, is_minor=False, minor_consent_given=False).discoverable
-    assert Participant(is_visible=True, is_minor=True, minor_consent_given=True).discoverable
-    assert not Participant(is_visible=True, is_minor=True, minor_consent_given=False).discoverable
-    assert not Participant(is_visible=False, is_minor=False, minor_consent_given=False).discoverable
+    adult = date(2000, 1, 1)
+    child = date(2012, 5, 1)
+    assert Participant(is_visible=True, is_minor=False, minor_consent_given=False, birth_date=adult).discoverable
+    assert Participant(is_visible=True, is_minor=True, minor_consent_given=True, birth_date=child).discoverable
+    assert not Participant(is_visible=True, is_minor=False, minor_consent_given=False).discoverable
+    assert not Participant(is_visible=True, is_minor=True, minor_consent_given=False, birth_date=child).discoverable
+    assert not Participant(is_visible=False, is_minor=False, minor_consent_given=False, birth_date=adult).discoverable
 
 
 def test_unsigned_token_is_rejected():

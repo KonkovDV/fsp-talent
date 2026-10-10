@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,7 +37,7 @@ from app.services.guardian import token_participant, token_valid
 from app.services.matching import GRADES
 from app.services.passport import is_passport
 from app.services.pdf_profile import profile_lines, render_profile_pdf
-from app.services.profile import adult_cutoff
+from app.services.profile import age_confirmed_adult
 from app.services.search.cache import bump_bank_epoch
 from app.services.search.pipeline import _bucket
 from app.services.skills import skill_line
@@ -55,14 +55,9 @@ _MAX_VERIFY_BYTES = 65_536  # 64 KB
 def _public_filter():
     """Named page / leaderboard / public credentials filter.
 
-    Uses birth_date for the adulthood check — the stored is_minor flag is only
-    a fallback for participants whose birth_date is unknown.
+    A checkbox is not an age. The page needs a birth date that is already 18.
     """
-    cutoff = adult_cutoff()
-    adult = or_(
-        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
-        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
-    )
+    adult = age_confirmed_adult()
     # 152-FZ art. 10.1: data open to everyone needs an active consent to distribution, not just the toggle.
     consented = Participant.id.in_(select(Consent.subject_id).where(
         Consent.subject_type == "participant", Consent.kind == "pd_distribution", Consent.withdrawn_at.is_(None)))

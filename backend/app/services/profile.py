@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -29,6 +29,11 @@ def adult_cutoff(today: date | None = None) -> date:
         return today.replace(year=today.year - 18)
     except ValueError:
         return date(today.year - 18, 2, 28)
+
+
+def age_confirmed_adult():
+    """SQL: a birth date is on file and that date is already 18. A checkbox is not a date."""
+    return and_(Participant.birth_date.is_not(None), Participant.birth_date <= adult_cutoff())
 
 
 def born_adult(birth: date | None, is_minor: bool, today: date | None = None) -> bool:
