@@ -18,6 +18,8 @@ class Offer(Base):
     currency = Column(String(3), nullable=False, default="RUB")
     role = Column(String(100), nullable=False)
     work_format = Column(String(20), nullable=False)
+    # Internship track. Null means an ordinary job invitation.
+    practice_stage = Column(String(20))
     message = Column(Text)
     # Codes from offer_perks.PERKS. Empty means the invitation names no extras.
     perks = Column(JSONB, nullable=False, default=list, server_default="[]")

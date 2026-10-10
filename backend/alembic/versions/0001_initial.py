@@ -499,6 +499,7 @@ CREATE TABLE public.offers (
     currency character varying(3) DEFAULT 'RUB'::character varying NOT NULL,
     role character varying(100) NOT NULL,
     work_format character varying(20) NOT NULL,
+    practice_stage character varying(20),
     message text,
     perks jsonb DEFAULT '[]'::jsonb NOT NULL,
     status character varying(20) DEFAULT 'pending'::character varying NOT NULL,

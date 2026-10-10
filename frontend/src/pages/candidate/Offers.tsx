@@ -11,7 +11,7 @@ import { netLine } from '../../money'
 
 interface Offer {
   id: string; company: string; company_id?: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
-  perks?: string[]
+  perks?: string[]; practice_stage?: string | null
   market_flag?: string | null
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
@@ -25,6 +25,9 @@ const STATUS: Record<string, [string, string]> = {
   expired: ['срок истёк', 'badge-vc'], withdrawn: ['отозвано', 'badge-vc'],
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
+const PRACTICE: Record<string, string> = {
+  sent: 'отправлено', screening: 'отбор', trial: 'пробный срок', hired: 'выход', closed: 'закрыто',
+}
 const REASONS: [string, string][] = [
   ['', 'Выберите причину'],
   ['salary', 'Зарплата'],
@@ -121,6 +124,7 @@ export default function CandidateOffers() {
                     <p className="mt-1 text-xs text-ink-2">Балл компании {o.company_profile.rating.score} из 10, {o.company_profile.rating.label}. {o.company_profile.rating.note}</p>
                   )}
                   <h2 className="mt-0.5 font-display text-lg font-bold tracking-[-0.01em] text-ink">{o.role}</h2>
+                  {o.practice_stage && <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}. Грейд от этого не меняется.</p>}
                   {(o.perks ?? []).length > 0 && (
                     <p className="mt-1 text-xs text-ink-2">{o.perks.map(code => PERK_RU[code] ?? code).join(' · ')}</p>
                   )}

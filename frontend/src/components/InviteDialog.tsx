@@ -12,7 +12,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
 }) {
   const qc = useQueryClient()
   const [form, setForm] = useState({
-    role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '', perks: [] as string[],
+    role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '', perks: [] as string[], practice: false,
   })
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
@@ -21,7 +21,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const [idem] = useState(() => crypto.randomUUID())
 
   const send = useMutation({
-    mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis, perks: form.perks }, idem),
+    mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis, perks: form.perks, practice: form.practice }, idem),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employerOffers'] }); onSent?.(); onClose() },
     onError: e => setError(apiError(e, 'Приглашение не отправлено')),
   })
@@ -93,6 +93,10 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
             <div><label className="field-label" htmlFor="inv-contact">Как связаться с вами</label>
               <input id="inv-contact" value={form.contact_method} onChange={set('contact_method')} className="input" placeholder="Telegram или email" /></div>
           </div>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={form.practice} onChange={e => setForm(prev => ({ ...prev, practice: e.target.checked }))} />
+            Это практика или стажировка
+          </label>
           <fieldset>
             <legend className="field-label">Условия, если есть</legend>
             <div className="flex flex-wrap gap-2">
