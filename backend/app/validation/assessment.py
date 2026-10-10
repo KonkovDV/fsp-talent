@@ -42,6 +42,7 @@ from app.services.cat import (
     decide,
     evaluate,
     item_key,
+    lower_offer,
     p3,
     posterior,
     prev_grade,
@@ -99,6 +100,7 @@ class Session:
     theta_hat: float = 0.0
     se: float = 1.0
     p_pass: float = 0.5
+    lower_offer: str | None = None   # the grade below a failed target that the candidate may accept
 
 
 _TYPED = True   # switched off by choices_only() for the ablation
@@ -195,8 +197,9 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
         keys.append(key)
         answers.append((key, ch.family.id, ch.a, ch.b, c, correct))
     out = decide(state)
+    offer = lower_offer(state, out)
     s = Session(spec, target, theta, out.earned, out.passed, out.recommend_next, state.n, keys, answers,
-                out.theta, out.se, out.p_pass)
+                out.theta, out.se, out.p_pass, offer[0] if offer else None)
     return s
 
 
@@ -798,8 +801,9 @@ def simulate_path(theta: float, spec: str, declared: str, truth: Truth, rng: ran
                   offsets: dict[str, float] | None = None):
     """One person, the product rules.
 
-    A failed test does not burn the step down: up to two grades lower. A confident pass
-    (the session recommends the next grade) earns one separate test one step higher.
+    A failed test does not burn the step down: up to two grades lower. When the same answers
+    confirm the grade one step below (cat.lower_offer), the person accepts it and stops. A confident
+    pass (the session recommends the next grade) earns one separate test one step higher.
     A confirmed grade is never replaced by a lower one. The result is the last confirmed
     grade, or nothing.
     """
@@ -822,7 +826,12 @@ def simulate_path(theta: float, spec: str, declared: str, truth: Truth, rng: ran
                 target = session.recommended
                 continue
             break
-        if confirmed is not None or downs >= 2:
+        if confirmed is not None:
+            break
+        if session.lower_offer:
+            confirmed = session.lower_offer
+            break
+        if downs >= 2:
             break
         lower = prev_grade(target)
         if lower is None:

@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.items import Family
 from app.items.hierarchy import parent
@@ -344,7 +344,7 @@ def sympson_hetter(window: list[Choice], rng: random.Random, exposure: dict[str,
 
 @dataclass(frozen=True)
 class Outcome:
-    earned: str | None        # the target when passed; target-1 is informational only; None: undecided or lower
+    earned: str | None        # the target when passed; target-1 is only offered (lower_offer); None: lower
     passed: bool
     recommend_next: str | None  # next grade to take a separate test at (P(θ ≥ its cut) ≥ RECOMMEND_NEXT_P)
     p_pass: float
@@ -386,6 +386,21 @@ def decide(state: State) -> Outcome:
     if lower and post.prob_at_least(CUTS[lower]) >= PASS_P:
         return Outcome(lower, False, None, p_pass, p_up, post.theta, post.se)
     return Outcome(None, False, None, p_pass, p_up, post.theta, post.se)
+
+
+def lower_offer(state: State, outcome: Outcome) -> tuple[str, float] | None:
+    """The grade one step below a failed target that the same answers confirm, with its probability.
+
+    The candidate may accept it instead of a separate test at that grade. It holds to the rule of a test at
+    that grade: the prior sits at its cut, P(θ ≥ cut) ≥ PASS_P and the family knife holds there.
+    """
+    lower = prev_grade(state.target)
+    if outcome.passed or lower is None or outcome.earned != lower:
+        return None
+    p = posterior(state.responses, prior_mean=CUTS[lower]).prob_at_least(CUTS[lower])
+    if p < PASS_P or not family_knife_holds(replace(state, target=lower)):
+        return None
+    return lower, p
 
 
 # A claimed grade is not confirmed when any topic with enough items was mostly wrong.

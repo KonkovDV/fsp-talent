@@ -6,7 +6,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CandidateAssessment from '../candidate/Assessment'
 
-const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, answerAssessment, noteAssessmentCopy } = vi.hoisted(() => ({
+const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, answerAssessment, noteAssessmentCopy, acceptLowerGrade } = vi.hoisted(() => ({
+  acceptLowerGrade: vi.fn(),
   getMyProfile: vi.fn(),
   assessmentBlueprint: vi.fn(),
   assessmentHistory: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('../../api/client', async () => {
     activeAssessment,
     answerAssessment,
     noteAssessmentCopy,
+    acceptLowerGrade,
     startAssessment: vi.fn(),
     abandonAssessment: vi.fn(),
     reviewAssessment: vi.fn(),
@@ -169,6 +171,21 @@ describe('тест на грейд', () => {
     expect(screen.getByTestId('proctor-warn')).toHaveTextContent('грейд из-за этого не меняется')
     expect(screen.getByLabelText('Ответ — целое число')).toBeInTheDocument()
     expect(noteAssessmentCopy).toHaveBeenCalledWith('s1')
+  })
+
+  it('принимает ступень ниже из той же сессии', async () => {
+    const offered = result({ earned_grade: 'junior', lower_offer: { grade: 'junior', p: 0.86 } })
+    acceptLowerGrade.mockResolvedValue({ data: session({ item: null, status: 'completed', result: result({
+      outcome: 'accepted_lower', earned_grade: 'junior', confirmed_grade: 'junior', lower_accepted: true,
+    }) }) })
+    activeAssessment.mockResolvedValue({ data: session({ item: null, result: offered }) })
+    renderPage(<CandidateAssessment />)
+    expect(await screen.findByTestId('lower-offer')).toHaveTextContent('вероятность 86%')
+    await userEvent.click(screen.getByRole('button', { name: 'Принять «джуниор»' }))
+    expect(acceptLowerGrade).toHaveBeenCalledWith('s1')
+    expect(await screen.findByTestId('lower-accepted')).toHaveTextContent('Грейд в профиле: джуниор')
+    expect(screen.queryByTestId('lower-offer')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /тест на ступень ниже/ })).not.toBeInTheDocument()
   })
 
   it('у стажёра ссылки на ступень ниже нет', async () => {

@@ -48,6 +48,7 @@ from app.services.assessment import (
     QuestionBankError,
     SessionError,
     abandon,
+    accept_lower,
     answer_item,
     check_cooldown,
     check_retake_interval,
@@ -147,14 +148,22 @@ class PersonFitOut(BaseModel):
     review: bool = Field(description="Ответы расходятся с моделью: повод пересдать, не вывод о списывании")
 
 
+class LowerOfferOut(BaseModel):
+    grade: str
+    p: float
+
+
 class ResultOut(BaseModel):
-    # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed | vacancy_test
+    # first_confirmation | upgrade | confirmed_again | kept_higher_grade | not_passed | accepted_lower | vacancy_test
     outcome: str
     passed: bool
     upgraded: bool = Field(description="Грейд в профиле вырос: тест на уровень выше подтверждённого сдан")
     vacancy_test: bool = Field(False, description="Тест по вакансии: грейд не меняет")
     recommended_grade: str | None = Field(
         None, description="Уровень, на который стоит пройти отдельный основной тест; сам грейд не меняется")
+    lower_offer: LowerOfferOut | None = Field(
+        None, description="Ступень ниже, которую подтверждают те же ответы; кандидат может её принять")
+    lower_accepted: bool = False
     earned_grade: str | None
     confirmed_grade: str | None
     p_pass: float
@@ -241,6 +250,9 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
     return ResultOut(
         outcome="trial" if trial else outcome, passed=passed, upgraded=outcome == "upgrade", trial=trial,
         vacancy_test=bool(flags.get("vacancy_id")), recommended_grade=flags.get("recommended_grade"),
+        lower_offer=LowerOfferOut(**offer) if isinstance(offer := flags.get("lower_offer"), dict)
+        and not flags.get("lower_accepted") else None,
+        lower_accepted=bool(flags.get("lower_accepted")),
         note="Пробный проход: грейд не подтверждается и в поиске не учитывается." if trial else None,
         earned_grade=None if trial else session.grade_assigned,
         confirmed_grade=None if trial else confirmed,
@@ -616,6 +628,29 @@ async def abandon_session(session_id: uuid.UUID, current: dict = Depends(get_cur
         _raise(e)
     await db.commit()
     return _session_out(session, await session_items(db, session.id))
+
+
+@router.post("/{session_id}/accept-lower", response_model=SessionOut)
+async def accept_lower_grade(session_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                             db: AsyncSession = Depends(get_db)):
+    """Confirm the grade one step below from the same answers instead of a separate test at it."""
+    try:
+        decision = await accept_lower(db, session_id, uuid.UUID(current["sub"]))
+    except SessionError as e:
+        _raise(e)
+    session = await db.get(TestSession, session_id)
+    assert session is not None
+    participant = await db.get(Participant, session.participant_id)
+    if participant is not None:
+        await rebuild_profile(db, participant)
+    await db.commit()
+    import app.services.search.cache  # noqa: F401  (registers the bank listener)
+    from app.services.profile_events import AssessmentFinished, publish_assessment_finished
+    await publish_assessment_finished(AssessmentFinished(str(session.participant_id), False))
+    items = await session_items(db, session.id)
+    locked = decision.locked_until.isoformat() if decision.locked_until else None
+    result = _result_from_session(session, items, decision.assessed_grade, locked=locked)
+    return _session_out(session, items, result)
 
 
 @router.get("/{session_id}/review")
