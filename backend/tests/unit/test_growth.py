@@ -1,5 +1,5 @@
 """Growth path: the next grade's common skills, without changing anyone's grade."""
-from app.services.growth import growth_gaps, next_grade
+from app.services.growth import growth_gaps, next_grade, skill_reach
 
 
 def test_the_ladder_stops_at_lead():
@@ -15,3 +15,17 @@ def test_a_gap_needs_five_people_and_the_role():
     assert [item["skill"] for item in gaps] == ["PostgreSQL", "Go"]
     assert growth_gaps("backend", {"Python"}, counts, people=4) == []
     assert growth_gaps(None, set(), counts, people=30) == []
+
+
+def test_one_missing_skill_opens_a_need_and_two_do_not():
+    needs = [
+        ("backend", ["Python", "PostgreSQL"]),
+        ("backend", ["Python", "PostgreSQL"]),
+        ("backend", ["Python", "Go"]),
+        ("backend", ["Python", "PostgreSQL", "Kafka"]),
+        ("security", ["Python", "Linux"]),
+    ]
+    rows = skill_reach("backend", {"Python"}, needs)
+    assert rows == [{"skill": "PostgreSQL", "needs": 2}, {"skill": "Go", "needs": 1}]
+    assert skill_reach("backend", {"Python", "PostgreSQL", "Go", "Kafka"}, needs) == []
+    assert skill_reach(None, set(), needs) == []

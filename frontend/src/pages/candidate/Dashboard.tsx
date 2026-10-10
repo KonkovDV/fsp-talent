@@ -15,7 +15,9 @@ interface Weekly { vacancy_id: string; title: string; company: string | null; to
 interface MarketCell { p25: number; median: number; p75: number; n: number }
 interface SalaryMarket { role: string | null; grade: string | null; cell: MarketCell | null; band: string | null }
 interface Growth { role: string | null; grade: string | null; next_grade: string | null; people: number | null
-  gaps: { skill: string; people: number }[]; next_market: MarketCell | null }
+  gaps: { skill: string; people: number }[]
+  need_reach?: { skill: string; needs: number }[]
+  next_market: MarketCell | null }
 
 const BAND_TEXT: Record<string, string> = {
   below_p25: 'Ваше ожидание ниже нижней четверти.',
@@ -270,6 +272,21 @@ export default function CandidateDashboard() {
             <p className="mt-3 text-sm text-ink-2">Середина названных ожиданий на следующей ступени — {rub(growth.data.next_market.median)}. По {growth.data.next_market.n} {plural(growth.data.next_market.n, ['ожиданию', 'ожиданиям', 'ожиданиям'])}.</p>
           )}
           <p className="mt-3 text-sm"><Link to="/candidate/profile" className="link">Добавить навык в профиле</Link></p>
+        </section>
+      )}
+
+      {(growth.data?.need_reach ?? []).length > 0 && (
+        <section className="card" aria-labelledby="reach-title">
+          <h2 id="reach-title" className="section-title">Одна технология до открытой потребности</h2>
+          <p className="mt-1 text-sm text-ink-2">Обязательные навыки той же специализации. Если не хватает ровно одного, потребность считается. Грейд и место в подборке это не меняет.</p>
+          <ul className="mt-4 divide-y divide-line">
+            {(growth.data?.need_reach ?? []).map(row => (
+              <li key={row.skill} className="flex items-baseline justify-between gap-3 py-2 text-sm">
+                <span className="font-medium text-ink">{row.skill}</span>
+                <span className="num shrink-0 text-ink-3">{row.needs} {plural(row.needs, ['потребность', 'потребности', 'потребностей'])}</span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
