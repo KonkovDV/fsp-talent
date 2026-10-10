@@ -313,6 +313,16 @@ export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)
 export const verifyCredential = (credential: object) => api.post('/public/credentials/verify', credential)
+export interface PassportGrade { specialization: string; grade: string; confirmedOn: string }
+export interface PassportFsp { discipline: string; results: number; bestBucket: string; statuses: string[]; lastYear: number }
+export interface PassportClaims { name?: string; grades: PassportGrade[]; testedSkills: string[]; fspResults: PassportFsp[] }
+export interface PassportCredential { validFrom?: string; credentialSubject?: { achievement?: PassportClaims } }
+export interface MyPassport { id: string; url: string; issued_at: string | null; credential: PassportCredential }
+export interface PublicPassport { valid: boolean; signature: boolean; revoked: boolean; issued_at: string | null; credential: PassportCredential }
+export const getMyPassport = () => api.get<MyPassport | null>('/candidates/me/passport')
+export const issueMyPassport = () => api.post<MyPassport>('/candidates/me/passport')
+export const revokeMyCredential = (id: string) => api.post(`/candidates/me/credentials/${id}/revoke`)
+export const getPublicPassport = (id: string) => api.get<PublicPassport>(`/public/passport/${id}`)
 export interface EvaluateRow { method: string; title: string; ndcg10: number; ndcg_ci: [number, number] | null; p10: number; map: number }
 export interface EvaluateReport { pairs: number; needs: number; judged_needs: number; sha256: string; rows: EvaluateRow[] }
 export const evaluatePairs = (text: string) =>

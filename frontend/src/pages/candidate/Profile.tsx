@@ -11,6 +11,7 @@ import DeleteAccountCard from '../../components/DeleteAccountCard'
 import SurveyCard, { type SurveyHint } from '../../components/SurveyCard'
 import SkillPassport from '../../components/SkillPassport'
 import ResumesCard from '../../components/ResumesCard'
+import PassportCard from '../../components/PassportCard'
 import { JOB_SEARCH_RU, roleRu } from '../../labels'
 
 interface SkillRow { name: string; source_quote?: string | null; trust_level?: string; created_at?: string | null; confirmed_at?: string | null }
@@ -256,6 +257,7 @@ export default function CandidateProfile() {
         <aside className="space-y-6">
           <SurveyCard profile={profile} compact hint={hint} />
           <ResumesCard />
+          <PassportCard />
           <FspLinkCard profile={profile} />
           <ConsentsPanel />
           <AccountSecurity />

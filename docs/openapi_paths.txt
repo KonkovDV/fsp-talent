@@ -43,6 +43,7 @@
 /api/v1/candidates/me/offers
 /api/v1/candidates/me/offers/{offer_id}/respond
 /api/v1/candidates/me/offers/{offer_id}/revoke-contacts
+/api/v1/candidates/me/passport
 /api/v1/candidates/me/profile
 /api/v1/candidates/me/profile.pdf
 /api/v1/candidates/me/results
@@ -102,6 +103,7 @@
 /api/v1/public/issuer
 /api/v1/public/jury-free
 /api/v1/public/leaderboard
+/api/v1/public/passport/{passport_id}
 /api/v1/search/bank
 /api/v1/search/candidates
 /api/v1/tasks/

@@ -20,6 +20,7 @@ from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.field_cipher import blind_index
 from app.services.guardian import token_participant, token_valid
+from app.services.passport import is_passport
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
 from app.services.search.cache import bump_bank_epoch
@@ -267,6 +268,8 @@ async def get_credentials(participant_id: uuid.UUID, db: AsyncSession = Depends(
     )
     out = []
     for vc in rows:
+        if is_passport(vc.credential_json):
+            continue
         signed = verify_credential(vc.credential_json)
         revoked = vc.revoked_at is not None
         out.append({

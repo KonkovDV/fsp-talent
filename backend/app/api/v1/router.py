@@ -18,6 +18,7 @@ from app.api.v1 import (
     needs,
     notifications,
     offers,
+    passport,
     public,
     resumes,
     search,
@@ -67,3 +68,4 @@ api_router.include_router(tasks.router)
 api_router.include_router(messages.router)
 api_router.include_router(moderation.router)
 api_router.include_router(interviews.router)
+api_router.include_router(passport.router)
