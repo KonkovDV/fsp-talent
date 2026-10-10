@@ -66,6 +66,8 @@ from app.services.skills import (
 )
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
 from app.services.trust import refresh_hold
+from app.services.trust_level import LABELS
+from app.services.trust_level import trust_level as company_trust
 from app.services.vc.issuer import issue_derived_credential, issue_sd_jwt, present_sd_jwt
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -482,7 +484,9 @@ async def get_my_offers(
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
         "company_profile": {"industry": o.employer.industry, "website": o.employer.website,
                             "about": o.employer.description, "inn_given": published_inn(o.employer.inn),
-                            "rating": company_score(o.employer.company_name)},
+                            "rating": company_score(o.employer.company_name),
+                            "trust_level": company_trust(o.employer),
+                            "trust_label": LABELS[company_trust(o.employer)]},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "market_flag": market_flag(o.salary_from_gross, o.salary_to_gross, median),

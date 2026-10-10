@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -29,6 +29,7 @@ from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
+from app.services.trust_level import next_step, trust_level, vacancy_limit
 from app.services.vacancies import match_vacancy, status_after_close
 from app.services.vacancy_exam import form_exam
 
@@ -91,6 +92,13 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
     employer = await db.get(Employer, _uuid(current))
     if not employer:
         raise HTTPException(404, "Работодатель не найден")
+    level = trust_level(employer)
+    cap = vacancy_limit(level)
+    opened = await db.scalar(select(func.count()).select_from(Vacancy).where(
+        Vacancy.employer_id == employer.id, Vacancy.is_open.is_(True))) or 0
+    if int(opened) >= cap:
+        raise ApiError(429, "rate_limited",
+                       f"На этом уровне доверия открытых вакансий не больше {cap}. {next_step(level)}")
     vacancy = Vacancy(
         employer_id=employer.id, title=body.title, description=(body.description or "").strip() or None,
         role=body.role, grade=body.grade,

@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -32,6 +32,8 @@ class Employer(Base):
     totp_secret = Column(Text)
     totp_last_step = Column(BigInteger)
     totp_verified_at = Column(DateTime(timezone=True))
+    # Set only by `python -m app.services.trust partner`. The API cannot write it.
+    fsp_partner = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
     vacancies = relationship("Vacancy", back_populates="employer")

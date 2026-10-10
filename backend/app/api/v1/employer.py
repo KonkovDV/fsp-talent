@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.models.employer import Employer
 from app.services.ats_sandbox import receipt
 from app.services.inn import inn_is_valid, published_inn
+from app.services.trust_level import LABELS, trust_level
 
 router = APIRouter(prefix="/employer", tags=["employer"])
 
@@ -31,6 +32,8 @@ class EmployerProfileOut(BaseModel):
     industry: str | None
     subscription_tier: str
     inn_checked: bool
+    trust_level: int
+    trust_label: str
 
 
 class EmployerProfileUpdate(BaseModel):
@@ -56,6 +59,7 @@ async def get_me(
         industry=getattr(emp, "industry", None),
         subscription_tier=emp.subscription_tier,
         inn_checked=published_inn(emp.inn),
+        trust_level=trust_level(emp), trust_label=LABELS[trust_level(emp)],
     )
 
 
@@ -88,6 +92,7 @@ async def update_me(
         industry=getattr(emp, "industry", None),
         subscription_tier=emp.subscription_tier,
         inn_checked=published_inn(emp.inn),
+        trust_level=trust_level(emp), trust_label=LABELS[trust_level(emp)],
     )
 
 
