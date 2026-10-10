@@ -255,6 +255,7 @@ async def tasks_for_me(current: dict = Depends(get_current_participant), db: Asy
 class AnswerIn(BaseModel):
     answer_text: str | None = Field(None, max_length=MAX_CODE)
     answer_index: int | None = Field(None, ge=0, le=7)
+    language: Literal["python", "javascript"] = "python"
 
 
 @router.post("/{task_id}/answer")
@@ -271,7 +272,7 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
         raise ApiError(409, "task_closed")
     try:
         # A code check waits up to the run limit; the event loop keeps serving other requests meanwhile.
-        checked = await asyncio.to_thread(check_answer, task, body.answer_text, body.answer_index)
+        checked = await asyncio.to_thread(check_answer, task, body.answer_text, body.answer_index, body.language)
     except SandboxUnavailable as e:
         raise ApiError(503, "sandbox_unavailable", "Проверка кода временно недоступна. Ответ не сохранён.") from e
     except ValueError as e:
@@ -285,7 +286,7 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
     if task.answer_type == "code" and checked.answer_text:
         others = list(await db.scalars(select(TaskSubmission.answer_text).where(
             TaskSubmission.task_id == task.id, TaskSubmission.answer_text.is_not(None))))
-        if copy_mark(checked.answer_text, [text for text in others if text]):
+        if copy_mark(checked.answer_text, [text for text in others if text], body.language):
             notes.append(
                 "Пометка для разбора: решение похоже на другое сданное. "
                 "Проверка примеров от этого не меняется.")
