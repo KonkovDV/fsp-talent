@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, blockCompany, fileComplaint, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
+import { apiError, blockCompany, fileComplaint, getMyOffers, markCompanyInterest, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
@@ -11,7 +11,7 @@ import { netLine } from '../../money'
 
 interface Offer {
   id: string; company: string; company_id?: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
-  perks?: string[]; practice_stage?: string | null
+  perks?: string[]; practice_stage?: string | null; company_interest?: boolean
   market_flag?: string | null
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
@@ -51,6 +51,10 @@ export default function CandidateOffers() {
   const [hideFor, setHideFor] = useState<string | null>(null)
   const [hidden, setHidden] = useState(false)
   const [hideError, setHideError] = useState('')
+  const interest = useMutation({
+    mutationFn: ({ id, on }: { id: string; on: boolean }) => markCompanyInterest(id, on),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
+  })
   const respond = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
       respondToOffer(id, action, action === 'reject' ? reasons[id] : undefined),
@@ -116,7 +120,9 @@ export default function CandidateOffers() {
                 <div className="flex min-w-0 items-start gap-4">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-accent-soft font-display text-lg font-bold text-accent" aria-hidden>{o.company.slice(0, 1)}</span>
                 <div className="min-w-0">
-                  <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}{o.company_id && <> · <Link to={`/companies/${o.company_id}`} className="text-accent hover:underline">Страница компании</Link></>}</p>
+                  <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}{o.company_id && <> · <Link to={`/companies/${o.company_id}`} className="text-accent hover:underline">Страница компании</Link></>}
+                    {o.company_id && <button type="button" className="btn-ghost btn-sm ml-2" onClick={() => interest.mutate({ id: o.company_id!, on: !o.company_interest })}>{o.company_interest ? 'Интерес отмечен' : 'Интересна компания'}</button>}
+                  </p>
                   {o.company_profile?.reputation?.reply?.shown && (
                     <p className="text-xs text-ink-3">После согласия отвечают не реже {Math.round((o.company_profile.reputation.reply.lower ?? 0) * 100)}% (по {o.company_profile.reputation.reply.n})</p>
                   )}

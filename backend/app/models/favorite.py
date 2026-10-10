@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -16,4 +16,16 @@ class EmployerFavorite(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employer_id = Column(UUID(as_uuid=True), ForeignKey("employers.id", ondelete="CASCADE"), nullable=False)
     participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    # saved — ordinary bookmark, priority — the company wants this card first. Still anonymous.
+    interest = Column(String(20), nullable=False, default="saved", server_default="saved")
+
+
+class CandidateInterest(Base):
+    """A specialist marked a company. The row stores ids, never a name."""
+    __tablename__ = "candidate_interests"
+    __table_args__ = (UniqueConstraint("participant_id", "employer_id", name="uq_candidate_interests_pair"),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False)
+    employer_id = Column(UUID(as_uuid=True), ForeignKey("employers.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))

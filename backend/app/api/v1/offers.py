@@ -22,7 +22,7 @@ from app.core.idempotency import (
     idem_finish,
 )
 from app.core.ratelimit import RateLimitUnavailable, too_many
-from app.models import AccessLog, CategoryAssignment, Employer, Offer, OfferFlag, Participant
+from app.models import AccessLog, CandidateInterest, CategoryAssignment, Employer, Offer, OfferFlag, Participant
 from app.services.market import market_flag, quartiles, reason_shares, role_median, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
 from app.services.offer_perks import PERKS, clean_perks
@@ -259,9 +259,13 @@ async def list_my_offers(current: dict = Depends(get_current_employer), db: Asyn
     cats = {c.participant_id: c for c in await db.scalars(select(CategoryAssignment).where(
         CategoryAssignment.participant_id.in_([o.candidate_id for o in rows])))} if rows else {}
     unread = await unread_counts(db, [o.id for o in rows if o.status == "accepted"], "employer")
+    marked = set(await db.scalars(select(CandidateInterest.participant_id).where(
+        CandidateInterest.employer_id == _eid(current),
+        CandidateInterest.participant_id.in_([o.candidate_id for o in rows])))) if rows else set()
     out = []
     for o in rows:
         card = _offer_out(o)
+        card["returned_interest"] = o.candidate_id in marked
         card["unread_messages"] = unread.get(o.id, 0)
         cat = cats.get(o.candidate_id)
         card["candidate"] = (

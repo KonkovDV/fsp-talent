@@ -286,6 +286,7 @@ CREATE TABLE public.employer_favorites (
     employer_id uuid NOT NULL,
     participant_id uuid NOT NULL,
     created_at timestamp with time zone NOT NULL,
+    interest character varying(20) DEFAULT 'saved'::character varying NOT NULL,
     CONSTRAINT employer_favorites_pkey PRIMARY KEY (id),
     CONSTRAINT uq_employer_favorites_pair UNIQUE (employer_id, participant_id),
     CONSTRAINT employer_favorites_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE,
@@ -319,6 +320,25 @@ CREATE POLICY candidate_resumes_owner ON public.candidate_resumes USING (((curre
 CREATE POLICY candidate_resumes_search ON public.candidate_resumes FOR SELECT USING ((current_setting('app.employer_id'::text, true) <> ''::text));
 
 CREATE POLICY employer_favorites_actor ON public.employer_favorites USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
+
+CREATE TABLE public.candidate_interests (
+    id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT candidate_interests_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_candidate_interests_pair UNIQUE (participant_id, employer_id),
+    CONSTRAINT candidate_interests_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE,
+    CONSTRAINT candidate_interests_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.candidate_interests FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.candidate_interests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY candidate_interests_owner ON public.candidate_interests USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
+CREATE POLICY candidate_interests_company ON public.candidate_interests FOR SELECT USING (((employer_id)::text = current_setting('app.employer_id'::text, true)));
 
 CREATE TABLE public.need_hidden (
     id uuid NOT NULL,

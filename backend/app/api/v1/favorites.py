@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
 from app.api.errors import ApiError
 from app.core.database import get_db
-from app.models import EmployerFavorite, Participant
+from app.models import CandidateInterest, EmployerFavorite, Participant
 from app.models.favorite import FAVORITES_MAX
 from app.services.search.pipeline import _build_cards, visible_in_search
 
@@ -41,8 +43,15 @@ async def list_favorites(current: dict = Depends(get_current_employer), db: Asyn
     ordered = [pid for pid in ids if pid in shown]
     cards = await _build_cards(db, ordered, set(), {}, set(), None) if ordered else []
     saved = {row.participant_id: row.created_at for row in rows}
+    status = {row.participant_id: row.interest for row in rows}
+    returned = set(await db.scalars(select(CandidateInterest.participant_id).where(
+        CandidateInterest.employer_id == employer_id,
+        CandidateInterest.participant_id.in_(ordered)))) if ordered else set()
     for card in cards:
-        card["saved_at"] = saved[uuid.UUID(card["candidate_id"])].isoformat()
+        pid = uuid.UUID(card["candidate_id"])
+        card["saved_at"] = saved[pid].isoformat()
+        card["interest"] = status.get(pid, "saved")
+        card["returned_interest"] = pid in returned
     return {"items": cards, "ids": [str(pid) for pid in ordered], "hidden": len(ids) - len(ordered),
             "max": FAVORITES_MAX}
 
@@ -63,6 +72,23 @@ async def add_favorite(participant_id: uuid.UUID, current: dict = Depends(get_cu
         db.add(EmployerFavorite(employer_id=employer_id, participant_id=participant_id, created_at=datetime.now(UTC)))
         await db.commit()
     return {"candidate_id": str(participant_id), "favorite": True}
+
+
+class InterestIn(BaseModel):
+    interest: Literal["saved", "priority"]
+
+
+@router.put("/{participant_id}")
+async def set_interest(participant_id: uuid.UUID, body: InterestIn, current: dict = Depends(get_current_employer),
+                       db: AsyncSession = Depends(get_db)):
+    """Priority is a label on the anonymous card. It does not change the match score."""
+    row = await db.scalar(select(EmployerFavorite).where(
+        EmployerFavorite.employer_id == uuid.UUID(current["sub"]), EmployerFavorite.participant_id == participant_id))
+    if row is None:
+        raise ApiError(404, "not_found", "Карточки нет в избранном")
+    row.interest = body.interest
+    await db.commit()
+    return {"candidate_id": str(participant_id), "interest": row.interest}
 
 
 @router.delete("/{participant_id}")
