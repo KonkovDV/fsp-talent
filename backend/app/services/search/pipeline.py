@@ -45,6 +45,7 @@ from app.services.matching import (
     CandidateFacts,
     NeedSpec,
     category_percentile,
+    near_pairs,
     pay_counterfactual,
     reason_source,
     recommended_categories,
@@ -430,16 +431,17 @@ async def search_candidates(
         stmt = stmt.where(or_(Participant.work_goal.is_(None), Participant.work_goal.in_(("job", "both"))))
     # City and format are score factors. A mismatch stays in the list and sorts lower.
     if role and grade:
-        # The primary category and a second confirmed specialization are checked separately.
-        # Filtering only by the stored primary grade would hide a junior confirmation on another role.
+        # Exact pair, one grade step, and a neighbour role at this grade. Two steps stay out.
+        # The match score still puts the exact category first and writes why the others are near.
+        pairs = near_pairs(role, grade)
         confirmed_pair = select(GradeConfirmation.participant_id).where(
-            GradeConfirmation.specialization == role, GradeConfirmation.grade == grade)
+            tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))
         resume_pair = select(CandidateResume.participant_id).where(
-            CandidateResume.specialization == role, CandidateResume.grade == grade,
+            tuple_(CandidateResume.specialization, CandidateResume.grade).in_(pairs),
             CandidateResume.participant_id.not_in(select(GradeConfirmation.participant_id).where(
-                GradeConfirmation.specialization == role)))
+                tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))))
         stmt = stmt.where(or_(
-            and_(PSI.role == role, PSI.grade == grade),
+            tuple_(PSI.role, PSI.grade).in_(pairs),
             Participant.id.in_(confirmed_pair),
             Participant.id.in_(resume_pair),
         ))
