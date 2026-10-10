@@ -563,9 +563,11 @@ async def search_candidates(
     matches = await score_pool(
         db, all_ids, need, text_fused, discipline, employer_id, by_discipline=by_discipline)
     platform_held = 0
+    full_card = True
     if employer_id is not None:
         company = await db.get(Employer, employer_id)
         if company is not None and not sees_senior(company.hiring_practice):
+            full_card = False
             kept = []
             for pid in all_ids:
                 person = matches[pid].facts
@@ -624,10 +626,13 @@ async def search_candidates(
         for pid in ordered if matches.get(pid) and matches[pid].facts
     }
     cards = await _build_cards(
-        db, ordered, wanted, have, dense_hit, discipline, chosen, _scored_roles(matches, ordered))
+        db, ordered, wanted, have, dense_hit, discipline, chosen, _scored_roles(matches, ordered),
+        full_card=full_card)
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
         card["match"] = _match_body(m, uuid.UUID(card["candidate_id"]) in cold_seats)
+        if not full_card:
+            card["match"]["info"] = [line for line in card["match"]["info"] if "признаков роста" not in line]
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
             "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
@@ -822,7 +827,8 @@ async def _category_percentiles(db, cats: dict) -> dict:
 
 
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
-                       fsp_choice: dict | None = None, scored: dict | None = None) -> list[dict]:
+                       fsp_choice: dict | None = None, scored: dict | None = None,
+                       full_card: bool = True) -> list[dict]:
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ordered)))}
@@ -918,28 +924,31 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             why.append(f"Короткая практика ({topic}): {mark}, {days_ago(p.practice_at)}")
         if task_line := card_signal(p, days_ago):
             why.append(task_line)
-        if code_line := code_profile_line(getattr(p, "github", None)):
+        if full_card and (code_line := code_profile_line(getattr(p, "github", None))):
             why.append(code_line)
         line = percentiles.get(pid)
         if line:
             why.append(line)
         stack = list(resume.stack or []) if resume is not None else (list(cat.stack) if cat else [])
+        show_city = bool(p.show_city) and full_card
+        show_fsp = bool(getattr(p, "show_fsp", True)) and full_card
+        show_experience = bool(getattr(p, "show_experience", True)) and full_card
         stack, experience, disciplines, why = visible_card(
             stack, p.experience_years, disciplines, why,
             show_stack=bool(getattr(p, "show_stack", True)),
-            show_fsp=bool(getattr(p, "show_fsp", True)),
-            show_experience=bool(getattr(p, "show_experience", True)))
+            show_fsp=show_fsp,
+            show_experience=show_experience)
         cards.append({
             "candidate_id": str(pid),
             "role": header_role,
             "grade": header_grade,
             "grade_source": header_source,
             "also_primary": also_primary,
-            "region": shown_region(p.region, bool(p.show_city)),
+            "region": shown_region(p.region, show_city),
             "experience_years": experience,
-            "soft_skills": list(getattr(p, "soft_skills", None) or []),
+            "soft_skills": list(getattr(p, "soft_skills", None) or []) if full_card else [],
             "stack": stack,
-            "resume_summary": resume.summary if resume is not None else None,
+            "resume_summary": resume.summary if resume is not None and full_card else None,
             "matched_skills": matched,
             "missing_skills": sorted(wanted - set(matched)),
             "disciplines": disciplines,

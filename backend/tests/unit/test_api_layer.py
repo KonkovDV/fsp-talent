@@ -320,7 +320,7 @@ async def test_favorites_keep_only_people_still_in_search(monkeypatch):
     current = _current("employer", company.id)
     kept, gone = _uid(), _uid()
 
-    async def cards(db, ordered, *rest):
+    async def cards(db, ordered, *rest, **_extra):
         return [{"candidate_id": str(pid), "why": []} for pid in ordered]
 
     monkeypatch.setattr(favorites, "_build_cards", cards)

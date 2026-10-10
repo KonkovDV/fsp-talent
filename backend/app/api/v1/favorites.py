@@ -18,8 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.api.errors import ApiError
 from app.core.database import get_db
-from app.models import CandidateInterest, EmployerFavorite, Participant
+from app.models import CandidateInterest, Employer, EmployerFavorite, Participant
 from app.models.favorite import FAVORITES_MAX
+from app.services.hiring_practice import sees_senior
 from app.services.search.pipeline import _build_cards, visible_in_search
 
 router = APIRouter(prefix="/employer/favorites", tags=["employer"])
@@ -41,7 +42,9 @@ async def list_favorites(current: dict = Depends(get_current_employer), db: Asyn
     ids = [row.participant_id for row in rows]
     shown = await _visible(db, ids)
     ordered = [pid for pid in ids if pid in shown]
-    cards = await _build_cards(db, ordered, set(), {}, set(), None) if ordered else []
+    company = await db.get(Employer, employer_id)
+    full_card = sees_senior(company.hiring_practice if company is not None else None)
+    cards = await _build_cards(db, ordered, set(), {}, set(), None, full_card=full_card) if ordered else []
     saved = {row.participant_id: row.created_at for row in rows}
     status = {row.participant_id: row.interest for row in rows}
     returned = set(await db.scalars(select(CandidateInterest.participant_id).where(
