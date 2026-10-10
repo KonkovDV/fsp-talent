@@ -27,6 +27,7 @@ vi.mock('../../api/client', async () => {
     answerAssessment,
     noteAssessmentCopy,
     acceptLowerGrade,
+    saveAssessmentDraft: vi.fn(() => Promise.resolve({ data: { version: 1 } })),
     startAssessment: vi.fn(),
     abandonAssessment: vi.fn(),
     reviewAssessment: vi.fn(),
@@ -103,6 +104,14 @@ describe('тест на грейд', () => {
     renderPage(<CandidateAssessment />)
     expect(await screen.findByLabelText('Ответ — целое число')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ответить' })).toBeDisabled()
+  })
+
+  it('после перезагрузки подставляет сохранённый ответ', async () => {
+    activeAssessment.mockResolvedValue({ data: session({
+      item: { ...item(), draft_text: '42', draft_version: 3 },
+    }) })
+    renderPage(<CandidateAssessment />)
+    expect(await screen.findByLabelText('Ответ — целое число')).toHaveValue('42')
   })
 
   it('не принимает буквы вместо числа', async () => {
