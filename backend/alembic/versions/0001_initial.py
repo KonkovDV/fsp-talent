@@ -10,7 +10,8 @@ of superuser rights if it already exists.
 Contact columns are text. Login looks up email_bindex, not the address itself.
 A fresh database is created in that shape. A database that already has this
 schema must be stamped onto this revision: upgrade would try to create the
-objects again and the transaction would roll back.
+objects again and the transaction would roll back. Objects added here later reach
+such a database through app.core.schema_sync, which runs after upgrade.
 """
 from __future__ import annotations
 

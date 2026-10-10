@@ -229,6 +229,7 @@ export REDIS_URL=redis://localhost:6379/0
 export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
 export MAIL_MODE=console VC_PRIVATE_KEY_PATH=./vc_ed25519.pem
 alembic upgrade head
+python -m app.core.schema_sync   # старая база получает новые таблицы и колонки, удалять ничего не нужно
 python -m seed.generate_seed
 uvicorn app.main:app --reload --port 8000
 
