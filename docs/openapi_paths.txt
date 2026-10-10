@@ -58,9 +58,16 @@
 /api/v1/employer/ats-sandbox
 /api/v1/employer/favorites
 /api/v1/employer/favorites/{participant_id}
+/api/v1/employer/integrations
+/api/v1/employer/integrations/deliveries
+/api/v1/employer/integrations/export
+/api/v1/employer/integrations/test
+/api/v1/employer/integrations/{endpoint_id}
+/api/v1/employer/integrations/{endpoint_id}/rotate
 /api/v1/employer/me
 /api/v1/employer/reputation
 /api/v1/fsp-id-demo/login
+/api/v1/integrations/sandbox/{endpoint_id}
 /api/v1/legal/documents
 /api/v1/legal/documents/{kind}
 /api/v1/me/consents

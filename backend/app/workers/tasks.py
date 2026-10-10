@@ -221,3 +221,16 @@ def reset_demo():
         return
     from seed.reset_demo import reset_demo as run
     run_async(run())
+
+
+@celery_app.task(name="app.workers.tasks.deliver_webhooks")
+def deliver_webhooks():
+    """Send ATS deliveries that are due. A failure stays pending until the next pass."""
+    async def _inner():
+        from app.core.database import AsyncSessionLocal
+        from app.services.webhooks import deliver_due
+        async with AsyncSessionLocal() as db:
+            sent = await deliver_due(db)
+            await db.commit()
+            return sent
+    run_async(_inner())
