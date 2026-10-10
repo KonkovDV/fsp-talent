@@ -71,7 +71,7 @@ def email_is(model: Any, email: str):
 
 
 _FIELDS = {
-    "Participant": ("participants", ("email", "phone", "telegram", "guardian_email")),
+    "Participant": ("participants", ("email", "phone", "telegram", "github", "guardian_email")),
     "Employer": ("employers", ("email",)),
     "Offer": ("offers", ("contact_method",)),
     "EmailVerification": ("email_verifications", ("email",)),

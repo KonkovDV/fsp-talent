@@ -37,6 +37,8 @@ class Participant(Base):
     # Set only for a demo guest account: sessions close at this moment (services/guest.py).
     guest_until = Column(DateTime(timezone=True))
     telegram = Column(Text)
+    # Public code host login. Sealed like the other contacts. Not a match input.
+    github = Column(Text)
     phone = Column(Text)
     birth_date = Column(Date)
     region = Column(String(100), index=True)

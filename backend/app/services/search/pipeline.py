@@ -40,6 +40,7 @@ from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.ambition import ambition_note
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.code_profile import code_profile_line
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.fsp.relevance import lcb_for_need
 from app.services.hiring_practice import sees_senior
@@ -907,6 +908,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             why.append(f"Короткая практика ({topic}): {mark}, {days_ago(p.practice_at)}")
         if task_line := card_signal(p, days_ago):
             why.append(task_line)
+        if code_line := code_profile_line(getattr(p, "github", None)):
+            why.append(code_line)
         line = percentiles.get(pid)
         if line:
             why.append(line)
