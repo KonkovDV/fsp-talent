@@ -101,7 +101,7 @@ jobs:
       # Unit tests never touch a database. These steps catch a broken migration chain, an
       # unimportable module and a dead API path, which all reached main before.
       - name: Apply migrations
-        run: cd backend && alembic upgrade head
+        run: cd backend && alembic upgrade head && python -m app.core.schema_sync --dry-run
       - name: Seed demo data
         run: cd backend && python -m seed.generate_seed
       - name: API smoke test
