@@ -465,6 +465,53 @@ async def get_my_results(
     } for r in rows]
 
 
+@router.post("/me/certificate")
+async def import_certificate(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
+                             db: AsyncSession = Depends(get_db)):
+    """Skills quoted in a certificate. A confirmed test skill is left as it is. The grade does not move."""
+    from app.services.certificate_evidence import certificate_skills
+    from app.services.protocol_file import text_of_pdf
+
+    if await too_many(f"certificate:{_pid(current)}", limit=10, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много файлов. Подождите час.")
+    person = await db.get(Participant, _pid(current))
+    if person is None or person.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    grade_before = person.assessed_grade
+    raw = await file.read()
+    if len(raw) > 2_000_000:
+        raise ApiError(413, "payload_too_large", "Файл больше 2 МБ")
+    try:
+        if (file.filename or "").lower().endswith(".pdf"):
+            text = text_of_pdf(raw)
+        else:
+            text = raw.decode("utf-8", errors="replace")
+    except Exception as exc:
+        raise ApiError(422, "validation_error", "Файл не читается") from exc
+    found = certificate_skills(text)
+    if found is None:
+        raise ApiError(422, "validation_error",
+                       "В файле нет свидетельства: нужно упоминание КИТ, i.moscow или компетенций")
+    existing = {row.name: row for row in await db.scalars(select(Skill).where(Skill.participant_id == person.id))}
+    kept = []
+    now = datetime.now(UTC)
+    for name, quote in found:
+        row = existing.get(name)
+        if row is not None and row.trust_level == "test_confirmed":
+            continue
+        if row is None:
+            row = Skill(participant_id=person.id, name=name, raw_name=name, created_at=now)
+            db.add(row)
+            existing[name] = row
+        row.source_quote = quote
+        row.trust_level = "resume_confirmed"
+        row.confirmed = True
+        row.confirmed_at = now
+        kept.append(name)
+    await db.commit()
+    return {"skills": kept, "grade_unchanged": person.assessed_grade == grade_before}
+
+
 @router.post("/me/protocols")
 async def import_protocols(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
                            db: AsyncSession = Depends(get_db)):

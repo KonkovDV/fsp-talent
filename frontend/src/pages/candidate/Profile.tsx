@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, apiErrorCode, downloadMyProfilePdf, getMyProfile, giveConsent, myExclusions, parseResume, setExclusions, surveyOptions, updateMyProfile, updateVisibility, uploadResumePdf } from '../../api/client'
+import { apiError, apiErrorCode, downloadMyProfilePdf, getMyProfile, giveConsent, importCertificate, myExclusions, parseResume, setExclusions, surveyOptions, updateMyProfile, updateVisibility, uploadResumePdf } from '../../api/client'
 import { Eye, EyeOff, MailCheck } from 'lucide-react'
 import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
@@ -41,6 +41,7 @@ export default function CandidateProfile() {
   const [found, setFound] = useState<ResumeFound | null>(null)
   const [hint, setHint] = useState<SurveyHint | null>(null)
   const [note, setNote] = useState('')
+  const [certificateNote, setCertificateNote] = useState('')
   const [askDistribution, setAskDistribution] = useState(false)
 
   useEffect(() => {
@@ -272,6 +273,24 @@ export default function CandidateProfile() {
                 <p className="field-hint">На карточке до согласия только пометка. Сам логин — вместе с контактами.</p></div>
               <div><label className="field-label" htmlFor="phone">Телефон</label>
                 <input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7" className="input" /></div>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="kit-file">Свидетельство о навыках</label>
+              <input id="kit-file" type="file" accept=".pdf,.txt,application/pdf,text/plain" className="text-sm"
+                onChange={e => {
+                  const picked = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!picked) return
+                  setCertificateNote('')
+                  void importCertificate(picked).then(r => {
+                    setCertificateNote(r.data.skills.length
+                      ? `По цитате из файла: ${r.data.skills.join(', ')}. Грейд не изменился.`
+                      : 'В свидетельстве нет навыков из словаря. Грейд не изменился.')
+                    qc.invalidateQueries({ queryKey: ['myProfile'] })
+                  }).catch(err => setCertificateNote(apiError(err, 'Файл не разобран')))
+                }} />
+              <p className="field-hint">Только если в файле есть КИТ, i.moscow или слово «компетенции». Навык берётся по цитате. Грейд не ставится.</p>
+              {certificateNote && <p className="text-sm text-ink-2" role="status">{certificateNote}</p>}
             </div>
             <label className="flex items-start gap-2.5 text-sm text-ink">
               <input type="checkbox" className="mt-1" checked={publicProfile} disabled={profile.is_minor}

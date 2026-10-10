@@ -240,6 +240,11 @@ export const readAllNotifications = () => api.post('/notifications/read-all')
 export const deleteMyAccount = (confirm: string, password = '') =>
   api.delete('/candidates/me', { data: { confirm, password } })
 export const getMyResults = () => api.get('/candidates/me/results')
+export const importCertificate = (file: File) => {
+  const body = new FormData()
+  body.append('file', file)
+  return api.post<{ skills: string[]; grade_unchanged: boolean }>('/candidates/me/certificate', body)
+}
 export const importProtocols = (file: File) => {
   const body = new FormData()
   body.append('file', file)
