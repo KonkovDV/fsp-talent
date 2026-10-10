@@ -625,7 +625,7 @@ def _match_body(m: PoolMatch, cold_seat: bool) -> dict:
     return {
         "score": m.score, "basis": m.basis, "plus": m.plus, "minus": m.minus, "info": m.info,
         "employer": m.employer, "accept": m.accept, "congestion": m.congestion,
-        "reply": m.reply,
+        "reply": m.reply, "mutual": m.mutual, "rejected_by": list(m.rejected_by or []),
         "reasons": reasons,
         "factors": [{"key": f.key, "label": f.label, "weight": f.weight, "value": f.value,
                      "contrib": f.contrib} for f in m.factors],
@@ -649,6 +649,8 @@ class PoolMatch:
     accept: float | None = None
     congestion: float = 0.0
     reply: dict | None = None
+    mutual: float | None = None
+    rejected_by: list | None = None
 
 
 async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: list[uuid.UUID]) -> dict:
@@ -759,7 +761,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             m.info.append(note)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,
                              m.fit, m.tier, m.confirmed, m.employer, m.accept, m.congestion,
-                             reply_outlook(need, facts))
+                             reply_outlook(need, facts), m.mutual, list(m.rejected_by or []))
     return out
 
 
