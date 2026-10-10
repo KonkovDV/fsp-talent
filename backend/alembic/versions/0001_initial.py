@@ -237,6 +237,24 @@ CREATE TABLE public.item_stats (
 );
 
 
+CREATE TABLE public.item_drafts (
+    id uuid NOT NULL,
+    spec character varying(30) NOT NULL,
+    topic character varying(40) NOT NULL,
+    level integer NOT NULL,
+    stem text NOT NULL,
+    key character varying(200) NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    note character varying(500),
+    created_at timestamp with time zone NOT NULL,
+    reviewed_at timestamp with time zone,
+    CONSTRAINT item_drafts_pkey PRIMARY KEY (id),
+    CONSTRAINT ck_item_drafts_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying])::text[])))
+);
+
+CREATE INDEX ix_item_drafts_status ON public.item_drafts USING btree (status);
+
+
 
 CREATE TABLE public.need_shortlist (
     id uuid NOT NULL,

@@ -59,6 +59,8 @@
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
 /api/v1/moderation/complaints
+/api/v1/moderation/item-drafts
+/api/v1/moderation/item-drafts/{draft_id}/review
 /api/v1/moderation/vacancies/{vacancy_id}/close
 /api/v1/needs
 /api/v1/needs/{need_id}

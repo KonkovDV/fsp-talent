@@ -182,7 +182,7 @@ def quiet(monkeypatch):
     async def nothing(*_args, **_kwargs):
         return None
 
-    for module in (offers, tasks, search, fsp_id_demo, messages, candidates):
+    for module in (offers, tasks, search, fsp_id_demo, messages, candidates, moderation):
         monkeypatch.setattr(module, "too_many", allow)
     monkeypatch.setattr(offers, "contacts_allowed", yes)
     monkeypatch.setattr("app.services.search.cache.publish_invite", nothing)
@@ -333,6 +333,52 @@ async def test_moderation_desk_lists_and_closes(quiet, monkeypatch):
     with pytest.raises(ApiError) as hidden:
         await moderation.complaints(current, db)
     assert hidden.value.status_code == 404
+
+    from app.services.ai import drafts
+
+    async def agree(model, system, user):
+        return '{"stem": "Сколько раз выполнится цикл?", "key": "6"}' if model == "writer" else '{"key": "6"}'
+
+    monkeypatch.setattr(drafts, "_chat", agree)
+    for name, value in (("AI_ENABLED", True), ("GIGACHAT_CREDENTIALS", "present"),
+                        ("GIGACHAT_MODEL", "writer"), ("GIGACHAT_CHECK_MODEL", "checker")):
+        monkeypatch.setattr(drafts.settings, name, value)
+    db = Bag()
+    db.gets = [company]
+    with pytest.raises(ApiError) as wrong:
+        await moderation.request_draft(moderation.DraftIn(spec="backend", topic="ui", level=2), current, db)
+    assert wrong.value.status_code == 422
+    db.gets = [company]
+    made = await moderation.request_draft(moderation.DraftIn(spec="backend", topic="python", level=2), current, db)
+    assert made["accepted"] and made["draft"]["status"] == "pending" and made["draft"]["key"] == "6"
+    draft = db.added[-1]
+
+    db.gets = [company, draft]
+    done = await moderation.review_draft(draft.id, moderation.ReviewIn(decision="approved", note="в семейство циклов"),
+                                         current, db)
+    assert done["status"] == "approved" and done["reviewed_at"]
+    db.gets = [company, draft]
+    with pytest.raises(ApiError) as twice:
+        await moderation.review_draft(draft.id, moderation.ReviewIn(decision="rejected"), current, db)
+    assert twice.value.status_code == 409
+
+    async def disagree(model, system, user):
+        return '{"stem": "Сколько раз?", "key": "6"}' if model == "writer" else '{"key": "7"}'
+
+    monkeypatch.setattr(drafts, "_chat", disagree)
+    db = Bag()
+    db.gets = [company]
+    lost = await moderation.request_draft(moderation.DraftIn(spec="backend", topic="python", level=2), current, db)
+    assert lost == {"accepted": False, "reason": "disagree", "draft": None} and not db.added
+
+    monkeypatch.setattr(drafts.settings, "GIGACHAT_CHECK_MODEL", "")
+    db.gets = [company]
+    listed_off = await moderation.item_drafts("pending", current, db)
+    assert listed_off["model_ready"] is False
+    db.gets = [company]
+    with pytest.raises(ApiError) as off:
+        await moderation.request_draft(moderation.DraftIn(spec="backend", topic="python", level=2), current, db)
+    assert off.value.status_code == 503
 
 
 async def test_employer_profile_round_trip(quiet):

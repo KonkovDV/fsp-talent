@@ -16,6 +16,22 @@ def test_two_keys_must_agree_and_the_stem_must_not_carry_a_person():
     assert drafts.judge("Сколько будет 2 + 2?", "4", "4").served is False
 
 
+def test_a_review_happens_once_and_keeps_people_out_of_the_note():
+    from datetime import UTC, datetime
+
+    from app.models import ItemDraft
+
+    row = ItemDraft(spec="backend", topic="python", level=2, stem="Сколько?", key="6", status="pending")
+    now = datetime(2026, 10, 10, tzinfo=UTC)
+    with pytest.raises(ValueError, match="identity"):
+        drafts.review(row, "approved", "Передать Анне Ивановой", now)
+    assert drafts.review(row, "rejected", None, now).status == "rejected" and row.reviewed_at == now
+    with pytest.raises(ValueError, match="already_reviewed"):
+        drafts.review(row, "approved", None, now)
+    assert drafts.brief_error("backend", "python", 3) is None
+    assert drafts.brief_error("backend", "python", 9) and drafts.brief_error("nope", "python", 1)
+
+
 def test_a_served_draft_cannot_be_constructed():
     with pytest.raises(RuntimeError):
         drafts.Verdict(True, "agree", served=True)
