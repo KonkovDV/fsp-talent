@@ -34,7 +34,7 @@
 
 ## Запуск
 
-Нужны Docker 24+ с Compose 2.17+, 4 ГБ свободной памяти и свободные порты 80 и 8025.
+Нужны Docker 24+ с Compose 2.17+, 4 ГБ свободной памяти и свободные порты 80 и 8025. Видеокарта не нужна: `docker-compose.yml` её не требует. С NVIDIA и NVIDIA Container Toolkit локальную модель пары можно перенести на GPU: `make demo GPU=1` (подключает `docker-compose.gpu.yml`).
 
 ```bash
 git clone https://github.com/KonkovDV/fsp-talent.git

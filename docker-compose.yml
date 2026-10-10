@@ -24,7 +24,8 @@ services:
       SANDBOX_SOCKET: /run/sandbox/sandbox.sock
       SANDBOX_TOKEN: ${SANDBOX_TOKEN:-local-sandbox}
     ports: ['127.0.0.1:8010:8000']
-    gpus: all
+    # No GPU here: a host without the NVIDIA Container Toolkit refuses `gpus: all`
+    # ("could not select device driver"). With a video card: make demo GPU=1 (docker-compose.gpu.yml).
     volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox, ./models:/models:ro]
     depends_on:
       postgres: {condition: service_healthy}
