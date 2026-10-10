@@ -53,6 +53,8 @@ class Participant(Base):
     industry = Column(String(40))
     work_goal = Column(String(20))   # job | internship | both
     survey_at = Column(DateTime(timezone=True))
+    # Set once, on the first saved survey. The 24-hour retest window is counted from it.
+    category_opened_at = Column(DateTime(timezone=True))
     # is_visible: anonymous card is searchable by employers; public_profile: named page + leaderboard
     is_visible = Column(Boolean, nullable=False, default=True)
     # active: looking now; open: will consider an offer; not_looking: out of search and shortlists.
