@@ -183,6 +183,8 @@ export async function signOut() {
 
 export const askGuide = (question: string) =>
   api.post<{ answer: string; links: { label: string; to: string }[] }>('/guide/ask', { question })
+export const askPublicGuide = (question: string) =>
+  api.post<{ answer: string; links: { label: string; to: string }[] }>('/public/guide', { question })
 
 export type Role = 'participant' | 'employer'
 const form = (username: string, password: string) =>

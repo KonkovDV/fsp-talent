@@ -40,10 +40,22 @@ _EMPLOYER: tuple[dict, ...] = (
      "text": "Вебхуки подключаются в «Интеграциях»."},
 )
 
-_PAGES = {"participant": _CANDIDATE, "employer": _EMPLOYER}
+_PUBLIC: tuple[dict, ...] = (
+    {"keys": ("тест", "метод", "вес"), "title": "Как устроен тест", "to": "/method",
+     "text": "Параметры теста — на странице «Как устроен тест». Грейд эта страница не ставит."},
+    {"keys": ("удостовер", "подпис", "did"), "title": "Проверка удостоверения", "to": "/badge",
+     "text": "JSON удостоверения проверяется на странице «Проверка удостоверения». Имени в краткой карточке нет."},
+    {"keys": ("жюри", "протокол", "ваканс"), "title": "Режим жюри", "to": "/jury",
+     "text": "Демо-входы и публичные страницы собраны в «Режиме жюри»."},
+)
+
+_PAGES = {"participant": _CANDIDATE, "employer": _EMPLOYER, "public": _PUBLIC}
+_PUBLIC_PATHS = {page["to"] for page in _PUBLIC}
 
 
 def _allowed(role: str, path: str) -> bool:
+    if role == "public":
+        return path in _PUBLIC_PATHS
     prefix = "/candidate" if role == "participant" else "/employer"
     return path == prefix or path.startswith(prefix + "/")
 

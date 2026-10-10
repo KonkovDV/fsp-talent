@@ -79,6 +79,21 @@ def _public_skill(s: Skill) -> dict:
     }
 
 
+class PublicGuideIn(BaseModel):
+    question: str = Field(min_length=2, max_length=200)
+
+
+@router.post("/guide")
+async def public_guide(body: PublicGuideIn, request: Request):
+    """A pointer for a visitor. No account, no model, and only public pages."""
+    from app.api.v1.auth import client_address
+    from app.services.guide import guide
+
+    if await too_many(f"public:guide:{client_address(request)}", limit=30, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много вопросов. Подождите час.")
+    return guide(body.question, "public")
+
+
 @router.get("/did.json")
 async def public_did():
     """The same did:web document as /.well-known/did.json, on the API prefix the site already proxies."""

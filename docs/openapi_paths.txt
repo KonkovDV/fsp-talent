@@ -143,6 +143,7 @@
 /api/v1/public/did.json
 /api/v1/public/evaluate
 /api/v1/public/guardian-consent
+/api/v1/public/guide
 /api/v1/public/issuer
 /api/v1/public/jury-free
 /api/v1/public/leaderboard

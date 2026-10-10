@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, FileCheck2, UserRound } from 'lucide-react'
-import { apiError, categoryRanking, telegramAchievements, telegramVacancies } from '../api/client'
+import { apiError, askPublicGuide, categoryRanking, telegramAchievements, telegramVacancies } from '../api/client'
 import { GRADES, ROLE_RU, gradeRu } from '../labels'
 import PublicShell from '../components/PublicShell'
 import { PageHeader } from '../components/ui'
@@ -23,6 +23,9 @@ export default function JuryPage() {
   const [rankGrade, setRankGrade] = useState('middle')
   const [ranks, setRanks] = useState<{ place: number; test: number }[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [question, setQuestion] = useState('')
+  const [hint, setHint] = useState<{ answer: string; links: { label: string; to: string }[] } | null>(null)
+  const publicPages = new Set(['/method', '/badge', '/jury'])
   const show = async (kind: 'achievements' | 'vacancies') => {
     setBusy(true)
     setNote('')
@@ -114,6 +117,27 @@ export default function JuryPage() {
           ? <p className="text-sm text-ink-2">В этой категории подтверждённых тестом нет.</p>
           : <ol className="text-sm text-ink">{ranks.map(row => <li key={row.place}>{row.place}. тест {Math.round(row.test * 100)} %</li>)}</ol>)}
       </section>
+
+      <form className="card mt-8 space-y-3 p-5" onSubmit={e => {
+        e.preventDefault()
+        setBusy(true)
+        void askPublicGuide(question.trim()).then(r => setHint(r.data)).catch(error => setNote(apiError(error, 'Подсказка не открылась'))).finally(() => setBusy(false))
+      }}>
+        <h2 className="font-display text-lg font-bold text-ink">Куда нажать без входа</h2>
+        <p className="text-sm text-ink-2">Ответ — только публичная страница. Вопрос на сервере не хранится и в модель не уходит.</p>
+        <input className="input" value={question} onChange={e => setQuestion(e.target.value)} maxLength={200} aria-label="Вопрос без входа" placeholder="Например, где проверить подпись" />
+        <button type="submit" className="btn-secondary btn-sm" disabled={busy || question.trim().length < 2}>Показать страницу</button>
+        {hint && (
+          <div className="text-sm text-ink">
+            <p>{hint.answer}</p>
+            <ul className="mt-2 space-y-1">
+              {hint.links.filter(link => publicPages.has(link.to)).map(link => (
+                <li key={link.to}><Link to={link.to} className="text-accent hover:underline">{link.label}</Link></li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </form>
 
       <p className="mt-6 text-sm text-ink-2">
         Набор этих профилей в JSON и CSV проверяется при запуске стенда и в базу не записывается.
