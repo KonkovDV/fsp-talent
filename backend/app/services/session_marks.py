@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 TAB_LEAVE_CAP = 30
+INTEGRITY_FACTOR = 0.85
+INTEGRITY_LINE = (
+    "На тесте отмечены быстрые верные ответы или уход со вкладки. "
+    "Место умножено на 0,85. Грейд не изменён."
+)
 COPY_CAP = 30
 DISPUTE_TEXT = (
     "Решение принято автоматически по правилам теста. "
@@ -22,6 +27,20 @@ def note_copy(flags: dict | None) -> dict:
     out = dict(flags or {})
     out["copies"] = min(COPY_CAP, int(out.get("copies") or 0) + 1)
     return out
+
+
+def integrity_flagged(flags: dict | None) -> bool:
+    """A grade test with a fast-correct run or a hidden tab. A trial and a vacancy test do not count."""
+    flags = flags or {}
+    if flags.get("vacancy_id") or flags.get("mode") == "express":
+        return False
+    return bool(flags.get("pace_review")) or int(flags.get("tab_leaves") or 0) > 0
+
+
+def penalised(score: float, flags: dict | None) -> tuple[float, str | None]:
+    if not integrity_flagged(flags):
+        return score, None
+    return round(score * INTEGRITY_FACTOR, 4), INTEGRITY_LINE
 
 
 def dispute_error(status: str, owned: bool, already: bool) -> str | None:

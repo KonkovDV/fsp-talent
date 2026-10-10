@@ -54,6 +54,7 @@ from app.services.matching import (
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
+from app.services.session_marks import penalised
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import card_signal
@@ -682,6 +683,15 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             counts[sid] = (int(correct or 0), int(n or 0))
     interviews = await _interview_outcomes(db, employer_id, ids) if employer_id else {}
     top = max(text_fused.values(), default=0.0) or 1.0
+    marks: dict[uuid.UUID, dict] = {}
+    if ids:
+        mark_rows = (await db.execute(
+            select(TestSession.participant_id, TestSession.flags)
+            .where(TestSession.participant_id.in_(list(ids)), TestSession.status == "completed",
+                   TestSession.completed_at.is_not(None))
+            .order_by(TestSession.completed_at.desc()))).all()
+        for pid, flags in mark_rows:
+            marks.setdefault(pid, flags or {})
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
         p, cat = people.get(pid), cats.get(pid)
@@ -713,6 +723,10 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             work_formats=tuple(p.work_formats or ()) if p else (),
         )
         m = match_score(need, facts)
+        adjusted, note = penalised(m.score, marks.get(pid))
+        if note:
+            m.score = adjusted
+            m.info.append(note)
         out[pid] = PoolMatch(m.score, m.factors, m.plus, m.minus, m.info, facts, m.basis, m.reasons,
                              m.fit, m.tier, m.confirmed, m.employer, m.accept, m.congestion,
                              reply_outlook(need, facts))
