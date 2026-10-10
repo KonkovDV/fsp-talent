@@ -32,6 +32,8 @@ class Participant(Base):
     # Successful password login. Empty means this account has never signed in.
     # The jury button offers the address that has been idle the longest.
     last_login_at = Column(DateTime(timezone=True))
+    # Set only for a demo guest account: sessions close at this moment (services/guest.py).
+    guest_until = Column(DateTime(timezone=True))
     telegram = Column(Text)
     phone = Column(Text)
     birth_date = Column(Date)

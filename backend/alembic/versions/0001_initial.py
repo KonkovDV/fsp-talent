@@ -196,7 +196,8 @@ CREATE TABLE public.employers (
     email_verified_at timestamp with time zone,
     token_epoch integer DEFAULT 0 NOT NULL,
     refresh_nonce integer DEFAULT 0 NOT NULL,
-    invites_paused_at timestamp with time zone
+    invites_paused_at timestamp with time zone,
+    guest_until timestamp with time zone
 );
 
 
@@ -400,6 +401,7 @@ CREATE TABLE public.participants (
     password_hash character varying(200),
     email_verified_at timestamp with time zone,
     last_login_at timestamp with time zone,
+    guest_until timestamp with time zone,
     fsp_linked_at timestamp with time zone,
     specialization character varying(30),
     industry character varying(40),

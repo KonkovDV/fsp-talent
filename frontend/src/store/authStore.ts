@@ -8,14 +8,17 @@ interface AuthFields {
   userRole: Role | null
   userId: string | null
   needsRenew: boolean
+  /** Demo guest account: the moment its sessions close. */
+  guestUntil: string | null
 }
 
 interface AuthState extends AuthFields {
-  setAuth: (token: string, role: Role) => void
+  /** A renewal passes no guestUntil and keeps the one of the same account. */
+  setAuth: (token: string, role: Role, guestUntil?: string | null) => void
   logout: () => void
 }
 
-const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null, needsRenew: false }
+const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null, needsRenew: false, guestUntil: null }
 
 function parseJwtPayload(token: string): Record<string, unknown> {
   try {
@@ -36,11 +39,13 @@ export function isTokenExpired(token: string | null, nowSeconds = Date.now() / 1
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...SIGNED_OUT,
-      setAuth: (token, role) => {
+      setAuth: (token, role, guestUntil) => {
         const payload = parseJwtPayload(token)
-        set({ token, userRole: role, userId: String(payload['sub'] ?? ''), needsRenew: false })
+        const userId = String(payload['sub'] ?? '')
+        const kept = get().userId === userId ? get().guestUntil : null
+        set({ token, userRole: role, userId, needsRenew: false, guestUntil: guestUntil !== undefined ? guestUntil : kept })
       },
       logout: () => set(SIGNED_OUT),
     }),
@@ -59,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
             userRole: saved.userRole,
             userId: saved.userId ?? null,
             needsRenew: true,
+            guestUntil: saved.guestUntil ?? null,
           }
         }
         return {
@@ -67,6 +73,7 @@ export const useAuthStore = create<AuthState>()(
           userRole: saved.userRole ?? null,
           userId: saved.userId ?? null,
           needsRenew: false,
+          guestUntil: saved.guestUntil ?? null,
         }
       },
       // merge only fixes the in-memory state. Writing it back through the store's own action also

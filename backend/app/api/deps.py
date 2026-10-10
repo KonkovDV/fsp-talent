@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token, epochs_match
 from app.models import Employer, Participant
+from app.services.guest import guest_expired
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/participant/token")
 
@@ -29,7 +30,7 @@ async def _open_account(db: AsyncSession, payload: dict):
         account = await db.get(model, uuid.UUID(str(payload["sub"])))
     except ValueError as e:
         raise ValueError("Invalid token") from e
-    if account is None or getattr(account, "deleted_at", None) is not None:
+    if account is None or getattr(account, "deleted_at", None) is not None or guest_expired(account):
         raise ValueError("Account is closed")
     if not epochs_match(payload.get("ep"), account.token_epoch):
         raise ValueError("Session was closed")

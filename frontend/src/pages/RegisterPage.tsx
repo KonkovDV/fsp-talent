@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
-import { apiError, apiErrorCode, legalDocuments, registerEmployer, registerParticipant, type Role } from '../api/client'
+import { apiError, apiErrorCode, guestLogin, legalDocuments, publicDemo, registerEmployer, registerParticipant, type Role } from '../api/client'
+import { useAuthStore } from '../store/authStore'
 import { ConsentChecklist, requiredKinds } from '../components/LegalConsents'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
 import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
@@ -37,6 +38,12 @@ export default function RegisterPage() {
     queryKey: ['legal-list', role], queryFn: () => legalDocuments(role).then(r => r.data),
   })
   const missing = requiredKinds(docs).filter(k => !consents.includes(k))
+  const setAuth = useAuthStore(s => s.setAuth)
+  const [demo, setDemo] = useState(false)
+  const [guestBusy, setGuestBusy] = useState(false)
+  useEffect(() => {
+    publicDemo().then(res => setDemo(Boolean(res.data.demo_mode))).catch(() => setDemo(false))
+  }, [])
 
   const pf = useForm<ParticipantForm>({ resolver: zodResolver(participantSchema), defaultValues: { is_adult: false, age_15_17: false } })
   const ef = useForm<EmployerForm>({ resolver: zodResolver(employerSchema) })
@@ -58,6 +65,19 @@ export default function RegisterPage() {
       const r = await registerEmployer({ ...data, inn: data.inn || null, website: data.website || null, consents })
       done(data.email, r.data?.demo_code)
     } catch (e) { fail(e) }
+  }
+  const onGuest = async () => {
+    setError('')
+    setGuestBusy(true)
+    try {
+      const r = await guestLogin(role, consents)
+      setAuth(r.data.access_token, role, r.data.guest_until)
+      navigate(role === 'participant' ? '/candidate' : '/employer')
+    } catch (e) {
+      setError(apiError(e, 'Не удалось войти гостем'))
+    } finally {
+      setGuestBusy(false)
+    }
   }
   const submitting = pf.formState.isSubmitting || ef.formState.isSubmitting
   const err = (m?: string) => m && <p className="field-error">{m}</p>
@@ -124,6 +144,18 @@ export default function RegisterPage() {
             {submitting ? 'Отправляем код…' : 'Получить код на email'}
           </button>
         </form>
+      )}
+      {demo && (
+        <div className="mt-6 space-y-2 border-t border-line pt-4" data-testid="guest-entry">
+          <p className="text-xs leading-relaxed text-ink-3">
+            Демо-стенд: можно войти без почты. Пустой гостевой аккаунт живёт 48 часов, потом удаляется.
+            {role === 'participant' ? ' Гостя не видно в поиске работодателей.' : ''} Нужны те же согласия, что и выше.
+          </p>
+          <button type="button" className="btn w-full border border-line py-2 text-sm" onClick={onGuest}
+            disabled={guestBusy || missing.length > 0}>
+            {guestBusy ? 'Входим…' : 'Войти гостем без почты'}
+          </button>
+        </div>
       )}
     </AuthShell>
   )

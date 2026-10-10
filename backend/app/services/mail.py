@@ -50,6 +50,8 @@ def _write_file(to: str, subject: str, text: str, meta: dict) -> Path:
 
 async def send_mail(to: str, subject: str, text: str, meta: dict | None = None) -> None:
     """Deliver a letter. Failures are logged, not raised: the person can ask for the code again."""
+    if to.strip().lower().endswith(".invalid"):
+        return
     mode = settings.MAIL_MODE
     try:
         if mode == "smtp":

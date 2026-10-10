@@ -58,6 +58,7 @@ from app.services.account_export import (
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
+from app.services.guest import guest_expired, new_guest
 from app.services.identity import (
     check_required_consents,
     check_resend_allowed,
@@ -82,6 +83,7 @@ class TokenOut(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     role: Role | None = None
+    guest_until: str | None = None
 
 
 class VerificationSent(BaseModel):
@@ -378,6 +380,32 @@ async def login_employer(response: Response, form: OAuth2PasswordRequestForm = D
     return deliver(response, await _login(db, "employer", form))
 
 
+class GuestIn(BaseModel):
+    role: Role
+    consents: list[str] = Field(default_factory=list, max_length=10)
+
+
+@router.post("/guest", response_model=TokenOut, status_code=201)
+async def guest_login(body: GuestIn, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """Demo stand only: an empty account for 48 hours without a mailbox. See services/guest.py."""
+    if not settings.DEMO_MODE:
+        raise ApiError(404, "not_found")
+    await _limit("guest", client_address(request), limit=10)
+    await _limit("guest-site", "all", limit=60)
+    check_required_consents(body.role, body.consents)
+    account = new_guest(body.role)
+    db.add(account)
+    await db.flush()
+    for kind in body.consents:
+        await give_consent(db, body.role, account.id, kind, request)
+    if body.role == "participant":
+        account.last_login_at = datetime.now(UTC)
+    await db.commit()
+    tokens = _account_tokens(account, body.role)
+    tokens.guest_until = account.guest_until.isoformat()
+    return deliver(response, tokens)
+
+
 # ── password reset ──────────────────────────────────────────────────────────
 
 class ForgotIn(BaseModel):
@@ -464,7 +492,7 @@ class RefreshIn(BaseModel):
 
 def account_can_refresh(account) -> bool:
     """A refresh token dies with the account. An erased profile must not mint a new access token."""
-    return account is not None and getattr(account, "deleted_at", None) is None
+    return account is not None and getattr(account, "deleted_at", None) is None and not guest_expired(account)
 
 
 def _grace_key(role: str, subject: str) -> str:
