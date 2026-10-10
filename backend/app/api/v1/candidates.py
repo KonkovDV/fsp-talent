@@ -46,7 +46,7 @@ from app.services.employer_score import company_score
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
-from app.services.growth import growth_gaps, next_grade
+from app.services.growth import growth_gaps, next_grade, skill_reach
 from app.services.guardian import consent_link, demo_consent_link, guardian_token
 from app.services.identity import active_consent
 from app.services.inn import published_inn
@@ -237,7 +237,9 @@ async def my_growth(current: dict = Depends(get_current_participant), db: AsyncS
     grade = cat.grade if cat else None
     nxt = next_grade(grade)
     if not role or not nxt:
-        return {"role": role, "grade": grade, "next_grade": nxt, "people": None, "gaps": [], "next_market": None}
+        reach = await _open_need_reach(db, role, p.id) if role else []
+        return {"role": role, "grade": grade, "next_grade": nxt, "people": None, "gaps": [],
+                "next_market": None, "need_reach": reach}
     visible = (Participant.deleted_at.is_(None), Participant.is_visible.is_(True),
                CategoryAssignment.primary_role == role, CategoryAssignment.grade == nxt)
     people = await db.scalar(
@@ -258,11 +260,35 @@ async def my_growth(current: dict = Depends(get_current_participant), db: AsyncS
         .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
         .where(*visible, Participant.salary_from_gross.is_not(None))))
     shown = people if people >= 5 else None
+    from app.models import Need, NeedVersion
+    versions = list(await db.scalars(
+        select(NeedVersion.params)
+        .join(Need, Need.id == NeedVersion.need_id)
+        .where(Need.archived.is_(False), NeedVersion.version == Need.version)))
+    pairs = [((params or {}).get("role"), list((params or {}).get("skills") or [])) for params in versions]
     return {
         "role": role, "grade": grade, "next_grade": nxt, "people": shown,
         "gaps": growth_gaps(role, owned, {name: int(n) for name, n in rows}, people),
         "next_market": quartiles([int(amount) for amount in amounts if amount]),
+        "need_reach": skill_reach(role, owned, pairs),
     }
+
+
+async def _open_need_reach(db: AsyncSession, role: str | None, participant_id: uuid.UUID) -> list[dict]:
+    """Needs whose current version is one required skill away. Archived needs stay out."""
+    if not role:
+        return []
+    from app.models import Need, NeedVersion
+    owned = {skill.name for skill in await db.scalars(select(Skill).where(Skill.participant_id == participant_id))}
+    versions = list(await db.scalars(
+        select(NeedVersion.params)
+        .join(Need, Need.id == NeedVersion.need_id)
+        .where(Need.archived.is_(False), NeedVersion.version == Need.version)))
+    needs = []
+    for params in versions:
+        params = params or {}
+        needs.append((params.get("role"), list(params.get("skills") or [])))
+    return skill_reach(role, owned, needs)
 
 
 class SkillIn(BaseModel):
