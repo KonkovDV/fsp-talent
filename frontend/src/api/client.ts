@@ -181,6 +181,9 @@ export async function signOut() {
   useAuthStore.getState().logout()
 }
 
+export const askGuide = (question: string) =>
+  api.post<{ answer: string; links: { label: string; to: string }[] }>('/guide/ask', { question })
+
 export type Role = 'participant' | 'employer'
 const form = (username: string, password: string) =>
   [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const

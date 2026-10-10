@@ -11,6 +11,7 @@ from app.api.v1 import (
     employer,
     favorites,
     fsp_id_demo,
+    guide,
     integrations,
     interviews,
     legal,
@@ -68,6 +69,7 @@ api_router.include_router(problems.router)
 api_router.include_router(assessment.router)
 api_router.include_router(employer.router)
 api_router.include_router(favorites.router)
+api_router.include_router(guide.router)
 api_router.include_router(resumes.router)
 api_router.include_router(legal.router)
 api_router.include_router(needs.router)
