@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.docs import install_docs
 from app.api.errors import install_error_handlers
@@ -49,6 +50,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+class BrowserLock(BaseHTTPMiddleware):
+    """Headers a browser should see even when the API is opened without nginx."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        return response
+
+
+app.add_middleware(BrowserLock)
 # Added last, so it runs first and can answer 413 before the body is parsed.
 app.add_middleware(LimitRequestBody)
 
