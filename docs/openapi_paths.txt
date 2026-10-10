@@ -1,3 +1,4 @@
+/.well-known/did.json
 /api/v1/ai/parse-query
 /api/v1/ai/parse-resume
 /api/v1/assessment/active
@@ -139,6 +140,7 @@
 /api/v1/public/credentials/{credential_id}/status
 /api/v1/public/credentials/{participant_id}
 /api/v1/public/demo
+/api/v1/public/did.json
 /api/v1/public/evaluate
 /api/v1/public/guardian-consent
 /api/v1/public/issuer

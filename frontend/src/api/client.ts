@@ -370,6 +370,7 @@ export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)
 export const verifyCredential = (credential: object) => api.post('/public/credentials/verify', credential)
+export const issuerDid = () => api.get<{ id: string }>('/public/did.json')
 export interface PassportGrade { specialization: string; grade: string; confirmedOn: string }
 export interface PassportFsp { discipline: string; results: number; bestBucket: string; statuses: string[]; lastYear: number }
 export interface PassportClaims { name?: string; grades: PassportGrade[]; testedSkills: string[]; fspResults: PassportFsp[] }

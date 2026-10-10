@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { credentialStatus, verifyCredential } from '../api/client'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { credentialStatus, issuerDid, verifyCredential } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import { PageHeader } from '../components/ui'
 
@@ -42,6 +42,7 @@ export default function BadgePage() {
   const [text, setText] = useState('')
   const [note, setNote] = useState('')
   const [claims, setClaims] = useState<Achievement | null>(null)
+  const did = useQuery({ queryKey: ['issuerDid'], queryFn: () => issuerDid().then(r => r.data), retry: false })
   const check = useMutation({
     mutationFn: async (raw: string) => {
       const credential = JSON.parse(raw) as Credential
@@ -78,6 +79,9 @@ export default function BadgePage() {
         title="Проверка удостоверения"
         lead="Подпись eddsa-jcs-2022. Полное удостоверение — OpenBadgeCredential со ссылкой на статус отзыва. Краткая карточка содержит год, статус соревнования и корзину места, без названия события и без имени."
       />
+      {did.data?.id && (
+        <p className="mb-4 text-sm text-ink-2">Ключ издателя: <span className="font-mono text-ink">{did.data.id}</span>. Тот же документ лежит в <span className="font-mono">/.well-known/did.json</span>.</p>
+      )}
       <form className="card space-y-3 p-5" onSubmit={e => { e.preventDefault(); check.mutate(text) }}>
         <label className="block text-sm text-ink-2" htmlFor="badge-json">JSON удостоверения</label>
         <textarea id="badge-json" value={text} onChange={e => setText(e.target.value)} rows={8}
