@@ -106,6 +106,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
       DEMO_MODE: ${DEMO_MODE:-false}
+      # Empty DEMO_RESET_CRON turns the nightly jury reset off for the duration of a showing.
+      DEMO_RESET_CRON: "${DEMO_RESET_CRON:-10 4 * * *}"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
     command: celery -A app.workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
