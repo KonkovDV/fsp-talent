@@ -709,7 +709,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             salary_refusals=int(refusals.get(pid, 0)),
             job_search=(p.job_search if p else None) or "open",
             interview_outcome=interviews.get(pid),
-            city=p.region if p else None,
+            city=p.region if p and bool(getattr(p, "show_city", True)) else None,
             work_formats=tuple(p.work_formats or ()) if p else (),
         )
         m = match_score(need, facts)
