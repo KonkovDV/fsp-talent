@@ -89,6 +89,8 @@ def health() -> int:
 
 
 def main() -> None:
+    if not TOKEN:
+        raise SystemExit("SANDBOX_TOKEN is required")
     if os.path.exists(SOCKET):
         os.unlink(SOCKET)
     with Server(SOCKET, Handler) as server:

@@ -28,6 +28,8 @@ class Runner(Protocol):
 def get_runner() -> Runner:
     from app.core.config import settings
 
+    if settings.SANDBOX_REQUIRED and not (settings.SANDBOX_TOKEN or "").strip():
+        raise SandboxUnavailable("sandbox_token_missing")
     if settings.SANDBOX_SOCKET:
         from app.services.sandbox.remote import RemoteRunner
         return RemoteRunner(settings.SANDBOX_SOCKET, settings.SANDBOX_TOKEN)
