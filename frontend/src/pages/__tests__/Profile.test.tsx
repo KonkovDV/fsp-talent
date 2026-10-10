@@ -38,6 +38,13 @@ function renderProfile() {
 describe('видимость города', () => {
   beforeEach(() => updateMyProfile.mockReset())
 
+  it('показывает три шага разбора резюме', async () => {
+    renderProfile()
+    expect(await screen.findByText(/Вставьте текст или загрузите PDF/)).toBeInTheDocument()
+    expect(screen.getByText(/дословной цитатой/)).toBeInTheDocument()
+    expect(screen.getByText(/Подставьте нужные строки/)).toBeInTheDocument()
+  })
+
   it('скрывает город и передаёт версию профиля', async () => {
     updateMyProfile.mockResolvedValue({ data: { ok: true } })
     renderProfile()

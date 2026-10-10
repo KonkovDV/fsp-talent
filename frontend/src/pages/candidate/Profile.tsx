@@ -208,6 +208,11 @@ export default function CandidateProfile() {
               <button className="btn-secondary shrink-0" disabled={!newSkill.trim()}>Добавить</button>
             </form>
             <div>
+              <ol className="mb-3 list-decimal space-y-1 pl-5 text-sm text-ink-2">
+                <li>Вставьте текст или загрузите PDF.</li>
+                <li>Разбор покажет только поля с дословной цитатой.</li>
+                <li>Подставьте нужные строки в профиль и сохраните.</li>
+              </ol>
               <label className="field-label" htmlFor="resume">Текст резюме</label>
               <textarea id="resume" value={resume} onChange={e => setResume(e.target.value)} rows={4}
                 placeholder="Вставьте резюме: навык попадёт в список, только если он прямо упомянут в тексте"
