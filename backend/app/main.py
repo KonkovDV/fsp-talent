@@ -145,3 +145,12 @@ app.include_router(api_router)
 @app.get("/health", tags=["health"])
 async def health():
     return {"status": "ok", "version": settings.VERSION, "mode": settings.FSP_MODE}
+
+
+@app.get("/.well-known/did.json", tags=["public"])
+async def well_known_did():
+    """did:web document. The key is the credential signing key. No personal data."""
+    from app.services.vc.did_web import did_document
+    from app.services.vc.issuer import public_key_multibase
+
+    return did_document(settings.PUBLIC_BASE_URL, public_key_multibase())

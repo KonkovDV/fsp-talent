@@ -16,7 +16,7 @@
 
 	# The API answers 413 when Content-Length is above 10 MB. The same bound here
 	# stops a body that arrives without a length.
-	@api path /api/* /health /docs /docs/* /openapi.json
+	@api path /api/* /health /docs /docs/* /openapi.json /.well-known/did.json
 	handle @api {
 		request_body {
 			max_size 10MB

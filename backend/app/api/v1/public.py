@@ -79,6 +79,15 @@ def _public_skill(s: Skill) -> dict:
     }
 
 
+@router.get("/did.json")
+async def public_did():
+    """The same did:web document as /.well-known/did.json, on the API prefix the site already proxies."""
+    from app.services.vc.did_web import did_document
+    from app.services.vc.issuer import public_key_multibase
+
+    return did_document(settings.PUBLIC_BASE_URL, public_key_multibase())
+
+
 @router.get("/demo")
 async def demo_stand():
     """Whether this stand shows the jury trial and the jury accounts. No other settings."""
