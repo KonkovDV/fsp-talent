@@ -13,7 +13,7 @@ from app.models.employer import Employer
 from app.models.exclusion import CandidateBlock
 from app.models.favorite import CandidateInterest, EmployerFavorite
 from app.models.identity import Consent, EmailVerification
-from app.models.interview import InterviewSlot
+from app.models.interview import InterviewCode, InterviewSlot
 from app.models.item_draft import ItemDraft
 from app.models.methodist import MethodistLog
 from app.models.need import Need, NeedHidden, NeedShortlist, NeedVersion
@@ -44,6 +44,7 @@ __all__ = [
     "EmployerTask",
     "GradeConfirmation",
     "GradeDispute",
+    "InterviewCode",
     "InterviewSlot",
     "AiProvider",
     "ItemDraft",

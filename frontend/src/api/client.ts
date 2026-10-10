@@ -269,6 +269,13 @@ export const advancePractice = (id: string, stage: string) => api.post(`/offers/
 export const getSlots = (offerId: string) => api.get(`/offers/${offerId}/slots`)
 export const proposeSlots = (offerId: string, slots: object[]) => api.post(`/offers/${offerId}/slots`, { slots })
 export const chooseSlot = (offerId: string, slotId: string) => api.post(`/offers/${offerId}/slots/${slotId}/choose`)
+export const getInterviewCode = (offerId: string) => api.get(`/offers/${offerId}/code`)
+export const openInterviewCode = (offerId: string, body: { problem_id?: string | null; prompt: string }) =>
+  api.post(`/offers/${offerId}/code`, body)
+export const saveInterviewCode = (offerId: string, text: string, version: number) =>
+  api.put(`/offers/${offerId}/code`, { text, version })
+export const disputeInterviewCode = (offerId: string, text: string) =>
+  api.post(`/offers/${offerId}/code/dispute`, { text })
 export const setInterviewOutcome = (offerId: string, outcome: string) =>
   api.post(`/offers/${offerId}/interview/outcome`, { outcome })
 export const downloadInterview = (offerId: string) =>

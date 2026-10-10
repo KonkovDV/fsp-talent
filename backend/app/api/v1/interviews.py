@@ -18,8 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_any_auth
 from app.api.errors import ApiError
 from app.core.database import get_db
-from app.models import Employer, InterviewSlot, Offer, Participant
+from app.models import Employer, InterviewCode, InterviewSlot, Offer, Participant
 from app.models.interview import FORMATS, OUTCOMES
+from app.services.code_lab import problem_ids, problem_public
+from app.services.interview_code import CodeStale, apply_code_draft, code_view
 from app.services.interviews import MSK, calendar_text, moscow_start, slot_view, still_ahead
 from app.services.notify import Outbox, notify
 from app.services.search.cache import bump_bank_epoch
@@ -178,3 +180,90 @@ async def set_outcome(offer_id: uuid.UUID, body: OutcomeIn, current: dict = Depe
     await db.commit()
     await bump_bank_epoch()
     return {"outcome": chosen.outcome}
+
+
+class OpenCodeIn(BaseModel):
+    problem_id: str | None = Field(None, max_length=40)
+    prompt: str = Field("", max_length=4000)
+
+
+class CodeDraftIn(BaseModel):
+    text: str = Field(max_length=8000)
+    version: int = Field(ge=0)
+
+
+class CodeDisputeIn(BaseModel):
+    text: str = Field(min_length=10, max_length=2000)
+
+
+def _code_out(row: InterviewCode) -> dict:
+    problem = problem_public(row.problem_id) if row.problem_id else None
+    return code_view(problem, row.prompt or "", row.draft or "", row.draft_version or 0,
+                     list(row.snapshots or []), row.dispute)
+
+
+@router.post("/{offer_id}/code", status_code=201)
+async def open_code(offer_id: uuid.UUID, body: OpenCodeIn, current: dict = Depends(get_any_auth),
+                    db: AsyncSession = Depends(get_db)):
+    """A library problem or a written prompt. No model is called."""
+    offer, side = await _offer(db, offer_id, current)
+    if side != "employer":
+        raise ApiError(403, "forbidden", "Задание даёт компания")
+    pid = (body.problem_id or "").strip() or None
+    if pid is not None and pid not in set(problem_ids()):
+        raise ApiError(422, "validation_error", "Такого задания в библиотеке нет")
+    prompt = body.prompt.strip()
+    if pid is None and len(prompt) < 20:
+        raise ApiError(422, "validation_error", "Напишите условие или выберите задание из библиотеки")
+    existing = await db.scalar(select(InterviewCode.id).where(InterviewCode.offer_id == offer.id))
+    if existing is not None:
+        raise ApiError(409, "conflict", "Задание уже есть")
+    row = InterviewCode(offer_id=offer.id, problem_id=pid, prompt=prompt, draft="", draft_version=0,
+                        snapshots=[], created_at=datetime.now(UTC))
+    db.add(row)
+    await db.commit()
+    return _code_out(row)
+
+
+@router.get("/{offer_id}/code")
+async def get_code(offer_id: uuid.UUID, current: dict = Depends(get_any_auth),
+                   db: AsyncSession = Depends(get_db)):
+    offer, _side = await _offer(db, offer_id, current)
+    row = await db.scalar(select(InterviewCode).where(InterviewCode.offer_id == offer.id))
+    if row is None:
+        raise ApiError(404, "not_found", "Задания пока нет")
+    return _code_out(row)
+
+
+@router.put("/{offer_id}/code")
+async def save_code(offer_id: uuid.UUID, body: CodeDraftIn, current: dict = Depends(get_any_auth),
+                    db: AsyncSession = Depends(get_db)):
+    offer, side = await _offer(db, offer_id, current)
+    if side != "participant":
+        raise ApiError(403, "forbidden", "Черновик пишет кандидат")
+    row = await db.scalar(select(InterviewCode).where(InterviewCode.offer_id == offer.id))
+    if row is None:
+        raise ApiError(404, "not_found", "Задания пока нет")
+    try:
+        version, text, shots = apply_code_draft(
+            row.draft_version or 0, body.version, body.text, list(row.snapshots or []))
+    except CodeStale:
+        raise ApiError(409, "conflict", "Черновик уже новее: обновите страницу") from None
+    row.draft_version, row.draft, row.snapshots = version, text, shots
+    await db.commit()
+    return _code_out(row)
+
+
+@router.post("/{offer_id}/code/dispute")
+async def dispute_code(offer_id: uuid.UUID, body: CodeDisputeIn, current: dict = Depends(get_any_auth),
+                       db: AsyncSession = Depends(get_db)):
+    """A note about the task. The grade and the match score stay as they were."""
+    offer, side = await _offer(db, offer_id, current)
+    if side != "participant":
+        raise ApiError(403, "forbidden", "Пометку пишет кандидат")
+    row = await db.scalar(select(InterviewCode).where(InterviewCode.offer_id == offer.id))
+    if row is None or not (row.draft_version or 0):
+        raise ApiError(409, "conflict", "Сначала сохраните черновик")
+    row.dispute = body.text.strip()
+    await db.commit()
+    return _code_out(row)

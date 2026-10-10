@@ -17,6 +17,7 @@ vi.mock('../../api/client', async () => {
   return { ...actual, getMyOffers, respondToOffer, revokeContacts, fileComplaint: vi.fn(), updateMyProfile: vi.fn() }
 })
 vi.mock('../../components/InterviewSlots', () => ({ default: () => <div /> }))
+vi.mock('../../components/CodeInterview', () => ({ default: () => <div /> }))
 vi.mock('../../components/MessageThread', () => ({ default: () => <div /> }))
 
 const pending = {

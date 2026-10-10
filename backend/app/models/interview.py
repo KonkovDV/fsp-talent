@@ -7,8 +7,8 @@ accept the next invitation from the same company.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.database import Base
 
@@ -26,4 +26,19 @@ class InterviewSlot(Base):
     chosen = Column(Boolean, nullable=False, default=False)
     outcome = Column(String(20))
     outcome_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
+class InterviewCode(Base):
+    """A coding step on an accepted invitation. Snapshots are drafts, not a grade."""
+    __tablename__ = "interview_code"
+    __table_args__ = (UniqueConstraint("offer_id", name="uq_interview_code_offer"),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offer_id = Column(UUID(as_uuid=True), ForeignKey("offers.id", ondelete="CASCADE"), nullable=False)
+    problem_id = Column(String(40))
+    prompt = Column(Text, nullable=False, default="")
+    draft = Column(Text, nullable=False, default="")
+    draft_version = Column(Integer, nullable=False, default=0, server_default="0")
+    snapshots = Column(JSONB, nullable=False, default=list, server_default="[]")
+    dispute = Column(Text)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))

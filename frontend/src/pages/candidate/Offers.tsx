@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
 import { apiError, blockCompany, fileComplaint, getMyOffers, markCompanyInterest, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
+import CodeInterview from '../../components/CodeInterview'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
@@ -187,6 +188,7 @@ export default function CandidateOffers() {
                     </div>
                   )}
                   <InterviewSlots offerId={o.id} side="participant" listKey="myOffers" />
+                  <CodeInterview offerId={o.id} side="participant" />
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => toggleThread(o.id)} aria-expanded={thread === o.id} className="btn-secondary btn-sm">
                       <MessageSquare size={14} aria-hidden /> Переписка
