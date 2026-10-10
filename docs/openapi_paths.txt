@@ -137,6 +137,8 @@
 /api/v1/public/jury-free
 /api/v1/public/leaderboard
 /api/v1/public/passport/{passport_id}
+/api/v1/public/telegram/achievements
+/api/v1/public/telegram/vacancies
 /api/v1/public/vacancy-preview
 /api/v1/search/bank
 /api/v1/search/candidates
