@@ -53,6 +53,27 @@ export default function Moderation() {
   return <Desk />
 }
 
+function SalaryFlags() {
+  const flags = useQuery({
+    queryKey: ['salary-flags'],
+    queryFn: () => api.get<{ id: string; flag: string; company: string; role: string; salary_from: number; salary_to: number }[]>('/moderation/salary-flags').then(r => r.data),
+  })
+  if (!flags.data?.length) return null
+  return (
+    <div className="mt-8">
+      <h2 className="mb-3 font-display text-xl font-bold text-ink">Вилки вне рынка</h2>
+      <ul className="space-y-3">
+        {flags.data.map(row => (
+          <li key={row.id} className="card text-sm text-ink">
+            {row.company}, {row.role}: {row.salary_from.toLocaleString('ru-RU')}–{row.salary_to.toLocaleString('ru-RU')} ₽.{' '}
+            {row.flag === 'suspicious' ? 'В несколько раз выше медианы категории.' : 'Ниже половины медианы категории.'}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Desk() {
   const qc = useQueryClient()
   const list = useQuery({
@@ -84,6 +105,7 @@ function Desk() {
           ))}
         </ul>
       )}
+      <SalaryFlags />
       <ItemDrafts />
       <AiProviders />
     </div>

@@ -39,6 +39,14 @@ export function grossForNet(net: number): number {
 
 const fmt = (n: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n)
 
+/** Same cutoffs as backend market_flag: under half the median, or over three times it. */
+export function marketFlag(from?: number | null, to?: number | null, median?: number | null): 'below_market' | 'suspicious' | null {
+  if (!median || median <= 0) return null
+  if (from && from > median * 3) return 'suspicious'
+  if (to && to * 2 < median) return 'below_market'
+  return null
+}
+
 /** «на руки ≈ …» under a gross range. Empty when both ends are missing. */
 export function netLine(from?: number | null, to?: number | null): string {
   const a = from ? netMonthly(from) : 0

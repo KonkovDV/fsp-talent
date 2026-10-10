@@ -45,6 +45,40 @@ def quartiles(values: list[int]) -> dict | None:
     return {"p25": at(0.25), "median": at(0.5), "p75": at(0.75), "n": len(ordered)}
 
 
+def market_flag(salary_from: int | None, salary_to: int | None, median: int | None) -> str | None:
+    """A fork far from the category median. Nothing when the cell has no published median.
+
+    below_market: the top of the fork is under half the median.
+    suspicious: the bottom is over three times the median.
+    A valid fork cannot be both. The flag warns and never blocks.
+    """
+    if not median or median <= 0:
+        return None
+    if salary_from and salary_from > median * 3:
+        return "suspicious"
+    if salary_to and salary_to * 2 < median:
+        return "below_market"
+    return None
+
+
+async def role_median(db, role: str | None, grade: str | None) -> int | None:
+    """Median expectation in one role × grade cell. Hidden below MIN_CELL, same rule as the market page."""
+    if not role or not grade:
+        return None
+    from sqlalchemy import select
+
+    from app.models import CategoryAssignment, Participant
+
+    amounts = list(await db.scalars(
+        select(Participant.salary_from_gross)
+        .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+        .where(CategoryAssignment.primary_role == role, CategoryAssignment.grade == grade,
+               Participant.salary_from_gross.is_not(None), Participant.deleted_at.is_(None),
+               Participant.is_visible.is_(True))))
+    cell = quartiles([int(amount) for amount in amounts if amount])
+    return cell["median"] if cell else None
+
+
 def salary_band(mine: int | None, cell: dict | None) -> str | None:
     """Where one wish sits on a quartile cell. Missing wish or a hidden cell gives nothing to compare."""
     if mine is None or mine <= 0 or not cell:

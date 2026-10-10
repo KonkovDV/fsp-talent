@@ -16,7 +16,7 @@ from app.models.interview import InterviewSlot
 from app.models.item_draft import ItemDraft
 from app.models.need import Need, NeedHidden, NeedShortlist, NeedVersion
 from app.models.notification import Notification
-from app.models.offer import Offer, OfferMessage
+from app.models.offer import Offer, OfferFlag, OfferMessage
 from app.models.participant import Participant, Qualification, Result, Skill
 from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbedding, ProfileSearchIndex
 from app.models.resume import CandidateResume
@@ -49,6 +49,7 @@ __all__ = [
     "NeedVersion",
     "Notification",
     "Offer",
+    "OfferFlag",
     "OfferMessage",
     "Participant",
     "PracticeAttempt",

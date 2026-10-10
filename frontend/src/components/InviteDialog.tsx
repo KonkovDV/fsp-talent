@@ -15,6 +15,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   })
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
+  const [market, setMarket] = useState('')
   const [idem] = useState(() => crypto.randomUUID())
 
   const send = useMutation({
@@ -34,7 +35,16 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     setForm({ ...form, [k]: k.startsWith('salary') ? Number(e.target.value) : e.target.value })
   const rangeReady = form.salary_from_gross > 0 && form.salary_to_gross >= form.salary_from_gross
   const look = () => {
-    previewOffer(candidateId, form.salary_to_gross).then(r => setHint(r.data.salary_hint || '')).catch(() => setHint(''))
+    previewOffer(candidateId, form.salary_to_gross, form.salary_from_gross).then(r => {
+      setHint(r.data.salary_hint || '')
+      const flag = r.data.market_flag as string | null
+      const median = r.data.market_median as number | null
+      setMarket(flag === 'below_market'
+        ? `Вилка ниже рынка категории${median ? ` (медиана ${median.toLocaleString('ru-RU')} ₽)` : ''}. Отправить всё равно можно.`
+        : flag === 'suspicious'
+          ? 'Вилка в несколько раз выше рынка категории. Приглашение уйдёт на проверку, отправить можно.'
+          : '')
+    }).catch(() => { setHint(''); setMarket('') })
   }
 
   return (
@@ -58,6 +68,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
                 onChange={e => { set('salary_to_gross')(e); setHint('') }} className="input num" aria-label="До" />
             </div>
             {rangeReady && <p className="mt-2 text-sm text-ink-3">{netLine(form.salary_from_gross, form.salary_to_gross)}</p>}
+            {market && <p className="mt-2 text-sm text-warn" role="status">{market}</p>}
             {hint && <p className="mt-2 text-sm text-ink-2" role="status">{hint} Отправить приглашение всё равно можно.</p>}
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">

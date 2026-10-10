@@ -22,8 +22,8 @@ from app.core.idempotency import (
     idem_finish,
 )
 from app.core.ratelimit import RateLimitUnavailable, too_many
-from app.models import AccessLog, CategoryAssignment, Employer, Offer, Participant
-from app.services.market import quartiles, reason_shares, salary_gap_hint
+from app.models import AccessLog, CategoryAssignment, Employer, Offer, OfferFlag, Participant
+from app.services.market import market_flag, quartiles, reason_shares, role_median, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
 from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.privacy import contacts_allowed
@@ -74,6 +74,7 @@ def _offer_out(o: Offer) -> dict:
 class SalaryPreview(BaseModel):
     candidate_id: uuid.UUID
     salary_to_gross: int = Field(gt=0, le=100_000_000)
+    salary_from_gross: int | None = Field(None, gt=0, le=100_000_000)
 
 
 @router.post("/preview")
@@ -85,7 +86,11 @@ async def preview_offer(body: SalaryPreview, current: dict = Depends(get_current
     candidate = await db.get(Participant, body.candidate_id)
     if not candidate or not candidate.discoverable:
         raise HTTPException(404, "Кандидат недоступен для предложений")
-    return {"salary_hint": salary_gap_hint(body.salary_to_gross, candidate.salary_from_gross)}
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == candidate.id))
+    median = await role_median(db, cat.primary_role if cat else None, cat.grade if cat else None)
+    return {"salary_hint": salary_gap_hint(body.salary_to_gross, candidate.salary_from_gross),
+            "market_flag": market_flag(body.salary_from_gross, body.salary_to_gross, median),
+            "market_median": median}
 
 
 @router.get("/market")
@@ -182,6 +187,12 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
     except IntegrityError as e:
         await db.rollback()
         raise HTTPException(409, "Активный оффер этому кандидату уже есть") from e
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == candidate.id))
+    median = await role_median(db, cat.primary_role if cat else None, cat.grade if cat else None)
+    flag = market_flag(offer.salary_from_gross, offer.salary_to_gross, median)
+    if flag:
+        db.add(OfferFlag(offer_id=offer.id, flag=flag, company_name=employer.company_name, role_title=offer.role,
+                         salary_from_gross=offer.salary_from_gross, salary_to_gross=offer.salary_to_gross))
     outbox = Outbox()
     await notify(db, outbox, "participant", candidate.id, "offer_new",
                  f"Приглашение от «{employer.company_name}»",
@@ -195,6 +206,7 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
     await outbox.deliver()
     out = _offer_out(offer)
     out["salary_hint"] = salary_gap_hint(offer.salary_to_gross, candidate.salary_from_gross)
+    out["market_flag"] = flag
     return out
 
 
