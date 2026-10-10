@@ -65,6 +65,9 @@ evaluate: validate
 check:
 	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/smoke_api.py
 
+accept:
+	cd backend && python -m app.validation.accept
+
 load:
 	docker compose exec -T -e SMOKE_BASE=http://localhost:8000/api/v1 -e MAILPIT_URL=http://mailpit:8025 backend python tests/load_api.py --users 40 --seconds 60
 
