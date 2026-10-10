@@ -1,12 +1,15 @@
 """One error format for the whole API.
 
-Every error body is
+Every error body is RFC 9457 (`application/problem+json`) plus the fields clients already read:
 
-    {"error": {"code": "<machine code>", "message": "<text for a person>", "details": ...},
+    {"type": "/problems/E01", "title": "Вход", "status": 401, "instance": "/api/v1/...",
+     "problem": "E01",
+     "error": {"code": "<machine code>", "message": "<text for a person>", "details": ...},
      "detail": <the same message, or the list of validation errors>}
 
 `detail` stays for clients written against FastAPI defaults; new clients read `error.code`.
-The full list of codes is in docs/API_ERRORS.md and is checked by a unit test.
+`problem` is the E01–E20 class (app/api/problems.py). The full list of codes is in
+docs/API_ERRORS.md and is checked by a unit test.
 """
 from __future__ import annotations
 
@@ -17,6 +20,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.api.problems import problem_fields
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +100,15 @@ class ApiError(HTTPException):
         self.details = details
 
 
-def error_body(code: str, message: str, details: Any = None, detail: Any = None) -> dict:
-    return {"error": {"code": code, "message": message, "details": details},
-            "detail": message if detail is None else detail}
+def error_body(code: str, message: str, details: Any = None, detail: Any = None,
+               status: int | None = None, instance: str | None = None) -> dict:
+    body = {
+        "error": {"code": code, "message": message, "details": details},
+        "detail": message if detail is None else detail,
+    }
+    if status is not None:
+        body.update(problem_fields(code, status, instance))
+    return body
 
 
 def _jsonable_errors(errors: list[dict]) -> list[dict]:
@@ -119,17 +130,30 @@ def install_error_handlers(app: FastAPI) -> None:
         headers = dict(exc.headers or {})
         if exc.status_code == 429:
             headers.setdefault("Retry-After", "60")
-        return JSONResponse(status_code=exc.status_code, content=error_body(code, message, details),
-                            headers=headers or None)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=error_body(code, message, details, status=exc.status_code, instance=request.url.path),
+            media_type="application/problem+json",
+            headers=headers or None,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
         errors = _jsonable_errors(exc.errors())
         first = errors[0]["msg"] if errors else "Проверьте поля запроса"
-        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            content=error_body("validation_error", first, errors, detail=errors))
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=error_body("validation_error", first, errors, detail=errors,
+                               status=status.HTTP_422_UNPROCESSABLE_ENTITY, instance=request.url.path),
+            media_type="application/problem+json",
+        )
 
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception):
         logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-        return JSONResponse(status_code=500, content=error_body("internal_error", "Внутренняя ошибка сервера"))
+        return JSONResponse(
+            status_code=500,
+            content=error_body("internal_error", "Внутренняя ошибка сервера", status=500,
+                               instance=request.url.path),
+            media_type="application/problem+json",
+        )

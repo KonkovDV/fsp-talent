@@ -21,6 +21,7 @@ from app.api.v1 import (
     notifications,
     offers,
     passport,
+    problems,
     public,
     resumes,
     search,
@@ -36,7 +37,12 @@ class ErrorBody(BaseModel):
 
 
 class ErrorOut(BaseModel):
-    """Every error has this shape; the list of codes is in docs/API_ERRORS.md."""
+    """RFC 9457 plus the fields clients already read. Codes: docs/API_ERRORS.md."""
+    type: str
+    title: str
+    status: int
+    instance: str | None = None
+    problem: str
     error: ErrorBody
     detail: Any
 
@@ -58,6 +64,7 @@ api_router.include_router(offers.router)
 api_router.include_router(vacancies.router)
 api_router.include_router(ai.router)
 api_router.include_router(public.router)
+api_router.include_router(problems.router)
 api_router.include_router(assessment.router)
 api_router.include_router(employer.router)
 api_router.include_router(favorites.router)

@@ -114,6 +114,8 @@
 /api/v1/offers/{offer_id}/slots
 /api/v1/offers/{offer_id}/slots/{slot_id}/choose
 /api/v1/offers/{offer_id}/withdraw
+/api/v1/problems
+/api/v1/problems/{problem}
 /api/v1/public/assessment/items
 /api/v1/public/assessment/psychometrics
 /api/v1/public/candidates/{participant_id}
