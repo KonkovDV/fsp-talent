@@ -42,6 +42,13 @@ export const JOB_SEARCH_BADGE: Record<string, string> = {
   JOB_SEARCH_OPEN: 'Открыт к предложениям',
 }
 
+export const PERK_RU: Record<string, string> = {
+  fsp_tournaments: 'Компенсация турниров ФСП',
+  health: 'ДМС',
+  learning: 'Обучение',
+  equipment: 'Техника',
+}
+
 export function gradeRu(grade?: string | null): string {
   if (!grade) return ''
   return GRADE_RU[grade] ?? grade

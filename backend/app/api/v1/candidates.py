@@ -536,6 +536,7 @@ async def get_my_offers(
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "market_flag": market_flag(o.salary_from_gross, o.salary_to_gross, median),
         "currency": o.currency, "work_format": o.work_format, "message": o.message,
+        "perks": list(o.perks or []),
         "status": o.status, "created_at": o.created_at.isoformat(),
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,

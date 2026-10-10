@@ -6,10 +6,12 @@ import { apiError, blockCompany, fileComplaint, getMyOffers, respondToOffer, rev
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
+import { PERK_RU } from '../../labels'
 import { netLine } from '../../money'
 
 interface Offer {
   id: string; company: string; company_id?: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
+  perks?: string[]
   market_flag?: string | null
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
@@ -119,6 +121,9 @@ export default function CandidateOffers() {
                     <p className="mt-1 text-xs text-ink-2">Балл компании {o.company_profile.rating.score} из 10, {o.company_profile.rating.label}. {o.company_profile.rating.note}</p>
                   )}
                   <h2 className="mt-0.5 font-display text-lg font-bold tracking-[-0.01em] text-ink">{o.role}</h2>
+                  {(o.perks ?? []).length > 0 && (
+                    <p className="mt-1 text-xs text-ink-2">{o.perks.map(code => PERK_RU[code] ?? code).join(' · ')}</p>
+                  )}
                   <p className="mt-1 text-sm text-ink-2">{FORMAT[o.work_format] ?? o.work_format}, получено {date(o.created_at)}
                     {o.expires_at && o.status === 'pending' ? `, ответить до ${date(o.expires_at)}` : ''}</p>
                 </div>
