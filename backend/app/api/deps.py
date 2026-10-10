@@ -32,6 +32,8 @@ async def _open_account(db: AsyncSession, payload: dict):
         raise ValueError("Invalid token") from e
     if account is None or getattr(account, "deleted_at", None) is not None or guest_expired(account):
         raise ValueError("Account is closed")
+    if getattr(account, "suspended_at", None) is not None:
+        raise ValueError("Account is suspended")
     if not epochs_match(payload.get("ep"), account.token_epoch):
         raise ValueError("Session was closed")
     return account

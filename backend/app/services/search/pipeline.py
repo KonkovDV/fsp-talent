@@ -225,6 +225,7 @@ def _in_search(adult):
     ))
     return and_(
         Participant.is_visible.is_(True),
+        Participant.suspended_at.is_(None),
         Participant.guest_until.is_(None),
         Participant.job_search != "not_looking",
         or_(adult, Participant.minor_consent_given.is_(True)),

@@ -202,7 +202,8 @@ CREATE TABLE public.employers (
     totp_last_step bigint,
     totp_verified_at timestamp with time zone,
     fsp_partner boolean DEFAULT false NOT NULL,
-    is_methodist boolean DEFAULT false NOT NULL
+    is_methodist boolean DEFAULT false NOT NULL,
+    suspended_at timestamp with time zone
 );
 
 
@@ -561,6 +562,7 @@ CREATE TABLE public.participants (
     practice_ok boolean,
     practice_at timestamp with time zone,
     deleted_at timestamp with time zone,
+    suspended_at timestamp with time zone,
     token_epoch integer DEFAULT 0 NOT NULL,
     profile_version integer DEFAULT 0 NOT NULL,
     salary_from_gross integer,

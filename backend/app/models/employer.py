@@ -26,6 +26,8 @@ class Employer(Base):
     subscription_tier = Column(String(20), nullable=False, default="free")
     # Set when complaints meet the Wilson rule. Cleared only by `python -m app.services.trust release`.
     invites_paused_at = Column(DateTime(timezone=True))
+    # Set from the moderation desk. Login and refresh stop; the row stays.
+    suspended_at = Column(DateTime(timezone=True))
     # Set only for a demo guest company: sessions close at this moment (services/guest.py).
     guest_until = Column(DateTime(timezone=True))
     # Moderation desk second factor, set only by `python -m app.services.totp enroll`. Sealed with AES-GCM.

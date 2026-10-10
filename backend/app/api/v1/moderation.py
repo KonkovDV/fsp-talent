@@ -10,9 +10,10 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
@@ -20,11 +21,12 @@ from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import AiProvider, Complaint, Employer, ItemDraft, OfferFlag, Vacancy
+from app.models import AiProvider, Complaint, Employer, ItemDraft, OfferFlag, Participant, Vacancy
 from app.models.ai_provider import open_secret, seal_secret
 from app.services import totp
 from app.services.ai import drafts, providers
 from app.services.ai.assistant import has_identity
+from app.services.desk import can_suspend, complaints_csv
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/moderation", tags=["moderation"])
@@ -100,10 +102,7 @@ async def unlock_desk(body: TotpIn, current: dict = Depends(get_current_employer
     return _factor_out(employer)
 
 
-@router.get("/complaints")
-async def complaints(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    await _desk(current, db)
-    rows = list(await db.scalars(select(Complaint).order_by(Complaint.created_at.desc()).limit(100)))
+def _complaint_rows(rows: list[Complaint]) -> list[dict]:
     return [{
         "id": str(row.id),
         "reason": LABELS.get(row.reason, "other"),
@@ -111,6 +110,88 @@ async def complaints(current: dict = Depends(get_current_employer), db: AsyncSes
         "offer_id": str(row.offer_id) if row.offer_id else None,
         "created_at": row.created_at.isoformat(),
     } for row in rows]
+
+
+@router.get("/stats")
+async def desk_stats(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    await _desk(current, db)
+    people = await db.scalar(select(func.count()).select_from(Participant).where(Participant.deleted_at.is_(None))) or 0
+    companies = await db.scalar(select(func.count()).select_from(Employer)) or 0
+    held_people = await db.scalar(select(func.count()).select_from(Participant).where(
+        Participant.suspended_at.is_not(None))) or 0
+    held_companies = await db.scalar(select(func.count()).select_from(Employer).where(
+        Employer.suspended_at.is_not(None))) or 0
+    complaint_n = await db.scalar(select(func.count()).select_from(Complaint)) or 0
+    vacancies = await db.scalar(select(func.count()).select_from(Vacancy).where(Vacancy.is_open.is_(True))) or 0
+    return {
+        "participants": int(people), "employers": int(companies),
+        "suspended": int(held_people) + int(held_companies),
+        "complaints": int(complaint_n), "open_vacancies": int(vacancies),
+    }
+
+
+@router.get("/complaints")
+async def complaints(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    await _desk(current, db)
+    rows = list(await db.scalars(select(Complaint).order_by(Complaint.created_at.desc()).limit(100)))
+    return _complaint_rows(rows)
+
+
+@router.get("/complaints.csv")
+async def complaints_export(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Complaint rows without the person who sent them."""
+    await _desk(current, db)
+    rows = list(await db.scalars(select(Complaint).order_by(Complaint.created_at.desc()).limit(1000)))
+    body = complaints_csv(_complaint_rows(rows))
+    return Response(body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=complaints.csv"})
+
+
+def _like(q: str) -> str:
+    cleaned = q.replace("\\", "").replace("%", "").replace("_", "")[:80]
+    return f"%{cleaned}%"
+
+
+@router.get("/accounts")
+async def accounts(role: Literal["participant", "employer"] = "employer", q: str = Query("", max_length=80),
+                   current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    await _desk(current, db)
+    if role == "employer":
+        stmt = select(Employer).where(Employer.guest_until.is_(None))
+        if q.strip():
+            stmt = stmt.where(Employer.company_name.ilike(_like(q)))
+        found = list(await db.scalars(stmt.order_by(Employer.created_at.desc()).limit(20)))
+        return [{"id": str(row.id), "role": "employer", "label": row.company_name,
+                 "suspended": row.suspended_at is not None} for row in found]
+    stmt = select(Participant).where(Participant.deleted_at.is_(None), Participant.guest_until.is_(None))
+    if q.strip():
+        stmt = stmt.where(Participant.display_name.ilike(_like(q)))
+    found = list(await db.scalars(stmt.order_by(Participant.created_at.desc()).limit(20)))
+    return [{"id": str(row.id), "role": "participant", "label": row.display_name or "без имени",
+             "suspended": row.suspended_at is not None} for row in found]
+
+
+class AccountIn(BaseModel):
+    role: Literal["participant", "employer"]
+    active: bool
+
+
+@router.post("/accounts/{account_id}")
+async def set_account(account_id: uuid.UUID, body: AccountIn, current: dict = Depends(get_current_employer),
+                      db: AsyncSession = Depends(get_db)):
+    """Close or restore login. The row, the complaints and the bank stay."""
+    desk = await _desk(current, db)
+    model = Employer if body.role == "employer" else Participant
+    row = await db.get(model, account_id)
+    if row is None or getattr(row, "deleted_at", None) is not None:
+        raise ApiError(404, "not_found", "Аккаунт не найден")
+    if not can_suspend(desk.id, row.id, getattr(row, "email", None)):
+        raise ApiError(403, "forbidden", "Этот вход закрыть нельзя")
+    row.suspended_at = None if body.active else datetime.now(UTC)
+    if not body.active:
+        row.token_epoch = int(row.token_epoch or 0) + 1
+    await db.commit()
+    return {"id": str(row.id), "suspended": row.suspended_at is not None}
 
 
 @router.get("/salary-flags")
