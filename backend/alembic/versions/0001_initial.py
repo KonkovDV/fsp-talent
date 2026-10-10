@@ -563,6 +563,7 @@ CREATE TABLE public.participants (
     work_formats jsonb DEFAULT '[]'::jsonb NOT NULL,
     experience_years integer,
     declared_grade character varying(20),
+    certificate_grade character varying(20),
     is_visible boolean DEFAULT true NOT NULL,
     public_profile boolean DEFAULT false NOT NULL,
     is_minor boolean DEFAULT false NOT NULL,

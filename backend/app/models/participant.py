@@ -56,6 +56,8 @@ class Participant(Base):
     # Subject areas this person does not want to be offered. Codes from INDUSTRIES, never "any".
     excluded_industries = Column(JSONB, nullable=False, default=list, server_default="[]")
     declared_grade = Column(String(20))
+    # A letter read from a certificate number. Search and the test grade do not read it.
+    certificate_grade = Column(String(20))
     # Survey (TZ 2.1): specialization drives the category and the test blueprint.
     specialization = Column(String(30), index=True)
     industry = Column(String(40))

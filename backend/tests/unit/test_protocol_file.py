@@ -1,4 +1,4 @@
-from app.services.protocol_file import parse_protocol_text
+from app.services.protocol_file import certificate_grade, parse_protocol_text
 
 
 def test_a_protocol_line_is_kept_and_does_not_set_a_grade():
@@ -15,6 +15,15 @@ def test_a_protocol_line_is_kept_and_does_not_set_a_grade():
     assert row.trust_level == "file_import"
     assert row.event_id.startswith("file-")
     assert not hasattr(row, "grade")
+
+
+def test_a_certificate_letter_does_not_become_the_grade():
+    assert certificate_grade("сертификат 20240115-1-M-004") == "middle"
+    assert certificate_grade("20240115-1-S-001") == "senior"
+    assert certificate_grade("нет номера") is None
+    assessed = "junior"
+    named = certificate_grade("20240115-1-S-001")
+    assert named == "senior" and assessed == "junior"
 
 
 def test_the_same_line_twice_is_one_event():
