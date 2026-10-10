@@ -115,12 +115,30 @@ class DraftIn(BaseModel):
     text: str = Field(min_length=10, max_length=8000)
 
 
+class DraftUrlIn(BaseModel):
+    url: str = Field(min_length=8, max_length=500)
+
+
 @router.post("/draft")
 async def draft(body: DraftIn, current: dict = Depends(get_current_employer)):
     """Fill a need from pasted text. Nothing is saved and nothing is fetched from a job board."""
     if await too_many(f"need-draft:{current['sub']}", 20, 3600):
         raise ApiError(429, "rate_limited", "Слишком часто. Подождите немного.")
     return draft_need(body.text)
+
+
+@router.post("/draft-url")
+async def draft_url(body: DraftUrlIn, current: dict = Depends(get_current_employer)):
+    """One public page, then the same draft rules. Nothing is saved. Redirects are not followed."""
+    from app.services.page_draft import PageDraftError, fetch_page
+
+    if await too_many(f"need-draft:{current['sub']}", 20, 3600):
+        raise ApiError(429, "rate_limited", "Слишком часто. Подождите немного.")
+    try:
+        text = await fetch_page(body.url)
+    except PageDraftError as exc:
+        raise ApiError(422, "validation_error", str(exc)) from exc
+    return draft_need(text)
 
 
 @router.post("", status_code=201)

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, needExam, createNeed, draftNeed, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
+  apiError, compareNeed, needExam, createNeed, draftNeed, draftNeedFromUrl, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import { useFavorites } from '../../hooks/useFavorites'
@@ -24,7 +24,7 @@ interface PayHint { known: number; covered: number; proposed_to: number; covered
 interface SkillHint { skill: string; gained: number; pool: number }
 interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number; flags?: { code: string; label: string }[] }
 
-const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '' }
+const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '', pageUrl: '' }
 const PRESETS = [
   { label: 'Высокая нагрузка', title: 'Сервис под нагрузкой', role: 'backend', grade: 'senior', skills: 'Go, PostgreSQL, Kafka', format: 'remote' },
   { label: 'Искусственный интеллект', title: 'Модели в продукте', role: 'ml', grade: 'middle', skills: 'Python, PyTorch', format: 'hybrid' },
@@ -86,7 +86,7 @@ export default function EmployerNeeds() {
     onError: (e: unknown) => setError(apiError(e)),
   })
   const parsed = useMutation({
-    mutationFn: () => draftNeed(form.paste).then(r => r.data as {
+    mutationFn: (url?: string) => (url ? draftNeedFromUrl(url) : draftNeed(form.paste)).then(r => r.data as {
       title: string; role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
       salary_from: number | null; salary_to: number | null; work_format: string | null; city: string | null
       industry: string | null; work_goal: string | null; notes: string[]; flags?: { code: string; label: string }[]
@@ -139,7 +139,7 @@ export default function EmployerNeeds() {
       nice: n.params.nice_to_have.join(', '), industry: n.params.industry ?? '', internship: n.params.work_goal === 'internship',
       payFrom: n.params.salary_from != null ? String(n.params.salary_from) : '',
       payTo: n.params.salary_to != null ? String(n.params.salary_to) : '',
-      city: n.params.city ?? '', format: n.params.work_format ?? '', paste: '' })
+      city: n.params.city ?? '', format: n.params.work_format ?? '', paste: '', pageUrl: '' })
   }
   const field = 'field-label'
   const shortItems = shortlist.data?.items ?? []
@@ -159,7 +159,11 @@ export default function EmployerNeeds() {
             <label className={field} htmlFor="n-paste">Текст вакансии</label>
             <textarea id="n-paste" value={form.paste} onChange={e => setForm({ ...form, paste: e.target.value })} rows={4}
               placeholder="Вставьте текст. Сайт вакансий не открывается: разбираются только эти строки." className="input" aria-label="Текст вакансии" />
-            <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate()}>Разобрать текст</button>
+            <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate(undefined)}>Разобрать текст</button>
+            <label className={field} htmlFor="n-url">Или одна открытая ссылка</label>
+            <input id="n-url" value={form.pageUrl} onChange={e => setForm({ ...form, pageUrl: e.target.value })} placeholder="https://…" className="input" aria-label="Ссылка на страницу вакансии" />
+            <button type="button" className="btn-secondary btn-sm mt-2" disabled={!(form.pageUrl ?? '').startsWith('http') || parsed.isPending} onClick={() => parsed.mutate(form.pageUrl)}>Разобрать страницу</button>
+            <p className="field-hint">Берётся только эта страница. Переход по ссылке внутри неё не выполняется. Внутренний адрес отклоняется.</p>
             {draftNotes.length > 0 && <ul className="mt-2 text-sm text-ink-2">{draftNotes.map(line => <li key={line}>{line}</li>)}</ul>}
             {(parsed.data?.flags ?? []).length > 0 && <p className="mt-2 text-sm text-warn">В тексте: {parsed.data!.flags!.map(flag => flag.label.toLowerCase()).join('; ')}. Потребность всё равно можно сохранить.</p>}
           </div>

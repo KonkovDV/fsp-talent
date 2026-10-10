@@ -104,6 +104,7 @@
 /api/v1/moderation/vacancies/{vacancy_id}/close
 /api/v1/needs
 /api/v1/needs/draft
+/api/v1/needs/draft-url
 /api/v1/needs/{need_id}
 /api/v1/needs/{need_id}/candidates/{candidate_id}/ai-note
 /api/v1/needs/{need_id}/compare

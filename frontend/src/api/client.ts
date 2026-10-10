@@ -422,6 +422,7 @@ export const setFavorite = (id: string, on: boolean) =>
 export const listNeeds = () => api.get('/needs')
 export const createNeed = (data: object) => api.post('/needs', data)
 export const draftNeed = (text: string) => api.post('/needs/draft', { text })
+export const draftNeedFromUrl = (url: string) => api.post('/needs/draft-url', { url })
 export const updateNeed = (id: string, data: object) => api.put(`/needs/${id}`, data)
 export const getNeed = (id: string) => api.get(`/needs/${id}`)
 export const restoreNeed = (id: string, version: number) => api.post(`/needs/${id}/versions/${version}/restore`)
