@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '../store/authStore'
 import { apiError, apiErrorCode, loginEmployer, loginParticipant, publicDemo, publicJuryFree } from '../api/client'
+import { serverUnreachable } from '../demoFallback'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
 import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
 
@@ -24,12 +25,17 @@ export default function LoginPage() {
   const role = params.get('role') === 'employer' ? 'employer' : 'participant'
   const navigate = useNavigate()
   const setAuth = useAuthStore(s => s.setAuth)
+  const enterExample = useAuthStore(s => s.enterExample)
   const [error, setError] = useState('')
   const [demo, setDemo] = useState(false)
+  const [offline, setOffline] = useState(false)
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<Form>({ resolver: zodResolver(schema) })
 
   useEffect(() => {
-    publicDemo().then(res => setDemo(Boolean(res.data.demo_mode))).catch(() => setDemo(false))
+    publicDemo().then(res => setDemo(Boolean(res.data.demo_mode))).catch((e: unknown) => {
+      setDemo(false)
+      if (serverUnreachable(e)) setOffline(true)
+    })
   }, [])
 
   const takeJury = async () => {
@@ -92,6 +98,15 @@ export default function LoginPage() {
           {isSubmitting ? 'Входим…' : 'Войти'}
         </button>
       </form>
+      {offline && (
+        <div className="mt-6 space-y-2 border-t border-line pt-4" data-testid="example-entry">
+          <p className="text-xs leading-relaxed text-ink-3">Сервер не ответил. Пример кабинета открывается без входа: карточки учебные.</p>
+          <button type="button" className="btn w-full border border-line py-2 text-sm"
+            onClick={() => { enterExample('employer'); navigate('/employer/search') }}>Пример кабинета работодателя</button>
+          <button type="button" className="btn w-full border border-line py-2 text-sm"
+            onClick={() => { enterExample('participant'); navigate('/candidate') }}>Пример кабинета кандидата</button>
+        </div>
+      )}
       <div className="mt-6 flex flex-col gap-2 border-t border-line pt-4">
         {demo && <p className="text-xs text-ink-3">Стенд сбрасывается каждую ночь</p>}
         {demo && (
