@@ -25,6 +25,11 @@ interface SkillHint { skill: string; gained: number; pool: number }
 interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number }
 
 const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '' }
+const PRESETS = [
+  { label: 'Высокая нагрузка', title: 'Сервис под нагрузкой', role: 'backend', grade: 'senior', skills: 'Go, PostgreSQL, Kafka', format: 'remote' },
+  { label: 'Искусственный интеллект', title: 'Модели в продукте', role: 'ml', grade: 'middle', skills: 'Python, PyTorch', format: 'hybrid' },
+  { label: 'Робототехника', title: 'Бортовое ПО', role: 'embedded', grade: 'middle', skills: 'C++, ROS', format: 'office' },
+]
 const money = (raw: string) => { const n = Number(raw); return raw.trim() && Number.isFinite(n) ? n : null }
 const csv = (s: string) => s.split(',').map(x => x.trim()).filter(Boolean)
 
@@ -156,6 +161,13 @@ export default function EmployerNeeds() {
               placeholder="Вставьте текст. Сайт вакансий не открывается: разбираются только эти строки." className="input" aria-label="Текст вакансии" />
             <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate()}>Разобрать текст</button>
             {draftNotes.length > 0 && <ul className="mt-2 text-sm text-ink-2">{draftNotes.map(line => <li key={line}>{line}</li>)}</ul>}
+          </div>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Готовые потребности">
+            {PRESETS.map(preset => (
+              <button type="button" key={preset.label} className="chip-default" onClick={() => setForm(current => ({
+                ...current, title: preset.title, role: preset.role, grade: preset.grade, skills: preset.skills, format: preset.format,
+              }))}>{preset.label}</button>
+            ))}
           </div>
           <div><label className={field} htmlFor="n-title">Название</label>
             <input id="n-title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
