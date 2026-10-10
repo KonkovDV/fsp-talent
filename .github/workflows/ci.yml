@@ -102,9 +102,12 @@ jobs:
       # unimportable module and a dead API path, which all reached main before.
       - name: Apply migrations
         run: cd backend && alembic upgrade head && python -m app.core.schema_sync --dry-run
+      # Demo data and the smoke run need the demo stand (seed refuses otherwise, ff1640b); unit tests above do not.
       - name: Seed demo data
+        env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: cd backend && python -m seed.generate_seed
       - name: API smoke test
+        env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: |
           cd backend
           uvicorn app.main:app --host 127.0.0.1 --port 8010 > /tmp/api.log 2>&1 &

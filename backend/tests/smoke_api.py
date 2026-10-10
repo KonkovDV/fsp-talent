@@ -187,6 +187,9 @@ def _new_candidate(tag: str) -> tuple[str, str, str]:
     assert status == 202, sent
     status, tokens = call("POST", "/auth/verify-email", {"email": email, "code": last_letter(email)["code"]})
     assert status == 200, tokens
+    # Employers see only a candidate with a birth date on file (Participant.discoverable); the 18+ box is not one.
+    status, saved = call("PUT", "/candidates/me/profile", {"birth_date": "2000-01-01"}, token=tokens["access_token"])
+    assert status == 200, saved
     status, me = call("GET", "/candidates/me", token=tokens["access_token"])
     return email, tokens["access_token"], me["id"]
 
@@ -730,7 +733,8 @@ def check_assessment():
     assert status == 200 and before["specialization"] == "security" and before["grade_source"] != "assessed", before
     weak = _run_test(token, "junior", _wrong_answer)
     result = weak["result"]
-    assert not result["passed"] and result["confirmed_grade"] is None, result
+    # The seed may leave an earlier confirmation of this specialization; a failed run must not earn a grade.
+    assert not result["passed"] and result["earned_grade"] is None, result
     status, again = call("POST", "/assessment/start", {"target_grade": "junior"}, token=token)
     assert status == 429 and again["error"]["code"] == "retake_cooldown", again
     # Stepping down after a failure does not wait for the retake interval.
