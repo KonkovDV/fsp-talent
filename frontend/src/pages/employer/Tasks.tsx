@@ -9,7 +9,7 @@ import TaskDialog from '../../components/TaskDialog'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 import { ROLE_RU } from '../../labels'
 
-const TYPE_LABEL: Record<string, string> = { number: 'число', choice: 'выбор варианта', open: 'открытый ответ', code: 'код' }
+const TYPE_LABEL: Record<string, string> = { number: 'число', choice: 'выбор варианта', open: 'открытый ответ', code: 'код', regex: 'шаблон' }
 
 function audience(t: EmployerTask): string {
   return t.visibility === 'addressed' ? 'адресное, одному кандидату' : `всем: ${ROLE_RU[t.specialization ?? ''] ?? t.specialization}`

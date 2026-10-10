@@ -420,7 +420,7 @@ export const fspSignInCallback = (code: string, state: string) => api.post('/aut
 export const fspSignUp = (ticket: string, consents: string[]) => api.post('/auth/fsp/signup', { ticket, consents })
 
 // Tasks written by employers: a reference answer is checked by the system, an open one by the employer.
-export type TaskAnswerType = 'number' | 'choice' | 'open' | 'code'
+export type TaskAnswerType = 'number' | 'choice' | 'open' | 'code' | 'regex'
 export interface TaskSubmission {
   id: string; status: 'checked' | 'review' | 'reviewed'; status_label: string; passed: boolean | null
   comment: string | null; answer_text: string | null; answer_index: number | null

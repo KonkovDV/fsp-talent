@@ -12,6 +12,7 @@ The pure rules live here so they can be tested without a database:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -19,7 +20,8 @@ from app.items import same_number, whole_number
 from app.models import EmployerTask, Participant, TaskSubmission
 from app.services.code_lab import LabError, problem_public, run_problem
 
-ANSWER_TYPES = ("number", "choice", "open", "code")
+ANSWER_TYPES = ("number", "choice", "open", "code", "regex")
+_UNSAFE = ("(.*)*", "(.+)+", "(.*)+", "(.+)*")
 MAX_ANSWER = 4000
 MAX_CODE = 16 * 1024
 STATUS_LABELS = {"checked": "проверено системой", "review": "на проверке", "reviewed": "проверено работодателем"}
@@ -60,9 +62,25 @@ def case_note(outcome: dict) -> str:
             f"скрытые {outcome.get('hidden_passed', 0)} из {outcome.get('hidden_total', 0)}.")
 
 
+def graded_by(answer_type: str) -> str:
+    """Who marks the answer. A model is not a marker."""
+    return "reviewer" if answer_type == "open" else "auto"
+
+
+def usable_pattern(pattern: str) -> bool:
+    text = (pattern or "").strip()
+    if not text or len(text) > 40 or any(token in text for token in _UNSAFE):
+        return False
+    try:
+        re.compile(text)
+    except re.error:
+        return False
+    return True
+
+
 def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int | None,
                  language: str = "python") -> Checked:
-    """Number and choice are checked against the reference now; an open answer waits for the employer.
+    """Number, choice and a short pattern are checked now. An open answer waits for the employer.
 
     ValueError means the answer does not fit the task type (the API turns it into 422).
     """
@@ -86,6 +104,11 @@ def check_answer(task: EmployerTask, answer_text: str | None, answer_index: int 
             raise ValueError(str(exc)) from exc
         return Checked("checked", bool(outcome["passed"]), text, None,
                        LIMIT_NOTE if outcome.get("timed_out") else case_note(outcome))
+    if task.answer_type == "regex":
+        text = (answer_text or "").strip()
+        if not text or len(text) > 200 or not usable_pattern(task.reference_number or ""):
+            raise ValueError("answer")
+        return Checked("checked", re.fullmatch(task.reference_number or "", text) is not None, text[:200], None)
     text = (answer_text or "").strip()
     if not text or len(text) > MAX_ANSWER:
         raise ValueError("answer")
@@ -109,13 +132,16 @@ def validate_reference(answer_type: str, options: list[str], correct_index: int 
     elif answer_type == "code":
         if problem_public(reference_number or "") is None:
             raise ValueError("Выберите задание лаборатории")
+    elif answer_type == "regex":
+        if not usable_pattern(reference_number or ""):
+            raise ValueError("Шаблон короче 40 знаков и без вложенных повторов")
     elif answer_type != "open":
         raise ValueError("Неизвестный тип ответа")
 
 
 def stored_reference(answer_type: str, reference_number: str | None) -> str | None:
     """A number keeps its key. A code task keeps the lab problem id. Other types keep neither."""
-    if answer_type not in ("number", "code") or not reference_number or not reference_number.strip():
+    if answer_type not in ("number", "code", "regex") or not reference_number or not reference_number.strip():
         return None
     return reference_number.strip()
 
@@ -125,6 +151,7 @@ def candidate_view(task: EmployerTask, company: str | None, mine: TaskSubmission
     """What the candidate sees. The reference appears only after the candidate's own answer is checked."""
     out = {
         "id": str(task.id), "title": task.title, "statement": task.statement, "answer_type": task.answer_type,
+        "graded_by": graded_by(task.answer_type),
         "options": [{"index": i, "text": t} for i, t in enumerate(task.options or [])]
         if task.answer_type == "choice" else [],
         "company": company, "addressed": task.visibility == "addressed",
@@ -138,8 +165,12 @@ def candidate_view(task: EmployerTask, company: str | None, mine: TaskSubmission
         if task.answer_type == "code" else [],
     }
     if mine is not None and mine.status == "checked":
-        out["reference"] = (task.reference_number if task.answer_type == "number"
-                            else (task.options or [])[task.correct_index] if task.correct_index is not None else None)
+        if task.answer_type in ("number", "regex"):
+            out["reference"] = task.reference_number
+        elif task.correct_index is not None:
+            out["reference"] = (task.options or [])[task.correct_index]
+        else:
+            out["reference"] = None
     return out
 
 
@@ -157,6 +188,7 @@ def employer_view(task: EmployerTask, counts: dict | None = None) -> dict:
     counts = counts or {}
     return {
         "id": str(task.id), "title": task.title, "statement": task.statement, "answer_type": task.answer_type,
+        "graded_by": graded_by(task.answer_type),
         "options": list(task.options or []), "correct_index": task.correct_index,
         "reference_number": task.reference_number, "visibility": task.visibility,
         "specialization": task.specialization,

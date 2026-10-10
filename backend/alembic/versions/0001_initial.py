@@ -175,7 +175,7 @@ CREATE TABLE public.employer_tasks (
     deadline timestamp with time zone,
     is_open boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT ck_employer_tasks_answer_type CHECK (((answer_type)::text = ANY ((ARRAY['number'::character varying, 'choice'::character varying, 'open'::character varying])::text[]))),
+    CONSTRAINT ck_employer_tasks_answer_type CHECK (((answer_type)::text = ANY ((ARRAY['number'::character varying, 'choice'::character varying, 'open'::character varying, 'code'::character varying, 'regex'::character varying])::text[]))),
     CONSTRAINT ck_employer_tasks_audience CHECK (((((visibility)::text = 'public'::text) AND (specialization IS NOT NULL) AND (candidate_id IS NULL)) OR (((visibility)::text = 'addressed'::text) AND (candidate_id IS NOT NULL))))
 );
 

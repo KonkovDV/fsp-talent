@@ -37,6 +37,7 @@ const TYPES: { value: TaskAnswerType; label: string; hint: string }[] = [
   { value: 'choice', label: 'Выбор варианта', hint: 'Проверит система по эталону' },
   { value: 'open', label: 'Открытый ответ', hint: 'Скрипт или решение: проверяете вы' },
   { value: 'code', label: 'Код', hint: 'Скрытые проверки. Грейд не меняется' },
+  { value: 'regex', label: 'Шаблон', hint: 'Проверит система. Модель ответ не смотрит' },
 ]
 
 /**
@@ -59,7 +60,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
   const send = useMutation({
     mutationFn: () => createTask({
       title: form.title.trim(), statement: form.statement.trim(), answer_type: form.answer_type,
-      reference_number: form.answer_type === 'number' ? form.reference_number.trim()
+      reference_number: form.answer_type === 'number' || form.answer_type === 'regex' ? form.reference_number.trim()
         : form.answer_type === 'code' ? form.lab_id : null,
       options: form.answer_type === 'choice' ? form.options.map(o => o.trim()) : [],
       correct_index: form.answer_type === 'choice' ? form.correct_index : null,
@@ -83,6 +84,7 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
     if (form.title.trim().length < 3) return setError('Назовите задание')
     if (form.statement.trim().length < 10) return setError('Опишите условие')
     if (form.answer_type === 'number' && !/^\s*-?\d+\s*$/.test(form.reference_number)) return setError('Эталон — целое число')
+    if (form.answer_type === 'regex' && !form.reference_number.trim()) return setError('Напишите шаблон')
     if (form.answer_type === 'choice' && form.options.some(o => !o.trim())) return setError('Заполните все варианты')
     setError('')
     send.mutate()
@@ -153,10 +155,11 @@ export default function TaskDialog({ candidateId, candidateLabel, defaultSpec = 
               ))}
             </div>
           </fieldset>
-          {form.answer_type === 'number' && (
-            <div><label className="field-label" htmlFor="t-ref">Эталон: целое число</label>
-              <input id="t-ref" value={form.reference_number} onChange={set('reference_number')} inputMode="numeric"
-                className="input num w-40" placeholder="500" /></div>
+          {(form.answer_type === 'number' || form.answer_type === 'regex') && (
+            <div><label className="field-label" htmlFor="t-ref">{form.answer_type === 'regex' ? 'Шаблон, до 40 знаков' : 'Эталон: целое число'}</label>
+              <input id="t-ref" value={form.reference_number} onChange={set('reference_number')}
+                inputMode={form.answer_type === 'regex' ? 'text' : 'numeric'} maxLength={form.answer_type === 'regex' ? 40 : 20}
+                className="input num w-full max-w-md" placeholder={form.answer_type === 'regex' ? 'FSP[0-9]{3}' : '500'} /></div>
           )}
           {form.answer_type === 'code' && (
             <div>
