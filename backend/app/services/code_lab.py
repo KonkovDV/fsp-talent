@@ -259,7 +259,7 @@ def _run_cases(source: str, cases: list[list[Any]]) -> tuple[list[int | None], b
     except (UnicodeDecodeError, json.JSONDecodeError):
         return blank, False
     if not isinstance(got, list) or len(got) != len(cases):
-        return blank
+        return blank, False
     out: list[int | None] = []
     for item in got:
         if isinstance(item, bool) or not isinstance(item, int) or item.bit_length() > MAX_BITS:

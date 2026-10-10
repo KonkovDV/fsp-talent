@@ -66,11 +66,15 @@ def test_the_practice_process_does_not_inherit_the_database_url(monkeypatch):
         assert probe.returncode == 0, probe.stderr.decode("utf-8", "replace")
 
 
-def test_imports_and_a_wrong_answer_do_not_pass():
+def test_imports_and_a_wrong_answer_do_not_pass(monkeypatch):
     with pytest.raises(LabError):
         guard("import os\ndef solve(xs):\n    return 0\n")
     out = run_problem("sum_positive", "def solve(xs):\n    return 0\n")
     assert out["passed"] is False and out["practice_only"] is True and out["timed_out"] is False
+    short = subprocess.CompletedProcess([], 0, stdout=b"[1]", stderr=b"")
+    monkeypatch.setattr("app.services.code_lab.subprocess.run", lambda *a, **k: short)
+    out = run_problem("sum_positive", SOLVE)
+    assert out["passed"] is False and out["hidden_passed"] == 0 and out["timed_out"] is False
 
 
 def test_a_code_task_keeps_the_lab_problem_and_a_growing_loop_stops():
