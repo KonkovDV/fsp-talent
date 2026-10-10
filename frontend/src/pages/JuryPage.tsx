@@ -40,6 +40,7 @@ export default function JuryPage() {
           <div className="mt-auto flex flex-col items-start gap-1 pt-3">
             <Link to="/method" className="link inline-flex min-h-8 items-center text-sm">Как устроен тест</Link>
             <Link to="/badge" className="link inline-flex min-h-8 items-center text-sm">Проверка удостоверения</Link>
+            <Link to="/evaluate" className="link inline-flex min-h-8 items-center text-sm">Подбор на своей разметке</Link>
           </div>
         </section>
       </div>

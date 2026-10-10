@@ -82,6 +82,7 @@ export function SiteFooter() {
             <li><Link to="/legal" className="inline-flex min-h-6 items-center underline hover:text-ink">Документы и согласия</Link></li>
             <li><Link to="/method" className="inline-flex min-h-6 items-center underline hover:text-ink">Как устроен тест</Link></li>
             <li><Link to="/badge" className="inline-flex min-h-6 items-center underline hover:text-ink">Проверка удостоверения</Link></li>
+            <li><Link to="/evaluate" className="inline-flex min-h-6 items-center underline hover:text-ink">Подбор на своей разметке</Link></li>
             <li><Link to="/jury" className="inline-flex min-h-6 items-center underline hover:text-ink">Режим жюри</Link></li>
           </ul>
         </nav>

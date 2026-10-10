@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
@@ -9,8 +10,10 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.ratelimit import too_many
 from app.models import Consent, ConsentLog, Participant, Skill, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.assessment import JURY_EMAILS
@@ -200,6 +203,30 @@ def credential_uuid(document: dict) -> uuid.UUID | None:
         return uuid.UUID(token)
     except ValueError:
         return None
+
+
+_MAX_EVALUATE_BYTES = 256 * 1024
+EVALUATE_PER_MINUTE = 10
+
+
+@router.post("/evaluate")
+async def evaluate_pairs(request: Request):
+    """The jury's own labelled pairs, scored like `--pairs`. Nothing is stored and the bank is not read."""
+    from app.api.v1.auth import client_address
+    from app.validation.matching import public_report
+
+    if await too_many(f"public:evaluate:{client_address(request)}", limit=EVALUATE_PER_MINUTE):
+        raise ApiError(429, "rate_limited")
+    body = await request.body()
+    if len(body) > _MAX_EVALUATE_BYTES:
+        raise ApiError(413, "payload_too_large", "Не больше 256 КБ за раз")
+    try:
+        text = body.decode("utf-8")
+        return await asyncio.to_thread(public_report, text)
+    except UnicodeDecodeError as exc:
+        raise ApiError(422, "validation_error", "Файл должен быть в UTF-8") from exc
+    except ValueError as exc:
+        raise ApiError(422, "validation_error", str(exc)) from exc
 
 
 @router.post("/credentials/verify")

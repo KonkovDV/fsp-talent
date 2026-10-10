@@ -638,7 +638,12 @@ def load_pairs(path: str) -> dict:
 
     A JSON object in the same shape as --export is accepted too.
     """
-    text = open(path, encoding="utf-8").read().strip()
+    return parse_pairs(open(path, encoding="utf-8").read())
+
+
+def parse_pairs(text: str) -> dict:
+    """The body of a --pairs file: JSONL of pairs or one exported JSON object."""
+    text = text.strip()
     lines = [ln for ln in text.splitlines() if ln.strip()]
     # One JSON object (possibly pretty-printed) versus one pair per line.
     if not (len(lines) > 1 and all(ln.lstrip().startswith("{") for ln in lines)):
@@ -661,6 +666,48 @@ def load_pairs(path: str) -> dict:
         candidates[cid] = {"id": cid, "observed": observed}
         labels.setdefault(nid, {})[cid] = int(row["label"])
     return {"seed": None, "candidates": list(candidates.values()), "needs": list(needs.values()), "labels": labels}
+
+
+PUBLIC_MAX_PAIRS = 500
+PUBLIC_METHODS = ("full", "keyword", "random")
+
+
+def public_report(text: str) -> dict:
+    """The same metrics as --pairs for the public page. ValueError carries the message for the person.
+
+    Only labelled pairs are ranked: the page never reads the candidate bank.
+    """
+    lines = [ln for ln in text.strip().splitlines() if ln.strip()]
+    if not lines:
+        raise ValueError("Вставьте хотя бы одну пару: потребность, кандидат и оценка 0–3")
+    if len(lines) > PUBLIC_MAX_PAIRS:
+        raise ValueError(f"Не больше {PUBLIC_MAX_PAIRS} пар за раз")
+    try:
+        dataset = parse_pairs(text)
+        for need in dataset["needs"]:
+            _spec(need)
+        for cand in dataset["candidates"]:
+            _facts(cand)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Строка {exc.lineno}: это не JSON") from exc
+    except ValueError as exc:
+        raise ValueError("Оценка — целое от 0 до 3") from exc
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"Не хватает поля {exc}: формат — как в примере") from exc
+    if any(not 0 <= v <= 3 for labels in dataset["labels"].values() for v in labels.values()):
+        raise ValueError("Оценка — целое от 0 до 3")
+    judged = [n for n in dataset["needs"] if any(v >= 2 for v in dataset["labels"][n["id"]].values())]
+    if not judged:
+        raise ValueError("Нужна хотя бы одна потребность с кандидатом на оценку 2 или 3")
+    rows = {row.method: row for row in evaluate(dataset)}
+    pairs = sum(len(labels) for labels in dataset["labels"].values())
+    return {
+        "pairs": pairs, "needs": len(dataset["needs"]), "judged_needs": len(judged),
+        "sha256": sha256(dataset),
+        "rows": [{"method": m, "title": TITLES[m].strip(), "ndcg10": round(rows[m].ndcg10, 4),
+                  "ndcg_ci": [round(v, 4) for v in rows[m].ndcg_ci] if rows[m].ndcg_ci else None,
+                  "p10": round(rows[m].p10, 4), "map": round(rows[m].map, 4)} for m in PUBLIC_METHODS],
+    }
 
 
 # Thresholds of --check. They guard the claims in docs/VALIDATION_MATCHING.md, not a tuned optimum.

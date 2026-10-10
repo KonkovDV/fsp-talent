@@ -279,6 +279,10 @@ export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)
 export const verifyCredential = (credential: object) => api.post('/public/credentials/verify', credential)
+export interface EvaluateRow { method: string; title: string; ndcg10: number; ndcg_ci: [number, number] | null; p10: number; map: number }
+export interface EvaluateReport { pairs: number; needs: number; judged_needs: number; sha256: string; rows: EvaluateRow[] }
+export const evaluatePairs = (text: string) =>
+  api.post<EvaluateReport>('/public/evaluate', text, { headers: { 'Content-Type': 'text/plain' } })
 export const credentialStatus = (id: string) => api.get(`/public/credentials/${id}/status`)
 export const presentResult = (id: string) => api.post(`/candidates/me/results/${id}/presentation`)
 
