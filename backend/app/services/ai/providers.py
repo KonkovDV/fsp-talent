@@ -14,6 +14,7 @@ import logging
 import re
 import socket
 import time
+import weakref
 from dataclasses import dataclass, field
 
 import httpx
@@ -23,6 +24,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 TIMEOUT = 30.0
+HTTP_TIMEOUT = httpx.Timeout(60.0, connect=5.0)
+CONNECT_ATTEMPTS = 3
 CACHE_SECONDS = 30.0
 _MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$")
 _PARAM = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -89,10 +92,19 @@ def validate(kind: str, model: str, check_model: str | None, params: dict, secre
 
 
 def _env() -> Provider | None:
-    if not settings.GIGACHAT_CREDENTIALS:
-        return None
-    return Provider("gigachat", settings.GIGACHAT_MODEL, settings.GIGACHAT_CHECK_MODEL or None,
-                    settings.GIGACHAT_CREDENTIALS, {"scope": settings.GIGACHAT_SCOPE})
+    if settings.GIGACHAT_CREDENTIALS:
+        return Provider("gigachat", settings.GIGACHAT_MODEL, settings.GIGACHAT_CHECK_MODEL or None,
+                        settings.GIGACHAT_CREDENTIALS, {"scope": settings.GIGACHAT_SCOPE})
+    if settings.YANDEX_API_KEY and settings.YANDEX_FOLDER_ID:
+        try:
+            params = validate("yandex", settings.YANDEX_MODEL, settings.YANDEX_CHECK_MODEL or None,
+                              {"folder_id": settings.YANDEX_FOLDER_ID}, settings.YANDEX_API_KEY)
+        except ValueError as exc:
+            logger.error("YANDEX_* settings are ignored: %s", exc)
+            return None
+        return Provider("yandex", settings.YANDEX_MODEL, settings.YANDEX_CHECK_MODEL or None,
+                        settings.YANDEX_API_KEY, params)
+    return None
 
 
 _stored: Provider | None = None
@@ -109,6 +121,7 @@ def active() -> Provider | None:
 def forget() -> None:
     global _stored, _loaded_at
     _stored, _loaded_at = None, None
+    _clients.clear()
 
 
 async def _active_row(db):
@@ -187,12 +200,33 @@ async def _gigachat(provider: Provider, model: str, messages: list[dict], temper
     return str(resp.choices[0].message.content or "")
 
 
+_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
+
+
+def _client() -> httpx.AsyncClient:
+    """One pooled client per event loop: a kept-alive TLS connection is not renegotiated for each call."""
+    loop = asyncio.get_running_loop()
+    client = _clients.get(loop)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False, trust_env=False,
+                                   limits=httpx.Limits(max_connections=20, keepalive_expiry=60.0))
+        _clients[loop] = client
+    return client
+
+
 async def _openai_compatible(provider: Provider, model: str, messages: list[dict], temperature: float) -> str:
     url, headers, wire_model = request_for(provider, model)
     host = KINDS[provider.kind].hosts[0]
-    async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False, trust_env=False) as client:
-        resp = await client.post(url, headers=headers, json={
-            "model": wire_model, "messages": messages, "temperature": temperature})
+    body = {"model": wire_model, "messages": messages, "temperature": temperature}
+    client = _client()
+    for attempt in range(CONNECT_ATTEMPTS):
+        try:
+            resp = await client.post(url, headers=headers, json=body)
+            break
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            # Only connection errors: nothing reached the provider, so the prompt cannot run twice.
+            if attempt == CONNECT_ATTEMPTS - 1:
+                raise ProviderError(f"{host} не отвечает на соединение") from None
     if resp.status_code != 200:
         raise ProviderError(f"{host} ответил {resp.status_code}")
     try:

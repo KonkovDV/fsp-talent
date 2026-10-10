@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     GIGACHAT_CHECK_MODEL: str = ""
     GIGACHAT_VERIFY_SSL: bool = True
 
+    # YandexGPT (Yandex AI Studio), used when GIGACHAT_CREDENTIALS is empty. API key of a service account
+    # with ai.languageModels.user on the folder; models are names inside the folder, e.g. yandexgpt/latest.
+    YANDEX_API_KEY: str = ""
+    YANDEX_FOLDER_ID: str = ""
+    YANDEX_MODEL: str = "yandexgpt/latest"
+    YANDEX_CHECK_MODEL: str = ""
+
     # Embeddings
     EMBEDDING_MODEL: str = "deepvk/USER-bge-m3"
     EMBEDDING_DIM: int = 1024

@@ -23,6 +23,7 @@ def clean(monkeypatch):
     providers.forget()
     monkeypatch.setattr(providers.settings, "AI_ENABLED", True)
     monkeypatch.setattr(providers.settings, "GIGACHAT_CREDENTIALS", "")
+    monkeypatch.setattr(providers.settings, "YANDEX_API_KEY", "")
     yield
     providers.forget()
 
@@ -78,6 +79,7 @@ def _capture(monkeypatch, answer=None):
         return REAL_CLIENT(transport=httpx.MockTransport(handler), **kwargs)
 
     monkeypatch.setattr(providers.httpx, "AsyncClient", client)
+    providers._clients.clear()
     return sent
 
 
@@ -93,6 +95,44 @@ async def test_a_call_strips_contacts_and_refuses_redirects(monkeypatch):
     _capture(monkeypatch, httpx.Response(302, headers={"Location": "http://169.254.169.254/"}))
     with pytest.raises(providers.ProviderError, match="302"):
         await providers.chat(provider, provider.model, "sys", "text")
+
+
+async def test_only_connection_failures_are_retried_and_the_pool_is_reused(monkeypatch):
+    monkeypatch.setattr(providers.socket, "getaddrinfo", lambda *a, **k: PUBLIC)
+    tries = {"n": 0, "posted": 0}
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        tries["n"] += 1
+        if tries["n"] <= 2:
+            raise httpx.ConnectTimeout("handshake", request=request)
+        tries["posted"] += 1
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    monkeypatch.setattr(providers.httpx, "AsyncClient",
+                        lambda **kw: REAL_CLIENT(transport=httpx.MockTransport(flaky), **kw))
+    providers._clients.clear()
+    provider = providers.Provider("cloudru", "m", None, "K")
+    assert await providers.chat(provider, "m", "sys", "text") == "ok" and tries["posted"] == 1
+    first = providers._client()
+    await providers.chat(provider, "m", "sys", "text")
+    assert providers._client() is first
+
+    tries["n"] = -10
+    with pytest.raises(providers.ProviderError, match="не отвечает"):
+        await providers.chat(provider, "m", "sys", "text")
+
+
+def test_yandex_from_the_environment_when_gigachat_has_no_key(monkeypatch):
+    for name, value in (("YANDEX_API_KEY", "AQVN-k"), ("YANDEX_FOLDER_ID", "b1gabc"),
+                        ("YANDEX_MODEL", "yandexgpt/latest"), ("YANDEX_CHECK_MODEL", "yandexgpt-lite/latest")):
+        monkeypatch.setattr(providers.settings, name, value)
+    env = providers.active()
+    assert (env.kind, env.model, env.check_model, env.params) == (
+        "yandex", "yandexgpt/latest", "yandexgpt-lite/latest", {"folder_id": "b1gabc"})
+    monkeypatch.setattr(providers.settings, "YANDEX_FOLDER_ID", "../etc")
+    assert providers.active() is None
+    monkeypatch.setattr(providers.settings, "GIGACHAT_CREDENTIALS", "giga")
+    assert providers.active().kind == "gigachat"
 
 
 @pytest.mark.parametrize("address", ["10.0.0.5", "127.0.0.1", "169.254.169.254", "::1", "::ffff:192.168.1.1"])
