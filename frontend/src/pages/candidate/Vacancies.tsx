@@ -8,7 +8,7 @@ import { netLine } from '../../money'
 interface Card {
   id: string; title: string; company: string | null; role: string | null; grade: string | null; work_format: string
   salary_from: number | null; salary_to: number | null; why: string[]; matched_skills: string[]; missing_skills: string[]
-  applied: boolean; can_apply: boolean
+  applied: boolean; can_apply: boolean; flags?: { code: string; label: string }[]
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
@@ -125,6 +125,7 @@ export default function CandidateVacancies() {
               <div className="min-w-0 flex-1">
                 <h2 className="text-lg font-semibold text-ink">{card.title}</h2>
                 <p className="text-sm text-ink-2">{card.company}</p>
+                {(card.flags ?? []).length > 0 && <p className="mt-1 text-sm text-warn">Проверьте текст: {card.flags!.map(flag => flag.label.toLowerCase()).join('; ')}. Грейд от этого не меняется.</p>}
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
                   <CategoryPlate role={card.role} grade={card.grade} /> <span>{FORMAT[card.work_format] ?? card.work_format}</span>
                 </div>
