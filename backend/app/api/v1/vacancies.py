@@ -32,6 +32,7 @@ from app.services.skills import normalize_skill
 from app.services.trust_level import next_step, trust_level, vacancy_limit
 from app.services.vacancies import match_vacancy, status_after_close
 from app.services.vacancy_exam import form_exam
+from app.services.vacancy_flags import vacancy_flags
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
@@ -80,6 +81,7 @@ def _out(v: Vacancy, extra: dict | None = None) -> dict:
         "salary_from": v.salary_from_gross, "salary_to": v.salary_to_gross,
         "work_format": v.work_format, "allows_minors": v.allows_minors, "is_open": v.is_open,
         "company": v.employer.company_name if v.employer else None,
+        "flags": vacancy_flags(v.title, v.description),
     }
     if extra:
         card.update(extra)

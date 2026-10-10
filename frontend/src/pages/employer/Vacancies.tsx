@@ -9,6 +9,7 @@ import { marketFlag, netLine } from '../../money'
 const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
 interface Vacancy { id: string; title: string; description?: string | null; role: string | null; grade: string | null
+  flags?: { code: string; label: string }[]
   discipline?: string | null; min_rank?: string | null; allows_minors?: boolean; is_open: boolean; skills: string[]
   salary_from: number | null; salary_to: number | null; work_format: string }
 interface Application { id: string; vacancy_title: string; status: string; created_at: string | null }
@@ -126,6 +127,7 @@ export default function EmployerVacancies() {
             <li key={v.id} className="card flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="font-medium text-ink">{v.title}</p>
+                {(v.flags ?? []).length > 0 && <p className="mt-1 text-sm text-warn">В тексте: {v.flags!.map(flag => flag.label.toLowerCase()).join('; ')}. Вакансия остаётся открытой.</p>}
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-ink-2">
                   <CategoryPlate role={v.role} grade={v.grade} /><span>{FORMAT[v.work_format] ?? v.work_format}</span>
                   {v.skills.map(s => <span key={s} className="chip-default">{s}</span>)}
