@@ -24,6 +24,7 @@ export interface CandidateCardData {
     employer?: number
     accept?: number | null
     congestion?: number
+    reply?: { p: number; label: string } | null
     plus: string[]
     minus: string[]
     info: string[]
@@ -224,10 +225,17 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3 sm:px-6">
-        <button onClick={() => setOpen(o => !o)} aria-expanded={open} className="btn-ghost -ml-3 gap-1 text-sm">
-          <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
-          Почему в выдаче
-        </button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button onClick={() => setOpen(o => !o)} aria-expanded={open} className="btn-ghost -ml-3 gap-1 text-sm">
+            <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+            Почему в выдаче
+          </button>
+          {card.match?.reply && (
+            <p data-testid="reply-chance" className="text-xs text-ink-2">
+              Ответят: {card.match.reply.label}, {Math.round(card.match.reply.p * 100)} %
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           {compare && (
             <button type="button" onClick={compare.toggle} aria-pressed={compare.on} disabled={!compare.on && compare.full}
