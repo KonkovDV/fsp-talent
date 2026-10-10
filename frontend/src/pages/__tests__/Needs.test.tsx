@@ -56,6 +56,15 @@ beforeEach(() => {
 })
 
 describe('потребность', () => {
+  it('готовая потребность заполняет форму и сама её не сохраняет', async () => {
+    renderPage(<EmployerNeeds />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Новая потребность' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Высокая нагрузка' }))
+    expect(screen.getByLabelText('Название')).toHaveValue('Сервис под нагрузкой')
+    expect(screen.getByLabelText('Обязательные навыки')).toHaveValue('Go, PostgreSQL, Kafka')
+    expect(createNeed).not.toHaveBeenCalled()
+  })
+
   it('короткое название не создаёт потребность', async () => {
     renderPage(<EmployerNeeds />)
     await userEvent.click(await screen.findByRole('button', { name: 'Новая потребность' }))
