@@ -755,6 +755,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             interview_outcome=interviews.get(pid),
             city=p.region if p and bool(getattr(p, "show_city", True)) else None,
             work_formats=tuple(p.work_formats or ()) if p else (),
+            tested_at=conf.confirmed_at if conf else None,
         )
         m = match_score(need, facts)
         adjusted, note = penalised(m.score, marks.get(pid))

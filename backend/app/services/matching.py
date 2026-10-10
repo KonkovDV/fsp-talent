@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import statistics
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
 
 from app.core.config import settings
 from app.services.categorization import DISCIPLINE_LABELS
@@ -113,6 +114,19 @@ def near_pairs(role: str, grade: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def freshness_of(tested_at: datetime | None, now: datetime | None = None) -> tuple[float, str | None]:
+    """Full credit for half a year, 0.85 until a year, 0.70 after. No date leaves the factor alone."""
+    if tested_at is None:
+        return 1.0, None
+    moment = tested_at if tested_at.tzinfo else tested_at.replace(tzinfo=UTC)
+    age = (now or datetime.now(UTC)) - moment
+    if age <= timedelta(days=180):
+        return 1.0, "Тест не старше полугода"
+    if age <= timedelta(days=365):
+        return 0.85, "Тесту больше полугода: вклад теста ×0,85"
+    return 0.70, "Тесту больше года: вклад теста ×0,70"
+
+
 def category_band(role: str | None, grade: str | None,
                   need_role: str | None, need_grade: str | None) -> int:
     """0 exact category, 1 one step away or a neighbour at the exact grade, 2 the rest.
@@ -150,7 +164,7 @@ SALARY_REFUSAL_CAP = 3
 # A pass can lift P(accept) up to 1. A fail and a no-show lower it. No interview leaves the score as it is.
 INTERVIEW_FACTOR = {"passed": 1.10, "failed": 0.85, "no_show": 0.70}
 REASON_SOURCE = {
-    "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "UNTESTED": "тест",
+    "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "TEST_FRESH": "тест", "UNTESTED": "тест",
     "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП", "FSP_NO_LIFT": "ФСП",
     "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП",
     "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
@@ -205,6 +219,7 @@ class CandidateFacts:
     work_formats: tuple[str, ...] = ()
     p_up: float | None = None             # P(θ ≥ cut of the next grade); used only by GRADE_MODEL=expected
     fail_rate: float | None = None        # π for a declared grade; None keeps the legacy 0.85 factor
+    tested_at: datetime | None = None     # confirmation date; None leaves the test factor unchanged
 
 
 @dataclass(frozen=True)
@@ -502,6 +517,11 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             else:
                 _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
             values["test"] = shown
+            factor, fresh = freshness_of(c.tested_at)
+            if factor != 1.0:
+                values["test"] = round(shown * factor, 4)
+            if fresh:
+                _note(info, reasons, "info", "TEST_FRESH", fresh)
         else:
             values["test"] = UNTESTED
             if not any("тестом не подтверждён" in line for line in info):
