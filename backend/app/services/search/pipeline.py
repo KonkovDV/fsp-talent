@@ -153,20 +153,31 @@ def _rrf_ties(ordered_ids: list, scores: dict | None = None) -> dict:
     return out
 
 
+# When a meaning vector exists it is 15% of the query signal. Words stay 85%.
+# With the model off, or when it returns nothing, the map is the word rank alone.
+RULES_SHARE = 0.85
+MEANING_SHARE = 0.15
+
+
 def fuse_text(lex_order: list, dense_order: list | None = None, lex_scores: dict | None = None) -> dict:
-    """Reciprocal rank of the wording and, when present, the meaning of the query.
+    """Reciprocal rank of the wording and, when present, a 15% share of the meaning.
 
     A discipline score and a test result are not arguments: growing either one cannot
     change this map, so the «Запрос» factor cannot smuggle them in. Equal word scores
-    share a rank, so the factor does not depend on the candidate id.
+    share a rank, so the factor does not depend on the candidate id. No meaning vector
+    leaves the word rank exactly as it was.
     """
-    fused: dict = {}
-    for pid, weight in _rrf_ties(list(lex_order), lex_scores).items():
-        fused[pid] = fused.get(pid, 0.0) + weight
-    if dense_order:
-        for pid, weight in _rrf(list(dense_order)).items():
-            fused[pid] = fused.get(pid, 0.0) + weight
+    lex = _rrf_ties(list(lex_order), lex_scores)
+    if not dense_order:
+        return lex
+    fused = {pid: RULES_SHARE * weight for pid, weight in lex.items()}
+    for pid, weight in _rrf(list(dense_order)).items():
+        fused[pid] = fused.get(pid, 0.0) + MEANING_SHARE * weight
     return fused
+
+
+def text_blend(dense_used: bool) -> str:
+    return "rules+meaning" if dense_used else "rules"
 
 
 def _skill_or_tsquery(names: list[str]) -> str | None:
@@ -568,7 +579,8 @@ async def search_candidates(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
     header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
-              "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint}
+              "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
+              "text_blend": text_blend(bool(dense_order))}
     if not build_cards:
         # The cache keeps the order and the scores. Cards for one page are built later.
         items = []
