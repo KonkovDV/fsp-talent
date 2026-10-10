@@ -240,6 +240,11 @@ export const readAllNotifications = () => api.post('/notifications/read-all')
 export const deleteMyAccount = (confirm: string, password = '') =>
   api.delete('/candidates/me', { data: { confirm, password } })
 export const getMyResults = () => api.get('/candidates/me/results')
+export const importProtocols = (file: File) => {
+  const body = new FormData()
+  body.append('file', file)
+  return api.post<{ added: number; read: number; grade_unchanged: boolean }>('/candidates/me/protocols', body)
+}
 export const getMyOffers = () => api.get('/candidates/me/offers', { params: { limit: 50 } })
 export const respondToOffer = (offerId: string, action: 'accept' | 'reject', reason?: string) =>
   api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null })

@@ -125,7 +125,9 @@ async def rebuild_profile(db: AsyncSession, p: Participant, ranks: list[Registry
         p.is_minor = age_on(p.birth_date, date.today()) < 18
         if p.is_minor:
             p.public_profile = False
-    results = list(await db.scalars(select(Result).where(Result.participant_id == p.id)))
+    # A file the candidate uploaded is a copy, not a registry line. It stays on their page and out of the score.
+    results = list(await db.scalars(select(Result).where(
+        Result.participant_id == p.id, Result.trust_level == "verified_fsp")))
     skills = [s.name for s in await db.scalars(
         select(Skill).where(Skill.participant_id == p.id, Skill.confirmed.is_(True)))]
 
