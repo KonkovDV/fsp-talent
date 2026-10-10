@@ -339,6 +339,9 @@ export const saveSurvey = (data: {
 
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
 export const getPublicCompany = (id: string) => api.get(`/public/companies/${id}`)
+export const telegramAchievements = (fspId: string) =>
+  api.get('/public/telegram/achievements', { params: { fsp_id: fspId } })
+export const telegramVacancies = () => api.get('/public/telegram/vacancies')
 export const getLeaderboard = (discipline?: string) =>
   api.get('/public/leaderboard', { params: discipline ? { discipline } : {} })
 export const getCredentials = (id: string) => api.get(`/public/credentials/${id}`)

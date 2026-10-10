@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, FileCheck2, UserRound } from 'lucide-react'
+import { apiError, telegramAchievements, telegramVacancies } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import { PageHeader } from '../components/ui'
 
@@ -14,6 +16,21 @@ const ROUTE = [
 
 /** Three ways in for a jury: two demo accounts and the public pages. No third login. */
 export default function JuryPage() {
+  const [fspId, setFspId] = useState('FSP001')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const show = async (kind: 'achievements' | 'vacancies') => {
+    setBusy(true)
+    setNote('')
+    try {
+      const response = kind === 'achievements' ? await telegramAchievements(fspId) : await telegramVacancies()
+      setNote(response.data.text as string)
+    } catch (error) {
+      setNote(apiError(error, 'Запрос не выполнился'))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <PublicShell>
       <PageHeader
@@ -57,6 +74,20 @@ export default function JuryPage() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="card mt-8 space-y-3" aria-label="Канал без кабинета">
+        <h2 className="font-display text-lg font-bold text-ink">Протоколы и вакансии без кабинета</h2>
+        <p className="text-sm text-ink-2">Те же ответы может забрать мессенджер. Имени, почты и телефона в них нет. Грейд по протоколу не ставится.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="field-label" htmlFor="fsp-poke">ФСП ID</label>
+            <input id="fsp-poke" className="input font-mono" value={fspId} onChange={e => setFspId(e.target.value)} aria-label="ФСП ID" />
+          </div>
+          <button type="button" className="btn-secondary" disabled={busy || fspId.trim().length < 4} onClick={() => { void show('achievements') }}>Протоколы</button>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={() => { void show('vacancies') }}>Вакансии</button>
+        </div>
+        {note && <pre className="whitespace-pre-wrap text-sm text-ink-2" role="status">{note}</pre>}
       </section>
 
       <p className="mt-6 text-sm text-ink-2">

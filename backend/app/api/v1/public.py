@@ -14,18 +14,21 @@ from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import Consent, ConsentLog, Employer, Participant, Skill, Vacancy, VerifiableCredential
+from app.models import Consent, ConsentLog, Employer, Participant, Result, Skill, Vacancy, VerifiableCredential
 from app.models.profile import CategoryAssignment, DisciplineScore
 from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.field_cipher import blind_index
+from app.services.fsp.mock import STATUS_LABELS
 from app.services.guardian import token_participant, token_valid
 from app.services.passport import is_passport
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
 from app.services.search.cache import bump_bank_epoch
+from app.services.search.pipeline import _bucket
 from app.services.skills import skill_line
 from app.services.survey import SPECIALIZATIONS
+from app.services.telegram_digest import achievement_digest, clean_fsp_id, vacancy_digest
 from app.services.vc.issuer import issuer_document, verify_credential
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -350,6 +353,62 @@ async def credential_status(credential_id: uuid.UUID, db: AsyncSession = Depends
         "type": "FSPCredentialStatus",
         "revoked": vc.revoked_at is not None,
     }
+
+
+_GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "мидл", "senior": "сеньор", "lead": "лид"}
+_FORMAT_RU = {"remote": "удалённо", "hybrid": "гибрид", "office": "офис"}
+
+
+@router.get("/telegram/achievements")
+async def telegram_achievements(request: Request, fsp_id: str = Query(min_length=4, max_length=12),
+                                db: AsyncSession = Depends(get_db)):
+    """Sport lines for one FSP ID. No name, no contacts, and the grade is not in the answer."""
+    from app.api.v1.auth import client_address
+
+    if await too_many(f"public:telegram:{client_address(request)}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    cleaned = clean_fsp_id(fsp_id)
+    if cleaned is None:
+        raise ApiError(422, "validation_error", "ФСП ID выглядит как FSP001")
+    person = await db.scalar(select(Participant).where(
+        Participant.fsp_id == cleaned, Participant.deleted_at.is_(None), Participant.suspended_at.is_(None)))
+    rows = []
+    if person is not None:
+        found = list(await db.scalars(select(Result).where(Result.participant_id == person.id)
+                                      .order_by(Result.event_date.desc()).limit(8)))
+        rows = [{
+            "discipline": DISCIPLINE_LABELS.get(row.discipline, row.discipline),
+            "year": row.event_date.year,
+            "bucket": _bucket(row.place, row.total_participants),
+            "status": STATUS_LABELS.get(row.competition_status, row.competition_status),
+        } for row in found]
+    return achievement_digest(cleaned, rows)
+
+
+@router.get("/telegram/vacancies")
+async def telegram_vacancies(request: Request, db: AsyncSession = Depends(get_db)):
+    """Open vacancies for a messenger. Company and role only: no candidate names."""
+    from app.api.v1.auth import client_address
+
+    if await too_many(f"public:telegram:{client_address(request)}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    found = (await db.execute(
+        select(Vacancy, Employer.company_name)
+        .join(Employer, Employer.id == Vacancy.employer_id)
+        .where(Vacancy.is_open.is_(True), Employer.suspended_at.is_(None), Employer.guest_until.is_(None))
+        .order_by(Vacancy.created_at.desc())
+        .limit(8)
+    )).all()
+    rows = [{
+        "company": company,
+        "title": vacancy.title,
+        "role": SPECIALIZATIONS.get(vacancy.role, vacancy.role),
+        "grade": _GRADE_RU.get(vacancy.grade, vacancy.grade),
+        "work_format": _FORMAT_RU.get(vacancy.work_format, vacancy.work_format),
+        "salary_from": vacancy.salary_from_gross,
+        "salary_to": vacancy.salary_to_gross,
+    } for vacancy, company in found]
+    return vacancy_digest(rows)
 
 
 @router.get("/leaderboard")
