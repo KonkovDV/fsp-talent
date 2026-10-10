@@ -133,7 +133,7 @@ export default function CandidateOffers() {
                   <h2 className="mt-0.5 font-display text-lg font-bold tracking-[-0.01em] text-ink">{o.role}</h2>
                   {o.practice_stage && <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}. Грейд от этого не меняется.</p>}
                   {(o.perks ?? []).length > 0 && (
-                    <p className="mt-1 text-xs text-ink-2">{o.perks.map(code => PERK_RU[code] ?? code).join(' · ')}</p>
+                    <p className="mt-1 text-xs text-ink-2">{(o.perks ?? []).map(code => PERK_RU[code] ?? code).join(' · ')}</p>
                   )}
                   <p className="mt-1 text-sm text-ink-2">{FORMAT[o.work_format] ?? o.work_format}, получено {date(o.created_at)}
                     {o.expires_at && o.status === 'pending' ? `, ответить до ${date(o.expires_at)}` : ''}</p>
