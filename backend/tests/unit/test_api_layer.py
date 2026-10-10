@@ -154,6 +154,7 @@ def _company(**extra):
         id=_uid(), company_name="Сибирский код", email="hr@sibcode.demo", inn=None,
         website=None, description=None, industry=None, subscription_tier="free",
         invites_paused_at=None, deleted_at=None, token_epoch=0,
+        totp_secret=None, totp_last_step=None, totp_verified_at=None,
     )
     fields.update(extra)
     return SimpleNamespace(**fields)

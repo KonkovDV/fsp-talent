@@ -197,7 +197,10 @@ CREATE TABLE public.employers (
     token_epoch integer DEFAULT 0 NOT NULL,
     refresh_nonce integer DEFAULT 0 NOT NULL,
     invites_paused_at timestamp with time zone,
-    guest_until timestamp with time zone
+    guest_until timestamp with time zone,
+    totp_secret text,
+    totp_last_step bigint,
+    totp_verified_at timestamp with time zone
 );
 
 

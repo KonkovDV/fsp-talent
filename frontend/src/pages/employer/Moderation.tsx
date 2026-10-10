@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
@@ -19,7 +20,39 @@ const LABEL: Record<string, string> = {
   other: 'другое',
 }
 
+interface Factor { enrolled: boolean; unlocked: boolean; unlocked_until: string | null }
+
 export default function Moderation() {
+  const qc = useQueryClient()
+  const [code, setCode] = useState('')
+  const factor = useQuery({
+    queryKey: ['moderation-totp'],
+    queryFn: () => api.get<Factor>('/moderation/totp').then(r => r.data),
+  })
+  const unlock = useMutation({
+    mutationFn: (value: string) => api.post<Factor>('/moderation/totp', { code: value }).then(r => r.data),
+    onSuccess: next => { setCode(''); qc.setQueryData(['moderation-totp'], next) },
+  })
+  if (factor.isLoading) return <Skeleton className="h-40" />
+  if (factor.isError) return <p className="notice-error" role="alert">{apiError(factor.error, 'Раздел недоступен')}</p>
+  if (factor.data?.enrolled && !factor.data.unlocked) {
+    return (
+      <div>
+        <PageHeader title="Модерация" lead="Стол защищён вторым фактором. Введите код из приложения-аутентификатора, стол откроется на 15 минут." />
+        <form className="card max-w-sm space-y-3" onSubmit={e => { e.preventDefault(); unlock.mutate(code) }} data-testid="totp-form">
+          <label className="block text-sm text-ink-2" htmlFor="totp-code">Код из приложения</label>
+          <input id="totp-code" className="input w-full font-mono" inputMode="numeric" autoComplete="one-time-code"
+            maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} />
+          <button className="btn-primary" type="submit" disabled={unlock.isPending || code.length !== 6}>Открыть стол</button>
+          {unlock.isError && <p className="notice-error" role="alert">{apiError(unlock.error, 'Код не подошёл')}</p>}
+        </form>
+      </div>
+    )
+  }
+  return <Desk />
+}
+
+function Desk() {
   const qc = useQueryClient()
   const list = useQuery({
     queryKey: ['moderation'],

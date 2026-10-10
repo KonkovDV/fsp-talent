@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -28,6 +28,10 @@ class Employer(Base):
     invites_paused_at = Column(DateTime(timezone=True))
     # Set only for a demo guest company: sessions close at this moment (services/guest.py).
     guest_until = Column(DateTime(timezone=True))
+    # Moderation desk second factor, set only by `python -m app.services.totp enroll`. Sealed with AES-GCM.
+    totp_secret = Column(Text)
+    totp_last_step = Column(BigInteger)
+    totp_verified_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
     vacancies = relationship("Vacancy", back_populates="employer")
