@@ -230,6 +230,13 @@ jobs:
         run: docker build -t fsp-talent-backend:${{ github.sha }} ./backend
       - name: Build frontend
         run: docker build -t fsp-talent-frontend:${{ github.sha }} ./frontend
+      # The same limits as in compose: a solution must not reach the network or outlive its run.
+      - name: Build and test the sandbox
+        run: |
+          docker build -t fsp-talent-sandbox:${{ github.sha }} ./sandbox
+          docker run --rm --network none --read-only --tmpfs /tmp:size=64m,noexec,nosuid \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 64 --memory 256m --cpus 0.5 \
+            fsp-talent-sandbox:${{ github.sha }} python -m unittest discover -s tests -v
 
   deploy:
     needs: [lint, test-backend, test-frontend, compose-e2e, docker-build]

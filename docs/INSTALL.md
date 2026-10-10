@@ -64,7 +64,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | http://localhost/health | `{"status":"ok",...}` |
 | http://localhost:8025 | Mailpit: письма с кодами подтверждения и уведомлениями |
 
-Команда `docker compose ps` должна показать восемь контейнеров в состоянии `running`: nginx, frontend, backend, worker, beat, postgres, redis и mailpit. Проверка здоровья есть у базы, backend, worker, beat и frontend. У redis, Mailpit и nginx её нет. Keycloak стартует отдельно, с профилем `fsp-id`.
+Команда `docker compose ps` должна показать девять контейнеров в состоянии `running`: nginx, frontend, backend, worker, beat, postgres, redis, mailpit и sandbox. Sandbox запускает решения задач с кодом, сети у него нет. Проверка здоровья есть у базы, backend, worker, beat, frontend и sandbox. У redis, Mailpit и nginx её нет. Keycloak стартует отдельно, с профилем `fsp-id`.
 
 Сквозная проверка API на запущенном стенде:
 

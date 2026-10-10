@@ -16,11 +16,14 @@ services:
       MAIL_MODE: ${MAIL_MODE:-smtp}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
+      SANDBOX_SOCKET: /run/sandbox/sandbox.sock
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-local-sandbox}
     ports: ['127.0.0.1:8010:8000']
-    volumes: [vc_keys:/secrets]
+    volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
+      sandbox: {condition: service_started}
     # worker and beat start after this check passes.
     healthcheck:
       test: ["CMD", "python", "-c",
@@ -76,6 +79,23 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # Practice code (Python, Node). No network, no secrets from .env, read-only root, small limits.
+  # The API reaches it only through the socket on the shared volume.
+  sandbox:
+    build: ./sandbox
+    network_mode: none
+    read_only: true
+    tmpfs: ['/tmp:size=64m,noexec,nosuid']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    environment:
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-local-sandbox}
+    volumes: [sandbox_sock:/run/sandbox]
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     ports: ['127.0.0.1:3010:80']
@@ -113,7 +133,7 @@ services:
     ports: ['127.0.0.1:8025:8025']
     restart: unless-stopped
 
-  # Real OIDC check of «Войти через ФСП ID» only on request: `docker compose --profile fsp-id up -d`
+  # Real OIDC check of В«Р’РѕР№С‚Рё С‡РµСЂРµР· Р¤РЎРџ IDВ» only on request: `docker compose --profile fsp-id up -d`
   # with FSP_ID_MODE=oidc. By default the stand uses the built-in mock and does not start Keycloak.
   keycloak:
     profiles: ["fsp-id"]
@@ -150,3 +170,4 @@ volumes:
   postgres_data:
   redis_data:
   vc_keys:
+  sandbox_sock:

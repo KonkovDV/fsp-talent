@@ -49,10 +49,14 @@ services:
       SMTP_PORT: ${SMTP_PORT:-1025}
       DEMO_MODE: ${DEMO_MODE:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-    volumes: [vc_keys:/secrets]
+      SANDBOX_SOCKET: /run/sandbox/sandbox.sock
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
+      SANDBOX_REQUIRED: "true"
+    volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
+      sandbox: {condition: service_started}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 15s
@@ -112,6 +116,22 @@ services:
     ports: ["127.0.0.1:8025:8025"]
     restart: unless-stopped
 
+  # Practice code (Python, Node). No network, no .env, read-only root. Reached only through the socket volume.
+  sandbox:
+    build: ../sandbox
+    network_mode: none
+    read_only: true
+    tmpfs: ['/tmp:size=64m,noexec,nosuid']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    environment:
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
+    volumes: [sandbox_sock:/run/sandbox]
+    restart: unless-stopped
+
   frontend:
     build: ../frontend
     restart: unless-stopped
@@ -153,3 +173,4 @@ volumes:
   caddy_data:
   caddy_config:
   vc_keys:
+  sandbox_sock:

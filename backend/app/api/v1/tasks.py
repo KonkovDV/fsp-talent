@@ -9,6 +9,7 @@ Letters carry no personal data of the other side: the employer reads the anonymo
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -269,7 +270,8 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
     if not accepts_answers(task):
         raise ApiError(409, "task_closed")
     try:
-        checked = check_answer(task, body.answer_text, body.answer_index)
+        # A code check waits up to the run limit; the event loop keeps serving other requests meanwhile.
+        checked = await asyncio.to_thread(check_answer, task, body.answer_text, body.answer_index)
     except SandboxUnavailable as e:
         raise ApiError(503, "sandbox_unavailable", "Проверка кода временно недоступна. Ответ не сохранён.") from e
     except ValueError as e:
