@@ -136,6 +136,10 @@ class TestSessionItem(Base):
     # A whole-number answer is typed (app.items.typed_answer): the options stay on the server.
     typed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     answer_text: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Unsent choice. A newer tab wins: the client sends the version it last saw.
+    draft_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    draft_text: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    draft_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # HMAC of the served key. A row whose index no longer matches this mac is not scored.
     answer_mac: Mapped[str | None] = mapped_column(String(64), nullable=True)
 

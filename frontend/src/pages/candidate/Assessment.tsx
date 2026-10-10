@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Info, Lock, XCircle } from 'lucide-react'
 import {
   abandonAssessment, acceptLowerGrade, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
+  saveAssessmentDraft,
   disputeGrade, getMyProfile, leaveAssessment, noteAssessmentCopy, reviewAssessment, startAssessment,
 } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
@@ -16,6 +17,7 @@ interface Item {
   answer_mode: 'choice' | 'number'
   options: { index: number; text: string }[]; topic_label: string; family_title: string; kind: string
   time_limit_s: number; served_at: string
+  draft_version?: number; draft_index?: number | null; draft_text?: string | null
 }
 interface ReviewItem {
   seq: number; stem: string; code: string | null; answer_mode: 'choice' | 'number'; options: string[]
@@ -91,6 +93,8 @@ export default function CandidateAssessment() {
   const [disputeText, setDisputeText] = useState('')
   const [markNote, setMarkNote] = useState<string | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
+  const draftVersion = useRef(0)
+  const skipDraft = useRef(true)
   const [typed, setTyped] = useState('')
   const [error, setError] = useState('')
   const [showReview, setShowReview] = useState(false)
@@ -130,6 +134,32 @@ export default function CandidateAssessment() {
     () => (profile?.confirmations ?? []).find((c: { specialization: string }) => c.specialization === chosen),
     [profile, chosen])
   const left = useCountdown(state?.item ?? null)
+  useEffect(() => {
+    const item = state?.item
+    if (!item) return
+    skipDraft.current = true
+    draftVersion.current = item.draft_version ?? 0
+    setPicked(item.draft_index ?? null)
+    setTyped(item.draft_text ?? '')
+  }, [state?.item?.token])
+  useEffect(() => {
+    if (skipDraft.current) {
+      skipDraft.current = false
+      return
+    }
+    if (!state?.item || state.status !== 'in_progress') return
+    const item = state.item
+    const version = draftVersion.current
+    const handle = window.setTimeout(() => {
+      const body = item.answer_mode === 'number'
+        ? { answer_text: typed.replace(/\s/g, '') || null, answer_index: null }
+        : { answer_index: picked, answer_text: null }
+      void saveAssessmentDraft(state.session_id, { item_token: item.token, version, ...body }).then(r => {
+        draftVersion.current = r.data.version
+      }).catch(() => undefined)
+    }, 400)
+    return () => window.clearTimeout(handle)
+  }, [picked, typed, state?.item, state?.session_id, state?.status])
 
   const refresh = () => {
     for (const key of ['myProfile', 'assessmentHistory', 'assessmentActive']) qc.invalidateQueries({ queryKey: [key] })

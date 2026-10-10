@@ -301,6 +301,9 @@ export const assessmentBlueprint = () => api.get('/assessment/blueprint')
 export const startAssessment = (data: { target_grade: string; specialization?: string | null; code_language?: string; vacancy_id?: string | null; mode?: 'grade' | 'express' }, idempotencyKey?: string) =>
   api.post('/assessment/start', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined)
 export const activeAssessment = () => api.get('/assessment/active')
+export const saveAssessmentDraft = (sessionId: string, body: {
+  item_token: string; version: number; answer_index?: number | null; answer_text?: string | null
+}) => api.put(`/assessment/${sessionId}/draft`, body)
 export const answerAssessment = (sessionId: string, item_token: string,
   answer: { answer_index: number } | { answer_text: string }) =>
   api.post(`/assessment/${sessionId}/answer`, { item_token, ...answer }, {

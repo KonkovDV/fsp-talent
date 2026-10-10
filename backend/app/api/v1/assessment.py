@@ -4,6 +4,7 @@ GET  /assessment/blueprint            - what a test of each specialization consi
 POST /assessment/start                - start a session, returns the first item
 GET  /assessment/active               - resume the running session after a reload
 GET  /assessment/{id}                 - session state: current item or the result
+PUT  /assessment/{id}/draft           - store the unsent answer; a stale version is refused
 POST /assessment/{id}/answer          - answer the current item (item_token + option index)
 POST /assessment/{id}/abandon         - stop; counts as an attempt
 POST /assessment/{id}/leave           - the tab was hidden; a mark, the grade does not move
@@ -14,6 +15,7 @@ GET  /assessment/history              - past sessions
 """
 from __future__ import annotations
 
+import hmac
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
@@ -43,6 +45,7 @@ from app.items.registry import BLUEPRINTS, CONCEPT_MAX_SHARE, families_for
 from app.models import Participant, PracticeAttempt, Vacancy
 from app.models.assessment import GRADE_ORDER, GradeDispute, TestSession, TestSessionItem
 from app.services import cat
+from app.services.answer_draft import DraftBoth, DraftStale, apply_draft
 from app.services.assessment import (
     Finished,
     QuestionBankError,
@@ -129,6 +132,9 @@ class ItemOut(BaseModel):
     kind: str
     time_limit_s: int
     served_at: str
+    draft_version: int = 0
+    draft_index: int | None = None
+    draft_text: str | None = None
 
 
 class SkillOut(BaseModel):
@@ -212,6 +218,7 @@ def _item_out(session_id: uuid.UUID, it: TestSessionItem) -> ItemOut:
         options=[] if it.typed else [OptionOut(index=i, text=t) for i, t in enumerate(it.options)], topic=it.topic,
         topic_label=TOPIC_LABELS.get(it.topic, it.topic), family_title=family_title(it.family_id), kind=it.kind,
         time_limit_s=it.time_limit_s, served_at=it.served_at.isoformat(),
+        draft_version=int(it.draft_version or 0), draft_index=it.draft_index, draft_text=it.draft_text,
     )
 
 
@@ -512,6 +519,50 @@ async def get_session(session_id: uuid.UUID, current: dict = Depends(get_current
     items = await session_items(db, session.id)
     result = await _finished_result(db, session, items) if session.status == "completed" else None
     return _session_out(session, items, result)
+
+
+class DraftIn(BaseModel):
+    item_token: str = Field(min_length=16, max_length=64)
+    version: int = Field(ge=0)
+    answer_index: int | None = Field(None, ge=0, le=9)
+    answer_text: str | None = Field(None, max_length=32)
+
+
+class DraftOut(BaseModel):
+    version: int
+    answer_index: int | None = None
+    answer_text: str | None = None
+
+
+@router.put("/{session_id}/draft", response_model=DraftOut)
+async def save_draft(session_id: uuid.UUID, body: DraftIn, current: dict = Depends(get_current_participant),
+                     db: AsyncSession = Depends(get_db)):
+    """Remember the unsent answer. It is not scored. An older tab gets 409 and must reload."""
+    session = await db.get(TestSession, session_id, with_for_update=True)
+    if session is None or session.participant_id != uuid.UUID(current["sub"]) or session.engine != "cat_v2":
+        raise ApiError(404, "not_found", "Сессия не найдена")
+    if session.status != "in_progress":
+        raise ApiError(409, "session_closed")
+    items = await session_items(db, session.id)
+    current_item = items[-1] if items else None
+    if (
+        current_item is None
+        or current_item.answered_at is not None
+        or not hmac.compare_digest(body.item_token, item_token(session.id, current_item.seq, current_item.id))
+    ):
+        raise ApiError(409, "item_token_invalid")
+    try:
+        version, index, text = apply_draft(
+            int(current_item.draft_version or 0), body.version, body.answer_index, body.answer_text)
+    except DraftStale:
+        raise ApiError(409, "conflict", "На экране старая версия ответа. Обновите страницу.") from None
+    except DraftBoth:
+        raise ApiError(422, "validation_error", "Укажите вариант или число, не оба сразу") from None
+    current_item.draft_version = version
+    current_item.draft_index = index
+    current_item.draft_text = text
+    await db.commit()
+    return DraftOut(version=version, answer_index=index, answer_text=text)
 
 
 @router.post("/{session_id}/answer", response_model=SessionOut)

@@ -706,6 +706,9 @@ CREATE TABLE public.test_session_items (
     excluded boolean DEFAULT false NOT NULL,
     typed boolean DEFAULT false NOT NULL,
     answer_text character varying(32),
+    draft_index integer,
+    draft_text character varying(32),
+    draft_version integer DEFAULT 0 NOT NULL,
     answer_mac character varying(64)
 );
 
