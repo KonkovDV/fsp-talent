@@ -100,6 +100,15 @@ def test_search_ignores_the_adult_checkbox_without_a_birth_date():
     assert "is_minor" not in sql
 
 
+def test_guardian_consent_does_not_open_search_without_a_birth_date():
+    from app.services.search.pipeline import _in_search
+    sql = str(_in_search(age_confirmed_adult()).compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    # The adult comparison already names the column. Consent must not be a second way in without a date.
+    assert sql.count("birth_date IS NOT NULL") >= 2
+    assert "is_minor" not in sql
+
+
 def test_discoverable_hides_minors_without_consent_and_hidden_profiles():
     adult = date(2000, 1, 1)
     child = date(2012, 5, 1)
