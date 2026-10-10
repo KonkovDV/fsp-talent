@@ -7,6 +7,7 @@ import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { ROLE_RU, gradeRu } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
+import { netLine } from '../../money'
 
 interface Offer {
   id: string; role: string; salary_from: number; salary_to: number; work_format: string; status: string
@@ -106,6 +107,7 @@ export default function EmployerOffers() {
                 </div>
                 <p className="text-sm text-ink">{o.role}</p>
                 <p className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)} <span className="text-xs text-ink-3">до вычета НДФЛ</span></p>
+                <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
                 <p className="text-xs text-ink-3">{date(o.created_at)}{o.contacts_revoked_at ? ' · контакты закрыты кандидатом' : ''}</p>
                 {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone].filter(Boolean).join(', ')}</p>}
                 <div className="flex flex-wrap gap-2">

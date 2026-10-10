@@ -6,6 +6,7 @@ import { apiError, fileComplaint, getMyOffers, respondToOffer, revokeContacts, u
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
+import { netLine } from '../../money'
 
 interface Offer {
   id: string; company: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
@@ -118,6 +119,7 @@ export default function CandidateOffers() {
                 <div className="sm:text-right">
                   <p className="num font-display text-xl font-bold text-ink">{rub(o.salary_from)} – {rub(o.salary_to)}</p>
                   <p className="text-xs text-ink-3">до вычета НДФЛ</p>
+                  <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
                   <span className={`${cls} mt-2`}>{label}</span>
                 </div>
               </div>

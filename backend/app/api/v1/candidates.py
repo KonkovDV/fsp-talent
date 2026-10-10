@@ -778,6 +778,8 @@ class SurveyIn(BaseModel):
     experience_years: int | None = Field(None, ge=0, le=50)
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
+    # "net": the two amounts are take-home and get converted to gross before they are stored.
+    salary_basis: Literal["gross", "net"] = "gross"
     work_formats: list[Literal["office", "hybrid", "remote"]] = Field(default_factory=list, max_length=3)
     region: str | None = Field(None, max_length=40)
 
@@ -798,10 +800,15 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
     await db.execute(delete(CandidateResume).where(
         CandidateResume.participant_id == p.id, CandidateResume.specialization == p.specialization))
     if "salary_from_gross" in body.model_fields_set or "salary_to_gross" in body.model_fields_set:
-        if body.salary_from_gross and body.salary_to_gross and body.salary_from_gross > body.salary_to_gross:
+        low, high = body.salary_from_gross, body.salary_to_gross
+        if body.salary_basis == "net":
+            from app.services.salary_net import gross_for_net
+            low = gross_for_net(low) if low else low
+            high = gross_for_net(high) if high else high
+        if low and high and low > high:
             raise ApiError(422, "validation_error", "Зарплата «от» больше, чем «до»")
-        p.salary_from_gross = body.salary_from_gross
-        p.salary_to_gross = body.salary_to_gross
+        p.salary_from_gross = low
+        p.salary_to_gross = high
     if body.work_formats:
         p.work_formats = list(dict.fromkeys(body.work_formats))
     if body.region:

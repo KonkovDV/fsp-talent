@@ -4,6 +4,7 @@ import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { apiError, applicationContacts, closeVacancy, createVacancy, getMyVacancies, previewVacancyExam, updateApplicationStatus, updateVacancy, vacancyApplications } from '../../api/client'
 import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, date, rub } from '../../components/ui'
+import { netLine } from '../../money'
 
 const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
@@ -93,6 +94,7 @@ export default function EmployerVacancies() {
             <div><label className="field-label" htmlFor="v-to">До, ₽ в месяц до вычета НДФЛ</label>
               <input id="v-to" type="number" step={5000} className="input num" value={form.salary_to_gross} onChange={set('salary_to_gross')} /></div>
           </div>
+          <p className="text-xs text-ink-3">{netLine(Number(form.salary_from_gross), Number(form.salary_to_gross))}</p>
           <div className="grid gap-4 sm:grid-cols-3">
             <div><label className="field-label" htmlFor="v-disc">Дисциплина ФСП, если важна</label>
               <select id="v-disc" className="select" value={form.discipline} onChange={set('discipline')}>
@@ -125,7 +127,7 @@ export default function EmployerVacancies() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-right text-sm text-ink"><span className="num">{rub(v.salary_from)} – {rub(v.salary_to)}</span><span className="block text-xs text-ink-3">до вычета НДФЛ</span></span>
+                <span className="text-right text-sm text-ink"><span className="num">{rub(v.salary_from)} – {rub(v.salary_to)}</span><span className="block text-xs text-ink-3">до вычета НДФЛ</span><span className="block text-xs text-ink-3">{netLine(v.salary_from, v.salary_to)}</span></span>
                 {v.is_open && <button className="btn-ghost btn-sm" onClick={() => {
                   setEditing(v.id); setOpen(true); setExam(null)
                   setForm({ ...EMPTY, title: v.title, description: v.description ?? '', role: v.role ?? 'backend', grade: v.grade ?? 'middle',
