@@ -35,6 +35,16 @@ def test_a_normal_address_stays_open_on_the_demo_stand(monkeypatch):
     demo_guard.reject_reserved("ivan@x.demo")
 
 
+def test_seed_refuses_when_the_stand_is_not_a_demo(monkeypatch):
+    from seed import generate_seed
+    monkeypatch.setattr(generate_seed.settings, "DEMO_MODE", False)
+    with pytest.raises(SystemExit):
+        generate_seed._refuse_production()
+    monkeypatch.setattr(generate_seed.settings, "DEMO_MODE", True)
+    monkeypatch.delenv("ENV", raising=False)
+    generate_seed._refuse_production()
+
+
 def test_mock_fsp_id_is_refused_outside_the_demo(caplog):
     from app.core.config import Settings
     with pytest.raises(RuntimeError):
