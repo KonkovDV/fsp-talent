@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
+import { advancePractice, apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -13,7 +13,7 @@ interface Offer {
   id: string; role: string; salary_from: number; salary_to: number; work_format: string; status: string
   contacts_available: boolean; contact_method: string | null; candidate_viewed_at: string | null
   contacts_revealed_at: string | null; created_at: string
-  expires_at: string | null; candidate: { role: string | null; grade: string | null; grade_source: string | null; label?: string | null } | null
+  expires_at: string | null; practice_stage?: string | null; candidate: { role: string | null; grade: string | null; grade_source: string | null; label?: string | null } | null
   contacts_revoked_at?: string | null; unread_messages?: number
 }
 interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; region: string | null }
@@ -21,6 +21,10 @@ interface Contacts { display_name: string; email: string | null; telegram: strin
 const REASON_RU: Record<string, string> = {
   salary: 'зарплата', format: 'формат', stack: 'стек', not_looking: 'не ищет', other: 'другое',
 }
+const PRACTICE: Record<string, string> = {
+  sent: 'отправлено', screening: 'отбор', trial: 'пробный срок', hired: 'выход', closed: 'закрыто',
+}
+const PRACTICE_NEXT: Record<string, string> = { sent: 'screening', screening: 'trial', trial: 'hired' }
 const STATUS: Record<string, [string, string]> = {
   pending: ['ждёт ответа', 'badge-warn'], viewed: ['просмотрено', 'badge-brand'], accepted: ['принято', 'badge-ok'],
   rejected: ['отклонено', 'badge-vc'], expired: ['срок истёк', 'badge-vc'], withdrawn: ['отозвано', 'badge-vc'],
@@ -50,6 +54,11 @@ export default function EmployerOffers() {
     setParams(next, { replace: true })
   }
   const [meeting, setMeeting] = useState<string | null>(null)
+  const practice = useMutation({
+    mutationFn: ({ id, stage: next }: { id: string; stage: string }) => advancePractice(id, next),
+    onSuccess: () => { setError(''); qc.invalidateQueries({ queryKey: ['employerOffers'] }) },
+    onError: (e: unknown) => setError(apiError(e, 'Этап не сдвинулся')),
+  })
   const withdraw = useMutation({
     mutationFn: withdrawOffer,
     onSuccess: () => { setError(''); qc.invalidateQueries({ queryKey: ['employerOffers'] }) },
@@ -106,6 +115,11 @@ export default function EmployerOffers() {
                   <span className={cls}>{label}</span>
                 </div>
                 <p className="text-sm text-ink">{o.role}</p>
+                {o.practice_stage && (
+                  <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}
+                    {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}
+                  </p>
+                )}
                 <p className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)} <span className="text-xs text-ink-3">до вычета НДФЛ</span></p>
                 <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
                 <p className="text-xs text-ink-3">{date(o.created_at)}{o.contacts_revoked_at ? ' · контакты закрыты кандидатом' : ''}</p>

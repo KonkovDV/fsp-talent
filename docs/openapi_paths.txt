@@ -117,6 +117,7 @@
 /api/v1/offers/{offer_id}/interview.ics
 /api/v1/offers/{offer_id}/interview/outcome
 /api/v1/offers/{offer_id}/messages
+/api/v1/offers/{offer_id}/practice
 /api/v1/offers/{offer_id}/slots
 /api/v1/offers/{offer_id}/slots/{slot_id}/choose
 /api/v1/offers/{offer_id}/withdraw

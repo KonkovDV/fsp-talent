@@ -27,6 +27,7 @@ from app.services.market import market_flag, quartiles, reason_shares, role_medi
 from app.services.notify import Outbox, notify, salary
 from app.services.offer_perks import PERKS, clean_perks
 from app.services.offers import expire_if_stale, expire_stale, reinvite_after
+from app.services.practice_track import next_stage
 from app.services.privacy import contacts_allowed
 from app.services.salary_net import as_gross
 from app.services.trust_level import invite_limit, next_step, trust_level
@@ -50,6 +51,7 @@ class OfferCreate(BaseModel):
     contact_method: str = Field(min_length=3, max_length=300)
     salary_basis: Literal["gross", "net"] = "gross"
     perks: list[str] = Field(default_factory=list, max_length=8)
+    practice: bool = False
 
     @model_validator(mode="after")
     def _range(self):
@@ -70,6 +72,7 @@ def _offer_out(o: Offer) -> dict:
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contact_method": o.contact_method,
         "perks": [{"code": code, "label": PERKS[code]} for code in (o.perks or []) if code in PERKS],
+        "practice_stage": o.practice_stage,
         "candidate_viewed_at": o.candidate_viewed_at.isoformat() if o.candidate_viewed_at else None,
         "contacts_available": o.status == "accepted" and o.contacts_revoked_at is None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
@@ -194,6 +197,7 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         currency=body.currency, role=body.role, work_format=body.work_format, message=body.message,
         contact_method=body.contact_method.strip(), perks=body.perks,
+        practice_stage="sent" if body.practice else None,
         status="pending", expires_at=datetime.now(UTC) + timedelta(days=14),
     )
     db.add(offer)
@@ -224,6 +228,25 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
     out["salary_hint"] = salary_gap_hint(offer.salary_to_gross, candidate.salary_from_gross)
     out["market_flag"] = flag
     return out
+
+
+class PracticeIn(BaseModel):
+    stage: Literal["screening", "trial", "hired", "closed"]
+
+
+@router.post("/{offer_id}/practice")
+async def advance_practice(offer_id: uuid.UUID, body: PracticeIn, current: dict = Depends(get_current_employer),
+                           db: AsyncSession = Depends(get_db)):
+    """Move an internship invitation one step. The match score and the grade stay put."""
+    offer = await db.get(Offer, offer_id)
+    if offer is None or offer.employer_id != _eid(current) or offer.practice_stage is None:
+        raise ApiError(404, "not_found", "Практики по этому приглашению нет")
+    try:
+        offer.practice_stage = next_stage(offer.practice_stage, body.stage)
+    except ValueError:
+        raise ApiError(409, "conflict", "Этап практики можно сдвинуть только на следующий") from None
+    await db.commit()
+    return _offer_out(offer)
 
 
 @router.get("/")
