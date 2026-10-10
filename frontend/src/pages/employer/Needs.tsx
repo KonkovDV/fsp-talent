@@ -11,6 +11,7 @@ import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
+import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
 
 interface NeedParams {
@@ -143,7 +144,7 @@ export default function EmployerNeeds() {
               <input id="n-from" inputMode="numeric" value={form.payFrom} onChange={e => setForm({ ...form, payFrom: e.target.value })} placeholder="180000" className="input num" aria-label="Вилка от" /></div>
             <div><label className={field} htmlFor="n-to">Вилка до, до вычета НДФЛ</label>
               <input id="n-to" inputMode="numeric" value={form.payTo} onChange={e => setForm({ ...form, payTo: e.target.value })} placeholder="260000" className="input num" aria-label="Вилка до" />
-              <p className="field-hint">Если кандидат указал ожидание, место в подборке учитывает, примет ли он такую вилку.</p></div>
+              <p className="field-hint">Если кандидат указал ожидание, место в подборке учитывает, примет ли он такую вилку. {netLine(Number(form.payFrom) || null, Number(form.payTo) || null)}</p></div>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.internship} onChange={e => setForm({ ...form, internship: e.target.checked })} />Ищем стажёра или практиканта</label>
           {error && <p className="notice-error" role="alert">{error}</p>}

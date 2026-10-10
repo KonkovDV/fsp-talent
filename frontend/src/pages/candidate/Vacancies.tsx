@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, answerPractice, applyToVacancy, myApplications, startPractice, vacanciesForMe } from '../../api/client'
 import { CategoryPlate, Empty, PageHeader, Skeleton, rub } from '../../components/ui'
+import { netLine } from '../../money'
 
 interface Card {
   id: string; title: string; company: string | null; role: string | null; grade: string | null; work_format: string
@@ -132,6 +133,7 @@ export default function CandidateVacancies() {
                 <p className="w-full text-left sm:w-auto sm:text-right">
                   <span className="block font-display text-xl font-bold text-ink num">{rub(card.salary_from)} – {rub(card.salary_to)}</span>
                   <span className="text-xs text-ink-3">до вычета НДФЛ</span>
+                  <span className="block text-xs text-ink-3">{netLine(card.salary_from, card.salary_to)}</span>
                 </p>
               )}
             </div>

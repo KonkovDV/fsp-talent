@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiError, createOffer, previewOffer } from '../api/client'
+import { netLine } from '../money'
 import Modal from './Modal'
 
 /** The invitation: role, salary range in roubles (mandatory, TZ 2.2), format and how to reach the employer. */
@@ -56,6 +57,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
               <input type="number" min={0} step={5000} value={form.salary_to_gross} onBlur={look}
                 onChange={e => { set('salary_to_gross')(e); setHint('') }} className="input num" aria-label="До" />
             </div>
+            {rangeReady && <p className="mt-2 text-sm text-ink-3">{netLine(form.salary_from_gross, form.salary_to_gross)}</p>}
             {hint && <p className="mt-2 text-sm text-ink-2" role="status">{hint} Отправить приглашение всё равно можно.</p>}
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">

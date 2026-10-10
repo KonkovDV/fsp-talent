@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ListChecks } from 'lucide-react'
 import { apiError, saveSurvey, surveyOptions } from '../api/client'
 import { gradeRu } from '../labels'
+import { grossForNet, netLine, netMonthly } from '../money'
 
 export interface SurveyHint {
   specialization?: string
@@ -37,6 +38,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
   const [years, setYears] = useState(profile.experience_years == null ? '' : String(profile.experience_years))
   const [payFrom, setPayFrom] = useState(profile.salary_from == null ? '' : String(profile.salary_from))
   const [payTo, setPayTo] = useState(profile.salary_to == null ? '' : String(profile.salary_to))
+  const [basis, setBasis] = useState<'gross' | 'net'>('gross')
   const [city, setCity] = useState(profile.region ?? '')
   const [formats, setFormats] = useState<string[]>(profile.work_formats ?? [])
   const [note, setNote] = useState('')
@@ -56,6 +58,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
       experience_years: years === '' ? null : Number(years),
       salary_from_gross: payFrom === '' ? null : Number(payFrom),
       salary_to_gross: payTo === '' ? null : Number(payTo),
+      salary_basis: basis,
       work_formats: formats, region: city || null }),
     onSuccess: () => { setNote('Сохранено. Категория пересчитана.'); qc.invalidateQueries({ queryKey: ['myProfile'] }); qc.invalidateQueries({ queryKey: ['resumes'] }) },
     onError: (e: unknown) => setNote(apiError(e)),
@@ -112,7 +115,18 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
           <input type="number" min={0} max={50} value={years} onChange={e => setYears(e.target.value)} className="input mt-1" />
         </label>
         <label>Ожидания по зарплате, от
-          <input type="number" min={0} step={5000} value={payFrom} onChange={e => setPayFrom(e.target.value)} className="input mt-1 num" placeholder="до НДФЛ" />
+          <select value={basis} onChange={e => {
+            const next = e.target.value as 'gross' | 'net'
+            const conv = next === 'net' ? netMonthly : grossForNet
+            setPayFrom(payFrom === '' ? '' : String(conv(Number(payFrom))))
+            setPayTo(payTo === '' ? '' : String(conv(Number(payTo))))
+            setBasis(next)
+          }} className={select} aria-label="Зарплата до НДФЛ или на руки">
+            <option value="gross">до вычета НДФЛ</option>
+            <option value="net">на руки</option>
+          </select>
+          <input type="number" min={0} step={5000} value={payFrom} onChange={e => setPayFrom(e.target.value)} className="input mt-1 num" />
+          {basis === 'gross' && netLine(Number(payFrom) || null, null) && <span className="field-hint">{netLine(Number(payFrom) || null, null)}</span>}
         </label>
         <label>Город
           <select value={city} onChange={e => setCity(e.target.value)} className={select} aria-label="Город">

@@ -6,6 +6,7 @@ import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
+import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
 
 interface Disc { discipline: string; label: string; score?: number; lcb: number; confidence: number; best_rank: string | null; rank_assigned_at?: string | null; rank_order_ref?: string | null; events_count: number }
@@ -138,7 +139,7 @@ export default function CandidateDashboard() {
                         <span className="block truncate font-medium text-ink">{o.role}</span>
                         <span className="block truncate text-sm text-ink-2">{o.company}</span>
                       </span>
-                      <span className="text-right font-display text-sm font-bold text-ink num">{rub(o.salary_from)}<span className="block text-xs font-normal text-ink-3">до {rub(o.salary_to)}, до НДФЛ</span></span>
+                      <span className="text-right font-display text-sm font-bold text-ink num">{rub(o.salary_from)}<span className="block text-xs font-normal text-ink-3">до {rub(o.salary_to)}, до НДФЛ</span><span className="block text-xs font-normal text-ink-3">{netLine(o.salary_from, o.salary_to)}</span></span>
                     </Link>
                   </li>
                 ))}
