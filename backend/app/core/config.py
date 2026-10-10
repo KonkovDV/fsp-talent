@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     # The six-item jury trial is offered only when this is on. The demo compose turns it on.
     DEMO_MODE: bool = False
+    # Moscow crontab for the nightly jury reset. An empty string turns it off, for a showing.
+    DEMO_RESET_CRON: str = "10 4 * * *"
     # Public demo stand without a real mail account: the registration answer carries the confirmation code,
     # only to the person who registers. Ignored unless DEMO_MODE is on as well.
     DEMO_SHOW_CODE: bool = False

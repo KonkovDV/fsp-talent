@@ -73,3 +73,18 @@ def test_a_complaint_from_a_demo_account_does_not_move_the_pause(monkeypatch):
     counted = complaints_that_count(emails)
     assert len(counted) == 3
     assert should_pause(len(set(counted)), len(counted), 10) is True
+
+
+def test_an_empty_cron_drops_the_nightly_reset(monkeypatch):
+    from app.core.config import settings
+    from app.workers.celery_app import demo_reset_entry
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    monkeypatch.setattr(settings, "DEMO_RESET_CRON", "10 4 * * *")
+    entry = demo_reset_entry()
+    assert entry is not None and entry["task"].endswith("reset_demo")
+    assert str(entry["schedule"].hour) == "{4}" and str(entry["schedule"].minute) == "{10}"
+    monkeypatch.setattr(settings, "DEMO_RESET_CRON", "")
+    assert demo_reset_entry() is None
+    monkeypatch.setattr(settings, "DEMO_RESET_CRON", "10 4 * * *")
+    monkeypatch.setattr(settings, "DEMO_MODE", False)
+    assert demo_reset_entry() is None
