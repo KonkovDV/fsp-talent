@@ -52,7 +52,7 @@ services:
       SANDBOX_SOCKET: /run/sandbox/sandbox.sock
       SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
       SANDBOX_REQUIRED: "true"
-    volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox]
+    volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox, ../models:/models:ro]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
