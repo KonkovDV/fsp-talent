@@ -291,6 +291,7 @@ export default function EmployerNeeds() {
                   )}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
                     <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
+                      aiNote={matches.data?.ai_note ? { needId: selected! } : undefined}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}
                       favorite={{ on: fav.has(card.candidate_id), toggle: fav.toggle }}
                       compare={{

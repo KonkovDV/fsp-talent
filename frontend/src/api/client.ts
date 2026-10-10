@@ -233,6 +233,13 @@ export const guardianConsent = (token: string) => api.post('/public/guardian-con
 export const parseQuery = (q: string) => api.post('/ai/parse-query', { q })
 export const parseResume = (text: string) => api.post('/ai/parse-resume', { text })
 
+export interface AiNotePoint { text: string; facts: string[] }
+export interface AiNote {
+  summary: string; strengths: AiNotePoint[]; risks: AiNotePoint[]; questions: AiNotePoint[]
+  dropped: number; provider: string; model: string; generated_at: string; affects_score: false; cached: boolean
+}
+export const getAiNote = (needId: string, candidateId: string) =>
+  api.get<AiNote>(`/needs/${needId}/candidates/${candidateId}/ai-note`)
 export const createOffer = (data: object, idempotencyKey?: string) =>
   api.post('/offers/', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined)
 export const previewOffer = (candidate_id: string, salary_to_gross: number) =>

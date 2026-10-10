@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ChevronDown, ClipboardList, Columns3, Heart, Star } from 'lucide-react'
 import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
+import AiNote from './AiNote'
 
 export interface CandidateCardData {
   candidate_id: string
@@ -87,6 +88,8 @@ interface Props {
   favorite?: { on: boolean; toggle: (id: string, on: boolean) => void }
   /** Side-by-side comparison of up to four cards from the same list. */
   compare?: { on: boolean; full: boolean; toggle: () => void }
+  /** Advisory model note for a card in a need's list. */
+  aiNote?: { needId: string }
 }
 
 const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет')
@@ -164,7 +167,7 @@ function FactorBars({ match, active, idle }: {
   )
 }
 
-export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, favorite, compare }: Props) {
+export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, favorite, compare, aiNote }: Props) {
   const [open, setOpen] = useState(false)
   const fresh = card.why.filter(l => FRESH.some(p => l.startsWith(p)))
   const employerTask = fresh.find(l => l.startsWith(FRESH[0]))
@@ -271,6 +274,8 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
           <button onClick={() => onOffer(card.candidate_id)} className="btn-invite-quiet btn-sm">Пригласить</button>
         </div>
       </div>
+
+      {aiNote && <AiNote needId={aiNote.needId} candidateId={card.candidate_id} />}
 
       {open && (
         <div className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 motion-safe:animate-rise">
