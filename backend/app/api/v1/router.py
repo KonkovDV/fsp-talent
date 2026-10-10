@@ -15,6 +15,7 @@ from app.api.v1 import (
     interviews,
     legal,
     messages,
+    methodist,
     moderation,
     needs,
     notifications,
@@ -68,6 +69,7 @@ api_router.include_router(fsp_id_demo.router)
 api_router.include_router(tasks.router)
 api_router.include_router(messages.router)
 api_router.include_router(moderation.router)
+api_router.include_router(methodist.router)
 api_router.include_router(integrations.router)
 api_router.include_router(integrations.sandbox)
 api_router.include_router(interviews.router)

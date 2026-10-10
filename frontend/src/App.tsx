@@ -62,6 +62,7 @@ const EmployerCompany = page(() => import('./pages/employer/Company'))
 const EmployerIntegrations = page(() => import('./pages/employer/Integrations'))
 const EmployerTasks = page(() => import('./pages/employer/Tasks'))
 const EmployerModeration = page(() => import('./pages/employer/Moderation'))
+const EmployerMethodist = page(() => import('./pages/employer/Methodist'))
 const EmployerFavorites = page(() => import('./pages/employer/Favorites'))
 
 function ProtectedRoute({ children, role }: { children: ReactNode; role: 'participant' | 'employer' }) {
@@ -127,6 +128,7 @@ export default function App() {
           <Route path="company" element={<EmployerCompany />} />
           <Route path="integrations" element={<EmployerIntegrations />} />
           <Route path="moderation" element={<EmployerModeration />} />
+          <Route path="methodist" element={<EmployerMethodist />} />
           <Route path="favorites" element={<EmployerFavorites />} />
         </Route>
 

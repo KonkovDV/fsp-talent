@@ -72,6 +72,10 @@
 /api/v1/legal/documents/{kind}
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
+/api/v1/methodist
+/api/v1/methodist/items/{item_key}/release
+/api/v1/methodist/log
+/api/v1/methodist/quarantine
 /api/v1/moderation/ai-providers
 /api/v1/moderation/ai-providers/deactivate
 /api/v1/moderation/ai-providers/{provider_id}

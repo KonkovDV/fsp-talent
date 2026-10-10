@@ -201,7 +201,8 @@ CREATE TABLE public.employers (
     totp_secret text,
     totp_last_step bigint,
     totp_verified_at timestamp with time zone,
-    fsp_partner boolean DEFAULT false NOT NULL
+    fsp_partner boolean DEFAULT false NOT NULL,
+    is_methodist boolean DEFAULT false NOT NULL
 );
 
 
@@ -388,6 +389,17 @@ ALTER TABLE ONLY public.webhook_deliveries FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.webhook_deliveries ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY webhook_deliveries_actor ON public.webhook_deliveries USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (endpoint_id IN ( SELECT webhook_endpoints.id FROM public.webhook_endpoints)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (endpoint_id IN ( SELECT webhook_endpoints.id FROM public.webhook_endpoints))));
+
+CREATE TABLE public.methodist_log (
+    id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    action character varying(40) NOT NULL,
+    subject character varying(80) NOT NULL,
+    note character varying(500) NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT methodist_log_pkey PRIMARY KEY (id),
+    CONSTRAINT methodist_log_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
+);
 
 
 

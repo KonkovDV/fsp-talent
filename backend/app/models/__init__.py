@@ -14,6 +14,7 @@ from app.models.favorite import EmployerFavorite
 from app.models.identity import Consent, EmailVerification
 from app.models.interview import InterviewSlot
 from app.models.item_draft import ItemDraft
+from app.models.methodist import MethodistLog
 from app.models.need import Need, NeedHidden, NeedShortlist, NeedVersion
 from app.models.notification import Notification
 from app.models.offer import Offer, OfferFlag, OfferMessage
@@ -22,8 +23,8 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.models.resume import CandidateResume
 from app.models.task import EmployerTask, TaskSubmission
 from app.models.vacancy import Application, Vacancy
-from app.models.webhook import WebhookDelivery, WebhookEndpoint
 from app.models.vc import VerifiableCredential
+from app.models.webhook import WebhookDelivery, WebhookEndpoint
 
 __all__ = [
     "AccessLog",
@@ -43,6 +44,7 @@ __all__ = [
     "InterviewSlot",
     "AiProvider",
     "ItemDraft",
+    "MethodistLog",
     "ItemStat",
     "Need",
     "NeedHidden",

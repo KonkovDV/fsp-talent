@@ -27,6 +27,7 @@ const EMPLOYER_LINKS = [
   { to: '/employer/company', label: 'Компания', end: false },
   { to: '/employer/integrations', label: 'Интеграции', end: false },
   { to: '/employer/moderation', label: 'Модерация', end: false },
+  { to: '/employer/methodist', label: 'Методист', end: false },
 ]
 
 export default function Layout() {
