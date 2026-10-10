@@ -96,7 +96,7 @@ def test_a_code_task_keeps_the_lab_problem_and_a_growing_loop_stops():
     assert time.perf_counter() - started < 2
 
 
-def test_a_code_task_is_checked_and_does_not_ask_for_a_grade():
+def test_a_code_task_is_checked_and_does_not_ask_for_a_grade(monkeypatch):
     validate_reference("code", [], None, "sum_positive")
     with pytest.raises(ValueError):
         validate_reference("code", [], None, "missing")
@@ -110,3 +110,11 @@ def test_a_code_task_is_checked_and_does_not_ask_for_a_grade():
     assert checked.note == "Пометка системы: открытые примеры 2 из 2, скрытые 3 из 3."
     wrong = check_answer(task, "def solve(xs):\n    return 0\n", None)
     assert wrong.passed is False and "скрытые" in (wrong.note or "") and "100" not in (wrong.note or "")
+    from app.core.config import settings
+    from app.services.sandbox import SandboxUnavailable
+    from app.services.sandbox.local import LocalRunner
+    with pytest.raises(SandboxUnavailable):
+        LocalRunner().run("javascript", "function solve(xs) { return 0 }", [[[]]])
+    monkeypatch.setattr(settings, "SANDBOX_REQUIRED", True)
+    with pytest.raises(SandboxUnavailable):
+        check_answer(task, SOLVE, None)

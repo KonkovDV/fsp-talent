@@ -27,6 +27,7 @@ from app.models import CategoryAssignment, Employer, EmployerTask, Participant, 
 from app.services.code_lab import problem_ids, problem_public
 from app.services.code_mark import copy_mark
 from app.services.notify import Outbox, category_label, notify
+from app.services.sandbox import SandboxUnavailable
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import (
     MAX_CODE,
@@ -269,6 +270,8 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
         raise ApiError(409, "task_closed")
     try:
         checked = check_answer(task, body.answer_text, body.answer_index)
+    except SandboxUnavailable as e:
+        raise ApiError(503, "sandbox_unavailable", "Проверка кода временно недоступна. Ответ не сохранён.") from e
     except ValueError as e:
         detail = str(e).strip()
         if not detail or detail == "answer":
