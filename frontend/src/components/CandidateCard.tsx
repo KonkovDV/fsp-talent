@@ -21,6 +21,7 @@ export interface CandidateCardData {
   skill_evidence?: Record<string, string>
   why: string[]
   shortlisted?: boolean
+  hidden?: boolean
   match?: {
     score: number
     basis?: 'fit' | 'evidence'
@@ -84,6 +85,8 @@ interface Props {
   /** «Дать задание»: a task addressed to this candidate only. */
   onTask?: (id: string) => void
   onShortlist?: (id: string, on: boolean) => void
+  /** Hide the card from this need. The hide stays when the need changes version. */
+  onHide?: (id: string) => void
   /** Company favorites, kept apart from any need. */
   favorite?: { on: boolean; toggle: (id: string, on: boolean) => void }
   /** Side-by-side comparison of up to four cards from the same list. */
@@ -167,7 +170,7 @@ function FactorBars({ match, active, idle }: {
   )
 }
 
-export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, favorite, compare, aiNote }: Props) {
+export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, favorite, compare, aiNote, onHide }: Props) {
   const [open, setOpen] = useState(false)
   const fresh = card.why.filter(l => FRESH.some(p => l.startsWith(p)))
   const employerTask = fresh.find(l => l.startsWith(FRESH[0]))
@@ -268,6 +271,11 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
               className={`btn-secondary btn-sm ${favorite.on ? 'border-accent text-accent' : ''}`}>
               <Heart size={14} className={favorite.on ? 'fill-current' : ''} aria-hidden />
               {favorite.on ? 'В избранном' : 'В избранное'}
+            </button>
+          )}
+          {onHide && (
+            <button type="button" onClick={() => onHide(card.candidate_id)} className="btn-secondary btn-sm">
+              {card.hidden ? 'Вернуть' : 'Скрыть'}
             </button>
           )}
           {onTask && <button onClick={() => onTask(card.candidate_id)} className="btn-secondary btn-sm">Дать задание</button>}

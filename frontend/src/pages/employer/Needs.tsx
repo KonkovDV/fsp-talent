@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, needExam, createNeed, getNeed, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, updateNeed,
+  apiError, compareNeed, needExam, createNeed, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import { useFavorites } from '../../hooks/useFavorites'
@@ -38,15 +38,16 @@ export default function EmployerNeeds() {
   const [taskFor, setTaskFor] = useState<string | null>(null)
   const [tab, setTab] = useState<'matches' | 'shortlist' | 'exam'>('matches')
   const [picked, setPicked] = useState<string[]>([])
+  const [showHidden, setShowHidden] = useState(false)
   const [sent, setSent] = useState(false)
 
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const { data: needs = [], isLoading: needsLoading, isError: needsError, error: needsLoadError } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
   useEffect(() => { if (!selected && needs.length) setSelected(needs[0].id) }, [needs, selected])
-  useEffect(() => { setPicked([]); setSent(false) }, [selected])
+  useEffect(() => { setPicked([]); setSent(false); setShowHidden(false) }, [selected])
   const current = needs.find(n => n.id === selected) ?? null
-  const matches = useQuery({ queryKey: ['needMatches', selected, current?.version], enabled: !!selected,
-    queryFn: () => needMatches(selected!).then(r => r.data) })
+  const matches = useQuery({ queryKey: ['needMatches', selected, current?.version, showHidden], enabled: !!selected,
+    queryFn: () => needMatches(selected!, showHidden).then(r => r.data) })
   const compared = useQuery({
     queryKey: ['needCompare', selected, picked.join(',')],
     enabled: !!selected && picked.length >= 2,
@@ -76,6 +77,10 @@ export default function EmployerNeeds() {
     onError: (e: unknown) => setError(apiError(e)),
   })
   const fav = useFavorites()
+  const hide = useMutation({
+    mutationFn: (card: CandidateCardData) => card.hidden ? unhideCandidate(selected!, card.candidate_id) : hideCandidate(selected!, card.candidate_id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['needMatches'] }),
+  })
   const toggle = useMutation({
     mutationFn: ({ id, on }: { id: string; on: boolean }) => on ? setShortlist(selected!, id) : removeShortlist(selected!, id),
     onSuccess: () => {
@@ -287,6 +292,11 @@ export default function EmployerNeeds() {
                   {matches.isLoading && <><Skeleton className="h-48" /><Skeleton className="h-48" /></>}
                   {matches.isError && <p className="notice-error" role="alert">{apiError(matches.error, 'Подборка не загрузилась')}</p>}
                   {matches.data && !matches.isError && (matches.data.items ?? []).length === 0 && <Empty title="Совпадений нет">Уберите часть обязательных навыков или грейд.</Empty>}
+                  {(matches.data?.hidden_count ?? 0) > 0 && (
+                    <button type="button" className="btn-ghost text-sm" onClick={() => setShowHidden(v => !v)}>
+                      {showHidden ? 'Скрыть убранных' : `Показать скрытых (${matches.data.hidden_count})`}
+                    </button>
+                  )}
                   {matches.data && (matches.data.total ?? 0) > (matches.data.items ?? []).length && (
                     <p className="text-sm text-ink-2">На экране первые {(matches.data.items ?? []).length} из {matches.data.total}.</p>
                   )}
@@ -294,6 +304,7 @@ export default function EmployerNeeds() {
                     <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                       aiNote={matches.data?.ai_note ? { needId: selected! } : undefined}
                       onShortlist={(id, on) => toggle.mutate({ id, on })}
+                      onHide={() => hide.mutate(card)}
                       favorite={{ on: fav.has(card.candidate_id), toggle: fav.toggle }}
                       compare={{
                         on: picked.includes(card.candidate_id), full: picked.length >= 4,

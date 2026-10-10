@@ -10,7 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from app.models import (
     GradeConfirmation,
     InterviewSlot,
     Need,
+    NeedHidden,
     NeedShortlist,
     NeedVersion,
     Offer,
@@ -308,16 +309,28 @@ async def _hydrate(db: AsyncSession, page: dict) -> dict:
     return page
 
 
+def visible_page(items: list[dict], hidden: set[str], offset: int, limit: int, *, show: bool) -> tuple[list[dict], int]:
+    """Drop hidden cards, then page. The ranking itself is shared; hiding belongs to one company."""
+    marked = [{**item, "hidden": item.get("candidate_id") in hidden} for item in items]
+    shown = marked if show else [item for item in marked if not item["hidden"]]
+    return shown[offset:offset + limit], len(shown)
+
+
 @router.get("/{need_id}/matches")
 async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
                   offset: int = Query(0, ge=0, le=200),
+                  show_hidden: bool = Query(False),
                   current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
     """Candidates for the need, ordered by the explainable score; role and grade are soft (neighbours count)."""
     if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
     need = await _own(db, need_id, current)
     p = NeedParams(**(await _params(db, need)).params)
-    result = await _hydrate(db, await _matches_cached(db, need, p, limit, offset))
+    ranked = await _matches_cached(db, need, p, shortlist_cache.WINDOW, 0)
+    hidden = {str(pid) for pid in await db.scalars(
+        select(NeedHidden.participant_id).where(NeedHidden.need_id == need.id))}
+    page_items, total = visible_page(ranked.get("items") or [], hidden, offset, limit, show=show_hidden)
+    result = await _hydrate(db, {**ranked, "items": page_items, "total": total})
     listed = {str(pid) for pid in await db.scalars(
         select(NeedShortlist.participant_id).where(NeedShortlist.need_id == need.id))}
     ids = []
@@ -329,7 +342,37 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
     offers = await _company_offers(db, need.employer_id, ids)
     shortlist_cache.apply_company_marks(result["items"], listed, offers)
     return {**result, "need": _out(need, await _params(db, need)),
-            "ai_note": await providers.refresh(db) is not None}
+            "hidden_count": len(hidden), "ai_note": await providers.refresh(db) is not None}
+
+
+@router.put("/{need_id}/hidden/{candidate_id}")
+async def hide_candidate(need_id: uuid.UUID, candidate_id: uuid.UUID,
+                         current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Hide one card from this need. A later version of the need keeps the hide."""
+    need = await _own(db, need_id, current)
+    person = await db.get(Participant, candidate_id)
+    if person is None or not person.discoverable:
+        raise ApiError(404, "not_found", "Кандидат не найден")
+    row = await db.scalar(select(NeedHidden).where(NeedHidden.need_id == need.id,
+                                                   NeedHidden.participant_id == candidate_id))
+    if row is None:
+        db.add(NeedHidden(need_id=need.id, participant_id=candidate_id, version=need.version))
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            raise ApiError(409, "conflict") from e
+    return {"candidate_id": str(candidate_id), "hidden": True}
+
+
+@router.delete("/{need_id}/hidden/{candidate_id}")
+async def unhide_candidate(need_id: uuid.UUID, candidate_id: uuid.UUID,
+                           current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    need = await _own(db, need_id, current)
+    await db.execute(delete(NeedHidden).where(NeedHidden.need_id == need.id,
+                                              NeedHidden.participant_id == candidate_id))
+    await db.commit()
+    return {"candidate_id": str(candidate_id), "hidden": False}
 
 
 @router.get("/{need_id}/exam")

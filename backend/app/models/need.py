@@ -41,3 +41,14 @@ class NeedShortlist(Base):
     status = Column(String(20), nullable=False, default="shortlisted")
     note = Column(String(500))
     added_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
+class NeedHidden(Base):
+    """A card this company hid from one need. The row stays when the need gets a new version."""
+    __tablename__ = "need_hidden"
+    __table_args__ = (UniqueConstraint("need_id", "participant_id", name="uq_need_hidden"),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    need_id = Column(UUID(as_uuid=True), ForeignKey("needs.id", ondelete="CASCADE"), nullable=False)
+    participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Integer, nullable=False)
+    hidden_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
