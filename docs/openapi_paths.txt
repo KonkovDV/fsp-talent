@@ -73,6 +73,7 @@
 /api/v1/employer/me
 /api/v1/employer/reputation
 /api/v1/fsp-id-demo/login
+/api/v1/guide/ask
 /api/v1/integrations/sandbox/{endpoint_id}
 /api/v1/legal/documents
 /api/v1/legal/documents/{kind}

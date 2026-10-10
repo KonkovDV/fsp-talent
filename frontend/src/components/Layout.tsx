@@ -3,6 +3,7 @@ import { LogOut } from 'lucide-react'
 import { signOut } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { Brand } from './Brand'
+import GuideBox from './GuideBox'
 import NotificationBell from './NotificationBell'
 import { MobileMenu, SiteFooter, ThemeToggle } from './chrome'
 
@@ -47,6 +48,7 @@ export default function Layout() {
             <span className="hidden rounded-full border border-line-strong px-2.5 py-0.5 text-2xs font-medium text-ink-2 sm:inline-flex">{roleLabel}</span>
           </div>
           <div className="flex items-center gap-1">
+            {userRole && <GuideBox role={userRole === 'participant' ? 'participant' : 'employer'} />}
             <NotificationBell />
             <span className="hidden md:inline-flex"><ThemeToggle /></span>
             <button type="button" onClick={exit} className="btn-nav gap-1.5 max-md:w-9 max-md:px-0" title="Выйти">
