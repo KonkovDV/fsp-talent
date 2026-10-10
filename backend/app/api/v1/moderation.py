@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import Complaint, Employer, ItemDraft, Vacancy
+from app.services import totp
 from app.services.ai import drafts
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
@@ -39,11 +40,48 @@ def may_moderate(demo: bool, email: str | None) -> bool:
     return bool(demo) and (email or "") in MODERATORS
 
 
-async def _desk(current: dict, db: AsyncSession) -> Employer:
+async def _desk(current: dict, db: AsyncSession, *, factor: bool = True) -> Employer:
     employer = await db.get(Employer, uuid.UUID(current["sub"]))
     if employer is None or not may_moderate(settings.DEMO_MODE, employer.email):
         raise ApiError(404, "not_found", "Раздел не найден")
+    if factor and employer.totp_secret and not totp.unlocked(employer.totp_verified_at, datetime.now(UTC)):
+        raise ApiError(403, "totp_required")
     return employer
+
+
+class TotpIn(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+def _factor_out(employer: Employer) -> dict:
+    now = datetime.now(UTC)
+    open_now = totp.unlocked(employer.totp_verified_at, now)
+    return {"enrolled": bool(employer.totp_secret), "unlocked": open_now,
+            "unlocked_until": (employer.totp_verified_at + totp.UNLOCK).isoformat() if open_now else None}
+
+
+@router.get("/totp")
+async def factor_state(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Whether the desk asks for a code. Turning the factor on or off is a server console command."""
+    return _factor_out(await _desk(current, db, factor=False))
+
+
+@router.post("/totp")
+async def unlock_desk(body: TotpIn, current: dict = Depends(get_current_employer),
+                      db: AsyncSession = Depends(get_db)):
+    employer = await _desk(current, db, factor=False)
+    if not employer.totp_secret:
+        raise ApiError(409, "conflict", "Второй фактор не включён")
+    if await too_many(f"moderation:totp:{employer.id}", limit=5, fail_closed=True):
+        raise ApiError(429, "rate_limited")
+    now = datetime.now(UTC)
+    step = totp.accept(totp.open_secret(str(employer.id), employer.totp_secret), body.code, now,
+                       employer.totp_last_step)
+    if step is None:
+        raise ApiError(422, "totp_invalid")
+    employer.totp_last_step, employer.totp_verified_at = step, now
+    await db.commit()
+    return _factor_out(employer)
 
 
 @router.get("/complaints")
