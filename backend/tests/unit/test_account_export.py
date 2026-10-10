@@ -28,8 +28,8 @@ def test_a_candidate_file_has_the_profile_and_not_the_password():
         specialization="backend", declared_grade="middle", assessed_grade="middle", experience_years=3,
         salary_from_gross=200_000, salary_to_gross=240_000, is_visible=True, job_search="open",
         birth_date=None, is_minor=False, minor_consent_given=False, guardian_email=None,
-        guardian_consent_at=None, public_profile=False, show_city=False, minor_now=lambda: False,
-        password_hash="secret",
+        guardian_consent_at=None, public_profile=False, show_city=False, show_stack=False,
+        show_fsp=False, show_experience=False, minor_now=lambda: False, password_hash="secret",
     )
     record = participant_record(person, [], None, [], [])
     assert record["email"] == "a@b.c"
@@ -74,7 +74,8 @@ def test_a_candidate_file_lists_own_results_and_skips_the_raw_registry():
         specialization="backend", declared_grade="middle", assessed_grade="middle", experience_years=3,
         salary_from_gross=200_000, salary_to_gross=240_000, is_visible=True, job_search="open",
         birth_date=None, is_minor=False, minor_consent_given=False, guardian_email=None,
-        guardian_consent_at=None, public_profile=False, show_city=True, minor_now=lambda: False,
+        guardian_consent_at=None, public_profile=False, show_city=True, show_stack=False,
+        show_fsp=False, show_experience=False, minor_now=lambda: False,
     )
     result = SimpleNamespace(
         event_name="Чемпионат", discipline="security", place=2, event_date=None, raw_data={"doc": "скрыто"},

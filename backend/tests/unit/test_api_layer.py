@@ -128,6 +128,8 @@ def _person(**extra):
         phone=None, telegram=None, fsp_id=None, specialization="backend",
         declared_grade="middle", assessed_grade=None, experience_years=3,
         salary_from_gross=180_000, salary_to_gross=240_000, is_visible=True, show_city=True,
+        show_stack=False, show_fsp=False, show_experience=False, github=None, soft_skills=[],
+        category_opened_at=None,
         job_search="active", birth_date=None, minor_consent_given=False,
         guardian_email=None, guardian_consent_at=None, public_profile=False,
         deleted_at=None, discoverable=True, email_verified_at=None,
@@ -345,7 +347,8 @@ async def test_favorites_keep_only_people_still_in_search(monkeypatch):
         await favorites.add_favorite(extra, current, db)
     assert full.value.status_code == 409
 
-    rows = [SimpleNamespace(participant_id=gone, created_at=NOW), SimpleNamespace(participant_id=kept, created_at=NOW)]
+    rows = [SimpleNamespace(participant_id=gone, created_at=NOW, interest="saved"),
+            SimpleNamespace(participant_id=kept, created_at=NOW, interest="saved")]
     db.scalars_q = [rows, [kept]]
     listed = await favorites.list_favorites(current, db)
     assert listed["ids"] == [str(kept)] and listed["hidden"] == 1
@@ -538,7 +541,7 @@ def _offer(employer_id, candidate_id, **extra):
         salary_from_gross=150_000, salary_to_gross=200_000, currency="RUB", work_format="remote",
         message=None, status="pending", created_at=NOW, expires_at=NOW, contact_method="почта",
         candidate_viewed_at=None, contacts_revoked_at=None, contacts_revealed_at=None,
-        decline_reason=None,
+        decline_reason=None, perks=[], practice_stage=None,
     )
     fields.update(extra)
     return SimpleNamespace(**fields)
@@ -724,6 +727,7 @@ async def test_vacancy_write_exam_and_apply(quiet):
     score = SimpleNamespace(discipline="algorithmic", best_rank=None)
     open_vacancy = SimpleNamespace(
         id=_uid(), employer_id=company.id, employer=company, title="Бэкенд", role="backend", grade="junior",
+        grade_match="plus_minus",
         discipline=None, min_rank=None, skills=["Python"], allows_minors=True, is_open=True,
         salary_from_gross=150_000, salary_to_gross=200_000, work_format="remote", description="API",
     )
