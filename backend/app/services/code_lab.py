@@ -270,14 +270,22 @@ def _run_cases(source: str, cases: list[list[Any]]) -> tuple[list[int | None], b
 
 
 def run_problem(problem_id: str, source: str) -> dict[str, Any]:
-    """Check public and hidden cases. Hidden expected numbers are not in the result."""
+    """Check public and hidden cases. Hidden expected numbers are not in the result.
+
+    SandboxUnavailable passes through: the caller stores nothing and answers 503.
+    """
+    from app.services.sandbox import get_runner
+
     row = _PROBLEMS.get(problem_id)
     if row is None:
         raise LabError("Такого задания в лаборатории нет")
     guard(source)
     public_cases = [list(args) for args, _fn in row["public"]]
     hidden_cases = [list(args) for args, _fn in row["hidden"]]
-    got, timed_out = _run_cases(source, public_cases + hidden_cases)
+    run = get_runner().run("python", source, public_cases + hidden_cases)
+    got, timed_out = run.outputs, run.timed_out
+    if len(got) != len(public_cases) + len(hidden_cases):
+        got = [None] * (len(public_cases) + len(hidden_cases))
     public_got = got[:len(public_cases)]
     hidden_got = got[len(public_cases):]
     public_ok = [

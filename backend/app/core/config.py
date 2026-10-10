@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "deepvk/USER-bge-m3"
     EMBEDDING_DIM: int = 1024
 
+    # Practice code runs in a local child process, Python only.
+    # SANDBOX_REQUIRED: a run without the sandbox container is refused, not run locally.
+    SANDBOX_REQUIRED: bool = False
+
     # Verifiable Credentials (W3C VC 2.0, Data Integrity eddsa-jcs-2022)
     VC_PRIVATE_KEY_PATH: str = "/secrets/vc_ed25519.pem"
 
