@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 import AiProviders from './AiProviders'
-import ItemDrafts from './ItemDrafts'
 
 interface Row {
   id: string
@@ -106,7 +105,6 @@ function Desk() {
         </ul>
       )}
       <SalaryFlags />
-      <ItemDrafts />
       <AiProviders />
     </div>
   )

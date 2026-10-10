@@ -44,6 +44,18 @@ def may_moderate(demo: bool, email: str | None) -> bool:
     return bool(demo) and (email or "") in MODERATORS
 
 
+async def _staff(current: dict, db: AsyncSession, *, factor: bool = True) -> Employer:
+    """The demo moderator or a methodist. Drafts and quarantine use this; complaints stay on the desk."""
+    employer = await db.get(Employer, uuid.UUID(current["sub"]))
+    allowed = employer is not None and (
+        getattr(employer, "is_methodist", False) or may_moderate(settings.DEMO_MODE, employer.email))
+    if not allowed:
+        raise ApiError(404, "not_found", "Раздел не найден")
+    if factor and employer.totp_secret and not totp.unlocked(employer.totp_verified_at, datetime.now(UTC)):
+        raise ApiError(403, "totp_required")
+    return employer
+
+
 async def _desk(current: dict, db: AsyncSession, *, factor: bool = True) -> Employer:
     employer = await db.get(Employer, uuid.UUID(current["sub"]))
     if employer is None or not may_moderate(settings.DEMO_MODE, employer.email):
@@ -136,7 +148,7 @@ def _draft_out(row: ItemDraft) -> dict:
 async def item_drafts(status: Literal["pending", "approved", "rejected"] = "pending",
                       current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
     """Drafts two models agreed on. Approval marks a starting point for a family author; the test never serves it."""
-    await _desk(current, db)
+    await _staff(current, db)
     await providers.refresh()
     rows = list(await db.scalars(
         select(ItemDraft).where(ItemDraft.status == status).order_by(ItemDraft.created_at.desc()).limit(100)))
@@ -146,7 +158,7 @@ async def item_drafts(status: Literal["pending", "approved", "rejected"] = "pend
 @router.post("/item-drafts", status_code=201)
 async def request_draft(body: DraftIn, current: dict = Depends(get_current_employer),
                         db: AsyncSession = Depends(get_db)):
-    await _desk(current, db)
+    await _staff(current, db)
     wrong = drafts.brief_error(body.spec, body.topic, body.level)
     if wrong:
         raise ApiError(422, "validation_error", wrong)
@@ -163,7 +175,7 @@ async def request_draft(body: DraftIn, current: dict = Depends(get_current_emplo
 @router.post("/item-drafts/{draft_id}/review")
 async def review_draft(draft_id: uuid.UUID, body: ReviewIn, current: dict = Depends(get_current_employer),
                        db: AsyncSession = Depends(get_db)):
-    await _desk(current, db)
+    await _staff(current, db)
     row = await db.get(ItemDraft, draft_id, with_for_update=True)
     if row is None:
         raise ApiError(404, "not_found", "Черновик не найден")

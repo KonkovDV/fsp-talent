@@ -34,6 +34,8 @@ class Employer(Base):
     totp_verified_at = Column(DateTime(timezone=True))
     # Set only by `python -m app.services.trust partner`. The API cannot write it.
     fsp_partner = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Set only by `python -m app.services.staff grant methodist`. The API cannot write it.
+    is_methodist = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
     vacancies = relationship("Vacancy", back_populates="employer")
