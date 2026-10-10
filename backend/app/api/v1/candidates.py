@@ -54,6 +54,7 @@ from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_li
 from app.services.privacy import erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.profile_completeness import profile_completeness
+from app.services.reputation import for_employer as company_reputation
 from app.services.search.cache import bump_bank_epoch
 from app.services.search.pipeline import _bucket
 from app.services.skills import (
@@ -479,6 +480,10 @@ async def get_my_offers(
     unread = await unread_counts(db, [o.id for o in rows if o.status == "accepted"], "participant")
     cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == _pid(current)))
     median = await role_median(db, cat.primary_role if cat else None, cat.grade if cat else None)
+    reputations = {}
+    for offer in rows:
+        if offer.employer_id not in reputations:
+            reputations[offer.employer_id] = await company_reputation(db, offer.employer)
     return [{
         "id": str(o.id), "company": o.employer.company_name, "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
@@ -486,7 +491,8 @@ async def get_my_offers(
                             "about": o.employer.description, "inn_given": published_inn(o.employer.inn),
                             "rating": company_score(o.employer.company_name),
                             "trust_level": company_trust(o.employer),
-                            "trust_label": LABELS[company_trust(o.employer)]},
+                            "trust_label": LABELS[company_trust(o.employer)],
+                            "reputation": reputations[o.employer_id]},
         "contact_method": o.contact_method,
         "salary_from": o.salary_from_gross, "salary_to": o.salary_to_gross,
         "market_flag": market_flag(o.salary_from_gross, o.salary_to_gross, median),

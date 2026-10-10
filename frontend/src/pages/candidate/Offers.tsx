@@ -14,6 +14,7 @@ interface Offer {
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
     trust_level?: number; trust_label?: string
+    reputation?: { reply: { shown: boolean; lower?: number; n: number }; complaints: { shown: boolean; count?: number; n: number } }
     rating?: { score: number; label: string; demo: boolean; note: string } }
   contacts_revoked_at?: string | null; unread_messages?: number
 }
@@ -110,6 +111,9 @@ export default function CandidateOffers() {
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-accent-soft font-display text-lg font-bold text-accent" aria-hidden>{o.company.slice(0, 1)}</span>
                 <div className="min-w-0">
                   <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}</p>
+                  {o.company_profile?.reputation?.reply?.shown && (
+                    <p className="text-xs text-ink-3">После согласия отвечают не реже {Math.round((o.company_profile.reputation.reply.lower ?? 0) * 100)}% (по {o.company_profile.reputation.reply.n})</p>
+                  )}
                   {o.company_profile?.rating && (
                     <p className="mt-1 text-xs text-ink-2">Балл компании {o.company_profile.rating.score} из 10, {o.company_profile.rating.label}. {o.company_profile.rating.note}</p>
                   )}

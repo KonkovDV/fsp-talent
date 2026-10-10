@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.models.employer import Employer
 from app.services.ats_sandbox import receipt
 from app.services.inn import inn_is_valid, published_inn
+from app.services.reputation import for_employer
 from app.services.trust_level import LABELS, trust_level
 
 router = APIRouter(prefix="/employer", tags=["employer"])
@@ -94,6 +95,15 @@ async def update_me(
         inn_checked=published_inn(emp.inn),
         trust_level=trust_level(emp), trust_label=LABELS[trust_level(emp)],
     )
+
+
+@router.get("/reputation")
+async def my_reputation(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """The same facts the candidate sees on an invitation. No single score."""
+    emp = await db.get(Employer, uuid.UUID(current["sub"]))
+    if emp is None:
+        raise HTTPException(404, "Работодатель не найден")
+    return await for_employer(db, emp)
 
 
 @router.post("/ats-sandbox")

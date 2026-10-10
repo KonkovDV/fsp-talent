@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, atsSandbox, getEmployerMe, updateEmployerMe } from '../../api/client'
+import { apiError, atsSandbox, getEmployerMe, getReputation, updateEmployerMe } from '../../api/client'
 import AccountSecurity from '../../components/AccountSecurity'
 import { PageHeader } from '../../components/ui'
 
@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/ui'
 export default function EmployerCompany() {
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ['employerMe'], queryFn: () => getEmployerMe().then(r => r.data) })
+  const facts = useQuery({ queryKey: ['reputation'], queryFn: () => getReputation().then(r => r.data) })
   const [form, setForm] = useState({ company_name: '', inn: '', website: '', industry: '', description: '' })
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
@@ -49,6 +50,14 @@ export default function EmployerCompany() {
   return (
     <div>
       <PageHeader title="Компания" lead="Эти сведения видит кандидат в приглашении: название, чем вы занимаетесь и как с вами связаться." />
+      {facts.data && (
+        <p className="mb-4 text-sm text-ink-2">
+          На платформе {facts.data.tenure_days ?? '—'} дн. Ответ после согласия: {facts.data.reply.shown ? `не ниже ${Math.round(facts.data.reply.lower * 100)}% из ${facts.data.reply.n}` : 'мало данных'}.
+          Собеседование: {facts.data.interview.shown ? `не ниже ${Math.round(facts.data.interview.lower * 100)}% из ${facts.data.interview.n}` : 'мало данных'}.
+          Жалобы: {facts.data.complaints.shown ? `${facts.data.complaints.count} из ${facts.data.complaints.n}` : 'мало данных'}.
+          Общей оценки нет.
+        </p>
+      )}
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_1fr]">
       <form className="card space-y-4" onSubmit={e => { e.preventDefault(); save.mutate() }}>
         <div><label className="field-label" htmlFor="co-name">Название</label>
