@@ -53,6 +53,8 @@ EMPLOYERS = [
     ("РобоТех Урал", "hr@robotech.demo"),
 ]
 DEMO_PASSWORD = "demo12345"
+# Adult date on the jury accounts. The survey stays empty; after the full test the grade can enter search.
+JURY_BIRTH = date(1990, 6, 15)
 SPEC_OF = {"FSP001": "backend", "FSP002": "security"}
 NO_FSP_DEMO = ("nofsp@demo.talent", "Ирина Смирнова", "Казань", 2, "middle",
                ["Python", "Django", "PostgreSQL", "Docker", "Redis"])
@@ -522,10 +524,15 @@ async def main(extra_candidates: int | None = None) -> None:
         # With DEMO_MODE they take the full test without pauses (app.services.assessment.jury_unlimited).
         for n in range(1, 11):
             email = f"jury{n}@demo.talent"
-            if await db.scalar(select(Participant.id).where(email_is(Participant, email))) is not None:
+            existing = await db.scalar(select(Participant).where(email_is(Participant, email)))
+            if existing is not None:
+                if existing.birth_date is None:
+                    existing.birth_date = JURY_BIRTH
+                    existing.is_minor = False
                 continue
             juror = Participant(email=email, display_name=f"Член жюри {n}", password_hash=password_hash,
-                                email_verified_at=now, is_minor=False, is_visible=True, public_profile=False)
+                                email_verified_at=now, birth_date=JURY_BIRTH,
+                                is_minor=False, is_visible=True, public_profile=False)
             db.add(juror)
             await db.flush()
             _consents(db, "participant", juror.id, now)

@@ -75,6 +75,21 @@ def test_a_complaint_from_a_demo_account_does_not_move_the_pause(monkeypatch):
     assert should_pause(len(set(counted)), len(counted), 10) is True
 
 
+def test_a_jury_account_is_seeded_with_an_adult_birth_date():
+    from datetime import date
+
+    from app.models import Participant
+    from app.services.profile import adult_cutoff
+    from seed.generate_seed import JURY_BIRTH
+    assert JURY_BIRTH <= adult_cutoff(date(2026, 10, 11))
+    person = Participant(is_visible=True, birth_date=JURY_BIRTH, job_search="open")
+    assert person.discoverable
+    source = open("seed/generate_seed.py", encoding="utf-8").read()
+    assert "birth_date=JURY_BIRTH" in source
+    assert "existing.birth_date = JURY_BIRTH" in source
+    assert "JURY_BIRTH" in open("seed/reset_demo.py", encoding="utf-8").read()
+
+
 def test_an_empty_cron_drops_the_nightly_reset(monkeypatch):
     from app.core.config import settings
     from app.workers.celery_app import demo_reset_entry
