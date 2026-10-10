@@ -294,8 +294,22 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
                  f"Откликнулся кандидат ({who}). "
                  "Контакты откликнувшегося доступны в разделе «Вакансии».",
                  "/employer/vacancies")
+    from app.services.webhooks import deliver_due, enqueue
+    await enqueue(db, vacancy.employer_id, "application.created", {
+        "created_at": datetime.now(UTC).isoformat(), "employer_id": str(vacancy.employer_id),
+        "vacancy": {"id": str(vacancy.id), "title": vacancy.title},
+        "candidate": {"ref": str(participant.id), "name": participant.display_name, "email": participant.email,
+                      "phone": participant.phone, "telegram": participant.telegram,
+                      "category": {"specialization": category.primary_role if category else None,
+                                   "grade": category.grade if category else None}},
+    })
     await db.commit()
     await outbox.deliver()
+    try:
+        await deliver_due(db, vacancy.employer_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
     return {"status": "applied"}
 
 

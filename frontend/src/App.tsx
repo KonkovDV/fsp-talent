@@ -59,6 +59,7 @@ const EmployerNeeds = page(() => import('./pages/employer/Needs'))
 const EmployerOffers = page(() => import('./pages/employer/Offers'))
 const EmployerVacancies = page(() => import('./pages/employer/Vacancies'))
 const EmployerCompany = page(() => import('./pages/employer/Company'))
+const EmployerIntegrations = page(() => import('./pages/employer/Integrations'))
 const EmployerTasks = page(() => import('./pages/employer/Tasks'))
 const EmployerModeration = page(() => import('./pages/employer/Moderation'))
 const EmployerFavorites = page(() => import('./pages/employer/Favorites'))
@@ -124,6 +125,7 @@ export default function App() {
           <Route path="vacancies" element={<EmployerVacancies />} />
           <Route path="tasks" element={<EmployerTasks />} />
           <Route path="company" element={<EmployerCompany />} />
+          <Route path="integrations" element={<EmployerIntegrations />} />
           <Route path="moderation" element={<EmployerModeration />} />
           <Route path="favorites" element={<EmployerFavorites />} />
         </Route>

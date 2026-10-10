@@ -22,6 +22,7 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.models.resume import CandidateResume
 from app.models.task import EmployerTask, TaskSubmission
 from app.models.vacancy import Application, Vacancy
+from app.models.webhook import WebhookDelivery, WebhookEndpoint
 from app.models.vc import VerifiableCredential
 
 __all__ = [
@@ -62,6 +63,8 @@ __all__ = [
     "TestSession",
     "TestSessionItem",
     "Vacancy",
+    "WebhookDelivery",
+    "WebhookEndpoint",
     "VerifiableCredential",
 ]
 

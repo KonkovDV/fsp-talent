@@ -351,6 +351,44 @@ CREATE TABLE public.offer_flags (
     CONSTRAINT offer_flags_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES public.offers(id) ON DELETE CASCADE
 );
 
+CREATE TABLE public.webhook_endpoints (
+    id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    url text NOT NULL,
+    secret text NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT webhook_endpoints_pkey PRIMARY KEY (id),
+    CONSTRAINT webhook_endpoints_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.webhook_endpoints FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.webhook_endpoints ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY webhook_endpoints_actor ON public.webhook_endpoints USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
+
+CREATE TABLE public.webhook_deliveries (
+    id uuid NOT NULL,
+    endpoint_id uuid NOT NULL,
+    event_type character varying(40) NOT NULL,
+    payload text NOT NULL,
+    attempt integer DEFAULT 0 NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    next_at timestamp with time zone NOT NULL,
+    last_code integer,
+    last_error character varying(300),
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT webhook_deliveries_pkey PRIMARY KEY (id),
+    CONSTRAINT webhook_deliveries_endpoint_id_fkey FOREIGN KEY (endpoint_id) REFERENCES public.webhook_endpoints(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.webhook_deliveries FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.webhook_deliveries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY webhook_deliveries_actor ON public.webhook_deliveries USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (endpoint_id IN ( SELECT webhook_endpoints.id FROM public.webhook_endpoints)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR (endpoint_id IN ( SELECT webhook_endpoints.id FROM public.webhook_endpoints))));
+
 
 
 CREATE TABLE public.need_shortlist (

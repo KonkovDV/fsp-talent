@@ -594,10 +594,34 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                      f"Кандидат отклонил приглашение «{offer.role}»",
                      f"Кандидат ({who}) отклонил приглашение. Подборка по потребности обновляется сама.",
                      "/employer/offers")
+    person = await db.get(Participant, offer.candidate_id)
+    event = {
+        "created_at": datetime.now(UTC).isoformat(), "employer_id": str(offer.employer_id),
+        "offer": {"id": str(offer.id), "role": offer.role, "salary_from": offer.salary_from_gross,
+                  "salary_to": offer.salary_to_gross, "work_format": offer.work_format},
+        "candidate": {"ref": str(offer.candidate_id),
+                      "category": {"specialization": cat.primary_role if cat else None,
+                                   "grade": cat.grade if cat else None,
+                                   "grade_source": cat.grade_source if cat else None}},
+    }
+    if offer.status == "accepted" and person is not None:
+        event["candidate"].update(name=person.display_name, email=person.email,
+                                  phone=person.phone, telegram=person.telegram)
+        event_type = "offer.accepted"
+    else:
+        event["reason"] = offer.decline_reason
+        event_type = "offer.declined"
+    from app.services.webhooks import deliver_due, enqueue
+    await enqueue(db, offer.employer_id, event_type, event)
     await db.commit()
     from app.services.search.cache import publish_invite
     await publish_invite()
     await outbox.deliver()
+    try:
+        await deliver_due(db, offer.employer_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
     suggest_hide = False
     if offer.status == "accepted":
         person = await db.get(Participant, offer.candidate_id)
@@ -638,8 +662,18 @@ async def revoke_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
                  f"Кандидат закрыл контакты по приглашению «{offer.role}»",
                  f"Кандидат ({who}) закрыл для вашей компании свои контакты. Если вы их сохранили, "
                  "не используйте их для связи без нового согласия.", "/employer/offers")
+    from app.services.webhooks import deliver_due, enqueue
+    await enqueue(db, offer.employer_id, "contacts.revoked", {
+        "created_at": now.isoformat(), "employer_id": str(offer.employer_id),
+        "candidate": {"ref": str(pid), "delete": True},
+    })
     await db.commit()
     await outbox.deliver()
+    try:
+        await deliver_due(db, offer.employer_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
     return {"status": offer.status, "contacts_revoked_at": now.isoformat()}
 
 
