@@ -10,7 +10,7 @@ def test_ats_sample_is_signed_and_not_delivered():
     import asyncio
 
     from app.api.v1.employer import ats_sandbox
-    from app.services.ats_sandbox import receipt, sign
+    from app.services.ats_sandbox import sign
 
     card = asyncio.run(ats_sandbox({"sub": "employer-1"}))
     assert card["delivered"] is False

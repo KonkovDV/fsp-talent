@@ -17,9 +17,9 @@ from app.core.security import hash_password
 from app.legal import documents
 from app.models import Consent, Employer, Participant, Skill, Vacancy
 from app.services.categorization import DISCIPLINE_ROLE_MAP, grade_from_experience
+from app.services.field_cipher import email_is
 from app.services.fsp.mock import MockFSPAdapter
 from app.services.profile import ingest_from_fsp, rebuild_profile
-from app.services.field_cipher import email_is
 from app.services.survey import INDUSTRIES
 
 SKILLS = {
