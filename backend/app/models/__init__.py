@@ -10,6 +10,7 @@ from app.models.assessment import (
 from app.models.audit import AccessLog, ConsentLog
 from app.models.complaint import Complaint
 from app.models.employer import Employer
+from app.models.exclusion import CandidateBlock
 from app.models.favorite import EmployerFavorite
 from app.models.identity import Consent, EmailVerification
 from app.models.interview import InterviewSlot
@@ -37,6 +38,7 @@ __all__ = [
     "EmailVerification",
     "Employer",
     "EmployerFavorite",
+    "CandidateBlock",
     "CandidateResume",
     "EmployerTask",
     "GradeConfirmation",

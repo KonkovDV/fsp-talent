@@ -459,6 +459,13 @@ async def search_candidates(
             dense_hit = set(dense_order[:20])
             ids_set.update(dense_order)
 
+    if employer_id is not None and ids_set:
+        from app.services.exclusions import drop_refused
+        gone = await drop_refused(db, ids_set, employer_id, need.industry if need else None)
+        ids_set -= gone
+        lex_order = [i for i in lex_order if i not in gone]
+        dense_order = [i for i in dense_order if i not in gone]
+
     by_discipline: dict[uuid.UUID, dict[str, float]] = {}
     if ids_set:
         for pid, disc, value in await db.execute(

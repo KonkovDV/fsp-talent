@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, apiErrorCode, downloadMyProfilePdf, getMyProfile, giveConsent, parseResume, updateMyProfile, updateVisibility, uploadResumePdf } from '../../api/client'
+import { apiError, apiErrorCode, downloadMyProfilePdf, getMyProfile, giveConsent, myExclusions, parseResume, setExclusions, surveyOptions, updateMyProfile, updateVisibility, uploadResumePdf } from '../../api/client'
 import { Eye, EyeOff, MailCheck } from 'lucide-react'
 import { PageHeader, Skeleton } from '../../components/ui'
 import { LegalDocModal } from '../../components/LegalConsents'
@@ -174,6 +174,8 @@ export default function CandidateProfile() {
         </div>
       </section>
 
+      <Exclusions />
+
       <section className="card mb-6" aria-labelledby="soft-h">
         <h2 id="soft-h" className="section-title">Мягкие навыки</h2>
         <p className="mt-1 text-sm text-ink-2">Печатаются на карточке. В балл подбора не входят.</p>
@@ -296,6 +298,35 @@ export default function CandidateProfile() {
         </aside>
       </div>
     </div>
+  )
+}
+
+function Exclusions() {
+  const qc = useQueryClient()
+  const saved = useQuery({ queryKey: ['exclusions'], queryFn: () => myExclusions().then(r => r.data) })
+  const opts = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data as { industries: Record<string, string> }) })
+  const save = useMutation({
+    mutationFn: (industries: string[]) => setExclusions(industries),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['exclusions'] }),
+  })
+  const chosen = saved.data?.industries ?? []
+  const areas = Object.entries(opts.data?.industries ?? {}).filter(([code]) => code !== 'any')
+  if (!areas.length) return null
+  return (
+    <section className="card mb-6" aria-labelledby="excl-h">
+      <h2 id="excl-h" className="section-title">Куда не предлагать</h2>
+      <p className="mt-1 text-sm text-ink-2">Эти предметные области не увидят вас в поиске. Компанию, которая уже писала, можно скрыть в приглашении.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {areas.map(([code, label]) => {
+          const on = chosen.includes(code)
+          return (
+            <button key={code} type="button" aria-pressed={on} className={on ? 'chip-active' : 'chip-default'}
+              onClick={() => save.mutate(on ? chosen.filter(item => item !== code) : [...chosen, code])}>{label}</button>
+          )
+        })}
+      </div>
+      {!!saved.data?.companies.length && <p className="mt-3 text-sm text-ink-2">Скрыты компании: {saved.data.companies.map(c => c.name).join(', ')}</p>}
+    </section>
   )
 }
 

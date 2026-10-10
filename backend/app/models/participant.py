@@ -49,6 +49,8 @@ class Participant(Base):
     experience_years = Column(Integer)
     # Names from soft_skills.NAMES. Shown on the card, not used in the score.
     soft_skills = Column(JSONB, nullable=False, default=list, server_default="[]")
+    # Subject areas this person does not want to be offered. Codes from INDUSTRIES, never "any".
+    excluded_industries = Column(JSONB, nullable=False, default=list, server_default="[]")
     declared_grade = Column(String(20))
     # Survey (TZ 2.1): specialization drives the category and the test blueprint.
     specialization = Column(String(30), index=True)

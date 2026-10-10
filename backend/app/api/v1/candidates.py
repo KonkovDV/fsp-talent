@@ -821,6 +821,71 @@ async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_par
     return {"ok": True, "guardian_email": email, "demo_link": shown}
 
 
+class ExclusionIn(BaseModel):
+    industries: list[str] = Field(default_factory=list, max_length=12)
+
+
+class BlockIn(BaseModel):
+    offer_id: uuid.UUID
+
+
+@router.get("/me/exclusions")
+async def my_exclusions(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    from app.models import CandidateBlock, Employer
+    person = await db.get(Participant, _pid(current))
+    if person is None:
+        raise HTTPException(404, "Профиль не найден")
+    rows = (await db.execute(
+        select(CandidateBlock.employer_id, Employer.company_name)
+        .join(Employer, Employer.id == CandidateBlock.employer_id)
+        .where(CandidateBlock.participant_id == person.id))).all()
+    return {"industries": list(person.excluded_industries or []),
+            "companies": [{"id": str(eid), "name": name} for eid, name in rows]}
+
+
+@router.put("/me/exclusions")
+async def set_exclusions(body: ExclusionIn, current: dict = Depends(get_current_participant),
+                         db: AsyncSession = Depends(get_db)):
+    unknown = [code for code in body.industries if code not in INDUSTRIES or code == "any"]
+    if unknown:
+        raise ApiError(422, "validation_error", "Неизвестная предметная область")
+    person = await db.get(Participant, _pid(current))
+    if person is None:
+        raise HTTPException(404, "Профиль не найден")
+    person.excluded_industries = sorted(set(body.industries))
+    await db.commit()
+    return {"industries": person.excluded_industries}
+
+
+@router.post("/me/blocks", status_code=201)
+async def block_company(body: BlockIn, current: dict = Depends(get_current_participant),
+                        db: AsyncSession = Depends(get_db)):
+    """Hide this person from one company. Only a company that already wrote to them."""
+    from app.models import CandidateBlock
+    person_id = _pid(current)
+    offer = await db.get(Offer, body.offer_id)
+    if offer is None or offer.candidate_id != person_id:
+        raise ApiError(404, "not_found", "Приглашение не найдено")
+    row = await db.scalar(select(CandidateBlock).where(
+        CandidateBlock.participant_id == person_id, CandidateBlock.employer_id == offer.employer_id))
+    if row is None:
+        db.add(CandidateBlock(participant_id=person_id, employer_id=offer.employer_id))
+        await db.commit()
+    return {"employer_id": str(offer.employer_id), "blocked": True}
+
+
+@router.delete("/me/blocks/{employer_id}")
+async def unblock_company(employer_id: uuid.UUID, current: dict = Depends(get_current_participant),
+                          db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete as sql_delete
+
+    from app.models import CandidateBlock
+    await db.execute(sql_delete(CandidateBlock).where(
+        CandidateBlock.participant_id == _pid(current), CandidateBlock.employer_id == employer_id))
+    await db.commit()
+    return {"employer_id": str(employer_id), "blocked": False}
+
+
 @router.get("/survey-options")
 async def survey_options():
     """Choices for the survey; public, so the registration flow can show them before login."""

@@ -401,6 +401,23 @@ CREATE TABLE public.methodist_log (
     CONSTRAINT methodist_log_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
 );
 
+CREATE TABLE public.candidate_blocks (
+    id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT candidate_blocks_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_candidate_blocks UNIQUE (participant_id, employer_id),
+    CONSTRAINT candidate_blocks_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE,
+    CONSTRAINT candidate_blocks_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.candidate_blocks FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.candidate_blocks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY candidate_blocks_actor ON public.candidate_blocks USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
 
 
 CREATE TABLE public.need_shortlist (
@@ -515,6 +532,7 @@ CREATE TABLE public.participants (
     show_experience boolean DEFAULT true NOT NULL,
     category_opened_at timestamp with time zone,
     soft_skills jsonb DEFAULT '[]'::jsonb NOT NULL,
+    excluded_industries jsonb DEFAULT '[]'::jsonb NOT NULL,
     work_formats jsonb DEFAULT '[]'::jsonb NOT NULL,
     experience_years integer,
     declared_grade character varying(20),

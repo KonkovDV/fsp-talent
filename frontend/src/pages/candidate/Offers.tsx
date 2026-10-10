@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, fileComplaint, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
+import { apiError, blockCompany, fileComplaint, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
@@ -75,6 +75,7 @@ export default function CandidateOffers() {
   const [complaintNote, setComplaintNote] = useState('')
   const [revokeError, setRevokeError] = useState('')
   const [respondError, setRespondError] = useState('')
+  const [blockedOffers, setBlockedOffers] = useState<string[]>([])
   const complain = useMutation({
     mutationFn: (id: string) => fileComplaint(id, complaintReason),
     onSuccess: (res) => {
@@ -128,6 +129,9 @@ export default function CandidateOffers() {
                   <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
                   {o.market_flag === 'below_market' && <p className="text-xs text-warn">вилка ниже рынка категории</p>}
                   <span className={`${cls} mt-2`}>{label}</span>
+                  {blockedOffers.includes(o.id)
+                    ? <p className="mt-2 text-xs text-ink-3">Эта компания больше не увидит вас в поиске</p>
+                    : <button type="button" className="btn-ghost btn-sm mt-2" onClick={() => blockCompany(o.id).then(() => setBlockedOffers(prev => [...prev, o.id])).catch((e: unknown) => setRespondError(apiError(e)))}>Не показывать этой компании</button>}
                 </div>
               </div>
               {o.message && <blockquote className="mt-4 max-w-prose border-l-2 border-accent pl-3 text-sm text-ink">{o.message}</blockquote>}
