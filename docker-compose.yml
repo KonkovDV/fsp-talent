@@ -14,6 +14,8 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
       # Fifteen-item, five-minute trial for the jury. A production deploy sets DEMO_MODE=false.
       DEMO_MODE: ${DEMO_MODE:-true}
+      # The built-in FSP ID page. mock is refused when DEMO_MODE is off.
+      FSP_ID_MODE: ${FSP_ID_MODE:-mock}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       # Letters with confirmation codes land in Mailpit: http://localhost:8025. Override in .env for real SMTP.
       MAIL_MODE: ${MAIL_MODE:-smtp}

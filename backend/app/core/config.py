@@ -1,10 +1,14 @@
+import logging
 import os
 import secrets
 import time
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger("app.core.config")
 
 # These strings are in the repo. A token signed with either of them can be forged by anyone who cloned it.
 PUBLISHED_SECRETS = frozenset({
@@ -111,12 +115,21 @@ class Settings(BaseSettings):
     FSP_API_KEY: str = ""
 
     # FSP ID login (OpenID Connect, Keycloak-compatible). mock: demo provider page on this site.
-    FSP_ID_MODE: str = "mock"   # mock | oidc
+    # The bare default is oidc. mock is allowed only while DEMO_MODE is on.
+    FSP_ID_MODE: str = "oidc"   # mock | oidc
     FSP_ID_ISSUER: str = ""     # https://<keycloak>/realms/<realm>, the address the browser opens
     FSP_ID_BACKEND_ISSUER: str = ""  # same realm as seen from the API container; empty uses FSP_ID_ISSUER
     FSP_ID_CLIENT_ID: str = "fsp-talent"
     FSP_ID_CLIENT_SECRET: str = ""
     FSP_ID_CLAIM: str = "fsp_id"
+
+    @model_validator(mode="after")
+    def _mocks_need_the_demo(self):
+        if self.FSP_ID_MODE == "mock" and not self.DEMO_MODE:
+            raise RuntimeError("FSP_ID_MODE=mock is only allowed when DEMO_MODE is on")
+        if self.MAIL_MODE == "console" and not self.DEMO_MODE:
+            logger.warning("MAIL_MODE=console while DEMO_MODE is off: letters are not delivered")
+        return self
 
 
 def _read_key(path: Path) -> str:
