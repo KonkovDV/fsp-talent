@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { credentialStatus, issuerDid, verifyCredential } from '../api/client'
 import PublicShell from '../components/PublicShell'
+import QrCode from '../components/QrCode'
 import { PageHeader } from '../components/ui'
 
 interface Achievement {
@@ -79,9 +80,13 @@ export default function BadgePage() {
         title="Проверка удостоверения"
         lead="Подпись eddsa-jcs-2022. Полное удостоверение — OpenBadgeCredential со ссылкой на статус отзыва. Краткая карточка содержит год, статус соревнования и корзину места, без названия события и без имени."
       />
-      {did.data?.id && (
-        <p className="mb-4 text-sm text-ink-2">Ключ издателя: <span className="font-mono text-ink">{did.data.id}</span>. Тот же документ лежит в <span className="font-mono">/.well-known/did.json</span>.</p>
-      )}
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <QrCode value={`${window.location.origin}/.well-known/did.json`} label="QR-код документа ключа издателя" />
+        <p className="max-w-prose text-sm text-ink-2">
+          {did.data?.id ? <>Ключ издателя: <span className="font-mono text-ink">{did.data.id}</span>. </> : null}
+          Код открывает <span className="font-mono">/.well-known/did.json</span> на этом сайте. Имени в документе нет.
+        </p>
+      </div>
       <form className="card space-y-3 p-5" onSubmit={e => { e.preventDefault(); check.mutate(text) }}>
         <label className="block text-sm text-ink-2" htmlFor="badge-json">JSON удостоверения</label>
         <textarea id="badge-json" value={text} onChange={e => setText(e.target.value)} rows={8}
