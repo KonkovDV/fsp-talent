@@ -78,13 +78,13 @@ export default function CandidateProfile() {
     mutationFn: (value: boolean) => updateVisibility(value),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
   })
-  const cityVisibility = useMutation({
-    mutationFn: (value: boolean) => updateMyProfile({
-      show_city: value,
+  const cardFields = useMutation({
+    mutationFn: (patch: Record<string, boolean>) => updateMyProfile({
+      ...patch,
       ...(profile?.profile_version != null ? { expected_version: profile.profile_version } : {}),
     }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile'] }),
-    onError: (error: unknown) => setNote(apiError(error, 'Не удалось сохранить видимость города')),
+    onError: (error: unknown) => setNote(apiError(error, 'Не удалось сохранить видимость карточки')),
   })
   const jobSearch = useMutation({
     mutationFn: (value: 'active' | 'open' | 'not_looking') => updateMyProfile({
@@ -153,13 +153,25 @@ export default function CandidateProfile() {
       </section>
 
       <section className="card mb-6" aria-labelledby="city-h">
-        <h2 id="city-h" className="section-title">Город на карточке</h2>
-        <p className="mt-1 text-sm text-ink-2">Скрытый город не печатается на анонимной карточке. В балл подбора он входит по-прежнему, когда вакансия называет город.</p>
-        <button type="button" aria-pressed={profile.show_city !== false} disabled={cityVisibility.isPending}
-          onClick={() => cityVisibility.mutate(profile.show_city === false)}
-          className={`mt-4 ${(profile.show_city !== false) ? 'btn-primary' : 'btn-secondary'}`}>
-          {profile.show_city === false ? 'Город скрыт' : 'Город виден работодателям'}
-        </button>
+        <h2 id="city-h" className="section-title">Что видно на анонимной карточке</h2>
+        <p className="mt-1 text-sm text-ink-2">Выключенное поле не печатается. Навыки, которые совпали с запросом работодателя, и балл остаются.</p>
+        <div className="mt-4 flex flex-col gap-2">
+          {([
+            ['show_city', 'Город виден работодателям', 'Город скрыт'],
+            ['show_stack', 'Стек виден', 'Стек скрыт'],
+            ['show_experience', 'Опыт виден', 'Опыт скрыт'],
+            ['show_fsp', 'Результаты ФСП видны', 'Результаты ФСП скрыты'],
+          ] as const).map(([field, on, off]) => {
+            const shown = profile[field] !== false
+            return (
+              <button key={field} type="button" aria-pressed={shown} disabled={cardFields.isPending}
+                onClick={() => cardFields.mutate({ [field]: !shown })}
+                className={shown ? 'btn-primary' : 'btn-secondary'}>
+                {shown ? on : off}
+              </button>
+            )
+          })}
+        </div>
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">

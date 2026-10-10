@@ -73,7 +73,7 @@ from app.services.vc.issuer import issue_derived_credential, issue_sd_jwt, prese
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
-PRIVACY_FIELDS = ("is_visible", "public_profile", "show_city")
+PRIVACY_FIELDS = ("is_visible", "public_profile", "show_city", "show_stack", "show_fsp", "show_experience")
 _PAGE_SIZE_MAX = 50
 
 
@@ -134,6 +134,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile, "show_city": p.show_city,
+        "show_stack": p.show_stack, "show_fsp": p.show_fsp, "show_experience": p.show_experience,
         "job_search": p.job_search,
         "is_minor": p.minor_now(), "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
         "guardian_demo_link": (
@@ -258,6 +259,9 @@ class ProfileUpdate(BaseModel):
     public_profile: bool | None = None
     is_visible: bool | None = None
     show_city: bool | None = None
+    show_stack: bool | None = None
+    show_fsp: bool | None = None
+    show_experience: bool | None = None
     job_search: Literal["active", "open", "not_looking"] | None = None
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)

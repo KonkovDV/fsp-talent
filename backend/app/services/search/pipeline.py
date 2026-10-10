@@ -293,6 +293,19 @@ def _role_for_need(cat, need_role: str | None, confirmation,
     return role, grade, source
 
 
+def visible_card(stack: list, experience, disciplines: list, why: list[str], *,
+                 show_stack: bool, show_fsp: bool, show_experience: bool):
+    """What the anonymous card may print. The score is computed before this and does not read it."""
+    if not show_stack:
+        stack = []
+    if not show_experience:
+        experience = None
+    if not show_fsp:
+        disciplines = []
+        why = [line for line in why if not line.startswith(("Подтверждено ФСП", "Присвоенный разряд"))]
+    return stack, experience, disciplines, why
+
+
 def shown_region(region: str | None, show_city: bool) -> str | None:
     """The city on the anonymous card. Hiding it leaves the field empty; the score still uses the city."""
     if not show_city:
@@ -830,6 +843,12 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
         line = percentiles.get(pid)
         if line:
             why.append(line)
+        stack = list(resume.stack or []) if resume is not None else (list(cat.stack) if cat else [])
+        stack, experience, disciplines, why = visible_card(
+            stack, p.experience_years, disciplines, why,
+            show_stack=bool(getattr(p, "show_stack", True)),
+            show_fsp=bool(getattr(p, "show_fsp", True)),
+            show_experience=bool(getattr(p, "show_experience", True)))
         cards.append({
             "candidate_id": str(pid),
             "role": header_role,
@@ -837,8 +856,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             "grade_source": header_source,
             "also_primary": also_primary,
             "region": shown_region(p.region, bool(p.show_city)),
-            "experience_years": p.experience_years,
-            "stack": list(resume.stack or []) if resume is not None else (cat.stack if cat else []),
+            "experience_years": experience,
+            "stack": stack,
             "resume_summary": resume.summary if resume is not None else None,
             "matched_skills": matched,
             "missing_skills": sorted(wanted - set(matched)),
