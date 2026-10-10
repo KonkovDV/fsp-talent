@@ -58,7 +58,7 @@ describe('страница методики', () => {
     expect(screen.getByText('0,47')).toBeInTheDocument()
     expect(screen.getByText('0,22')).toBeInTheDocument()
     expect(screen.getByText('0 %')).toBeInTheDocument()
-    expect(screen.getByText('65,1 %')).toBeInTheDocument()
+    expect(screen.getByText('65,8 %')).toBeInTheDocument()
     expect(screen.getAllByText(/python -m app.validation.assessment --n 2000 --seed 7/)).toHaveLength(7)
     expect(screen.getByRole('img', { name: 'Показов ещё нет' })).toBeInTheDocument()
     expect(screen.getByText(/максимальная доля одного ключа — 34 %/)).toBeInTheDocument()

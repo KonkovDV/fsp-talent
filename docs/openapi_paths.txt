@@ -10,6 +10,7 @@
 /api/v1/assessment/start
 /api/v1/assessment/{session_id}
 /api/v1/assessment/{session_id}/abandon
+/api/v1/assessment/{session_id}/accept-lower
 /api/v1/assessment/{session_id}/answer
 /api/v1/assessment/{session_id}/copy
 /api/v1/assessment/{session_id}/dispute

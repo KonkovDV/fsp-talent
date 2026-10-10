@@ -324,6 +324,30 @@ def test_failure_above_lifts_an_earlier_lower_attempt():
     assert retake_available_at([_at(3, "middle"), _at(1, "junior", True)], "middle", NOW) is not None
 
 
+def test_a_failed_target_offers_the_grade_below_only_on_its_own_terms():
+    junior_cut, middle_cut = cat.CUTS["junior"], cat.CUTS["middle"]
+    # Right on items between the two cuts, wrong above middle: middle fails, junior holds.
+    between = [cat.Response(1.6, b, 0.0, True, f"f{i}") for i, b in
+               enumerate([junior_cut - 0.6 + 0.05 * i for i in range(12)])]
+    above = [cat.Response(1.6, middle_cut + 0.4, 0.0, False, f"g{i}") for i in range(8)]
+    state = cat.State(spec="backend", target="middle", responses=between + above)
+    outcome = cat.decide(state)
+    offer = cat.lower_offer(state, outcome)
+    assert not outcome.passed and offer is not None and offer[0] == "junior"
+    assert offer[1] >= cat.PASS_P
+    # The prior sits at the lower cut, as in a test at that grade: no higher than with the middle prior.
+    assert offer[1] <= state.post().prob_at_least(junior_cut) + 1e-9
+    # A pass offers nothing, and neither does a failure that confirms no lower grade.
+    passed = cat.State(spec="backend", target="junior", responses=between)
+    assert cat.lower_offer(passed, cat.decide(passed)) is None
+    lost = cat.State(spec="backend", target="middle",
+                     responses=[cat.Response(1.6, junior_cut, 0.0, False, f"h{i}") for i in range(20)])
+    assert cat.lower_offer(lost, cat.decide(lost)) is None
+    # Accepting goes through the usual policy: a first confirmation, never below a confirmed grade.
+    assert decide_grade(None, "junior", "junior", NOW).reason == "first_confirmation"
+    assert not decide_grade("middle", "junior", "junior", NOW).applied
+
+
 def test_test_never_lowers_a_confirmed_grade():
     d = decide_grade("senior", "junior", "junior", NOW)
     assert d.assessed_grade == "senior" and not d.applied and d.reason == "kept_higher_grade"

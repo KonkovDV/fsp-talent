@@ -595,6 +595,10 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
     recommend = recommended_grade(decision.assessed_grade, outcome, session.target_grade, vacancy_test)
     if recommend:
         flags["recommended_grade"] = recommend
+    offer = None if trial or vacancy_test else cat.lower_offer(state, outcome)
+    current = decision.assessed_grade
+    if offer and (current is None or GRADE_ORDER.index(offer[0]) > GRADE_ORDER.index(current)):
+        flags["lower_offer"] = {"grade": offer[0], "p": round(offer[1], 3)}
     session.flags = flags
 
     if not trial:
@@ -606,6 +610,49 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
         topics[it.topic] = (n + 1, right + int(bool(it.is_correct)))
     await db.flush()
     return Finished(session, decision, outcome, confirmed, topics)
+
+
+async def accept_lower(db: AsyncSession, session_id: uuid.UUID, participant_id: uuid.UUID) -> GradeDecision:
+    """Confirm the grade one step below a failed target from the same answers (cat.lower_offer).
+
+    The offer lapses once another primary test of this specialization has started: a later attempt
+    must not be a free look before choosing the older result.
+    """
+    session = await db.get(TestSession, session_id, with_for_update=True)
+    if session is None or session.participant_id != participant_id:
+        raise SessionError("not_found")
+    flags = dict(session.flags or {})
+    offer = flags.get("lower_offer")
+    if session.status != "completed" or not isinstance(offer, dict) or flags.get("lower_accepted"):
+        raise SessionError("lower_offer_closed")
+    later = await db.scalar(select(func.count()).select_from(TestSession).where(
+        TestSession.participant_id == participant_id, TestSession.specialization == session.specialization,
+        TestSession.started_at > session.completed_at, TestSession.flags["vacancy_id"].astext.is_(None),
+        TestSession.flags["mode"].astext.is_distinct_from("express")))
+    if later:
+        raise SessionError("lower_offer_closed")
+    grade, now = str(offer["grade"]), datetime.now(UTC)
+    conf = await confirmation(db, participant_id, session.specialization)
+    decision = decide_grade(conf.grade if conf else None, grade, grade, now)
+    if not decision.applied:
+        raise SessionError("lower_offer_closed")
+    if conf is None:
+        conf = GradeConfirmation(participant_id=participant_id, specialization=session.specialization, grade=grade)
+        db.add(conf)
+    conf.grade, conf.p_pass = grade, float(offer["p"])
+    conf.theta, conf.se = session.irt_theta, session.theta_se
+    conf.session_id, conf.confirmed_at = session.id, now
+    if decision.locked_until is not None:
+        conf.locked_until = decision.locked_until
+    flags["lower_accepted"] = True
+    flags["outcome"] = "accepted_lower"
+    session.flags = flags
+    await db.flush()
+    participant = await db.get(Participant, participant_id, with_for_update=True)
+    if participant is not None:
+        await sync_assessed_grade(db, participant)
+    await db.flush()
+    return decision
 
 
 async def sync_assessed_grade(db: AsyncSession, participant: Participant) -> None:

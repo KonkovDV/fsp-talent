@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ClipboardCheck, Clock, Info, Lock, XCircle } from 'lucide-react'
 import {
-  abandonAssessment, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
+  abandonAssessment, acceptLowerGrade, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
   disputeGrade, getMyProfile, leaveAssessment, noteAssessmentCopy, reviewAssessment, startAssessment,
 } from '../../api/client'
 import SurveyCard from '../../components/SurveyCard'
@@ -26,6 +26,7 @@ const WHOLE = /^[+\-\u2212]?\d{1,12}$/
 interface Result {
   outcome: string; passed: boolean; upgraded: boolean; earned_grade: string | null; confirmed_grade: string | null
   vacancy_test: boolean; recommended_grade: string | null
+  lower_offer?: { grade: string; p: number } | null; lower_accepted?: boolean
   p_pass: number; p_upgrade: number | null; theta: number; se: number; items_count: number; score: number
   stop_reason: string | null; grade_locked_until: string | null; trial?: boolean; note?: string | null
   confirmed_skills: { name: string; share: number }[]
@@ -53,6 +54,7 @@ const OUTCOME_TEXT: Record<string, string> = {
   confirmed_again: 'Результат совпал с уже подтверждённым грейдом. Профиль не изменился.',
   kept_higher_grade: 'У вас уже подтверждён более высокий грейд. Тест его не понижает.',
   not_passed: 'Заявленный уровень не подтверждён. Профиль не изменился. Тест на уровень ниже можно пройти сразу, ждать не нужно.',
+  accepted_lower: 'Заявленный уровень не подтверждён. Ступень ниже подтверждена этими же ответами и записана в профиль.',
   vacancy_test: 'Это тест по вакансии: он показывает результат по темам вакансии и подтверждает навыки, но грейд не меняет. Грейд даёт только основной тест специализации.',
 }
 const pct = (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`)
@@ -154,6 +156,11 @@ export default function CandidateAssessment() {
     mutationFn: () => abandonAssessment(state!.session_id),
     onSuccess: () => { setState(null); setError(''); refresh() },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось прервать тест')),
+  })
+  const acceptLower = useMutation({
+    mutationFn: () => acceptLowerGrade(state!.session_id).then(r => r.data),
+    onSuccess: (data: SessionState) => { setState(data); setError(''); refresh() },
+    onError: (e: unknown) => setError(apiError(e, 'Не удалось принять грейд')),
   })
   const dispute = useMutation({
     mutationFn: () => disputeGrade(state!.session_id),
@@ -393,7 +400,19 @@ export default function CandidateAssessment() {
                 <div>
                   <p className="section-title">Уровень «{gradeRu(state.target_grade)}» не подтверждён</p>
                   <p className="text-sm text-ink-2">{OUTCOME_TEXT[result.outcome] ?? ''}</p>
-                  {!result.vacancy_test && previousGrade(state.target_grade) && (
+                  {result.lower_accepted && result.confirmed_grade && (
+                    <p className="mt-2 text-sm text-ink" data-testid="lower-accepted">Грейд в профиле: {gradeRu(result.confirmed_grade)}.</p>
+                  )}
+                  {result.lower_offer && (
+                    <div className="notice-info mt-3 flex-wrap items-center justify-between" data-testid="lower-offer">
+                      <p className="text-sm text-ink">
+                        Эти же ответы подтверждают уровень «{gradeRu(result.lower_offer.grade)}»: вероятность {pct(result.lower_offer.p)}, правило то же, что у теста на него. Можно принять его сейчас без отдельного теста. Предложение действует, пока вы не начали новый основной тест по этой специализации.
+                      </p>
+                      <button type="button" className="btn-primary btn-sm" disabled={acceptLower.isPending}
+                        onClick={() => acceptLower.mutate()}>Принять «{gradeRu(result.lower_offer.grade)}»</button>
+                    </div>
+                  )}
+                  {!result.vacancy_test && !result.lower_accepted && previousGrade(state.target_grade) && (
                     <button type="button" className="link mt-2 text-left text-sm" onClick={() => {
                       levelTouched.current = true
                       setTarget(previousGrade(state.target_grade)!)

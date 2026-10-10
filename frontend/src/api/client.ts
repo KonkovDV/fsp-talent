@@ -248,6 +248,7 @@ export const answerAssessment = (sessionId: string, item_token: string,
     headers: { 'Idempotency-Key': `${sessionId}:${item_token}` },
   })
 export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/abandon`)
+export const acceptLowerGrade = (sessionId: string) => api.post(`/assessment/${sessionId}/accept-lower`)
 export const leaveAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/leave`)
 export const noteAssessmentCopy = (sessionId: string) => api.post(`/assessment/${sessionId}/copy`)
 export const disputeGrade = (sessionId: string) =>
