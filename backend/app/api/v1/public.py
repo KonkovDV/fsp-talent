@@ -14,13 +14,26 @@ from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.ratelimit import too_many
-from app.models import Consent, ConsentLog, Employer, Participant, Result, Skill, Vacancy, VerifiableCredential
-from app.models.profile import CategoryAssignment, DisciplineScore
+from app.models import (
+    CategoryAssignment,
+    Consent,
+    ConsentLog,
+    Employer,
+    GradeConfirmation,
+    Participant,
+    Result,
+    Skill,
+    Vacancy,
+    VerifiableCredential,
+)
+from app.models.profile import DisciplineScore
 from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.category_rank import rank_scores
 from app.services.field_cipher import blind_index
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.guardian import token_participant, token_valid
+from app.services.matching import GRADES
 from app.services.passport import is_passport
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import adult_cutoff
@@ -356,6 +369,37 @@ async def credential_status(credential_id: uuid.UUID, db: AsyncSession = Depends
 
 
 _GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "мидл", "senior": "сеньор", "lead": "лид"}
+
+
+@router.get("/categories/{role}/{grade}/ranking")
+async def category_ranking(role: str, grade: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Places inside one category by the confirming test. No name and no account id."""
+    from app.api.v1.auth import client_address
+
+    if await too_many(f"public:ranking:{client_address(request)}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    if role not in SPECIALIZATIONS or grade not in GRADES:
+        raise ApiError(404, "not_found", "Такой категории нет")
+    scores = list(await db.scalars(
+        select(GradeConfirmation.p_pass)
+        .join(Participant, Participant.id == GradeConfirmation.participant_id)
+        .join(CategoryAssignment, and_(
+            CategoryAssignment.participant_id == Participant.id,
+            CategoryAssignment.primary_role == GradeConfirmation.specialization,
+            CategoryAssignment.grade == GradeConfirmation.grade,
+        ))
+        .where(
+            GradeConfirmation.specialization == role,
+            GradeConfirmation.grade == grade,
+            GradeConfirmation.p_pass.is_not(None),
+            Participant.deleted_at.is_(None),
+            Participant.suspended_at.is_(None),
+            Participant.is_visible.is_(True),
+        )))
+    page = rank_scores([float(score) for score in scores if score is not None])
+    page["role"] = role
+    page["grade"] = grade
+    return page
 _FORMAT_RU = {"remote": "удалённо", "hybrid": "гибрид", "office": "офис"}
 
 
