@@ -94,6 +94,11 @@ export default function LoginPage() {
       </form>
       <div className="mt-6 flex flex-col gap-2 border-t border-line pt-4">
         {demo && <p className="text-xs text-ink-3">Стенд сбрасывается каждую ночь</p>}
+        {demo && (
+          <Link to={`/register?role=${role}`} className="text-xs font-medium text-accent hover:underline">
+            Без почты: гостевой аккаунт на 48 часов
+          </Link>
+        )}
         <p className="text-xs text-ink-3">Демо-аккаунты, пароль demo12345:</p>
         {DEMO[role].map(([email, note]) => (
           <button key={email} type="button" className="chip-default w-full justify-start hover:border-accent hover:text-accent"

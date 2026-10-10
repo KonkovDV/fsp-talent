@@ -21,6 +21,7 @@
 /api/v1/auth/fsp/authorize
 /api/v1/auth/fsp/callback
 /api/v1/auth/fsp/signup
+/api/v1/auth/guest
 /api/v1/auth/logout
 /api/v1/auth/me
 /api/v1/auth/me/export

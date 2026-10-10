@@ -25,6 +25,7 @@ celery_app.conf.update(
         "app.workers.tasks.expire_offers":        {"queue": "maintenance"},
         "app.workers.tasks.watchdog_stuck_tasks": {"queue": "maintenance"},
         "app.workers.tasks.purge_withdrawn":      {"queue": "maintenance"},
+        "app.workers.tasks.purge_guests":         {"queue": "maintenance"},
         "app.workers.tasks.offer_weekly_tasks":   {"queue": "maintenance"},
         "app.workers.tasks.sync_fsp_changes":     {"queue": "maintenance"},
         "app.workers.tasks.reset_demo":          {"queue": "maintenance"},
@@ -42,6 +43,10 @@ celery_app.conf.update(
         "purge-withdrawn-daily": {
             "task": "app.workers.tasks.purge_withdrawn",
             "schedule": 86400,
+        },
+        "purge-guests-hourly": {
+            "task": "app.workers.tasks.purge_guests",
+            "schedule": 3600,
         },
         "watchdog-stuck-tasks": {
             "task": "app.workers.tasks.watchdog_stuck_tasks",

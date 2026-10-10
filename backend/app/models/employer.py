@@ -26,6 +26,8 @@ class Employer(Base):
     subscription_tier = Column(String(20), nullable=False, default="free")
     # Set when complaints meet the Wilson rule. Cleared only by `python -m app.services.trust release`.
     invites_paused_at = Column(DateTime(timezone=True))
+    # Set only for a demo guest company: sessions close at this moment (services/guest.py).
+    guest_until = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     offers = relationship("Offer", back_populates="employer")
     vacancies = relationship("Vacancy", back_populates="employer")

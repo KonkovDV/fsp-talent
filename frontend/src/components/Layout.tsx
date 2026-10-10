@@ -29,7 +29,7 @@ const EMPLOYER_LINKS = [
 ]
 
 export default function Layout() {
-  const { userRole } = useAuthStore()
+  const { userRole, guestUntil } = useAuthStore()
   const navigate = useNavigate()
   const links = userRole === 'participant' ? CANDIDATE_LINKS : EMPLOYER_LINKS
   const roleLabel = userRole === 'participant' ? 'Кандидат' : 'Работодатель'
@@ -70,6 +70,12 @@ export default function Layout() {
       </header>
 
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-page flex-1 px-4 py-7 outline-none sm:px-6 sm:py-10">
+        {guestUntil && (
+          <p className="notice-info mb-6 text-sm" data-testid="guest-banner">
+            Гостевой аккаунт: данные удалятся {new Date(guestUntil).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.
+            Чтобы сохранить работу, зарегистрируйтесь с почтой.
+          </p>
+        )}
         <Outlet />
       </main>
       <SiteFooter />

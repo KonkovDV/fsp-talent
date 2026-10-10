@@ -150,6 +150,20 @@ def purge_withdrawn():
     run_async(_inner())
 
 
+@celery_app.task(name="app.workers.tasks.purge_guests")
+def purge_guests():
+    """Close what demo guests left after their 48 hours (services/guest.py)."""
+    async def _inner():
+        from app.core.database import AsyncSessionLocal
+        from app.services.guest import purge_guests as purge
+        async with AsyncSessionLocal() as db:
+            closed = await purge(db)
+            await db.commit()
+            if closed:
+                logger.info("purge_guests: closed %d rows", closed)
+    run_async(_inner())
+
+
 @celery_app.task(name="app.workers.tasks.refresh_grade_fail_rates")
 def refresh_grade_fail_rates():
     """Nightly π: the share who fail the first attempt at a declared grade, by specialization."""
