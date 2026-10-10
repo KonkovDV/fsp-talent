@@ -167,7 +167,7 @@ export default function EmployerSearch() {
           {parsed.isError && <p className="notice-error mb-4" role="alert">{apiError(parsed.error, 'Не удалось разобрать запрос')}</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{data.total > cards.length ? ` — на экране первые ${cards.length}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}{data.text_blend === 'rules+meaning' ? ' Смысл запроса — 15%, слова — 85%.' : ' Смысловой поиск выключен: порядок по словам.'}</p>
+              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{data.total > cards.length ? ` — на экране первые ${cards.length}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}{data.text_blend === 'rules+meaning' ? ' Смысл запроса — 15%, слова — 85%.' : ' Смысловой поиск выключен: порядок по словам.'}{(data.platform_held ?? 0) > 0 ? ` Площадка не показала ${data.platform_held}. Уровень компании в этом списке не пишется.` : ''}</p>
               {data.recommended_categories?.length > 0 && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Сильнее всего:
                   {data.recommended_categories.filter((c: { candidates: number | null }) => (c.candidates ?? 0) >= 5).map((c: { role: string; grade: string; candidates: number }) => (

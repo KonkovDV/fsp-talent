@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     CandidateResume,
+    Employer,
     GradeConfirmation,
     InterviewSlot,
     Offer,
@@ -41,6 +42,7 @@ from app.services.ambition import ambition_note
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.fsp.relevance import lcb_for_need
+from app.services.hiring_practice import sees_senior
 from app.services.matching import (
     RELATED,
     CandidateFacts,
@@ -557,6 +559,18 @@ async def search_candidates(
 
     matches = await score_pool(
         db, all_ids, need, text_fused, discipline, employer_id, by_discipline=by_discipline)
+    platform_held = 0
+    if employer_id is not None:
+        company = await db.get(Employer, employer_id)
+        if company is not None and not sees_senior(company.hiring_practice):
+            kept = []
+            for pid in all_ids:
+                person = matches[pid].facts
+                if person and person.grade in ("senior", "lead") and person.grade_source == "assessed":
+                    platform_held += 1
+                else:
+                    kept.append(pid)
+            all_ids = kept
     facts = [matches[i].facts for i in all_ids if matches[i].facts]
     pay_hint = pay_counterfactual(need, facts)
     skill_hint = skill_counterfactual(need, facts)
@@ -583,7 +597,7 @@ async def search_candidates(
         min_n=BANK_MIN)
     header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
               "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
-              "text_blend": text_blend(bool(dense_order))}
+              "text_blend": text_blend(bool(dense_order)), "platform_held": platform_held}
     if not build_cards:
         # The cache keeps the order and the scores. Cards for one page are built later.
         items = []

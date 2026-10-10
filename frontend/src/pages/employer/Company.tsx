@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, atsSandbox, getEmployerMe, getReputation, updateEmployerMe } from '../../api/client'
+import { apiError, atsSandbox, getEmployerMe, getReputation, saveHiringPractice, updateEmployerMe } from '../../api/client'
 import AccountSecurity from '../../components/AccountSecurity'
 import { PageHeader } from '../../components/ui'
 
@@ -11,6 +11,8 @@ export default function EmployerCompany() {
   const facts = useQuery({ queryKey: ['reputation'], queryFn: () => getReputation().then(r => r.data) })
   const [form, setForm] = useState({ company_name: '', inn: '', website: '', industry: '', description: '' })
   const [note, setNote] = useState('')
+  const [practice, setPractice] = useState({ feedback: false, platform_interview: false, task_review: false, salary_written: false })
+  const [practiceNote, setPracticeNote] = useState('')
   const [error, setError] = useState('')
   const [slip, setSlip] = useState<{ signature: string; valid: boolean; delivered: boolean; event: { type: string } } | null>(null)
   const [slipError, setSlipError] = useState('')
@@ -74,6 +76,26 @@ export default function EmployerCompany() {
         {error && <p className="notice-error" role="alert">{error}</p>}
         {note && <p className="notice-ok" role="status">{note}</p>}
         <button className="btn-primary" type="submit" disabled={save.isPending}>Сохранить</button>
+      </form>
+      <form className="card space-y-3" onSubmit={e => {
+        e.preventDefault()
+        saveHiringPractice(practice).then(() => setPracticeNote('Ответы сохранены.')).catch((err: unknown) => setPracticeNote(apiError(err, 'Не сохранилось')))
+      }}>
+        <h2 className="section-title">Как вы нанимаете</h2>
+        <p className="text-sm text-ink-2">Ответы сохраняются. Уровень по ним компания не видит.</p>
+        {([
+          ['feedback', 'Письменный ответ кандидату, если не зовём дальше'],
+          ['platform_interview', 'Собеседование назначаем на платформе'],
+          ['task_review', 'Задание проверяем и пишем комментарий'],
+          ['salary_written', 'Вилка есть в приглашении до ответа кандидата'],
+        ] as const).map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={practice[key]} onChange={e => setPractice(prev => ({ ...prev, [key]: e.target.checked }))} />
+            {label}
+          </label>
+        ))}
+        <button type="submit" className="btn-secondary btn-sm">Сохранить ответы</button>
+        {practiceNote && <p className="text-sm text-ink-2" role="status">{practiceNote}</p>}
       </form>
       <aside className="lg:sticky lg:top-36" aria-label="Как кандидат увидит приглашение">
         <p className="field-label">Так кандидат увидит приглашение</p>
