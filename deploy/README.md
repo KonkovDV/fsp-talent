@@ -11,11 +11,11 @@
 
 После срока сдачи код на сервере не меняется: упавший контейнер поднимают заново, показ возвращают командой из пункта 5.
 
-**Бэкап.** Контейнер `backup` каждую ночь в 03:30 делает `pg_dump` в `deploy/backups/` и хранит 14 последних. Вручную: `docker compose ... exec backup sh /backup.sh`. Восстановление:
+**Бэкап.** Контейнер `backup` каждую ночь в 03:30 делает `pg_dump` в `deploy/backups/` и хранит 14 последних. Вручную: `docker compose ... exec backup sh /backup.sh`. Перед восстановлением файл проверяют без записи в базу: `python deploy/verify_backup.py deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump`. Восстановление заменяет данные в базе и не запускается, пока в команде нет `CONFIRM=restore`. Тома Docker оно не удаляет.
 
 ```bash
-docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T postgres \
-  pg_restore -U fsp -d fsp_talent --clean --if-exists < deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump
+CONFIRM=restore ENV_FILE=deploy/.env COMPOSE_FILE=deploy/docker-compose.prod.yml \
+  sh deploy/restore_db.sh deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump
 ```
 
 Ключ подписи удостоверений лежит в томе `vc_keys` и должен принадлежать `appuser`. Том не удаляют: иначе выданные подписи нельзя проверить. `SECRET_KEY` и `FIELD_ENCRYPTION_KEY` на стенде с уже записанной почтой не меняют: шифр контактов от них зависит.
