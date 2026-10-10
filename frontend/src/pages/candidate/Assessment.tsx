@@ -87,6 +87,7 @@ export default function CandidateAssessment() {
   const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
   const [disputeText, setDisputeText] = useState('')
+  const [markNote, setMarkNote] = useState<string | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   const [typed, setTyped] = useState('')
   const [error, setError] = useState('')
@@ -163,9 +164,16 @@ export default function CandidateAssessment() {
     if (!state || state.status !== 'in_progress' || state.result) return
     const id = state.session_id
     const onHide = () => {
-      if (document.visibilityState === 'hidden') void leaveAssessment(id).catch(() => undefined)
+      if (document.visibilityState !== 'hidden') return
+      void leaveAssessment(id).then(() => {
+        setMarkNote('Уход со вкладки записан. Тест продолжается, грейд из-за этого не меняется.')
+      }).catch(() => undefined)
     }
-    const onCopy = () => { void noteAssessmentCopy(id).catch(() => undefined) }
+    const onCopy = () => {
+      void noteAssessmentCopy(id).then(() => {
+        setMarkNote('Копирование текста задания записано. Тест продолжается, грейд из-за этого не меняется.')
+      }).catch(() => undefined)
+    }
     document.addEventListener('visibilitychange', onHide)
     document.addEventListener('copy', onCopy)
     return () => {
@@ -284,6 +292,7 @@ export default function CandidateAssessment() {
             </span>
           </div>
           {left === 0 && <p className="text-sm text-danger" role="status">Время задания вышло. Опоздавший ответ не засчитывается как верный.</p>}
+          {markNote && <p className="notice-info text-sm" role="status" data-testid="proctor-warn">{markNote}</p>}
           {state.progress.answered >= 1 && state.progress.p_pass != null && (
             <ConfidenceScale p={state.progress.p_pass} trial={state.progress.min_items === state.progress.max_items}
               detail={state.progress.se != null ? `θ ${state.progress.theta?.toFixed(2)} ± ${state.progress.se.toFixed(2)}` : ''} />

@@ -6,12 +6,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CandidateAssessment from '../candidate/Assessment'
 
-const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, answerAssessment } = vi.hoisted(() => ({
+const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, answerAssessment, noteAssessmentCopy } = vi.hoisted(() => ({
   getMyProfile: vi.fn(),
   assessmentBlueprint: vi.fn(),
   assessmentHistory: vi.fn(),
   activeAssessment: vi.fn(),
   answerAssessment: vi.fn(),
+  noteAssessmentCopy: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
@@ -23,6 +24,7 @@ vi.mock('../../api/client', async () => {
     assessmentHistory,
     activeAssessment,
     answerAssessment,
+    noteAssessmentCopy,
     startAssessment: vi.fn(),
     abandonAssessment: vi.fn(),
     reviewAssessment: vi.fn(),
@@ -155,6 +157,18 @@ describe('тест на грейд', () => {
     await userEvent.click(await screen.findByRole('button', { name: /тест на ступень ниже без паузы/ }))
     expect(screen.getByRole('radio', { name: /джуниор/ })).toHaveAttribute('aria-checked', 'true')
     expect(screen.queryByRole('button', { name: /тест на ступень ниже/ })).not.toBeInTheDocument()
+  })
+
+  it('предупреждает о копировании и не прерывает тест', async () => {
+    noteAssessmentCopy.mockResolvedValue({ data: { copies: 1 } })
+    activeAssessment.mockResolvedValue({ data: session() })
+    renderPage(<CandidateAssessment />)
+    await screen.findByLabelText('Ответ — целое число')
+    document.dispatchEvent(new Event('copy'))
+    expect(await screen.findByTestId('proctor-warn')).toHaveTextContent('Копирование текста задания записано')
+    expect(screen.getByTestId('proctor-warn')).toHaveTextContent('грейд из-за этого не меняется')
+    expect(screen.getByLabelText('Ответ — целое число')).toBeInTheDocument()
+    expect(noteAssessmentCopy).toHaveBeenCalledWith('s1')
   })
 
   it('у стажёра ссылки на ступень ниже нет', async () => {
