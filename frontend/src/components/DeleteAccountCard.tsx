@@ -7,9 +7,10 @@ import { apiError, apiErrorCode, deleteMyAccount, signOut } from '../api/client'
 export default function DeleteAccountCard() {
   const [open, setOpen] = useState(false)
   const [word, setWord] = useState('')
+  const [password, setPassword] = useState('')
   const navigate = useNavigate()
   const erase = useMutation({
-    mutationFn: () => deleteMyAccount(word).then(r => r.data),
+    mutationFn: () => deleteMyAccount(word, password).then(r => r.data),
     onSuccess: () => { void signOut().then(() => navigate('/', { replace: true })) },
   })
   return (
@@ -25,6 +26,8 @@ export default function DeleteAccountCard() {
           <form className="space-y-2" onSubmit={e => { e.preventDefault(); erase.mutate() }}>
             <label className="field-label" htmlFor="delete-word">Введите слово «удалить»</label>
             <input id="delete-word" value={word} onChange={e => setWord(e.target.value)} className="input" autoComplete="off" />
+            <label className="field-label" htmlFor="delete-password">Пароль, если входите по нему</label>
+            <input id="delete-password" type="password" value={password} onChange={e => setPassword(e.target.value)} className="input" autoComplete="current-password" />
             {erase.isError && apiErrorCode(erase.error) === 'demo_protected'
               ? <p className="text-sm text-ink-2" role="status">{apiError(erase.error)}</p>
               : erase.isError && <p className="field-error" role="alert">{apiError(erase.error)}</p>}
