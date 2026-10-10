@@ -55,7 +55,7 @@ def _sub(current: dict) -> uuid.UUID:
 class TaskCreate(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     statement: str = Field(min_length=10, max_length=4000)
-    answer_type: Literal["number", "choice", "open", "code"]
+    answer_type: Literal["number", "choice", "open", "code", "regex"]
     options: Annotated[list[Annotated[str, Field(max_length=300)]], Field(max_length=8)] = Field(default_factory=list)
     correct_index: int | None = Field(None, ge=0, le=7)
     reference_number: str | None = Field(None, max_length=40)

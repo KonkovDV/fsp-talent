@@ -1,6 +1,7 @@
 """Employer tasks: answer checking, who sees what, the card signal; the message thread's access rule."""
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -14,6 +15,7 @@ from app.services.tasks import (
     candidate_view,
     card_signal,
     check_answer,
+    graded_by,
     record_verdict,
     validate_reference,
     visible_to,
@@ -62,6 +64,17 @@ def test_open_answer_waits_for_the_employer():
         check_answer(task, "", None)
     with pytest.raises(ValueError):
         check_answer(task, "x" * 4001, None)
+
+
+def test_a_pattern_is_checked_by_the_system_and_a_model_is_not_a_marker():
+    task = SimpleNamespace(answer_type="regex", reference_number=r"FSP[0-9]{3}")
+    assert check_answer(task, "FSP001", None).passed is True
+    assert check_answer(task, "FSP001x", None).passed is False
+    assert graded_by("regex") == "auto"
+    assert graded_by("open") == "reviewer"
+    validate_reference("regex", [], None, r"FSP[0-9]{3}")
+    with pytest.raises(ValueError):
+        validate_reference("regex", [], None, "(.*)*")
 
 
 def test_employer_reference_is_validated():
