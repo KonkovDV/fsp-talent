@@ -710,6 +710,17 @@ def _mean(factors: list[Factor]) -> float | None:
     return sum(f.weight * f.value for f in active) / weight
 
 
+def standing_line(pct: int, label: str) -> str:
+    """Short place in the category. The percent is how many others this result beats."""
+    if pct > 50:
+        word = "Выше среднего"
+    elif pct < 50:
+        word = "Ниже среднего"
+    else:
+        word = "На среднем уровне"
+    return f"{word} по категории {label}: лучше {pct} %"
+
+
 def category_percentile(value: float, others: list[float]) -> int | None:
     """How many of the other people in the same category this value beats, in percent.
 
