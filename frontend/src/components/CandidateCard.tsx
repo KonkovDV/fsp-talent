@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import { ChevronDown, ClipboardList, Columns3, Star } from 'lucide-react'
+import { ChevronDown, ClipboardList, Columns3, Heart, Star } from 'lucide-react'
 import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 
@@ -81,6 +81,8 @@ interface Props {
   /** «Дать задание»: a task addressed to this candidate only. */
   onTask?: (id: string) => void
   onShortlist?: (id: string, on: boolean) => void
+  /** Company favorites, kept apart from any need. */
+  favorite?: { on: boolean; toggle: (id: string, on: boolean) => void }
   /** Side-by-side comparison of up to four cards from the same list. */
   compare?: { on: boolean; full: boolean; toggle: () => void }
 }
@@ -160,7 +162,7 @@ function FactorBars({ match, active, idle }: {
   )
 }
 
-export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, compare }: Props) {
+export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, favorite, compare }: Props) {
   const [open, setOpen] = useState(false)
   const fresh = card.why.filter(l => FRESH.some(p => l.startsWith(p)))
   const employerTask = fresh.find(l => l.startsWith(FRESH[0]))
@@ -250,6 +252,14 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
               className={`btn-secondary btn-sm ${card.shortlisted ? 'border-accent text-accent' : ''}`}>
               <Star size={14} className={card.shortlisted ? 'fill-current' : ''} aria-hidden />
               {card.shortlisted ? 'В шорт-листе' : 'В шорт-лист'}
+            </button>
+          )}
+          {favorite && (
+            <button type="button" onClick={() => favorite.toggle(card.candidate_id, !favorite.on)} aria-pressed={favorite.on}
+              data-testid="favorite-toggle"
+              className={`btn-secondary btn-sm ${favorite.on ? 'border-accent text-accent' : ''}`}>
+              <Heart size={14} className={favorite.on ? 'fill-current' : ''} aria-hidden />
+              {favorite.on ? 'В избранном' : 'В избранное'}
             </button>
           )}
           {onTask && <button onClick={() => onTask(card.candidate_id)} className="btn-secondary btn-sm">Дать задание</button>}

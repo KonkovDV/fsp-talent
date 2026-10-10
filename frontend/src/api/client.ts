@@ -287,6 +287,10 @@ export const evaluatePairs = (text: string) =>
 export const credentialStatus = (id: string) => api.get(`/public/credentials/${id}/status`)
 export const presentResult = (id: string) => api.post(`/candidates/me/results/${id}/presentation`)
 
+export const listFavorites = () => api.get('/employer/favorites')
+export const setFavorite = (id: string, on: boolean) =>
+  on ? api.post(`/employer/favorites/${id}`) : api.delete(`/employer/favorites/${id}`)
+
 export const listNeeds = () => api.get('/needs')
 export const createNeed = (data: object) => api.post('/needs', data)
 export const updateNeed = (id: string, data: object) => api.put(`/needs/${id}`, data)

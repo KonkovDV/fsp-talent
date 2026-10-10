@@ -220,6 +220,15 @@ def _in_search(adult):
     )
 
 
+def visible_in_search():
+    """The search visibility rule as of now, for lists that are not a search (favorites)."""
+    cutoff = adult_cutoff()
+    return _in_search(or_(
+        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
+        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
+    ))
+
+
 async def bank_grid(db: AsyncSession) -> dict:
     """The candidate bank by specialization and grade: who is in search and how many confirmed the grade by test.
 

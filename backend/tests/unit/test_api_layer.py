@@ -22,6 +22,7 @@ from app.api.v1 import (
     auth,
     candidates,
     employer,
+    favorites,
     fsp_id_demo,
     interviews,
     legal,
@@ -309,6 +310,48 @@ async def test_bell_lists_and_marks_one_row(quiet):
     assert (await notifications.mark_all_read(current, db))["marked"] == 3
     with pytest.raises(ApiError):
         notifications._me({"role": "guest", "sub": str(me)})
+
+
+async def test_favorites_keep_only_people_still_in_search(monkeypatch):
+    company = _company()
+    current = _current("employer", company.id)
+    kept, gone = _uid(), _uid()
+
+    async def cards(db, ordered, *rest):
+        return [{"candidate_id": str(pid), "why": []} for pid in ordered]
+
+    monkeypatch.setattr(favorites, "_build_cards", cards)
+    db = Bag()
+    db.scalars_q = [[kept]]
+    db.scalar_q = [None, 0]
+    added = await favorites.add_favorite(kept, current, db)
+    assert added["favorite"] and db.added[-1].participant_id == kept and db.commits == 1
+
+    db.scalars_q = [[kept]]
+    db.scalar_q = [_uid()]
+    await favorites.add_favorite(kept, current, db)
+    assert len(db.added) == 1 and db.commits == 1
+
+    db.scalars_q = [[]]
+    with pytest.raises(ApiError) as hidden:
+        await favorites.add_favorite(gone, current, db)
+    assert hidden.value.status_code == 404
+
+    extra = _uid()
+    db.scalars_q = [[extra]]
+    db.scalar_q = [None, favorites.FAVORITES_MAX]
+    with pytest.raises(ApiError) as full:
+        await favorites.add_favorite(extra, current, db)
+    assert full.value.status_code == 409
+
+    rows = [SimpleNamespace(participant_id=gone, created_at=NOW), SimpleNamespace(participant_id=kept, created_at=NOW)]
+    db.scalars_q = [rows, [kept]]
+    listed = await favorites.list_favorites(current, db)
+    assert listed["ids"] == [str(kept)] and listed["hidden"] == 1
+    assert listed["items"][0]["saved_at"] == NOW.isoformat()
+
+    removed = await favorites.remove_favorite(kept, current, db)
+    assert removed["favorite"] is False
 
 
 async def test_moderation_desk_lists_and_closes(quiet, monkeypatch):

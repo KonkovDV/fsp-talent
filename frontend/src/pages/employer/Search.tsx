@@ -6,6 +6,7 @@ import { apiError, parseQuery, searchCandidates } from '../../api/client'
 import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import BankGrid from '../../components/BankGrid'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
+import { useFavorites } from '../../hooks/useFavorites'
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
@@ -37,6 +38,7 @@ export default function EmployerSearch() {
   const [taskFor, setTaskFor] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const fav = useFavorites()
 
   const params: Params = {
     q: q || undefined, role: role || undefined, grade: grade || undefined, discipline: discipline || undefined,
@@ -179,7 +181,8 @@ export default function EmployerSearch() {
           {isLoading && <div className="space-y-4"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>}
           {data && !isError && cards.length === 0 && <Empty title="Никого не нашли">Ослабьте фильтры: например, уберите разряд или грейд. Кандидаты без истории ФСП тоже есть в базе.</Empty>}
           <div className="space-y-4">
-            {cards.map((card, i) => <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setInviteFor} onTask={setTaskFor} />)}
+            {cards.map((card, i) => <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setInviteFor} onTask={setTaskFor}
+              favorite={{ on: fav.has(card.candidate_id), toggle: fav.toggle }} />)}
           </div>
         </section>
       </div>

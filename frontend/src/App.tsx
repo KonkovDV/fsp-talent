@@ -60,6 +60,7 @@ const EmployerVacancies = page(() => import('./pages/employer/Vacancies'))
 const EmployerCompany = page(() => import('./pages/employer/Company'))
 const EmployerTasks = page(() => import('./pages/employer/Tasks'))
 const EmployerModeration = page(() => import('./pages/employer/Moderation'))
+const EmployerFavorites = page(() => import('./pages/employer/Favorites'))
 
 function ProtectedRoute({ children, role }: { children: ReactNode; role: 'participant' | 'employer' }) {
   const { token, userRole, needsRenew } = useAuthStore()
@@ -121,6 +122,7 @@ export default function App() {
           <Route path="tasks" element={<EmployerTasks />} />
           <Route path="company" element={<EmployerCompany />} />
           <Route path="moderation" element={<EmployerModeration />} />
+          <Route path="favorites" element={<EmployerFavorites />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
