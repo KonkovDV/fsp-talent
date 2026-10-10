@@ -43,6 +43,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       PUBLIC_BASE_URL: https://${SITE_ADDRESS}
       CORS_ORIGINS: https://${SITE_ADDRESS}
+      # mock is the jury page. It is refused when DEMO_MODE is off.
+      FSP_ID_MODE: ${FSP_ID_MODE:-mock}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       MAIL_MODE: ${MAIL_MODE:-smtp}
       SMTP_HOST: ${SMTP_HOST:-mailpit}

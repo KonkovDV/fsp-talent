@@ -35,6 +35,15 @@ def test_a_normal_address_stays_open_on_the_demo_stand(monkeypatch):
     demo_guard.reject_reserved("ivan@x.demo")
 
 
+def test_mock_fsp_id_is_refused_outside_the_demo(caplog):
+    from app.core.config import Settings
+    with pytest.raises(RuntimeError):
+        Settings(DEMO_MODE=False, FSP_ID_MODE="mock")
+    with caplog.at_level("WARNING", logger="app.core.config"):
+        Settings(DEMO_MODE=False, FSP_ID_MODE="oidc", MAIL_MODE="console")
+    assert any("MAIL_MODE=console" in rec.message for rec in caplog.records)
+
+
 def test_a_published_address_cannot_be_registered(monkeypatch):
     _demo(monkeypatch, True)
     with pytest.raises(ApiError) as caught:
