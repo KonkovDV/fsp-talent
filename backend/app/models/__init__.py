@@ -11,6 +11,7 @@ from app.models.complaint import Complaint
 from app.models.employer import Employer
 from app.models.identity import Consent, EmailVerification
 from app.models.interview import InterviewSlot
+from app.models.item_draft import ItemDraft
 from app.models.need import Need, NeedShortlist, NeedVersion
 from app.models.notification import Notification
 from app.models.offer import Offer, OfferMessage
@@ -34,6 +35,7 @@ __all__ = [
     "GradeConfirmation",
     "GradeDispute",
     "InterviewSlot",
+    "ItemDraft",
     "ItemStat",
     "Need",
     "NeedShortlist",

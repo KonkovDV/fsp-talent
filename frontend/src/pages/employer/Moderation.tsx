@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
+import ItemDrafts from './ItemDrafts'
 
 interface Row {
   id: string
@@ -30,7 +31,8 @@ export default function Moderation() {
   })
   return (
     <div>
-      <PageHeader title="Жалобы" lead="Демо-стол. Закрытие вакансии не банит человека и не прячет банк кандидатов." />
+      <PageHeader title="Модерация" lead="Демо-стол: жалобы на вакансии и черновики заданий. Закрытие вакансии не банит человека и не прячет банк кандидатов." />
+      <h2 className="mb-3 font-display text-xl font-bold text-ink">Жалобы</h2>
       {list.isLoading && <Skeleton className="h-40" />}
       {list.isError && <p className="notice-error" role="alert">{apiError(list.error, 'Список недоступен')}</p>}
       {list.data && list.data.length === 0 && <Empty title="Жалоб нет">Когда кандидат пожалуется на вакансию, строка появится здесь.</Empty>}
@@ -48,6 +50,7 @@ export default function Moderation() {
           ))}
         </ul>
       )}
+      <ItemDrafts />
     </div>
   )
 }
