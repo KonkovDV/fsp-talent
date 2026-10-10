@@ -125,6 +125,7 @@
 /api/v1/public/assessment/psychometrics
 /api/v1/public/candidates/{participant_id}
 /api/v1/public/candidates/{participant_id}/profile.pdf
+/api/v1/public/companies/{employer_id}
 /api/v1/public/credentials/verify
 /api/v1/public/credentials/verify/{credential_id}
 /api/v1/public/credentials/{credential_id}/status

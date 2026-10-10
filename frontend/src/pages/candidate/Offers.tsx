@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
 import { apiError, blockCompany, fileComplaint, getMyOffers, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
@@ -9,7 +9,7 @@ import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 import { netLine } from '../../money'
 
 interface Offer {
-  id: string; company: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
+  id: string; company: string; company_id?: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
   market_flag?: string | null
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
@@ -111,7 +111,7 @@ export default function CandidateOffers() {
                 <div className="flex min-w-0 items-start gap-4">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-accent-soft font-display text-lg font-bold text-accent" aria-hidden>{o.company.slice(0, 1)}</span>
                 <div className="min-w-0">
-                  <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}</p>
+                  <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}{o.company_id && <> · <Link to={`/companies/${o.company_id}`} className="text-accent hover:underline">Страница компании</Link></>}</p>
                   {o.company_profile?.reputation?.reply?.shown && (
                     <p className="text-xs text-ink-3">После согласия отвечают не реже {Math.round((o.company_profile.reputation.reply.lower ?? 0) * 100)}% (по {o.company_profile.reputation.reply.n})</p>
                   )}
