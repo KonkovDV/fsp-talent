@@ -27,6 +27,7 @@ from app.services.market import market_flag, quartiles, reason_shares, role_medi
 from app.services.notify import Outbox, notify, salary
 from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.privacy import contacts_allowed
+from app.services.salary_net import as_gross
 from app.services.trust_level import invite_limit, next_step, trust_level
 
 router = APIRouter(prefix="/offers", tags=["offers"])
@@ -46,9 +47,12 @@ class OfferCreate(BaseModel):
     message: str | None = Field(None, max_length=2000)
     # TZ 2.2 п.2: how the candidate reaches the company (email, Telegram, phone of the recruiter).
     contact_method: str = Field(min_length=3, max_length=300)
+    salary_basis: Literal["gross", "net"] = "gross"
 
     @model_validator(mode="after")
     def _range(self):
+        self.salary_from_gross = as_gross(self.salary_from_gross, self.salary_basis)
+        self.salary_to_gross = as_gross(self.salary_to_gross, self.salary_basis)
         if self.salary_to_gross < self.salary_from_gross:
             raise ValueError("Верхняя граница зарплаты меньше нижней")
         return self
@@ -74,6 +78,14 @@ class SalaryPreview(BaseModel):
     candidate_id: uuid.UUID
     salary_to_gross: int = Field(gt=0, le=100_000_000)
     salary_from_gross: int | None = Field(None, gt=0, le=100_000_000)
+    salary_basis: Literal["gross", "net"] = "gross"
+
+    @model_validator(mode="after")
+    def _as_gross(self):
+        self.salary_to_gross = as_gross(self.salary_to_gross, self.salary_basis)
+        if self.salary_from_gross:
+            self.salary_from_gross = as_gross(self.salary_from_gross, self.salary_basis)
+        return self
 
 
 @router.post("/preview")
