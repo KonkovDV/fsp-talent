@@ -1,4 +1,4 @@
-"""Turn a pasted vacancy into need fields. Rules only: no model and no fetch of a job board."""
+"""Turn a pasted vacancy into need fields. Rules first, then word-similarity hints. Nothing is fetched."""
 from __future__ import annotations
 
 import re
@@ -7,6 +7,7 @@ from app.services.ai.assistant import parse_query
 from app.services.cities import CITIES
 from app.services.skills import extract_skills
 from app.services.survey import INDUSTRIES
+from app.services.tfidf_need import suggest_skills
 
 _NICE = re.compile(r"будет плюсом|желательн\w*|nice to have|как плюс", re.IGNORECASE)
 _THOUSANDS = re.compile(r"(\d{2,4})\s*(?:тыс\.?|тысяч|k\b)", re.IGNORECASE)
@@ -99,5 +100,8 @@ def draft_need(text: str) -> dict:
         notes.append("Формат работы не найден.")
     if not draft["city"]:
         notes.append("Город не найден.")
+    hinted = [name for name in suggest_skills(cleaned) if name not in required and name not in nice][:5]
+    if hinted:
+        notes.append("Похоже по словам, проверьте перед сохранением: " + ", ".join(hinted) + ".")
     draft["notes"] = notes
     return draft
