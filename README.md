@@ -53,6 +53,8 @@ docker compose up -d --build --wait
 docker compose exec -T -u appuser backend python -m seed.generate_seed
 ```
 
+Те же шаги одной командой из папки проекта: `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1`. Код из письма смотрите в Mailpit, http://localhost:8025: на локальном запуске он не уходит в Gmail.
+
 </details>
 
 `make demo` создаёт `.env` из примера (править не нужно), собирает и поднимает девять контейнеров, ждёт проверки здоровья, применяет миграции и загружает демо-данные. Keycloak в этот набор не входит: он нужен только для проверки настоящего ФСП ID.
