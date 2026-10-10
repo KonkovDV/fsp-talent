@@ -100,8 +100,9 @@ const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3,
 
 function skillChip(name: string, evidence?: Record<string, string>): string {
   const trust = evidence?.[name]
-  if (trust === 'test_confirmed') return `${name}, тест`
-  if (trust === 'resume_confirmed') return `${name}, резюме`
+  if (trust === 'test_confirmed') return `${name}, подтверждён`
+  if (trust === 'resume_confirmed') return `${name}, по цитате`
+  if (trust === 'self_reported') return `${name}, заявлен`
   return name
 }
 

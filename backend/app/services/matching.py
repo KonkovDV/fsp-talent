@@ -65,6 +65,7 @@ LABELS = {
     "fsp": "ФСП", "text": "Запрос", "industry": "Предметная область",
     "conditions": "Город и формат",
 }
+# confirmed / quoted / declared. A skill with no row is "no data" and scores 0.
 TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
 RELATED_CREDIT = 0.3
 # Groups of interchangeable technologies: knowing one gives partial credit for another.
