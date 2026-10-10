@@ -8,6 +8,8 @@ import uuid
 
 from sqlalchemy import select
 
+from app.services.survey import INDUSTRIES
+
 
 def refused(industries: list[str] | None, blocked: bool, industry: str | None) -> bool:
     if blocked:
@@ -24,11 +26,10 @@ async def drop_refused(db, ids: set[uuid.UUID], employer_id: uuid.UUID | None,
         return set()
     from app.models import CandidateBlock, Employer, Participant
 
-    sector = industry if industry and industry != "any" else None
+    sector = industry if industry in INDUSTRIES and industry != "any" else None
     if sector is None:
-        sector = await db.scalar(select(Employer.industry).where(Employer.id == employer_id))
-        if sector == "any":
-            sector = None
+        stored = await db.scalar(select(Employer.industry).where(Employer.id == employer_id))
+        sector = stored if stored in INDUSTRIES and stored != "any" else None
     blocked = set(await db.scalars(select(CandidateBlock.participant_id).where(
         CandidateBlock.employer_id == employer_id, CandidateBlock.participant_id.in_(ids))))
     if not sector:

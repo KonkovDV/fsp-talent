@@ -55,7 +55,7 @@ from app.services.matching import (
 from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
-from app.services.session_marks import penalised
+from app.services.session_marks import latest_grade_flags, penalised
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import card_signal
@@ -721,8 +721,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             .where(TestSession.participant_id.in_(list(ids)), TestSession.status == "completed",
                    TestSession.completed_at.is_not(None))
             .order_by(TestSession.completed_at.desc()))).all()
-        for pid, flags in mark_rows:
-            marks.setdefault(pid, flags or {})
+        marks = latest_grade_flags(mark_rows)
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
         p, cat = people.get(pid), cats.get(pid)

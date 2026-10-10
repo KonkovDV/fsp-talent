@@ -29,6 +29,23 @@ def note_copy(flags: dict | None) -> dict:
     return out
 
 
+def latest_grade_flags(rows: list[tuple]) -> dict:
+    """Newest completed grade test per person. Rows are newest first.
+
+    An express trial and a vacancy test are not grade tests, so they neither
+    apply the penalty nor hide an earlier grade test that should.
+    """
+    marks: dict = {}
+    for pid, flags in rows:
+        if pid in marks:
+            continue
+        flags = flags or {}
+        if flags.get("vacancy_id") or flags.get("mode") == "express":
+            continue
+        marks[pid] = flags
+    return marks
+
+
 def integrity_flagged(flags: dict | None) -> bool:
     """A grade test with a fast-correct run or a hidden tab. A trial and a vacancy test do not count."""
     flags = flags or {}
