@@ -17,6 +17,16 @@ router = APIRouter(prefix="/search", tags=["search"])
 _SEARCH_RATE = 30  # per employer per minute
 
 
+def implied_role(text: str | None, chosen: str | None) -> str | None:
+    """A Russian or English role word fills an empty specialization filter. An explicit filter wins."""
+    if chosen:
+        return chosen
+    if not (text or "").strip():
+        return None
+    from app.services.ai.assistant import parse_query
+    return parse_query(text or "").get("role")
+
+
 def _wanted(skill_list: list[str], q: str | None) -> tuple[str, ...]:
     names = {n for s in skill_list if (n := normalize_skill(s))}
     if q:
@@ -62,6 +72,7 @@ async def search(
             headers={"Retry-After": "60"},
         )
     skill_list = [s.strip() for s in skills.split(",") if s.strip()] if skills else []
+    role = implied_role(q, role)
     named = city_name(city) if city else None
     if city and named is None:
         raise ApiError(422, "validation_error", "Город выберите из справочника")
