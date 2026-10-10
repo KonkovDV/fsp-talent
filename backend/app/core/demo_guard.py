@@ -9,18 +9,26 @@ from app.api.errors import ApiError
 from app.core.config import settings
 
 MESSAGE = "Демо-аккаунт: пароль и удаление закрыты, чтобы жюри могло войти"
-
-
-def _suffixes() -> tuple[str, ...]:
-    return tuple(part.strip().lower() for part in settings.DEMO_PROTECTED_SUFFIXES.split(",") if part.strip())
+# Printed logins only. A lookalike such as ivan@x.demo is an ordinary account.
+PUBLISHED_EMAILS = frozenset({
+    "fsp001@demo.talent", "fsp002@demo.talent", "nofsp@demo.talent",
+    "hr@sibcode.demo", "hr@quantumlab.demo", "hr@perimeter.demo",
+    "hr@cloudwhale.demo", "hr@robotech.demo",
+    *(f"jury{n}@demo.talent" for n in range(1, 11)),
+})
 
 
 def is_protected(email: str | None) -> bool:
-    """True only on the demo stand, and only for an address that ends with a configured suffix."""
+    """True only on the demo stand, and only for an address the seed publishes."""
     if not settings.DEMO_MODE or not email:
         return False
-    lowered = email.strip().lower()
-    return any(lowered.endswith(suffix) for suffix in _suffixes())
+    return email.strip().lower() in PUBLISHED_EMAILS
+
+
+def reject_reserved(email: str | None) -> None:
+    """The published addresses are not open for a new registration."""
+    if is_protected(email):
+        raise ApiError(422, "reserved_email", "Этот адрес зарезервирован для демо-стенда")
 
 
 def reject_protected(email: str | None) -> None:

@@ -23,7 +23,7 @@ from app.api.errors import ApiError
 from app.core.config import settings
 from app.core.csrf import CSRF_COOKIE, attach_csrf, check_csrf, clear_csrf
 from app.core.database import get_db
-from app.core.demo_guard import is_protected, reject_protected
+from app.core.demo_guard import is_protected, reject_protected, reject_reserved
 from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.core.redis_client import get_redis
 from app.core.security import (
@@ -237,6 +237,7 @@ class ParticipantRegister(BaseModel):
 @router.post("/participant/register", response_model=VerificationSent, status_code=202)
 async def register_participant(body: ParticipantRegister, request: Request, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
+    reject_reserved(email)
     await _limit("register:participant", email)
     await _limit("register-site", "all", limit=30)
     if not body.is_adult and not body.age_15_17:
@@ -275,6 +276,7 @@ class EmployerRegister(BaseModel):
 @router.post("/employer/register", response_model=VerificationSent, status_code=202)
 async def register_employer(body: EmployerRegister, request: Request, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
+    reject_reserved(email)
     await _limit("register:employer", email)
     await _limit("register-site", "all", limit=30)
     check_required_consents("employer", body.consents)

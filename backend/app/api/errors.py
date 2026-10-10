@@ -47,6 +47,7 @@ ERROR_CODES: dict[str, str] = {
     "invalid_credentials": "Неверный email или пароль",
     "email_not_verified": "Email не подтверждён: введите код из письма",
     "email_taken": "Аккаунт с таким email уже есть",
+    "reserved_email": "Этот адрес зарезервирован для демо-стенда",
     "verification_invalid": "Код или ссылка не подходят",
     "verification_expired": "Срок кода истёк, запросите новый",
     "verification_attempts": "Слишком много неверных попыток, запросите новый код",

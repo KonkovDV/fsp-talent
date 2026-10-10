@@ -30,7 +30,18 @@ def test_the_guard_is_off_when_the_stand_is_not_a_demo(monkeypatch):
 def test_a_normal_address_stays_open_on_the_demo_stand(monkeypatch):
     _demo(monkeypatch, True)
     assert demo_guard.is_protected("person@example.com") is False
+    assert demo_guard.is_protected("ivan@x.demo") is False
     demo_guard.reject_protected("person@example.com")
+    demo_guard.reject_reserved("ivan@x.demo")
+
+
+def test_a_published_address_cannot_be_registered(monkeypatch):
+    _demo(monkeypatch, True)
+    with pytest.raises(ApiError) as caught:
+        demo_guard.reject_reserved("jury1@demo.talent")
+    assert caught.value.status_code == 422 and caught.value.code == "reserved_email"
+    _demo(monkeypatch, False)
+    demo_guard.reject_reserved("jury1@demo.talent")
 
 
 def test_a_complaint_from_a_demo_account_does_not_move_the_pause(monkeypatch):
