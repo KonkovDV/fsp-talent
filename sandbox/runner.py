@@ -28,11 +28,12 @@ COMMANDS = {
     "python": [sys.executable, "-I", "-S", str(HERE / "harness.py")],
     "javascript": ["node", "--max-old-space-size=64", "--disallow-code-generation-from-strings",
                    str(HERE / "harness.js")],
+    "sql": [sys.executable, "-I", "-S", str(HERE / "harness_sql.py")],
 }
 
 
 def available_languages() -> list[str]:
-    out = ["python"]
+    out = ["python", "sql"]
     if shutil.which("node"):
         out.append("javascript")
     return out
@@ -45,7 +46,7 @@ def _limits(language: str):
         resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         # V8 reserves far more address space than it uses; Node is held by its heap flag and the container.
-        if language == "python":
+        if language in ("python", "sql"):
             resource.setrlimit(resource.RLIMIT_AS, (PY_MEMORY, PY_MEMORY))
     return apply
 

@@ -4,7 +4,7 @@ FROM python:3.12-slim-bookworm
 # Only the node binary: no npm, no packages, nothing to install at run time.
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
-COPY runner.py server.py harness.py harness.js ./
+COPY runner.py server.py harness.py harness.js harness_sql.py ./
 COPY tests ./tests
 # The named volume takes this owner on first mount, so the unprivileged server can create its socket.
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin sandbox \
