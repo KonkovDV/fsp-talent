@@ -274,7 +274,7 @@ async def answer_task(task_id: uuid.UUID, body: AnswerIn, current: dict = Depend
         # A code check waits up to the run limit; the event loop keeps serving other requests meanwhile.
         checked = await asyncio.to_thread(check_answer, task, body.answer_text, body.answer_index, body.language)
     except SandboxUnavailable as e:
-        raise ApiError(503, "sandbox_unavailable", "Проверка кода временно недоступна. Ответ не сохранён.") from e
+        raise ApiError(503, "sandbox_unavailable") from e
     except ValueError as e:
         detail = str(e).strip()
         if not detail or detail == "answer":
