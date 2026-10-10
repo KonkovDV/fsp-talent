@@ -232,6 +232,16 @@ def _in_search(adult):
     )
 
 
+async def searchable_count(db: AsyncSession) -> int:
+    """People a search can see before a need's role, grade and skill filters."""
+    cutoff = adult_cutoff()
+    adult = or_(
+        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
+        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
+    )
+    return int(await db.scalar(select(func.count()).select_from(Participant).where(_in_search(adult))) or 0)
+
+
 def visible_in_search():
     """The search visibility rule as of now, for lists that are not a search (favorites)."""
     cutoff = adult_cutoff()

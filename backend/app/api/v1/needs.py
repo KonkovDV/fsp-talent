@@ -35,7 +35,7 @@ from app.services.cities import CITIES
 from app.services.matching import NeedSpec, anonymous_compare
 from app.services.need_draft import draft_need
 from app.services.search import cache as shortlist_cache
-from app.services.search.pipeline import _build_cards, score_pool, search_candidates, shown_category
+from app.services.search.pipeline import _build_cards, score_pool, search_candidates, searchable_count, shown_category
 from app.services.skills import normalize_skill
 from app.services.survey import INDUSTRIES, SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
@@ -361,6 +361,7 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
     offers = await _company_offers(db, need.employer_id, ids)
     shortlist_cache.apply_company_marks(result["items"], listed, offers)
     return {**result, "need": _out(need, await _params(db, need)),
+            "base_total": await searchable_count(db),
             "hidden_count": len(hidden), "ai_note": await providers.refresh(db) is not None}
 
 
