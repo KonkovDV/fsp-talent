@@ -16,6 +16,10 @@ CASES = [[[1, -2, 3]], [[]], [[5, 5]]]
 class RunnerTest(unittest.TestCase):
     def test_both_languages_answer_every_case(self):
         self.assertIn("javascript", available_languages())
+        self.assertIn("sql", available_languages())
+        fixture = "create table nums(n integer); insert into nums values (1), (-2), (3);"
+        self.assertEqual(run("sql", "select sum(n) from nums", [[fixture]])["outputs"], [2])
+        self.assertEqual(run("sql", "delete from nums", [[fixture]])["outputs"], [None])
         self.assertEqual(run("python", PY_SUM, CASES), {"outputs": [4, 0, 10], "timed_out": False})
         self.assertEqual(run("javascript", JS_SUM, CASES), {"outputs": [4, 0, 10], "timed_out": False})
 
