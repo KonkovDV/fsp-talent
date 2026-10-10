@@ -228,6 +228,8 @@ def _review_notes(flags: dict) -> list[str]:
         notes.append("Вкладка теста скрывалась. Грейд не изменён.")
     if int(flags.get("copies") or 0) > 0:
         notes.append("Текст задания копировали. Грейд не изменён.")
+    if int(flags.get("carried") or 0) > 0:
+        notes.append("В старт вошли ответы прошлого теста этой специализации. Уровень не обнулялся.")
     return notes
 
 

@@ -340,6 +340,28 @@ def _topic_shares(session: TestSession) -> dict[str, float] | None:
     return shares if isinstance(shares, dict) and shares else None
 
 
+def carried_responses(items: list[TestSessionItem]) -> list[cat.Response]:
+    """Answers worth keeping when the next grade test starts. Unscored and excluded rows are not evidence."""
+    out = []
+    for it in items:
+        if it.is_correct is None or it.excluded:
+            continue
+        out.append(cat.Response(it.a, it.b, it.c, bool(it.is_correct), it.family_id))
+    return out
+
+
+def seed_carried(state: cat.State, items: list[TestSessionItem]) -> int:
+    """Put a previous attempt into the new state. The same key is not served again."""
+    responses = carried_responses(items)
+    state.responses.extend(responses)
+    for it in items:
+        if it.is_correct is None or it.excluded:
+            continue
+        state.families_used[it.family_id] += 1
+        state.keys_used.add(it.item_key)
+    return len(responses)
+
+
 def build_state(spec: str, target: str, items: list[TestSessionItem], blocked: set[str] | None = None,
                blueprint: dict[str, float] | None = None) -> cat.State:
     """Rebuild the CAT state from answered items; items quarantined since they were served do not count."""
@@ -382,13 +404,23 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
         engine="cat_v2", questions_json=[], seed=secrets.randbits(62), flags=flags,
         expires_at=now + timedelta(minutes=ttl),
     )
-    prior = cat.evaluate(cat.State(spec=spec, target=target_grade, blueprint=topic_shares))
+    state = cat.State(spec=spec, target=target_grade, blueprint=topic_shares)
+    if mode == "grade" and vacancy_id is None:
+        previous = await db.scalar(select(TestSession).where(
+            TestSession.participant_id == participant_id, TestSession.specialization == spec,
+            TestSession.status == "completed", TestSession.flags["vacancy_id"].astext.is_(None),
+            TestSession.flags["mode"].astext.is_distinct_from("express"),
+        ).order_by(TestSession.completed_at.desc()))
+        if previous is not None:
+            carried = seed_carried(state, await session_items(db, previous.id))
+            if carried:
+                flags["carried"] = carried
+    prior = cat.evaluate(state)
     session.p_pass, session.irt_theta, session.theta_se = prior.p_pass, prior.theta, prior.se
     db.add(session)
     await db.flush()
     bank = await bank_state(db)
-    item = await serve_next(
-        db, session, cat.State(spec=spec, target=target_grade, blueprint=topic_shares), bank, seq=1)
+    item = await serve_next(db, session, state, bank, seq=1)
     return session, item
 
 
