@@ -62,7 +62,7 @@ from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.elo_stretch import elo_stretch
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
-from app.services.search.cross_rank import blend_pair, cross_enabled, rank_pairs
+from app.services.search.cross_rank import RERANK_HEAD, cross_enabled, rank_pairs, rerank_text
 from app.services.session_marks import latest_grade_flags, penalised
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
@@ -525,14 +525,17 @@ async def search_candidates(
     text_fused = fuse_text(lex_order, dense_order or None, lex_of)
     pair_order = None
     if q and cross_enabled() and ids_set:
-        sample = [pid for pid in lex_order if pid in ids_set][:30]
-        if not sample:
-            sample = sorted(ids_set, key=str)[:30]
+        head = sorted(
+            (pid for pid in text_fused if pid in ids_set),
+            key=lambda pid: (-text_fused[pid], str(pid)),
+        )[:RERANK_HEAD]
+        if not head:
+            head = sorted(ids_set, key=str)[:RERANK_HEAD]
         found = (await db.execute(
             select(ProfileSearchIndex.participant_id, ProfileSearchIndex.skills_text)
-            .where(ProfileSearchIndex.participant_id.in_(sample)))).all()
+            .where(ProfileSearchIndex.participant_id.in_(head)))).all()
         pair_order = await asyncio.to_thread(rank_pairs, found, q)
-    text_fused = blend_pair(text_fused, pair_order)
+    text_fused = rerank_text(text_fused, pair_order)
 
     # Sort ties still see the test and the discipline rule. The FSP list uses the need's
     # discipline, not the highest result in any sport.
@@ -911,9 +914,11 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
                 f"Подтверждено ФСП: {top['label']}, нижняя граница {shown_text}{weight_note}, "
                 f"уверенность {round(top['confidence'] * 100)}%, событий {top['events_count']}")
             span = elo_stretch(float(top["score"]), float(top.get("sigma") or 0))
-            low = f"{span['low']:.2f}".replace(".", ",")
-            high = f"{span['high']:.2f}".replace(".", ",")
-            why.append(f"Разброс шкалы {low}–{high}. Нижняя граница в балле не заменяется.")
+            center = f"{span['mu']:.2f}".replace(".", ",")
+            width = f"{span['sigma']:.2f}".replace(".", ",")
+            why.append(
+                f"Разброс шкалы {center} ± {width}, по {top['events_count']} событиям. "
+                "В балле остаётся нижняя граница.")
             # The header and the evidence list follow the discipline that entered the score,
             # not the highest lower bound in some other sport.
             disciplines = [top] + [row for row in disciplines if row is not top]
