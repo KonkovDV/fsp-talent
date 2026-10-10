@@ -6,9 +6,9 @@ import { DISC_RU, GRADES, ROLE_RU, gradeRu } from '../../labels'
 import { CategoryPlate, Empty, PageHeader, date, rub } from '../../components/ui'
 import { marketFlag, netLine } from '../../money'
 
-const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
+const EMPTY = { title: '', description: '', role: 'backend', grade: 'middle', grade_match: 'plus_minus', discipline: '', min_rank: '', skills: '', salary_from_gross: 150000,
   salary_to_gross: 250000, work_format: 'remote', allows_minors: false }
-interface Vacancy { id: string; title: string; description?: string | null; role: string | null; grade: string | null
+interface Vacancy { id: string; title: string; description?: string | null; role: string | null; grade: string | null; grade_match?: string
   flags?: { code: string; label: string }[]
   discipline?: string | null; min_rank?: string | null; allows_minors?: boolean; is_open: boolean; skills: string[]
   salary_from: number | null; salary_to: number | null; work_format: string }
@@ -86,6 +86,12 @@ export default function EmployerVacancies() {
             <div><label className="field-label" htmlFor="v-grade">Грейд</label>
               <select id="v-grade" className="select" value={form.grade} onChange={set('grade')}>
                 {GRADES.map(g => <option key={g} value={g}>{gradeRu(g)}</option>)}</select></div>
+            <div><label className="field-label" htmlFor="v-match">Как сравнивать грейд</label>
+              <select id="v-match" className="select" value={form.grade_match} onChange={set('grade_match')} aria-label="Как сравнивать грейд">
+                <option value="plus_minus">Плюс-минус один шаг</option>
+                <option value="exact">Только этот грейд</option>
+                <option value="any">Любой грейд</option>
+              </select></div>
             <div><label className="field-label" htmlFor="v-format">Формат</label>
               <select id="v-format" className="select" value={form.work_format} onChange={set('work_format')}>
                 {Object.entries(FORMAT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
@@ -138,6 +144,7 @@ export default function EmployerVacancies() {
                 {v.is_open && <button className="btn-ghost btn-sm" onClick={() => {
                   setEditing(v.id); setOpen(true); setExam(null)
                   setForm({ ...EMPTY, title: v.title, description: v.description ?? '', role: v.role ?? 'backend', grade: v.grade ?? 'middle',
+                    grade_match: v.grade_match ?? 'plus_minus',
                     discipline: v.discipline ?? '', min_rank: v.min_rank ?? '', allows_minors: Boolean(v.allows_minors),
                     skills: v.skills.join(', '), salary_from_gross: v.salary_from ?? 150000, salary_to_gross: v.salary_to ?? 250000,
                     work_format: v.work_format })

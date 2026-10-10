@@ -49,8 +49,8 @@ from app.services.matching import (
     RELATED,
     CandidateFacts,
     NeedSpec,
+    category_pairs,
     category_percentile,
-    near_pairs,
     pay_counterfactual,
     reason_source,
     recommended_categories,
@@ -62,7 +62,7 @@ from app.services.matching import score as match_score
 from app.services.profile import adult_cutoff
 from app.services.scoring.elo_stretch import elo_stretch
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
-from app.services.search.cross_rank import RERANK_HEAD, cross_enabled, rank_pairs, rerank_text
+from app.services.search.cross_rank import RERANK_HEAD, cross_enabled, pair_device, rank_pairs, rerank_text
 from app.services.session_marks import latest_grade_flags, penalised
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
@@ -386,6 +386,7 @@ async def search_candidates(
     need: NeedSpec | None = None,
     employer_id: uuid.UUID | None = None,
     build_cards: bool = True,
+    grade_span: str = "near",
 ) -> dict:
     wanted = {n for s in (skills or []) if (n := normalize_skill(s))}
     if q:
@@ -437,10 +438,9 @@ async def search_candidates(
     elif work_goal == "job":
         stmt = stmt.where(or_(Participant.work_goal.is_(None), Participant.work_goal.in_(("job", "both"))))
     # City and format are score factors. A mismatch stays in the list and sorts lower.
-    if role and grade:
-        # Exact pair, one grade step, and a neighbour role at this grade. Two steps stay out.
-        # The match score still puts the exact category first and writes why the others are near.
-        pairs = near_pairs(role, grade)
+    span = grade_span if grade_span in ("exact", "near", "wide", "plus_minus", "any") else "near"
+    pairs = category_pairs(role, grade, span) if role and grade else None
+    if pairs:
         confirmed_pair = select(GradeConfirmation.participant_id).where(
             tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))
         resume_pair = select(CandidateResume.participant_id).where(
@@ -614,7 +614,8 @@ async def search_candidates(
         min_n=BANK_MIN)
     header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
               "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
-              "text_blend": text_blend(bool(dense_order)), "platform_held": platform_held}
+              "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
+              "platform_held": platform_held}
     if not build_cards:
         # The cache keeps the order and the scores. Cards for one page are built later.
         items = []
@@ -644,6 +645,7 @@ async def search_candidates(
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
             "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
+            "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
             "items": cards}
 
 

@@ -96,6 +96,43 @@ ROLE_NEIGHBOURS = {
 }
 
 
+def grade_matches(candidate_grade: str | None, need_grade: str | None, mode: str = "plus_minus") -> bool:
+    """Whether a grade passes the vacancy or need filter. The match score is not this check.
+
+    plus_minus is one step on the ladder. exact is the same grade. any does not filter.
+    """
+    if not need_grade or mode == "any":
+        return True
+    if candidate_grade not in GRADES or need_grade not in GRADES:
+        return False
+    if mode == "exact":
+        return candidate_grade == need_grade
+    return abs(GRADES.index(candidate_grade) - GRADES.index(need_grade)) <= 1
+
+
+def category_pairs(role: str, grade: str, span: str = "near") -> list[tuple[str, str]] | None:
+    """Who stays in a filtered search. any and wide drop the grade filter. exact is one pair.
+
+    plus_minus is the same specialization, one grade step. near also keeps a neighbour role.
+    The score is unchanged.
+    """
+    if span in ("any", "wide"):
+        return None
+    if span == "exact":
+        return [(role, grade)]
+    if span == "plus_minus":
+        if grade not in GRADES:
+            return [(role, grade)]
+        index = GRADES.index(grade)
+        pairs = [(role, grade)]
+        if index > 0:
+            pairs.append((role, GRADES[index - 1]))
+        if index + 1 < len(GRADES):
+            pairs.append((role, GRADES[index + 1]))
+        return pairs
+    return near_pairs(role, grade)
+
+
 def near_pairs(role: str, grade: str) -> list[tuple[str, str]]:
     """The asked category, one grade step on the same role, and a neighbour role at the same grade.
 
@@ -267,7 +304,7 @@ def reason_source(code: str) -> str | None:
 
 
 def fit_tier(fit: float, delta: float | None = None) -> int:
-    """Tier index of a fit in [0, 1]. A hair above the cut stays in the upper tier."""
+    """Band of a fit score in [0, 1] (TZ 2.1). A hair above the cut stays in the upper band."""
     step = FIT_TIER_DELTA if delta is None else delta
     if step <= 0:
         return 0
@@ -425,7 +462,7 @@ def conditions_value(need: NeedSpec, c: CandidateFacts) -> float | None:
 
 def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: bool = True,
           use_fsp: bool = True, use_related: bool = True) -> MatchResult:
-    """Factor score with plus / minus / info lines. The use_* switches exist for the ablation study."""
+    """Factor score with plus / minus / info lines (TZ 2.1). The use_* switches exist for the ablation study."""
     values: dict[str, float | None] = {k: None for k in WEIGHTS}
     plus: list[str] = []
     minus: list[str] = []

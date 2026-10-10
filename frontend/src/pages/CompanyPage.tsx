@@ -32,6 +32,11 @@ export default function CompanyPage() {
         <p className="text-sm text-ink-2">
           {[company.industry, company.trust_label].filter(Boolean).join(' · ')}
         </p>
+        {company.rating && (
+          <p className="text-sm text-ink-2">
+            Балл компании {company.rating.score} из 10, {company.rating.label}. {company.rating.note}
+          </p>
+        )}
         {company.about && <p className="max-w-prose text-ink-2">{company.about}</p>}
         <p className="text-xs text-ink-3">
           {[company.website, company.inn_given ? 'ИНН указан' : 'ИНН не указан'].filter(Boolean).join(' · ')}

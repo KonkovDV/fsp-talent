@@ -18,11 +18,35 @@ logger = logging.getLogger(__name__)
 
 RERANK_HEAD = 50
 _RRF_K = 60
-_loaded: tuple[str, object] | None = None
+_loaded: tuple[str, str, object] | None = None
+_running: str | None = None
 
 
 def cross_enabled() -> bool:
     return settings.CROSS_ENCODER_MODE == "model" and bool(settings.CROSS_ENCODER_MODEL.strip())
+
+
+def resolve_device(asked: str, cuda_ok: bool) -> str:
+    """cpu forces the processor. gpu and auto use the video card when it is visible."""
+    name = (asked or "auto").strip().lower()
+    if name == "cpu" or not cuda_ok:
+        return "cpu"
+    if name in ("gpu", "cuda", "auto"):
+        return "cuda"
+    return "cpu"
+
+
+def pair_device() -> str | None:
+    """Where the loaded pair model is running. None until a search has loaded it."""
+    return _running
+
+
+def _cuda_ok() -> bool:
+    try:
+        import torch
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
 
 
 def rerank_text(fused: dict, pair_order: list | None) -> dict:
@@ -55,28 +79,30 @@ def _open(name: str, device: str):
 
 
 def load_model():
-    """The pair model, or None. GPU first, half precision: the 1650 has 4 GB. Never raises."""
-    global _loaded
+    """The pair model, or None. Half precision on the GPU: the 1650 has 4 GB. Never raises."""
+    global _loaded, _running
     if not cross_enabled():
         return None
     name = settings.CROSS_ENCODER_MODEL.strip()
-    if _loaded is not None and _loaded[0] == name:
-        return _loaded[1]
+    device = resolve_device(settings.CROSS_ENCODER_DEVICE, _cuda_ok())
+    if _loaded is not None and _loaded[0] == name and _loaded[1] == device:
+        return _loaded[2]
     try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         try:
             model = _open(name, device)
         except Exception:
             if device != "cuda":
                 raise
             logger.exception("pair model did not fit on the GPU, loading on CPU")
-            model = _open(name, "cpu")
             device = "cpu"
+            model = _open(name, device)
     except Exception:
         logger.exception("pair model was not loaded")
+        _loaded = None
+        _running = None
         return None
-    _loaded = (name, model)
+    _loaded = (name, device, model)
+    _running = device
     logger.info("pair model loaded on %s from %s", device, name)
     return model
 

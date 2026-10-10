@@ -25,6 +25,7 @@ export default function EmployerSearch() {
   const [q, setQ] = useState('')
   const [role, setRole] = useState(url.get('role') ?? '')
   const [grade, setGrade] = useState(url.get('grade') ?? '')
+  const [gradeSpan, setGradeSpan] = useState('near')
   const [discipline, setDiscipline] = useState('')
   const [minRank, setMinRank] = useState('')
   const [skills, setSkills] = useState('')
@@ -41,7 +42,8 @@ export default function EmployerSearch() {
   const fav = useFavorites()
 
   const params: Params = {
-    q: q || undefined, role: role || undefined, grade: grade || undefined, discipline: discipline || undefined,
+    q: q || undefined, role: role || undefined, grade: grade || undefined,
+    grade_span: role && grade ? gradeSpan : undefined, discipline: discipline || undefined,
     min_rank: minRank || undefined, skills: skills || undefined, assessed_only: assessedOnly || undefined,
     has_fsp: hasFsp || undefined, work_goal: internship ? 'internship' : undefined,
     city: city || undefined, work_format: workFormat || undefined,
@@ -124,7 +126,19 @@ export default function EmployerSearch() {
             <select id="f-grade" value={grade} onChange={e => setGrade(e.target.value)} className="select">
               <option value="">Любой</option>{GRADES.map(v => <option key={v} value={v}>{gradeRu(v)}</option>)}
             </select>
-            {role && grade && <p className="field-hint">В списке также соседний грейд этой специализации и смежные специализации этого грейда. Точное совпадение выше, причина написана на карточке.</p>}
+            {role && grade && <>
+              <label className={label} htmlFor="f-span">Кого оставить в списке</label>
+              <select id="f-span" value={gradeSpan} onChange={e => setGradeSpan(e.target.value)} className="select" aria-label="Ширина грейда">
+                <option value="near">Соседний грейд и смежные специализации</option>
+                <option value="exact">Только эта пара</option>
+                <option value="wide">Любой грейд этой специализации</option>
+              </select>
+              <p className="field-hint">{gradeSpan === 'exact'
+                ? 'В списке только эта специализация и этот грейд. Балл не меняется.'
+                : gradeSpan === 'wide'
+                  ? 'В списке любой грейд этой специализации. Балл не меняется.'
+                  : 'Соседний грейд и смежная специализация остаются в списке. Точная пара выше. Два шага по грейду не входят.'}</p>
+            </>}
             </div>
           <div><label className={label} htmlFor="f-skills">Навыки</label>
             <input id="f-skills" value={skills} onChange={e => setSkills(e.target.value)} placeholder="Через запятую" className="input" /></div>

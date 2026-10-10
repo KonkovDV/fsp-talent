@@ -1,5 +1,15 @@
 """The company figure is a labelled demo score and stays inside 0..10."""
+from app.services.employer_rating import EmployerTrustSignals, compute_trust_score
 from app.services.employer_score import company_score
+
+
+def test_the_open_signals_stay_on_a_zero_to_ten_scale():
+    mid = compute_trust_score(EmployerTrustSignals("", True, 2, 4.0, 5.0))
+    assert mid == 6.1
+    floor = compute_trust_score(EmployerTrustSignals("", False, 0, 1.0, 10.0))
+    assert floor == 0.0
+    cap = compute_trust_score(EmployerTrustSignals("7700000000", True, 100, 5.0, 0.0))
+    assert cap == 8.5
 
 
 def test_a_known_name_is_stable_and_labelled_as_demo():

@@ -17,6 +17,7 @@ class Vacancy(Base):
     description = Column(String(4000))
     role = Column(String(50))
     grade = Column(String(20))
+    grade_match = Column(String(20), nullable=False, default="plus_minus", server_default="plus_minus")
     discipline = Column(String(50))
     min_rank = Column(String(10))
     skills = Column(JSONB, nullable=False, default=list)

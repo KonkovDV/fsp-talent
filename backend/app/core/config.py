@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # Empty stays off: the demo image has no weights, and the published list order stays.
     CROSS_ENCODER_MODE: str = "off"
     CROSS_ENCODER_MODEL: str = ""
+    # auto uses the GPU when the process can see one. cpu and gpu force the device.
+    CROSS_ENCODER_DEVICE: str = "auto"
     # legacy: a declared grade counts as 0.85 of a confirmed one.
     # expected: the grade factor is the expected relevance under the posterior of the true grade.
     # The default stays legacy until a three-seed run meets the acceptance rule.

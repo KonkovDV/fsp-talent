@@ -15,7 +15,7 @@ import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
 
 interface NeedParams {
-  role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
+  role: string | null; grade: string | null; grade_match?: 'exact' | 'plus_minus' | 'any'; skills: string[]; nice_to_have: string[]
   industry: string | null; work_goal: string | null; has_fsp: boolean | null
   salary_from?: number | null; salary_to?: number | null
   city?: string | null; work_format?: string | null
@@ -24,7 +24,7 @@ interface PayHint { known: number; covered: number; proposed_to: number; covered
 interface SkillHint { skill: string; gained: number; pool: number }
 interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number; flags?: { code: string; label: string }[] }
 
-const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '', pageUrl: '' }
+const EMPTY = { title: '', role: '', grade: '', gradeMatch: 'plus_minus', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '', pageUrl: '' }
 const PRESETS = [
   { label: 'Высокая нагрузка', title: 'Сервис под нагрузкой', role: 'backend', grade: 'senior', skills: 'Go, PostgreSQL, Kafka', format: 'remote' },
   { label: 'Искусственный интеллект', title: 'Модели в продукте', role: 'ml', grade: 'middle', skills: 'Python, PyTorch', format: 'hybrid' },
@@ -70,7 +70,7 @@ export default function EmployerNeeds() {
     queryFn: () => getNeed(selected!).then(r => r.data as Need & { versions: { version: number; params: NeedParams }[] }) })
   const body = () => ({
     title: form.title.trim(),
-    params: { role: form.role || null, grade: form.grade || null, skills: csv(form.skills), nice_to_have: csv(form.nice),
+    params: { role: form.role || null, grade: form.grade || null, grade_match: form.gradeMatch, skills: csv(form.skills), nice_to_have: csv(form.nice),
       industry: form.industry || null, work_goal: form.internship ? 'internship' : null,
       salary_from: money(form.payFrom), salary_to: money(form.payTo),
       city: form.city || null, work_format: form.format || null },
@@ -135,7 +135,8 @@ export default function EmployerNeeds() {
   })
   const edit = (n: Need) => {
     setEditing(n.id)
-    setForm({ title: n.title, role: n.params.role ?? '', grade: n.params.grade ?? '', skills: n.params.skills.join(', '),
+    setForm({ title: n.title, role: n.params.role ?? '', grade: n.params.grade ?? '',
+      gradeMatch: n.params.grade_match ?? 'plus_minus', skills: n.params.skills.join(', '),
       nice: n.params.nice_to_have.join(', '), industry: n.params.industry ?? '', internship: n.params.work_goal === 'internship',
       payFrom: n.params.salary_from != null ? String(n.params.salary_from) : '',
       payTo: n.params.salary_to != null ? String(n.params.salary_to) : '',
@@ -187,6 +188,12 @@ export default function EmployerNeeds() {
               <select id="n-grade" value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} className="select" aria-label="Грейд">
                 <option value="">Любой</option>
                 {(opts?.grades ?? []).map((g: string) => <option key={g} value={g}>{gradeRu(g)}</option>)}
+              </select></div>
+            <div><label className={field} htmlFor="n-match">Как сравнивать грейд</label>
+              <select id="n-match" value={form.gradeMatch} onChange={e => setForm({ ...form, gradeMatch: e.target.value })} className="select" aria-label="Как сравнивать грейд">
+                <option value="plus_minus">Плюс-минус один шаг</option>
+                <option value="exact">Только этот грейд</option>
+                <option value="any">Любой грейд</option>
               </select></div>
             <div><label className={field} htmlFor="n-ind">Предметная область (необязательно)</label>
               <select id="n-ind" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} className="select" aria-label="Предметная область">

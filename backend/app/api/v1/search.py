@@ -61,6 +61,8 @@ async def search(
     work_format: str | None = Query(None, pattern="^(office|hybrid|remote)$",
                                     description="Формат работы. Входит в балл, из выдачи не убирает"),
     industry: str | None = Query(None, max_length=40),
+    grade_span: str = Query("near", pattern="^(exact|near|wide)$"),
+    grade_match: str | None = Query(None, pattern="^(exact|plus_minus|any)$"),
     current: dict = Depends(get_current_employer),
     db: AsyncSession = Depends(get_db),
 ):
@@ -83,6 +85,7 @@ async def search(
         min_rank=min_rank or None, skills=skill_list, q=q or None, limit=limit, fresh_days=fresh_days,
         assessed_only=assessed_only, has_fsp=has_fsp, work_goal=work_goal,
         city=named, work_format=work_format,
+        grade_span={"exact": "exact", "plus_minus": "plus_minus", "any": "any"}.get(grade_match or "", grade_span),
         need=NeedSpec(role=role or None, grade=grade or None, skills=_wanted(skill_list, q),
                       industry=industry or None, text=bool(q)),
         employer_id=uuid.UUID(employer_id),

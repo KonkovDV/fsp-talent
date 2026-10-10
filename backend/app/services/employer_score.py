@@ -1,11 +1,13 @@
 """A demo company score shown before the candidate accepts. Not a live registry.
 
-The figure starts at 3. Known demo names use a fixed table. Everyone else is a
-stable mix of the name. A process tier is not an input and is not shown.
+Known demo names use a fixed table. Everyone else is a stable mix of the name.
+The number is compute_trust_score. A process tier is not an input and is not shown.
 """
 from __future__ import annotations
 
 import hashlib
+
+from app.services.employer_rating import EmployerTrustSignals, compute_trust_score
 
 # reviews 1..5, registry yes/no, tenders 0..20, pay gap of leadership to engineers.
 _KNOWN = {
@@ -29,15 +31,13 @@ def _signals(name: str) -> dict:
 
 def company_score(name: str) -> dict:
     row = _signals(name or "")
-    value = 3.0
-    value += (float(row["reviews"]) - 3) * 1.5
-    if row["registry"]:
-        value += 1.0
-    value += min(20, int(row["tenders"])) / 20 * 1.5
-    gap = float(row["pay_gap"])
-    if gap > 5:
-        value -= (gap - 5) * 0.6
-    value = max(0.0, min(10.0, value))
+    value = compute_trust_score(EmployerTrustSignals(
+        inn="",
+        has_otechestvennoe_po=bool(row["registry"]),
+        tender_count=int(row["tenders"]),
+        review_score=float(row["reviews"]),
+        salary_spread_pct=float(row["pay_gap"]),
+    ))
     if value >= 7.5:
         label = "высокий"
     elif value >= 5:

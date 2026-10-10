@@ -2,19 +2,10 @@
 from __future__ import annotations
 
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.matching import grade_matches
 from app.services.scoring.engine import RANK_ORDER, rank_at_least
 from app.services.skills import normalize_skill
 from app.services.survey import SPECIALIZATIONS
-
-GRADES = ("intern", "junior", "middle", "senior", "lead")
-
-
-def _at_least_grade(candidate_grade: str | None, required: str | None) -> bool:
-    if not required:
-        return True
-    if required not in GRADES or candidate_grade not in GRADES:
-        return False
-    return GRADES.index(candidate_grade) >= GRADES.index(required)
 
 
 def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
@@ -30,7 +21,8 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
     role = vacancy.get("role")
     if role and candidate.get("role") and role != candidate["role"]:
         return None
-    if not _at_least_grade(candidate.get("grade"), vacancy.get("grade")):
+    mode = vacancy.get("grade_match") or "plus_minus"
+    if not grade_matches(candidate.get("grade"), vacancy.get("grade"), mode):
         return None
     disciplines = candidate.get("disciplines") or []
     disc = vacancy.get("discipline")
@@ -49,8 +41,8 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
         why.append(f"Навыки: {len(have)} из {len(wanted)}" + (f" ({matched})" if matched else ""))
     if role and candidate.get("role") == role:
         why.append(f"Специализация совпадает: {SPECIALIZATIONS.get(role, role)}")
-    if vacancy.get("grade"):
-        why.append(f"Грейд не ниже {vacancy['grade']}")
+    if vacancy.get("grade") and mode != "any":
+        why.append("Грейд совпадает" if mode == "exact" else f"Грейд не дальше одного шага от {vacancy['grade']}")
     if disc:
         why.append(f"Есть результаты ФСП: {DISCIPLINE_LABELS.get(disc, disc).lower()}")
     return {

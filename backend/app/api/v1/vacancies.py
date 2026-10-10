@@ -32,7 +32,7 @@ from app.services.skills import normalize_skill
 from app.services.trust_level import next_step, trust_level, vacancy_limit
 from app.services.vacancies import match_vacancy, status_after_close
 from app.services.vacancy_exam import form_exam
-from app.services.vacancy_flags import vacancy_flags
+from app.services.vacancy_flags import vacancy_flags, vacancy_warnings
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
@@ -49,6 +49,7 @@ class VacancyIn(BaseModel):
     description: str | None = Field(None, max_length=4000)
     role: str | None = None
     grade: str | None = None
+    grade_match: Literal["exact", "plus_minus", "any"] = "plus_minus"
     discipline: str | None = None
     min_rank: str | None = None
     # FIX (Pydantic v2): max_length on list must use Annotated
@@ -77,11 +78,13 @@ class VacancyIn(BaseModel):
 def _out(v: Vacancy, extra: dict | None = None) -> dict:
     card = {
         "id": str(v.id), "title": v.title, "description": v.description, "role": v.role, "grade": v.grade,
-        "discipline": v.discipline, "min_rank": v.min_rank, "skills": v.skills or [],
+        "discipline": v.discipline, "min_rank": v.min_rank, "grade_match": v.grade_match or "plus_minus",
+        "skills": v.skills or [],
         "salary_from": v.salary_from_gross, "salary_to": v.salary_to_gross,
         "work_format": v.work_format, "allows_minors": v.allows_minors, "is_open": v.is_open,
         "company": v.employer.company_name if v.employer else None,
         "flags": vacancy_flags(v.title, v.description),
+        "warnings": vacancy_warnings(v.title, v.description),
     }
     if extra:
         card.update(extra)
@@ -103,7 +106,7 @@ async def create_vacancy(body: VacancyIn, current: dict = Depends(get_current_em
                        f"На этом уровне доверия открытых вакансий не больше {cap}. {next_step(level)}")
     vacancy = Vacancy(
         employer_id=employer.id, title=body.title, description=(body.description or "").strip() or None,
-        role=body.role, grade=body.grade,
+        role=body.role, grade=body.grade, grade_match=body.grade_match,
         discipline=body.discipline, min_rank=body.min_rank, skills=_skills(body.skills),
         salary_from_gross=body.salary_from_gross, salary_to_gross=body.salary_to_gross,
         work_format=body.work_format, allows_minors=body.allows_minors,
@@ -135,6 +138,7 @@ async def update_vacancy(vacancy_id: uuid.UUID, body: VacancyIn,
     vacancy.description = (body.description or "").strip() or None
     vacancy.role = body.role
     vacancy.grade = body.grade
+    vacancy.grade_match = body.grade_match
     vacancy.discipline = body.discipline
     vacancy.min_rank = body.min_rank
     vacancy.skills = _skills(body.skills)
@@ -227,7 +231,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
     cards = []
     for vacancy in rows:
         hit = match_vacancy(candidate, {
-            "role": vacancy.role, "grade": vacancy.grade, "discipline": vacancy.discipline,
+            "role": vacancy.role, "grade": vacancy.grade, "grade_match": vacancy.grade_match,
+            "discipline": vacancy.discipline,
             "min_rank": vacancy.min_rank, "skills": vacancy.skills or [],
             "allows_minors": vacancy.allows_minors, "is_open": vacancy.is_open,
         })
@@ -275,7 +280,8 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
         "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
         "is_minor": participant.minor_now(),
     }, {
-        "role": vacancy.role, "grade": vacancy.grade, "discipline": vacancy.discipline,
+        "role": vacancy.role, "grade": vacancy.grade, "grade_match": vacancy.grade_match,
+        "discipline": vacancy.discipline,
         "min_rank": vacancy.min_rank, "skills": vacancy.skills or [],
         "allows_minors": vacancy.allows_minors, "is_open": True,
     })

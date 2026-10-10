@@ -51,6 +51,7 @@ Grade = Literal["intern", "junior", "middle", "senior", "lead"]
 class NeedParams(BaseModel):
     role: str | None = None
     grade: Grade | None = None
+    grade_match: Literal["exact", "plus_minus", "any"] = "plus_minus"
     skills: list[str] = Field(default_factory=list, max_length=15)
     nice_to_have: list[str] = Field(default_factory=list, max_length=15)
     industry: str | None = None
@@ -143,6 +144,7 @@ async def draft_url(body: DraftUrlIn, current: dict = Depends(get_current_employ
 
 @router.post("", status_code=201)
 async def create_need(body: NeedIn, current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Employer need (TZ 2): specialization, grade and stack, stored as version 1."""
     need = Need(employer_id=uuid.UUID(current["sub"]), title=body.title, version=1)
     db.add(need)
     await db.flush()
@@ -186,7 +188,7 @@ async def get_need(need_id: uuid.UUID, current: dict = Depends(get_current_emplo
 @router.put("/{need_id}")
 async def update_need(need_id: uuid.UUID, body: NeedIn, current: dict = Depends(get_current_employer),
                       db: AsyncSession = Depends(get_db)):
-    """An edit is a new version; earlier versions and shortlist decisions stay as they were."""
+    """An edit is a new version (TZ 2.1); earlier versions and shortlist decisions stay as they were."""
     need = await db.get(Need, need_id, with_for_update=True)
     if need is None or need.employer_id != uuid.UUID(current["sub"]):
         raise ApiError(404, "need_not_found")
@@ -204,7 +206,7 @@ async def update_need(need_id: uuid.UUID, body: NeedIn, current: dict = Depends(
 @router.post("/{need_id}/versions/{version}/restore")
 async def restore_need(need_id: uuid.UUID, version: int, current: dict = Depends(get_current_employer),
                        db: AsyncSession = Depends(get_db)):
-    """Copy an older version into a new one. The shortlist stays; nothing is rewritten in place."""
+    """Copy an older version into a new one (TZ 2.1). The shortlist stays; nothing is rewritten in place."""
     need = await db.get(Need, need_id, with_for_update=True)
     if need is None or need.employer_id != uuid.UUID(current["sub"]):
         raise ApiError(404, "need_not_found")
@@ -287,7 +289,8 @@ async def _matches_cached(db: AsyncSession, need: Need, params: NeedParams, limi
             if page is not None:
                 return page
     result = await search_candidates(
-        db, skills=params.skills, q=params.q, limit=shortlist_cache.WINDOW, offset=0, has_fsp=params.has_fsp,
+        db, role=params.role, grade=params.grade, grade_span=params.grade_match,
+        skills=params.skills, q=params.q, limit=shortlist_cache.WINDOW, offset=0, has_fsp=params.has_fsp,
         work_goal=params.work_goal, need=params.spec(), employer_id=need.employer_id,
         build_cards=False)
     payload = shortlist_cache.store_payload(result)
@@ -365,7 +368,7 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
                   offset: int = Query(0, ge=0, le=200),
                   show_hidden: bool = Query(False),
                   current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    """Candidates for the need, ordered by the explainable score; role and grade are soft (neighbours count)."""
+    """Candidates for this need, ordered by the explainable score (TZ 2.1)."""
     if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
     need = await _own(db, need_id, current)
@@ -434,7 +437,7 @@ async def exam_preview(need_id: uuid.UUID, current: dict = Depends(get_current_e
 @router.get("/{need_id}/compare")
 async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
                   current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    """Side-by-side factors for up to four candidates already in this need's match list."""
+    """Side-by-side factors for up to four candidates in this need's list, without a name (TZ 2.1)."""
     if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
     need = await _own(db, need_id, current)
@@ -449,7 +452,8 @@ async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
             continue
     p = NeedParams(**(await _params(db, need)).params)
     result = await search_candidates(
-        db, skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal,
+        db, role=p.role, grade=p.grade, grade_span=p.grade_match,
+        skills=p.skills, q=p.q, limit=50, has_fsp=p.has_fsp, work_goal=p.work_goal,
         need=p.spec(), employer_id=need.employer_id)
     picked = wanted[:4]
     items = anonymous_compare(result["items"], picked)
@@ -510,6 +514,7 @@ class ShortlistIn(BaseModel):
 @router.put("/{need_id}/shortlist/{candidate_id}")
 async def shortlist(need_id: uuid.UUID, candidate_id: uuid.UUID, body: ShortlistIn,
                     current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Remember a decision on this need's version (TZ 2.1). A later edit of the need keeps the row."""
     need = await _own(db, need_id, current)
     p = await db.get(Participant, candidate_id)
     if p is None or not p.discoverable:
@@ -553,6 +558,7 @@ def shortlist_page(items: list[dict], status: str | None) -> list[dict]:
 async def get_shortlist(need_id: uuid.UUID, status: Literal["shortlisted", "invited", "rejected"] | None = None,
                         current: dict = Depends(get_current_employer),
                         db: AsyncSession = Depends(get_db)):
+    """Saved shortlist and its funnel (TZ 2.1). One status on screen does not change the counts."""
     need = await _own(db, need_id, current)
     rows = list(await db.scalars(select(NeedShortlist).where(NeedShortlist.need_id == need.id)
                                  .order_by(NeedShortlist.added_at)))

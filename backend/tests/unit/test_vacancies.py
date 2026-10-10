@@ -41,6 +41,10 @@ def test_match_respects_role_grade_and_rank():
     assert match_vacancy(_candidate(role="frontend"), _vacancy()) is None
     assert match_vacancy(_candidate(grade="junior"), _vacancy(grade="senior")) is None
     assert match_vacancy(_candidate(grade="lead"), _vacancy(grade="senior")) is not None
+    assert match_vacancy(_candidate(grade="lead"), _vacancy(grade="junior")) is None
+    assert match_vacancy(_candidate(grade="middle"), _vacancy(grade="senior")) is not None
+    assert match_vacancy(_candidate(grade="intern"), _vacancy(grade="senior", grade_match="exact")) is None
+    assert match_vacancy(_candidate(grade="intern"), _vacancy(grade="senior", grade_match="any")) is not None
     assert match_vacancy(_candidate(disciplines=[{"discipline": "algorithmic", "best_rank": "III"}]),
                          _vacancy(min_rank="I")) is None
 

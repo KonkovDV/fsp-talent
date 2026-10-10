@@ -782,6 +782,7 @@ CREATE TABLE public.vacancies (
     title character varying(200) NOT NULL,
     role character varying(50),
     grade character varying(20),
+    grade_match character varying(20) DEFAULT 'plus_minus' NOT NULL,
     discipline character varying(50),
     min_rank character varying(10),
     skills jsonb DEFAULT '[]'::jsonb NOT NULL,
