@@ -1,6 +1,12 @@
 from app.services.exclusions import refused
 
 
+def test_a_free_text_company_field_is_not_a_sector_code():
+    from app.services.exclusions import INDUSTRIES
+    assert "fintech" in INDUSTRIES
+    assert "Финтех" not in INDUSTRIES
+
+
 def test_a_blocked_company_and_a_refused_sector_both_hide_the_person():
     assert refused(["fintech"], blocked=False, industry="fintech") is True
     assert refused([], blocked=True, industry=None) is True
