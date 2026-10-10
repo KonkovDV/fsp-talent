@@ -137,6 +137,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile, "show_city": p.show_city,
         "show_stack": p.show_stack, "show_fsp": p.show_fsp, "show_experience": p.show_experience,
+        "soft_skills": list(p.soft_skills or []),
         "job_search": p.job_search,
         "is_minor": p.minor_now(), "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
         "guardian_demo_link": (
@@ -264,6 +265,7 @@ class ProfileUpdate(BaseModel):
     show_stack: bool | None = None
     show_fsp: bool | None = None
     show_experience: bool | None = None
+    soft_skills: list[str] | None = Field(None, max_length=5)
     job_search: Literal["active", "open", "not_looking"] | None = None
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
@@ -291,6 +293,12 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
     for field in ("experience_years", "declared_grade"):
         if field in data:
             setattr(p, field, data[field])
+    if "soft_skills" in data and data["soft_skills"] is not None:
+        from app.services.soft_skills import clean
+        try:
+            p.soft_skills = clean(data["soft_skills"])
+        except ValueError as exc:
+            raise ApiError(422, "validation_error", str(exc)) from exc
     city_changed = False
     for field in PRIVACY_FIELDS:
         value = data.get(field)
