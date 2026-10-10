@@ -53,6 +53,7 @@
 /api/v1/candidates/me/passport
 /api/v1/candidates/me/profile
 /api/v1/candidates/me/profile.pdf
+/api/v1/candidates/me/protocols
 /api/v1/candidates/me/results
 /api/v1/candidates/me/results/{result_id}/presentation
 /api/v1/candidates/me/resume

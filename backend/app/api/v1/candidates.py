@@ -465,6 +465,53 @@ async def get_my_results(
     } for r in rows]
 
 
+@router.post("/me/protocols")
+async def import_protocols(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
+                           db: AsyncSession = Depends(get_db)):
+    """A protocol file when the registry is silent. The grade and the match score stay put."""
+    from app.services.profile import rebuild_profile
+    from app.services.protocol_file import parse_protocol_text, text_of_pdf, text_of_xlsx
+
+    if await too_many(f"protocols:{_pid(current)}", limit=10, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много файлов. Подождите час.")
+    person = await db.get(Participant, _pid(current))
+    if person is None or person.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    raw = await file.read()
+    if len(raw) > 2_000_000:
+        raise ApiError(413, "payload_too_large", "Файл больше 2 МБ")
+    name = (file.filename or "").lower()
+    try:
+        if name.endswith(".pdf"):
+            text = text_of_pdf(raw)
+        elif name.endswith(".xlsx"):
+            text = text_of_xlsx(raw)
+        else:
+            text = raw.decode("utf-8", errors="replace")
+    except Exception as exc:
+        raise ApiError(422, "validation_error", "Файл не читается") from exc
+    parsed = parse_protocol_text(text)
+    if not parsed:
+        raise ApiError(422, "validation_error", "В файле нет строк протокола: дисциплина, дата, место, всего")
+    known = set(await db.scalars(select(Result.event_id).where(Result.participant_id == person.id)))
+    added = 0
+    for row in parsed:
+        if row.event_id in known:
+            continue
+        db.add(Result(
+            participant_id=person.id, event_id=row.event_id, event_name=row.event_name,
+            discipline=row.discipline, competition_status=row.competition_status,
+            place=row.place, total_participants=row.total_participants, is_team=False, team_size=1,
+            role="participant", event_date=row.event_date, trust_level="file_import",
+            raw_data={"source": "file"},
+        ))
+        added += 1
+    if added:
+        await rebuild_profile(db, person)
+    await db.commit()
+    return {"added": added, "read": len(parsed), "grade_unchanged": True}
+
+
 @router.post("/me/results/{result_id}/presentation")
 async def present_result(result_id: uuid.UUID, current: dict = Depends(get_current_participant),
                          db: AsyncSession = Depends(get_db)):
