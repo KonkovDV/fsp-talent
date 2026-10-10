@@ -1,6 +1,9 @@
 """Employer needs: versioned search profiles, matches with explanations, recommended categories, shortlist."""
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
@@ -26,6 +29,7 @@ from app.models import (
     Offer,
     Participant,
 )
+from app.services.ai import providers, second_opinion
 from app.services.matching import NeedSpec, anonymous_compare
 from app.services.search import cache as shortlist_cache
 from app.services.search.pipeline import _build_cards, score_pool, search_candidates, shown_category
@@ -34,6 +38,7 @@ from app.services.survey import INDUSTRIES, SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
 router = APIRouter(prefix="/needs", tags=["needs"])
+logger = logging.getLogger(__name__)
 Grade = Literal["intern", "junior", "middle", "senior", "lead"]
 
 
@@ -323,7 +328,8 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
             continue
     offers = await _company_offers(db, need.employer_id, ids)
     shortlist_cache.apply_company_marks(result["items"], listed, offers)
-    return {**result, "need": _out(need, await _params(db, need))}
+    return {**result, "need": _out(need, await _params(db, need)),
+            "ai_note": await providers.refresh(db) is not None}
 
 
 @router.get("/{need_id}/exam")
@@ -362,6 +368,50 @@ async def compare(need_id: uuid.UUID, ids: str = Query("", max_length=200),
     if picked and len(items) != len(picked):
         raise ApiError(404, "not_found", "Кто-то из выбранных кандидатов недоступен")
     return {"items": items}
+
+
+_NOTE_RATE = 30  # model calls per employer per hour
+_NOTE_TTL = 86_400
+
+
+@router.get("/{need_id}/candidates/{candidate_id}/ai-note")
+async def ai_note(need_id: uuid.UUID, candidate_id: uuid.UUID,
+                  current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Advisory model note on one card from this need's list. The score and the order stay as they are."""
+    need = await _own(db, need_id, current)
+    if await providers.refresh(db) is None:
+        raise ApiError(503, "unavailable", "ИИ-помощник не подключён")
+    p = NeedParams(**(await _params(db, need)).params)
+    page = await _hydrate(db, await _matches_cached(db, need, p, 50, 0))
+    card = next((c for c in page["items"] if c.get("candidate_id") == str(candidate_id)), None)
+    if card is None:
+        raise ApiError(404, "not_found", "Кандидата нет в подборке по этой потребности")
+    need_facts = p.model_dump(include={"role", "grade", "skills", "nice_to_have"})
+    known = second_opinion.facts(card, need_facts)
+    digest = hashlib.sha256(json.dumps(known, ensure_ascii=False).encode()).hexdigest()[:32]
+    key = f"ai:note:{need.id}:{digest}"
+    redis = await _redis()
+    if redis is not None:
+        try:
+            if cached := await redis.get(key):
+                return {**json.loads(cached), "cached": True}
+        except Exception:
+            redis = None
+    if await too_many(f"ai:note:{current['sub']}", limit=_NOTE_RATE, window_seconds=3600, fail_closed=True):
+        raise ApiError(429, "rate_limited", headers={"Retry-After": "3600"})
+    try:
+        note = await second_opinion.second_opinion(card, need_facts)
+    except Exception as e:
+        logger.warning("AI note failed for need %s: %s", need.id, type(e).__name__)
+        raise ApiError(503, "unavailable", "ИИ-помощник не ответил, попробуйте позже") from None
+    logger.info("AI note for candidate %s, need %s, employer %s via %s, dropped %s",
+                candidate_id, need.id, current["sub"], note["provider"], note["dropped"])
+    if redis is not None:
+        try:
+            await redis.set(key, json.dumps(note, ensure_ascii=False), ex=_NOTE_TTL)
+        except Exception:
+            pass
+    return {**note, "cached": False}
 
 
 class ShortlistIn(BaseModel):
