@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -123,6 +123,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "id": str(p.id), "fsp_id": p.fsp_id, "has_fsp": p.fsp_id is not None,
         "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
         "display_name": p.display_name, "region": p.region,
+        "birth_date": p.birth_date.isoformat() if p.birth_date else None,
         "email": p.email, "email_verified": p.email_verified_at is not None,
         "telegram": p.telegram, "phone": p.phone, "github": p.github,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
@@ -299,6 +300,7 @@ class ProfileUpdate(BaseModel):
     job_search: Literal["active", "open", "not_looking"] | None = None
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
+    birth_date: date | None = None
     expected_version: int | None = Field(None, ge=0)
 
 
@@ -355,6 +357,15 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         p.region = (data["region"] or "").strip() or None
     if "job_search" in data and data["job_search"]:
         p.job_search = data["job_search"]
+    if "birth_date" in data and data["birth_date"] is not None and p.fsp_id is None:
+        born = data["birth_date"]
+        if born > date.today():
+            raise ApiError(422, "validation_error", "Дата рождения ещё не наступила")
+        from app.services.profile import age_on
+        if age_on(born, date.today()) < 15:
+            raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
+        p.birth_date = born
+        p.is_minor = age_on(born, date.today()) < 18
     for field in ("salary_from_gross", "salary_to_gross"):
         if field in data:
             setattr(p, field, data[field])

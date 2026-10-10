@@ -1,5 +1,6 @@
 """Explainable match score and the offline ranking benchmark."""
 import random
+from datetime import date
 
 from app.services import matching as matching_mod
 from app.services.matching import (
@@ -450,7 +451,7 @@ def test_not_looking_stays_out_of_search_without_withdrawing_consent():
     from app.models.participant import Participant
     person = Participant(is_visible=True, is_minor=False, job_search="not_looking")
     assert person.is_visible and not person.discoverable
-    listed = Participant(is_visible=True, is_minor=False, job_search="open")
+    listed = Participant(is_visible=True, is_minor=False, job_search="open", birth_date=date(2000, 1, 1))
     assert listed.discoverable
 
 

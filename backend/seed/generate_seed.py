@@ -8,7 +8,7 @@ import argparse
 import asyncio
 import os
 import random
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select
 
@@ -499,10 +499,14 @@ async def main(extra_candidates: int | None = None) -> None:
             if not existing_plain.password_hash:
                 existing_plain.password_hash = password_hash
                 existing_plain.email_verified_at = existing_plain.email_verified_at or now
+            if existing_plain.birth_date is None:
+                existing_plain.birth_date = date(2000, 1, 1)
+                existing_plain.is_minor = False
         else:
             # TZ 2.1: a candidate without FSP history is a normal case, not an error.
             participant = Participant(email=email, display_name=name, region=region, experience_years=years,
                                       declared_grade=grade, password_hash=password_hash, email_verified_at=now,
+                                      birth_date=date(2000, 1, 1),
                                       is_minor=False, is_visible=True, public_profile=False,
                                       specialization="backend", industry="fintech", work_goal="job", survey_at=now)
             db.add(participant)

@@ -59,7 +59,7 @@ from app.services.matching import (
     standing_line,
 )
 from app.services.matching import score as match_score
-from app.services.profile import adult_cutoff
+from app.services.profile import age_confirmed_adult
 from app.services.scoring.elo_stretch import elo_stretch
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
 from app.services.search.cross_rank import RERANK_HEAD, cross_enabled, pair_device, rank_pairs, rerank_text
@@ -254,21 +254,13 @@ def _in_search(adult):
 
 async def searchable_count(db: AsyncSession) -> int:
     """People a search can see before a need's role, grade and skill filters."""
-    cutoff = adult_cutoff()
-    adult = or_(
-        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
-        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
-    )
-    return int(await db.scalar(select(func.count()).select_from(Participant).where(_in_search(adult))) or 0)
+    return int(await db.scalar(select(func.count()).select_from(Participant).where(
+        _in_search(age_confirmed_adult()))) or 0)
 
 
 def visible_in_search():
     """The search visibility rule as of now, for lists that are not a search (favorites)."""
-    cutoff = adult_cutoff()
-    return _in_search(or_(
-        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
-        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
-    ))
+    return _in_search(age_confirmed_adult())
 
 
 async def bank_grid(db: AsyncSession) -> dict:
@@ -276,11 +268,7 @@ async def bank_grid(db: AsyncSession) -> dict:
 
     Same visibility as the search itself, including the survey-or-test grade inside ``_in_search``.
     """
-    cutoff = adult_cutoff()
-    adult = or_(
-        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
-        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
-    )
+    adult = age_confirmed_adult()
     PSI = ProfileSearchIndex
     tested = func.count(Participant.assessed_grade).filter(PSI.grade == Participant.assessed_grade)
     rows = (await db.execute(
@@ -418,11 +406,7 @@ async def search_candidates(
     else:
         lex = literal(0.0).label("lex")
 
-    cutoff = adult_cutoff()
-    adult = or_(
-        and_(Participant.birth_date.is_not(None), Participant.birth_date <= cutoff),
-        and_(Participant.birth_date.is_(None), Participant.is_minor.is_(False)),
-    )
+    adult = age_confirmed_adult()
     stmt = (select(Participant.id, lex)
             .join(PSI, PSI.participant_id == Participant.id)
             .where(_in_search(adult)))

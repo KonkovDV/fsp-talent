@@ -118,8 +118,10 @@ class Participant(Base):
 
     @property
     def discoverable(self) -> bool:
+        """Visible to employers only with a birth date. The 18+ checkbox is not that date."""
         looking = (self.job_search or "open") != "not_looking"
-        return bool(self.is_visible) and looking and (not self.minor_now() or bool(self.minor_consent_given))
+        return (bool(self.is_visible) and looking and self.birth_date is not None
+                and (not self.minor_now() or bool(self.minor_consent_given)))
 
 
 class Qualification(Base):
