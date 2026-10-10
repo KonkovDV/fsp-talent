@@ -63,7 +63,7 @@ const EmployerModeration = page(() => import('./pages/employer/Moderation'))
 const EmployerFavorites = page(() => import('./pages/employer/Favorites'))
 
 function ProtectedRoute({ children, role }: { children: ReactNode; role: 'participant' | 'employer' }) {
-  const { token, userRole, needsRenew } = useAuthStore()
+  const { token, userRole, needsRenew, example } = useAuthStore()
   const [renewing, setRenewing] = useState(needsRenew)
   useEffect(() => {
     if (!needsRenew) {
@@ -76,6 +76,7 @@ function ProtectedRoute({ children, role }: { children: ReactNode; role: 'partic
     return () => { live = false }
   }, [needsRenew])
   if (renewing) return <p className="sr-only" role="status">Вход</p>
+  if (example && userRole === role) return <>{children}</>
   if (!token) return <Navigate to="/login" replace />
   if (userRole !== role) return <Navigate to="/" replace />
   return <>{children}</>

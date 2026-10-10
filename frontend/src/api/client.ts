@@ -1,4 +1,5 @@
-import axios from 'axios'
+import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import { EXAMPLE_EVENT, exampleFixture, serverUnreachable } from '../demoFallback'
 import { isTokenExpired, useAuthStore } from '../store/authStore'
 
 type ErrorPayload = { error?: { code?: string; message?: string; details?: unknown }; detail?: unknown }
@@ -34,7 +35,31 @@ export const api = axios.create({
   withCredentials: true,
 })
 
+function exampleResponse(config: InternalAxiosRequestConfig, data: unknown): AxiosResponse {
+  return { data, status: 200, statusText: 'OK', headers: {}, config }
+}
+
+function exampleRejected(config: InternalAxiosRequestConfig): Promise<never> {
+  return Promise.reject(new AxiosError(
+    'example',
+    AxiosError.ERR_BAD_REQUEST,
+    config,
+    null,
+    { status: 409, statusText: 'Conflict', headers: {}, config, data: { error: { code: 'conflict', message: 'Это пример без сервера: действие не выполняется.' } } },
+  ))
+}
+
 api.interceptors.request.use((config) => {
+  if (useAuthStore.getState().example) {
+    const method = (config.method ?? 'get').toLowerCase()
+    if (method === 'get') {
+      const data = exampleFixture(config.url)
+      if (data !== undefined) config.adapter = () => Promise.resolve(exampleResponse(config, data))
+    } else {
+      config.adapter = () => exampleRejected(config)
+    }
+    return config
+  }
   const token = useAuthStore.getState().token
   if (token) config.headers.Authorization = `Bearer ${token}`
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
@@ -120,7 +145,13 @@ api.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('fsp-rate-limit', { detail: seconds }))
     }
     // A failed login is also 401. Reloading /login would wipe the error on the form.
-    if (error.response?.status === 401 && config && !url.includes('/auth/') && !config._retried) {
+    const method = String(error.config?.method ?? 'get').toLowerCase()
+    const sample = exampleFixture(url)
+    if (method === 'get' && sample !== undefined && serverUnreachable(error) && !useAuthStore.getState().example) {
+      window.dispatchEvent(new CustomEvent(EXAMPLE_EVENT))
+      return exampleResponse(config ?? error.config, sample)
+    }
+    if (error.response?.status === 401 && config && !url.includes('/auth/') && !config._retried && !useAuthStore.getState().example) {
       config._retried = true
       const token = await renewAccess()
       if (token) {

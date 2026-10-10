@@ -10,15 +10,18 @@ interface AuthFields {
   needsRenew: boolean
   /** Demo guest account: the moment its sessions close. */
   guestUntil: string | null
+  /** Read-only cabinet of sample cards, used when the server does not answer. */
+  example: boolean
 }
 
 interface AuthState extends AuthFields {
   /** A renewal passes no guestUntil and keeps the one of the same account. */
   setAuth: (token: string, role: Role, guestUntil?: string | null) => void
+  enterExample: (role: Role) => void
   logout: () => void
 }
 
-const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null, needsRenew: false, guestUntil: null }
+const SIGNED_OUT: AuthFields = { token: null, userRole: null, userId: null, needsRenew: false, guestUntil: null, example: false }
 
 function parseJwtPayload(token: string): Record<string, unknown> {
   try {
@@ -45,8 +48,9 @@ export const useAuthStore = create<AuthState>()(
         const payload = parseJwtPayload(token)
         const userId = String(payload['sub'] ?? '')
         const kept = get().userId === userId ? get().guestUntil : null
-        set({ token, userRole: role, userId, needsRenew: false, guestUntil: guestUntil !== undefined ? guestUntil : kept })
+        set({ token, userRole: role, userId, needsRenew: false, example: false, guestUntil: guestUntil !== undefined ? guestUntil : kept })
       },
+      enterExample: (role) => set({ ...SIGNED_OUT, example: true, userRole: role, userId: 'example' }),
       logout: () => set(SIGNED_OUT),
     }),
     {
@@ -55,6 +59,9 @@ export const useAuthStore = create<AuthState>()(
       // The refresh token is an HttpOnly cookie, so a copy in this store is dropped.
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<AuthFields> & { refreshToken?: string | null }
+        if (saved.example && (saved.userRole === 'participant' || saved.userRole === 'employer')) {
+          return { ...current, ...SIGNED_OUT, example: true, userRole: saved.userRole, userId: 'example' }
+        }
         if (isTokenExpired(saved.token ?? null)) {
           // The access token died. The refresh cookie may still be alive, so keep the role and renew once.
           if (!saved.userRole) return { ...current, ...SIGNED_OUT }
@@ -65,6 +72,7 @@ export const useAuthStore = create<AuthState>()(
             userId: saved.userId ?? null,
             needsRenew: true,
             guestUntil: saved.guestUntil ?? null,
+            example: false,
           }
         }
         return {
@@ -74,11 +82,13 @@ export const useAuthStore = create<AuthState>()(
           userId: saved.userId ?? null,
           needsRenew: false,
           guestUntil: saved.guestUntil ?? null,
+          example: false,
         }
       },
       // merge only fixes the in-memory state. Writing it back through the store's own action also
       // wipes the stale tokens from localStorage.
       onRehydrateStorage: () => (state) => {
+        if (state?.example) return
         if (state && !state.token && !state.needsRenew) state.logout()
       },
     },
