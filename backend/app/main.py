@@ -12,6 +12,7 @@ from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
 from app.core.body_limit import LimitRequestBody
 from app.core.config import PUBLISHED_SECRETS, settings
+from app.core.csp import POLICY
 from app.core.rls import reset_rls, set_rls
 from app.core.security import decode_token
 
@@ -60,6 +61,7 @@ class BrowserLock(BaseHTTPMiddleware):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("Content-Security-Policy", POLICY)
         return response
 
 
