@@ -124,6 +124,27 @@ function barShares(contribs: number[], employer: number): number[] {
   return shown
 }
 
+function RadarAxes({ axes }: { axes: { label: string; value: number }[] }) {
+  const n = axes.length
+  const cx = 80
+  const cy = 80
+  const radius = 52
+  const point = (index: number, scale: number) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / n
+    return [cx + Math.cos(angle) * radius * scale, cy + Math.sin(angle) * radius * scale]
+  }
+  const ring = (scale: number) => axes.map((_, index) => point(index, scale).join(',')).join(' ')
+  const shape = axes.map((axis, index) => point(index, Math.max(0, Math.min(1, axis.value))).join(',')).join(' ')
+  return (
+    <svg viewBox="0 0 160 160" className="mx-auto mb-3 h-36 w-36 text-line" role="img"
+      aria-label={axes.map(axis => `${axis.label} ${Math.round(axis.value * 100)}`).join(', ')}>
+      <polygon points={ring(1)} fill="none" stroke="currentColor" />
+      <polygon points={ring(0.5)} fill="none" stroke="currentColor" />
+      <polygon points={shape} className="fill-accent/25 stroke-accent" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
 function FactorBars({ match, active, idle }: {
   match: NonNullable<CandidateCardData['match']>
   active: NonNullable<CandidateCardData['match']>['factors']
@@ -137,6 +158,7 @@ function FactorBars({ match, active, idle }: {
   }
   return (
     <div className="border-t border-line bg-sunken/50 px-5 py-3.5 sm:px-6">
+      {active.length >= 3 && <RadarAxes axes={active.map(factor => ({ label: factor.label, value: factor.value ?? 0 }))} />}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 md:[grid-template-columns:var(--cols)]"
         style={{ '--cols': active.map(width).join(' ') } as React.CSSProperties}
         aria-label="Факторы скора">

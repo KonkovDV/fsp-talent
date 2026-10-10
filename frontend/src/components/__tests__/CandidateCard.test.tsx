@@ -54,6 +54,8 @@ describe('карточка кандидата', () => {
     const employer = Number(screen.getByTestId('employer-score').textContent?.replace('Работодатель ', ''))
     expect(shares.reduce((sum, part) => sum + part, 0)).toBeCloseTo(employer, 5)
     expect(screen.getByText(/гармоническое среднее/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Навыки 100/ })).toBeInTheDocument()
+    expect(screen.getByTestId('candidate-card').textContent).not.toMatch(/@|Ирина/)
   })
 
   it('показывает коды причин плашками и не печатает имя', async () => {
