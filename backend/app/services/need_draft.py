@@ -8,6 +8,7 @@ from app.services.cities import CITIES
 from app.services.skills import extract_skills
 from app.services.survey import INDUSTRIES
 from app.services.tfidf_need import suggest_skills
+from app.services.vacancy_flags import vacancy_flags
 
 _NICE = re.compile(r"будет плюсом|желательн\w*|nice to have|как плюс", re.IGNORECASE)
 _THOUSANDS = re.compile(r"(\d{2,4})\s*(?:тыс\.?|тысяч|k\b)", re.IGNORECASE)
@@ -104,4 +105,5 @@ def draft_need(text: str) -> dict:
     if hinted:
         notes.append("Похоже по словам, проверьте перед сохранением: " + ", ".join(hinted) + ".")
     draft["notes"] = notes
+    draft["flags"] = vacancy_flags(draft.get("title") or "", cleaned)
     return draft
