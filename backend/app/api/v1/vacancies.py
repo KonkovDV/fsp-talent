@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_employer, get_current_participant
 from app.api.errors import ApiError
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import (
     AccessLog,
@@ -72,6 +73,9 @@ class VacancyIn(BaseModel):
             raise ValueError("Неизвестный разряд")
         if self.salary_to_gross < self.salary_from_gross:
             raise ValueError("Верхняя граница зарплаты меньше нижней")
+        floor = settings.MIN_MONTHLY_GROSS
+        if self.salary_from_gross < floor or self.salary_to_gross < floor:
+            raise ValueError(f"Вилка не ниже {floor} ₽ в месяц до вычета НДФЛ")
         return self
 
 
