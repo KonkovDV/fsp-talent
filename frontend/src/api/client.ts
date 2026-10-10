@@ -277,6 +277,8 @@ export const downloadMyProfilePdf = () => api.get('/candidates/me/profile.pdf', 
 export const createVacancy = (data: object) => api.post('/vacancies/', data)
 export const needExam = (id: string) => api.get(`/needs/${id}/exam`)
 export const previewVacancyExam = (data: object) => api.post('/vacancies/exam', data)
+export const previewPublicExam = (data: { description: string; role?: string; grade?: string }) =>
+  api.post('/public/vacancy-preview', data)
 export const closeVacancy = (id: string) => api.post(`/vacancies/${id}/close`)
 export const vacanciesForMe = () => api.get('/vacancies/for-me')
 export const applyToVacancy = (id: string) => api.post(`/vacancies/${id}/apply`)
