@@ -16,6 +16,7 @@ from app.services.assessment import (
     RETAKE_INTERVAL_DAYS,
     Attempt,
     decide_grade,
+    exposure_map,
     note_pace,
     passed_target,
     recommended_grade,
@@ -481,6 +482,13 @@ def test_isomorphs_share_the_parent_and_differ_in_wording():
     assert scored_answer(False, True, False) == (None, True)
 
 
+def test_exposure_waits_for_twenty_sessions_of_one_pool():
+    assert exposure_map({"js_eval:3": 14}, 19) == {}
+    rates = exposure_map({"js_eval:3": 14, "py_eval:1": 2}, 20)
+    assert rates["js_eval:3"] == 0.7
+    assert rates["js_eval:3"] > cat.EXPOSURE_TARGET
+
+
 def test_sympson_hetter_skips_an_overexposed_key():
     from app.items import Family
 
@@ -497,5 +505,6 @@ def test_sympson_hetter_skips_an_overexposed_key():
 
     picked = cat.sympson_hetter(window, AlwaysHigh(), {"hot:3": 1.0})
     assert picked.family.id == "cold"
+    assert cat.sympson_hetter(window, AlwaysHigh(), {"hot:3": 0.69}).family.id == "cold"
     assert cat.sympson_hetter(window, random.Random(1), {}) in window
     assert cat.EXPRESS_ITEMS == 15 and cat.EXPRESS_MINUTES == 5 and cat.EXPRESS_ITEM_S * cat.EXPRESS_ITEMS == 300

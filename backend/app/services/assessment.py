@@ -69,6 +69,18 @@ SKILL_CONFIRM_SHARE = 0.75  # a tested skill counts as confirmed at ≥ 75 % rig
 EXPOSURE_MIN_SESSIONS = 20
 
 
+def exposure_map(counts: dict[str, int], total: int) -> dict[str, float]:
+    """Share of sessions that saw each key. Below the warm-up the selector stays uniform.
+
+    The live bank counts sessions of one specialization. A global denominator leaves a
+    JavaScript key under the 0.40 target even when most of that specialization saw it.
+    Learned Sympson–Hetter constants stay out: that trial lost accuracy on the hold-out.
+    """
+    if total < EXPOSURE_MIN_SESSIONS:
+        return {}
+    return {key: count / total for key, count in counts.items() if count > 0}
+
+
 def note_pace(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str) -> dict:
     """Count fast right answers per family. Three in one family ask for a look; the grade does not move."""
     flags = dict(flags)
@@ -326,13 +338,27 @@ class BankState:
     blocked: set[str]
 
 
-async def bank_state(db: AsyncSession) -> BankState:
+async def bank_state(db: AsyncSession, spec: str | None = None) -> BankState:
+    """Offsets and quarantine are bank-wide. Exposure is this specialization's own sessions."""
     rows = list(await db.scalars(select(ItemStat)))
-    total = await db.scalar(select(func.count()).select_from(TestSession).where(
-        TestSession.engine == "cat_v2", TestSession.status == "completed")) or 0
-    exposure = {r.item_key: r.sessions / total for r in rows} if total >= EXPOSURE_MIN_SESSIONS else {}
-    return BankState(offsets={r.item_key: r.b_offset for r in rows if r.b_offset},
-                     exposure=exposure, blocked={r.item_key for r in rows if r.status == "quarantined"})
+    offsets = {r.item_key: r.b_offset for r in rows if r.b_offset}
+    blocked = {r.item_key for r in rows if r.status == "quarantined"}
+    if spec:
+        completed = and_(
+            TestSession.engine == "cat_v2", TestSession.status == "completed",
+            TestSession.specialization == spec)
+        total = await db.scalar(select(func.count()).select_from(TestSession).where(completed)) or 0
+        grouped = await db.execute(
+            select(TestSessionItem.item_key, func.count(func.distinct(TestSessionItem.session_id)))
+            .join(TestSession, TestSession.id == TestSessionItem.session_id)
+            .where(completed)
+            .group_by(TestSessionItem.item_key))
+        counts = {key: int(n) for key, n in grouped.all()}
+    else:
+        total = await db.scalar(select(func.count()).select_from(TestSession).where(
+            TestSession.engine == "cat_v2", TestSession.status == "completed")) or 0
+        counts = {r.item_key: r.sessions for r in rows}
+    return BankState(offsets=offsets, exposure=exposure_map(counts, int(total)), blocked=blocked)
 
 
 def _topic_shares(session: TestSession) -> dict[str, float] | None:
@@ -419,7 +445,7 @@ async def start_session(db: AsyncSession, participant_id: uuid.UUID, spec: str, 
     session.p_pass, session.irt_theta, session.theta_se = prior.p_pass, prior.theta, prior.se
     db.add(session)
     await db.flush()
-    bank = await bank_state(db)
+    bank = await bank_state(db, spec)
     item = await serve_next(db, session, state, bank, seq=1)
     return session, item
 
@@ -560,7 +586,7 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
     session.flags = flags
     await db.flush()
 
-    bank = await bank_state(db)
+    bank = await bank_state(db, session.specialization)
     state = build_state(session.specialization, session.target_grade, items, bank.blocked,
                         _topic_shares(session))
     verdict = cat.evaluate(state, item_limit=cat.EXPRESS_ITEMS if is_trial(session.flags) else None)
