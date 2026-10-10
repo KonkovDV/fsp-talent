@@ -57,6 +57,7 @@ CODE_CLASS: dict[str, str] = {
     "delete_confirm": "E05",
     "survey_required": "E05",
     "too_young": "E05",
+    "reserved_email": "E05",
     "rate_limited": "E06",
     "resend_cooldown": "E06",
     "verification_attempts": "E06",
