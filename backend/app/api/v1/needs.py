@@ -31,7 +31,9 @@ from app.models import (
     Participant,
 )
 from app.services.ai import providers, second_opinion
+from app.services.cities import CITIES
 from app.services.matching import NeedSpec, anonymous_compare
+from app.services.need_draft import draft_need
 from app.services.search import cache as shortlist_cache
 from app.services.search.pipeline import _build_cards, score_pool, search_candidates, shown_category
 from app.services.skills import normalize_skill
@@ -53,6 +55,8 @@ class NeedParams(BaseModel):
     has_fsp: bool | None = None
     salary_from: int | None = Field(None, ge=0)
     salary_to: int | None = Field(None, ge=0)
+    city: str | None = None
+    work_format: Literal["office", "hybrid", "remote"] | None = None
     q: str | None = Field(None, max_length=300)
 
     @model_validator(mode="after")
@@ -61,6 +65,8 @@ class NeedParams(BaseModel):
             raise ValueError("Неизвестная специализация")
         if self.industry and self.industry not in INDUSTRIES:
             raise ValueError("Неизвестная сфера")
+        if self.city and self.city not in CITIES:
+            raise ValueError("Неизвестный город")
         if self.salary_from and self.salary_to and self.salary_from > self.salary_to:
             raise ValueError("Зарплата «от» больше, чем «до»")
         self.skills = sorted({n for s in self.skills if (n := normalize_skill(s))})
@@ -70,7 +76,8 @@ class NeedParams(BaseModel):
     def spec(self) -> NeedSpec:
         return NeedSpec(
             role=self.role, grade=self.grade, skills=tuple(self.skills), nice=tuple(self.nice_to_have),
-            industry=self.industry, text=bool(self.q), salary_from=self.salary_from, salary_to=self.salary_to)
+            industry=self.industry, text=bool(self.q), salary_from=self.salary_from, salary_to=self.salary_to,
+            city=self.city, work_format=self.work_format)
 
 
 class NeedIn(BaseModel):
@@ -97,6 +104,18 @@ async def _params(db: AsyncSession, need: Need, version: int | None = None) -> N
 def _out(need: Need, ver: NeedVersion, shortlist: int = 0) -> dict:
     return {"id": str(need.id), "title": need.title, "version": need.version, "archived": need.archived,
             "params": ver.params, "shortlist_count": shortlist, "updated_at": need.updated_at.isoformat()}
+
+
+class DraftIn(BaseModel):
+    text: str = Field(min_length=10, max_length=8000)
+
+
+@router.post("/draft")
+async def draft(body: DraftIn, current: dict = Depends(get_current_employer)):
+    """Fill a need from pasted text. Nothing is saved and nothing is fetched from a job board."""
+    if await too_many(f"need-draft:{current['sub']}", 20, 3600):
+        raise ApiError(429, "rate_limited", "Слишком часто. Подождите немного.")
+    return draft_need(body.text)
 
 
 @router.post("", status_code=201)

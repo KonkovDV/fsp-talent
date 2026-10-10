@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, needExam, createNeed, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
+  apiError, compareNeed, needExam, createNeed, draftNeed, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
 } from '../../api/client'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import { useFavorites } from '../../hooks/useFavorites'
@@ -18,12 +18,13 @@ interface NeedParams {
   role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
   industry: string | null; work_goal: string | null; has_fsp: boolean | null
   salary_from?: number | null; salary_to?: number | null
+  city?: string | null; work_format?: string | null
 }
 interface PayHint { known: number; covered: number; proposed_to: number; covered_if_raised: number; gained: number }
 interface SkillHint { skill: string; gained: number; pool: number }
 interface Need { id: string; title: string; version: number; params: NeedParams; shortlist_count: number }
 
-const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '' }
+const EMPTY = { title: '', role: '', grade: '', skills: '', nice: '', industry: '', internship: false, payFrom: '', payTo: '', city: '', format: '', paste: '' }
 const money = (raw: string) => { const n = Number(raw); return raw.trim() && Number.isFinite(n) ? n : null }
 const csv = (s: string) => s.split(',').map(x => x.trim()).filter(Boolean)
 
@@ -34,6 +35,7 @@ export default function EmployerNeeds() {
   const [form, setForm] = useState(EMPTY)
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [error, setError] = useState('')
+  const [draftNotes, setDraftNotes] = useState<string[]>([])
   const [offerFor, setOfferFor] = useState<string | null>(null)
   const [taskFor, setTaskFor] = useState<string | null>(null)
   const [tab, setTab] = useState<'matches' | 'shortlist' | 'exam'>('matches')
@@ -64,7 +66,8 @@ export default function EmployerNeeds() {
     title: form.title.trim(),
     params: { role: form.role || null, grade: form.grade || null, skills: csv(form.skills), nice_to_have: csv(form.nice),
       industry: form.industry || null, work_goal: form.internship ? 'internship' : null,
-      salary_from: money(form.payFrom), salary_to: money(form.payTo) },
+      salary_from: money(form.payFrom), salary_to: money(form.payTo),
+      city: form.city || null, work_format: form.format || null },
     ...(editing && editing !== 'new' && current ? { expected_version: current.version } : {}),
   })
   const save = useMutation({
@@ -75,6 +78,32 @@ export default function EmployerNeeds() {
       qc.invalidateQueries({ queryKey: ['need', need.id] })
     },
     onError: (e: unknown) => setError(apiError(e)),
+  })
+  const parsed = useMutation({
+    mutationFn: () => draftNeed(form.paste).then(r => r.data as {
+      title: string; role: string | null; grade: string | null; skills: string[]; nice_to_have: string[]
+      salary_from: number | null; salary_to: number | null; work_format: string | null; city: string | null
+      industry: string | null; work_goal: string | null; notes: string[]
+    }),
+    onSuccess: (d) => {
+      setError('')
+      setDraftNotes(d.notes ?? [])
+      setForm(f => ({
+        ...f,
+        title: d.title || f.title,
+        role: d.role ?? '',
+        grade: d.grade ?? '',
+        skills: (d.skills ?? []).join(', '),
+        nice: (d.nice_to_have ?? []).join(', '),
+        industry: d.industry ?? '',
+        internship: d.work_goal === 'internship',
+        payFrom: d.salary_from != null ? String(d.salary_from) : '',
+        payTo: d.salary_to != null ? String(d.salary_to) : '',
+        city: d.city ?? '',
+        format: d.work_format ?? '',
+      }))
+    },
+    onError: (e: unknown) => setError(apiError(e, 'Текст не разобран')),
   })
   const fav = useFavorites()
   const hide = useMutation({
@@ -103,7 +132,8 @@ export default function EmployerNeeds() {
     setForm({ title: n.title, role: n.params.role ?? '', grade: n.params.grade ?? '', skills: n.params.skills.join(', '),
       nice: n.params.nice_to_have.join(', '), industry: n.params.industry ?? '', internship: n.params.work_goal === 'internship',
       payFrom: n.params.salary_from != null ? String(n.params.salary_from) : '',
-      payTo: n.params.salary_to != null ? String(n.params.salary_to) : '' })
+      payTo: n.params.salary_to != null ? String(n.params.salary_to) : '',
+      city: n.params.city ?? '', format: n.params.work_format ?? '', paste: '' })
   }
   const field = 'field-label'
   const shortItems = shortlist.data?.items ?? []
@@ -112,11 +142,18 @@ export default function EmployerNeeds() {
     <div>
       <PageHeader title="Потребности"
         lead="Опишите, кого ищете. Каждое изменение сохраняется новой версией, а шорт-лист помнит, по какой версии выбран кандидат."
-        actions={<button onClick={() => { setEditing('new'); setForm(EMPTY) }} className="btn-primary"><Plus size={16} aria-hidden />Новая потребность</button>} />
+        actions={<button onClick={() => { setEditing('new'); setForm(EMPTY); setDraftNotes([]) }} className="btn-primary"><Plus size={16} aria-hidden />Новая потребность</button>} />
 
       {editing && (
         <form className="card mb-8 space-y-5" onSubmit={e => { e.preventDefault(); save.mutate() }} aria-label="Потребность">
           <h2 className="section-title">{editing === 'new' ? 'Новая потребность' : 'Изменение — будет сохранено новой версией'}</h2>
+          <div>
+            <label className={field} htmlFor="n-paste">Текст вакансии</label>
+            <textarea id="n-paste" value={form.paste} onChange={e => setForm({ ...form, paste: e.target.value })} rows={4}
+              placeholder="Вставьте текст. Сайт вакансий не открывается: разбираются только эти строки." className="input" aria-label="Текст вакансии" />
+            <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate()}>Разобрать текст</button>
+            {draftNotes.length > 0 && <ul className="mt-2 text-sm text-ink-2">{draftNotes.map(line => <li key={line}>{line}</li>)}</ul>}
+          </div>
           <div><label className={field} htmlFor="n-title">Название</label>
             <input id="n-title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
               placeholder="Например, Python-бэкенд в платёжную команду" className="input" aria-label="Название" /></div>
@@ -151,6 +188,18 @@ export default function EmployerNeeds() {
               <input id="n-to" inputMode="numeric" value={form.payTo} onChange={e => setForm({ ...form, payTo: e.target.value })} placeholder="260000" className="input num" aria-label="Вилка до" />
               <p className="field-hint">Если кандидат указал ожидание, место в подборке учитывает, примет ли он такую вилку. {netLine(Number(form.payFrom) || null, Number(form.payTo) || null)}</p></div>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div><label className={field} htmlFor="n-city">Город</label>
+              <select id="n-city" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="select" aria-label="Город">
+                <option value="">Не важен</option>
+                {(opts?.cities ?? []).map((name: string) => <option key={name} value={name}>{name}</option>)}
+              </select></div>
+            <div><label className={field} htmlFor="n-fmt">Формат</label>
+              <select id="n-fmt" value={form.format} onChange={e => setForm({ ...form, format: e.target.value })} className="select" aria-label="Формат">
+                <option value="">Не важен</option>
+                {Object.entries(opts?.work_formats ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
+              </select></div>
+          </div>
           <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.internship} onChange={e => setForm({ ...form, internship: e.target.checked })} />Ищем стажёра или практиканта</label>
           {error && <p className="notice-error" role="alert">{error}</p>}
           <div className="flex gap-3">
@@ -162,7 +211,7 @@ export default function EmployerNeeds() {
 
       {needsError && <p className="notice-error mb-4" role="alert">{apiError(needsLoadError, 'Не удалось загрузить потребности')}</p>}
       {!needsLoading && !needsError && needs.length === 0 && !editing && (
-        <Empty title="Потребностей пока нет" action={<button onClick={() => { setEditing('new'); setForm(EMPTY) }} className="btn-primary">Создать первую</button>}>
+        <Empty title="Потребностей пока нет" action={<button onClick={() => { setEditing('new'); setForm(EMPTY); setDraftNotes([]) }} className="btn-primary">Создать первую</button>}>
           Подборка с объяснением появится сразу после сохранения.
         </Empty>
       )}
