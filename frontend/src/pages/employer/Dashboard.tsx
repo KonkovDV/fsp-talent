@@ -18,12 +18,15 @@ export default function EmployerDashboard() {
   const loadError = offersQ.error ?? needsQ.error ?? appsQ.error
   const accepted = offers.filter(o => o.status === 'accepted').length
   const pending = offers.filter(o => o.status === 'pending').length
+  const shortlisted = needs.reduce((sum, need) => sum + (need.shortlist_count || 0), 0)
   const funnel = [
+    ['В шорт-листе', shortlisted],
     ['Отправлено', offers.length],
     ['Просмотрено', offers.filter(o => o.candidate_viewed_at).length],
     ['Принято', accepted],
     ['Контакты открыты', offers.filter(o => o.contacts_revealed_at).length],
   ] as const
+  const funnelScale = Math.max(...funnel.map(([, n]) => n), 1)
 
   const tiles = [
     { n: needs.length, label: plural(needs.length, ['потребность', 'потребности', 'потребностей']), hint: 'Описание того, кого ищете, с подборкой и шорт-листом', to: '/employer/needs', cta: needs.length ? 'Открыть' : 'Создать первую' },
@@ -41,25 +44,22 @@ export default function EmployerDashboard() {
             <h2 className="font-display text-xl font-bold">Воронка приглашений</h2>
             <p className="mt-1 max-w-[52ch] text-sm on-hero-muted">
               {offers.length
-                ? 'От отправки до открытых контактов. Контакты появляются только после согласия кандидата.'
+                ? 'От шорт-листа до открытых контактов. Контакты появляются только после согласия кандидата.'
                 : 'Приглашений ещё нет. Опишите потребность — подборка с объяснением появится сразу, приглашать можно из неё.'}
             </p>
           </div>
           <Link to="/employer/needs" className="btn-on-hero">{needs.length ? 'К подборкам' : 'Описать потребность'}</Link>
         </div>
-        <ol className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-4">
-          {funnel.map(([label, n], i) => {
-            const top = funnel[0][1] || 1
-            return (
+        <ol className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-5">
+          {funnel.map(([label, n], i) => (
               <li key={label}>
                 <p className="font-display font-bold leading-none tracking-tight num [font-size:clamp(2.25rem,5vw,3.25rem)]">{n}</p>
                 <p className="mt-2 text-sm on-hero-muted">{label}</p>
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20" aria-hidden>
-                  <span className="block h-full rounded-full bg-white" style={{ width: `${offers.length ? Math.round((n / top) * 100) : 0}%`, opacity: 1 - i * 0.15 }} />
+                  <span className="block h-full rounded-full bg-white" style={{ width: `${funnelScale > 0 && (shortlisted || offers.length) ? Math.round((n / funnelScale) * 100) : 0}%`, opacity: 1 - i * 0.12 }} />
                 </div>
               </li>
-            )
-          })}
+          ))}
         </ol>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
