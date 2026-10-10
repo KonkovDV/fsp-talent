@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { itemPsychometrics } from '../api/client'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { apiError, itemPsychometrics, previewPublicExam } from '../api/client'
+import ExamPreview, { type Exam } from '../components/ExamPreview'
 import PublicShell from '../components/PublicShell'
 import { PageHeader, Skeleton } from '../components/ui'
 import { GRADE_RU, ROLE_RU } from '../labels'
@@ -106,6 +107,10 @@ function ExposureBars({ families, answers, target }: { families: FamilyRow[]; an
 /** Open view of the item bank: information at the cuts, exposure, no answer keys. */
 export default function MethodPage() {
   const [spec, setSpec] = useState('backend')
+  const [vacancy, setVacancy] = useState('Ищем backend-разработчика на Python и PostgreSQL')
+  const demo = useMutation({
+    mutationFn: () => previewPublicExam({ description: vacancy, role: spec, grade: 'middle' }).then(r => r.data as Exam),
+  })
   const { data, isLoading, isError } = useQuery<Report>({
     queryKey: ['psychometrics', spec],
     queryFn: () => itemPsychometrics(spec).then(r => r.data),
@@ -141,6 +146,16 @@ export default function MethodPage() {
               Согласованность без порога 0,75 — 79 %. По правилу «сдавать от 75 %» модель предсказывает 76,1 %,
               повтор даёт 73,6 %. Обе цифры печатает команда каппы.
             </p>
+          </section>
+          <section className="card p-5">
+            <h2 className="font-display text-lg font-bold text-ink">Какой тест получится из вакансии</h2>
+            <p className="mt-1 text-sm text-ink-2">Вставьте описание. Вход не нужен. Правильные ответы не показываются.</p>
+            <textarea value={vacancy} onChange={e => setVacancy(e.target.value)} rows={4} className="input mt-3" aria-label="Текст вакансии" />
+            <button type="button" className="btn-primary mt-3" disabled={vacancy.trim().length < 2 || demo.isPending} onClick={() => demo.mutate()}>
+              {demo.isPending ? 'Считаем…' : 'Показать состав'}
+            </button>
+            {demo.isError && <p className="notice-error mt-3" role="alert">{apiError(demo.error)}</p>}
+            {demo.data && <div className="mt-4"><ExamPreview exam={demo.data} /></div>}
           </section>
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Информация у порога уровня</h2>

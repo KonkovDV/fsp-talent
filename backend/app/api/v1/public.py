@@ -210,6 +210,26 @@ _MAX_EVALUATE_BYTES = 256 * 1024
 EVALUATE_PER_MINUTE = 10
 
 
+class VacancyPreviewIn(BaseModel):
+    title: str = Field("Вакансия", min_length=2, max_length=200)
+    description: str = Field("", max_length=4000)
+    role: str | None = Field(None, max_length=30)
+    grade: str | None = Field(None, max_length=20)
+
+
+@router.post("/vacancy-preview")
+async def vacancy_preview(body: VacancyPreviewIn, request: Request):
+    """Topic mix and three sample items for a pasted vacancy. No login and no answer keys."""
+    from app.api.v1.auth import client_address
+    from app.services.vacancy_exam import form_exam
+
+    if await too_many(f"public:vacancy:{client_address(request)}", limit=EVALUATE_PER_MINUTE):
+        raise ApiError(429, "rate_limited")
+    exam = form_exam(body.title, body.description, [], body.role, body.grade)
+    exam.pop("topic_shares", None)
+    return exam
+
+
 @router.post("/evaluate")
 async def evaluate_pairs(request: Request):
     """The jury's own labelled pairs, scored like `--pairs`. Nothing is stored and the bank is not read."""
