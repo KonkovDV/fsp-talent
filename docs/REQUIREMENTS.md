@@ -158,6 +158,7 @@
 | 3.5 Frontend, Backend и слой хранения разделены | ✅ | `frontend/`, `backend/`, PostgreSQL |
 | 3.5 Docker, Dockerfile, docker-compose.yml | ✅ | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, проверка в CI |
 | 3.5 OpenAPI: запросы, ответы, коды ошибок | ✅ | `/docs`, `/openapi.json`, [API_ERRORS.md](API_ERRORS.md) |
+| Ошибка API в форме RFC 9457: класс E01–E20 и прежний код | ✅ сверх ТЗ | `GET /api/v1/problems`, [API_ERRORS.md](API_ERRORS.md) | `app/api/problems.py` |
 | 3.5 152-ФЗ, согласия, роли, защита паролей и токенов | ✅ | [SOLUTION.md, гл. 10](SOLUTION.md#10-безопасность-и-152-фз) |
 | 3.5 Совместимость с Keycloak | ✅ | OIDC-клиент, [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |
 | 3.5 Кроссплатформенность, адаптивная вёрстка | ✅ | Все экраны от 390 px, светлая и тёмная темы ([DESIGN.md](DESIGN.md#проверка-интерфейса)) |
