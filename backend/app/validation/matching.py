@@ -3,7 +3,8 @@
 Labelled employer–candidate pairs do not exist for the hackathon, so the benchmark is synthetic and says so.
 Each candidate has a hidden truth (real skills, real level) and noisy observations the platform sees:
 declared skills miss 25 % of the real ones and add 15 % false ones; the declared grade is one level too high
-for 30 % of people; a test (taken by 45 %) confirms real skills and measures the level; 55 % have FSP history
+for 30 % of people; a test (taken by 45 %) confirms real skills and measures the level, and a failed attempt is
+observed as `failed_grade` (the production search reads it the same way, DoR-N7); 55 % have FSP history
 whose LCB correlates with the level. Relevance labels come from the hidden truth only:
 
     3  role matches, all required skills are real, real grade equals the requested one
@@ -89,13 +90,14 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
             # The sweep names only the share who claim one step up. Everyone else states the true grade.
             declared_grade = GRADES[min(gi + 1, len(GRADES) - 1)] if r < overclaim else true_grade
         tested = rng.random() < 0.45
-        grade, source, test_p = declared_grade, "declared", None
+        grade, source, test_p, failed_grade = declared_grade, "declared", None, None
         if tested:
             test_p = 1.0 / (1.0 + math.exp(-3.0 * (theta - CUTS[declared_grade])))
             if test_p >= 0.75:
                 grade, source = declared_grade, "assessed"
             else:
-                test_p = None
+                # The platform stores the failed attempt (outcome "not_passed"); the grade stays declared.
+                test_p, failed_grade = None, declared_grade
             for s in true_skills:
                 if s in TESTABLE and rng.random() < 0.9:
                     declared[s] = "test_confirmed"
@@ -105,12 +107,15 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
             test_correct = int(round(test_p * test_n))
         has_fsp = rng.random() < 0.55
         lcb = max(0.0, min(0.9, 0.3 + 0.15 * theta + rng.gauss(0, 0.08))) if has_fsp else None
+        observed = {"role": role, "grade": grade, "grade_source": source, "skills": declared,
+                    "test_p": test_p, "test_correct": test_correct, "test_n": test_n,
+                    "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)}
+        if failed_grade is not None:
+            observed["failed_grade"] = failed_grade
         candidates.append({
             "id": f"c{i}",
             "truth": {"role": role, "grade": true_grade, "skills": true_skills, "theta": round(theta, 4)},
-            "observed": {"role": role, "grade": grade, "grade_source": source, "skills": declared,
-                         "test_p": test_p, "test_correct": test_correct, "test_n": test_n,
-                         "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)},
+            "observed": observed,
         })
     needs = []
     for j in range(n_needs):
@@ -221,7 +226,8 @@ def _facts(c: dict) -> CandidateFacts:
     return CandidateFacts(role=o["role"], grade=o["grade"], grade_source=o["grade_source"], skills=dict(o["skills"]),
                           test_p=o["test_p"], test_spec=o["role"], fsp_lcb=o["fsp_lcb"], industry=o["industry"],
                           test_correct=o.get("test_correct"), test_n=o.get("test_n"),
-                          city=o.get("city"), work_formats=tuple(o.get("work_formats") or ()))
+                          city=o.get("city"), work_formats=tuple(o.get("work_formats") or ()),
+                          failed_grade=o.get("failed_grade"))
 
 
 def _spec(n: dict) -> NeedSpec:
@@ -877,7 +883,10 @@ def public_report(text: str) -> dict:
 
 
 # Thresholds of --check. They guard the claims in docs/VALIDATION_MATCHING.md, not a tuned optimum.
-RHO_DROP = 0.04          # removing the test or the FSP axis must cost at least this much Spearman in the category
+RHO_DROP = 0.04          # removing the test must cost at least this much Spearman in the category
+# Removing the FSP axis. Since DoR-N7 the failed attempt orders the category that FSP alone used to order,
+# so the FSP share of the Spearman is smaller: paired +0.031…+0.038 on seeds 2026–2028 (0.038…0.048 before).
+RHO_DROP_FSP = 0.03
 NDCG_FLOOR = 0.65        # full model on the default seed; the release before the category order had 0.661
 
 
@@ -894,9 +903,9 @@ def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
     if by["full"].ndcg10 < NDCG_FLOOR:
         failed.append(f"full nDCG@10 >= {NDCG_FLOOR}")
     full_rho = by["full"].rho or 0.0
-    for ablation in ("no_test", "no_fsp"):
-        if full_rho - (by[ablation].rho or 0.0) < RHO_DROP:
-            failed.append(f"Spearman full - {ablation} >= {RHO_DROP}")
+    for ablation, drop in (("no_test", RHO_DROP), ("no_fsp", RHO_DROP_FSP)):
+        if full_rho - (by[ablation].rho or 0.0) < drop:
+            failed.append(f"Spearman full - {ablation} >= {drop}")
     if not (by["full"].overrated or 0.0) < (by["keyword"].overrated or 0.0):
         failed.append("overrated in top 10: full < keyword")
     return failed
