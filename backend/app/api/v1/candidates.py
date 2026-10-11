@@ -53,6 +53,7 @@ from app.services.inn import published_inn
 from app.services.mail import send_mail
 from app.services.market import market_flag, quartiles, role_median, salary_band
 from app.services.notify import Outbox, category_label, notify
+from app.services.offer_why import why_invited
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
 from app.services.privacy import erase_participant
@@ -679,6 +680,20 @@ async def get_my_offers(
             reputations[offer.employer_id] = await company_reputation(db, offer.employer)
     marked = set(await db.scalars(select(CandidateInterest.employer_id).where(
         CandidateInterest.participant_id == _pid(current))))
+    # «Почему вас пригласили»: only the candidate's own signals, the same ones the search reads.
+    me = await db.get(Participant, _pid(current))
+    fsp_scores = {disc: float(lcb) for disc, lcb in (await db.execute(
+        select(DisciplineScore.discipline, DisciplineScore.lcb).where(
+            DisciplineScore.participant_id == _pid(current)))).all()}
+
+    def why(o: Offer) -> list[dict[str, str]]:
+        return why_invited(
+            offer_title=o.role, offer_format=o.work_format,
+            role=cat.primary_role if cat else None, grade=cat.grade if cat else None,
+            grade_source=cat.grade_source if cat else None,
+            assessed_at=getattr(me, "assessed_at", None), fsp_scores=fsp_scores,
+            work_formats=list(getattr(me, "work_formats", None) or []))
+
     return [{
         "id": str(o.id), "company": o.employer.company_name, "company_id": str(o.employer_id), "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
@@ -699,6 +714,7 @@ async def get_my_offers(
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "unread_messages": unread.get(o.id, 0),
+        "why_you": why(o),
     } for o in rows]
 
 
