@@ -46,7 +46,7 @@ export default function JuryQuickStart() {
         className="btn mt-3 min-h-12 w-full bg-white px-6 text-base text-[#2A1DD6] hover:bg-white/90 disabled:opacity-70">
         {busy ? 'Открываем тест…' : 'Пройти экспресс-тест за 5 минут'}
       </button>
-      <p className="mt-2 text-xs text-white/85">Без регистрации: свободный аккаунт jury1…jury10, 15 заданий, грейд не меняется.</p>
+      <p className="mt-2 text-xs text-white/95">Без регистрации: свободный аккаунт jury1…jury10, 15 заданий, грейд не меняется.</p>
       {error && (
         <p className="mt-2 text-sm text-white" role="alert">
           {error} <Link to="/jury" className="font-medium underline">Открыть страницу жюри</Link>
@@ -57,7 +57,7 @@ export default function JuryQuickStart() {
         <li>Работодатель <Link to="/login?role=employer" className="font-medium text-white underline">hr@sibcode.demo</Link>: потребность → подборка с объяснением → приглашение с вилкой.</li>
         <li>Методика: <Link to="/method" className="font-medium text-white underline">как устроен тест</Link> и <Link to="/badge" className="font-medium text-white underline">проверка удостоверения</Link>.</li>
       </ol>
-      <p className="mt-3 text-xs text-white/80">
+      <p className="mt-3 text-xs text-white/95">
         Демо-входы, пароль demo12345: кандидат <Link to="/login" className="underline">fsp001@demo.talent</Link>, работодатель{' '}
         <Link to="/login?role=employer" className="underline">hr@sibcode.demo</Link>. Столы модерации и методиста открыты только
         сотрудникам: опубликованный логин их не видит.
