@@ -121,7 +121,7 @@ export default function CandidateDashboard() {
             ))}
           </ul>
           {(career.data?.gained ?? 0) > 0 && (
-            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, закроется ещё {career.data?.gained} открытых вакансий. Грейд от этого сам не вырастет.</p>
+            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, {plural(career.data?.gained ?? 0, ['подойдёт', 'подойдут', 'подойдут'])} ещё {career.data?.gained} {plural(career.data?.gained ?? 0, ['открытая вакансия', 'открытые вакансии', 'открытых вакансий'])}. Грейд от этого сам не вырастет.</p>
           )}
           <p className="mt-4 text-xs text-ink-3">
             {p.has_fsp ? 'ФСП ID привязан.' : 'ФСП ID не привязан: на заполненность это не влияет.'}

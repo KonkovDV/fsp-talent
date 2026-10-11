@@ -43,5 +43,6 @@ describe('готовность профиля', () => {
     expect(screen.getByRole('link', { name: 'Названо ожидание по зарплате' })).toHaveAttribute('href', '/candidate/profile')
     expect(screen.getByRole('link', { name: 'Грейд подтверждён тестом' })).toHaveAttribute('href', '/candidate/assessment')
     expect(screen.getByText(/ФСП ID не привязан/)).toBeInTheDocument()
+    expect(await screen.findByText(/подойдут ещё 2 открытые вакансии\./)).toBeInTheDocument()
   })
 })
