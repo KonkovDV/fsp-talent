@@ -49,6 +49,14 @@ def test_role_without_profile_discipline_reads_the_plain_fsp_line():
     assert _codes(lines) == ["CATEGORY_MATCH", "GRADE_ASSESSED", "FSP_SCORE"]
 
 
+def test_fsp_result_at_the_prior_floor_is_not_called_a_reason():
+    from app.services.scoring.engine import LCB0
+    lines = why_invited(offer_title="Backend", offer_format="remote", role="backend", grade="middle",
+                        grade_source="assessed", assessed_at=None, fsp_scores={"algorithmic": LCB0},
+                        work_formats=None)
+    assert "FSP_NO_LIFT" in _codes(lines) and "FSP_RELEVANT" not in _codes(lines)
+
+
 def test_no_category_still_explains_fsp_and_format():
     lines = why_invited(offer_title="Стажёр", offer_format="remote", role=None, grade=None, grade_source=None,
                         assessed_at=None, fsp_scores={}, work_formats=["remote"])

@@ -14,6 +14,7 @@ from datetime import date, datetime
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.fsp.relevance import OTHER_DISCIPLINE, lcb_for_need
 from app.services.matching import GRADE_RU
+from app.services.scoring.engine import LCB0
 from app.services.survey import SPECIALIZATIONS
 
 MAX_LINES = 4
@@ -83,9 +84,12 @@ def why_invited(*, offer_title: str | None, offer_format: str | None,
             lines.append({"code": "GRADE_DECLARED",
                           "text": "Грейд не подтверждён тестом — в выдаче вы ниже тех, кто его подтвердил"})
     if fsp_scores:
-        _, kind, discipline = lcb_for_need(role, fsp_scores)
+        lcb, kind, discipline = lcb_for_need(role, fsp_scores)
         label = DISCIPLINE_LABELS.get(discipline or "", discipline or "")
-        if kind == "other":
+        if lcb <= LCB0:
+            # At or below the prior floor the FSP axis adds nothing to the score (matching.fsp_factor).
+            lines.append({"code": "FSP_NO_LIFT", "text": "Результаты ФСП учтены, место не опускают"})
+        elif kind == "other":
             weight = f"{OTHER_DISCIPLINE:.1f}".replace(".", ",")
             lines.append({"code": "FSP_OTHER",
                           "text": f"Результаты ФСП в другой дисциплине ({label}) учтены с весом {weight}"})
