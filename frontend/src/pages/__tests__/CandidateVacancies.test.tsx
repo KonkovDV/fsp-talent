@@ -51,4 +51,10 @@ describe('вакансии кандидата', () => {
     expect(await screen.findByText('Backend-разработчик')).toBeInTheDocument()
     expect(screen.queryByTestId('vacancies-birth-date')).not.toBeInTheDocument()
   })
+  it('в карточке видно, открывает ли компания отклики', async () => {
+    vacanciesForMe.mockResolvedValue({ data: [{ ...card, match: 'matched', company_responsiveness: {
+      shown: true, n: 8, count: 6, lower: 0.43, median_days: 1.5, window_days: 90, within_days: 7 } }] })
+    renderPage()
+    expect(await screen.findByTestId('responsiveness')).toHaveTextContent('не реже 43 %')
+  })
 })
