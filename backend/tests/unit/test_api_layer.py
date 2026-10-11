@@ -583,7 +583,7 @@ async def test_offer_create_and_contact_reveal(quiet):
     db.scalars_q = [[]]
     body = offers.OfferCreate(
         candidate_id=person.id, salary_from_gross=150_000, salary_to_gross=200_000,
-        role="Backend", contact_method="почта",
+        role="Backend", contact_method="hr@example.ru",
     )
     created = await offers._create_offer(body, current, db)
     assert created["status"] == "pending" and "salary_hint" in created
@@ -601,7 +601,7 @@ async def test_create_offer_replays_a_stored_body(quiet, monkeypatch):
     monkeypatch.setattr(offers, "idem_begin", replay)
     body = offers.OfferCreate(
         candidate_id=_uid(), salary_from_gross=100_000, salary_to_gross=120_000,
-        role="Backend", contact_method="почта",
+        role="Backend", contact_method="hr@example.ru",
     )
     response = await offers.create_offer(body, _current("employer"), Bag(), idempotency_key="same-key")
     assert response.status_code == 201
