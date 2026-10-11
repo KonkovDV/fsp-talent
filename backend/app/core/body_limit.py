@@ -7,6 +7,7 @@ bytes as they arrive, before the route runs.
 from __future__ import annotations
 
 import json
+import re
 
 from app.api.errors import error_body
 
@@ -29,7 +30,8 @@ class LimitRequestBody:
         if length is not None and length > self.max_bytes:
             await _reject(send)
             return
-        if length is not None:
+        json_body = _is_json(scope)
+        if length is not None and not json_body:
             await self.app(scope, receive, send)
             return
         chunks: list[dict] = []
@@ -44,6 +46,9 @@ class LimitRequestBody:
             chunks.append(message)
             if message["type"] != "http.request" or not message.get("more_body"):
                 break
+        if json_body and _json_has_nul(b"".join(m.get("body") or b"" for m in chunks)):
+            await _reject(send, 422, "nul_byte", "Нулевой байт (\\u0000) в теле запроса")
+            return
         index = 0
 
         async def replay():
@@ -65,6 +70,21 @@ def _content_length(scope) -> int | None:
             except ValueError:
                 return None
     return None
+
+
+_JSON_NUL = re.compile(rb"(?<!\\)(?:\\\\)*\\u0000", re.IGNORECASE)
+
+
+def _is_json(scope) -> bool:
+    for key, value in scope.get("headers") or []:
+        if key.lower() == b"content-type":
+            return b"json" in value.lower()
+    return False
+
+
+def _json_has_nul(body: bytes) -> bool:
+    """RT-04: PostgreSQL text cannot hold NUL, so a JSON \\u0000 used to end as a 500."""
+    return b"\x00" in body or bool(_JSON_NUL.search(body))
 
 
 def _has_nul(scope) -> bool:
