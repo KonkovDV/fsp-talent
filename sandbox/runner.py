@@ -48,6 +48,11 @@ def _limits(language: str):
         # V8 reserves far more address space than it uses; Node is held by its heap flag and the container.
         if language in ("python", "sql"):
             resource.setrlimit(resource.RLIMIT_AS, (PY_MEMORY, PY_MEMORY))
+            # Audit M-1: the harness never forks or starts threads. With NPROC 0 the kernel refuses
+            # every fork and clone of this uid's child, so nothing can setsid() out of the group that
+            # killpg ends, and one run cannot eat the container's pids_limit. Node needs its V8
+            # threads, so it stays under pids_limit and the container instead.
+            resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
     return apply
 
 

@@ -52,6 +52,16 @@ class RunnerTest(unittest.TestCase):
                 "        n += 1\n    return n\n")
         self.assertIn(run("python", fork, [[[]]])["outputs"][0], (None, -1))
 
+    def test_python_cannot_fork_or_start_a_thread(self):
+        # Audit M-1: no child can leave the process group that killpg ends.
+        escape = ("def solve(xs):\n    import os\n    try:\n        pid = os.fork()\n    except OSError:\n"
+                  "        return -1\n    if pid == 0:\n        os.setsid()\n        os._exit(0)\n    return 1\n")
+        self.assertEqual(run("python", escape, [[[]]])["outputs"], [-1])
+        thread = ("def solve(xs):\n    import threading\n    try:\n        threading.Thread(target=int).start()\n"
+                  "    except RuntimeError:\n        return -1\n    return 1\n")
+        self.assertEqual(run("python", thread, [[[]]])["outputs"], [-1])
+        self.assertEqual(run("python", PY_SUM, CASES)["outputs"], [4, 0, 10])
+
     def test_wrong_shapes_are_nulls(self):
         self.assertEqual(run("python", "def solve(xs):\n    return 'x'\n", CASES)["outputs"], [None] * 3)
         self.assertEqual(run("javascript", "function solve(xs) { return 2 ** 80 }", [[[]]])["outputs"], [None])

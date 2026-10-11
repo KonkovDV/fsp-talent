@@ -3,6 +3,8 @@
 # The volume vc_keys holds the credential signing key and, unless SECRET_KEY is set in .env, the JWT key.
 services:
   backend:
+    # The sandbox socket is 0660, owner uid/gid 10001 (sandbox image). Join its group to connect.
+    group_add: ["10001"]
     build:
       context: ./backend
       args:

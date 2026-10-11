@@ -7,8 +7,10 @@ WORKDIR /app
 COPY runner.py server.py harness.py harness.js harness_sql.py ./
 COPY tests ./tests
 # The named volume takes this owner on first mount, so the unprivileged server can create its socket.
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin sandbox \
-    && mkdir -p /run/sandbox && chown sandbox /run/sandbox \
+# gid 10001 is fixed: the API container joins it (group_add) to reach the 0660 socket.
+RUN groupadd --gid 10001 sandbox \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin sandbox \
+    && mkdir -p /run/sandbox && chown sandbox:sandbox /run/sandbox \
     && node --version
 USER 10001
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

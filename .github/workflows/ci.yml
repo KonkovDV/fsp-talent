@@ -50,6 +50,8 @@ jobs:
       SECRET_KEY: test-secret-key-for-ci-only
       FSP_MODE: mock
       AI_ENABLED: 'false'
+      # No sandbox container in this job: the local runner is allowed here explicitly (audit M-1).
+      SANDBOX_REQUIRED: 'false'
       # Letters go to files; the smoke test reads confirmation codes from there.
       MAIL_MODE: file
       MAIL_FILE_DIR: /tmp/fsp-talent-mail
