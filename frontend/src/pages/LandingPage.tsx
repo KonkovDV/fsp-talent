@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { BadgeCheck, FileSignature, ShieldCheck } from 'lucide-react'
 import { SiteFooter } from '../components/chrome'
 import { PublicHeader } from '../components/PublicShell'
+import JuryQuickStart from '../components/JuryQuickStart'
 import RussiaNetwork from '../components/RussiaNetwork'
 import { CategoryPlate } from '../components/ui'
 import { GRADES, ROLE_RU, gradeRu } from '../labels'
@@ -164,16 +165,7 @@ export default function LandingPage() {
                 <Link to="/register?role=employer" className="btn min-h-12 bg-white px-6 text-base text-[#2A1DD6] hover:bg-white/90">Найти кандидата</Link>
                 <Link to="/register" className="btn min-h-12 border border-white/60 px-6 text-base text-white hover:bg-white/10">Я ищу работу</Link>
               </div>
-              <div className="mt-8 max-w-xl rounded-xl border border-white/25 bg-white/[0.08] p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-display text-sm font-bold">Жюри: проверка за три минуты</p>
-                  <Link to="/jury" className="btn-on-hero btn-sm">Маршрут для жюри</Link>
-                </div>
-                <p className="mt-2 text-sm text-white/90">
-                  Демо-вход: <Link to="/login?role=employer" className="font-medium text-white underline">hr@sibcode.demo</Link> или{' '}
-                  <Link to="/login" className="font-medium text-white underline">fsp001@demo.talent</Link>, пароль demo12345.
-                </p>
-              </div>
+              <JuryQuickStart />
             </div>
             <figure>
               <RussiaNetwork onBrand className="h-auto w-full" />
