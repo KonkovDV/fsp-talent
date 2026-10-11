@@ -4,15 +4,16 @@ from app.services.matching import CandidateFacts, NeedSpec, reason_source, score
 NEED = NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL", "Docker"))
 
 
-def _cand(skills: dict) -> CandidateFacts:
-    return CandidateFacts(role="backend", grade="middle", grade_source="declared", skills=skills)
+def _cand(skills: dict, tested: tuple[str, ...] = ()) -> CandidateFacts:
+    return CandidateFacts(role="backend", grade="middle", grade_source="declared", skills=skills,
+                          tested_skills=frozenset(tested))
 
 
 def test_untested_confirmed_and_missing_are_three_reasons():
     m = score(NEED, _cand({"Python": "test_confirmed", "PostgreSQL": "self_reported"}))
     codes = {r.code: r for r in m.reasons}
     assert "Python" in codes["VERIFIED_SKILL"].text
-    assert codes["SKILL_UNTESTED"].text == "Заявлены, тестом не подтверждены: PostgreSQL"
+    assert codes["SKILL_UNTESTED"].text == "Заявлены, тестом не проверялись: PostgreSQL"
     assert codes["SKILL_UNTESTED"].tone == "info"
     assert "Docker" in codes["SKILL_GAP"].text and "PostgreSQL" not in codes["SKILL_GAP"].text
     assert reason_source("SKILL_UNTESTED") == "заявлено"
@@ -31,3 +32,22 @@ def test_the_new_line_does_not_move_the_score():
     confirmed = score(NEED, _cand({"Python": "test_confirmed", "PostgreSQL": "test_confirmed"}))
     assert not any(r.code == "SKILL_UNTESTED" for r in confirmed.reasons)
     assert m.score < confirmed.score
+
+
+def test_three_states_confirmed_checked_not_passed_and_never_checked():
+    m = score(NEED, _cand({"Python": "test_confirmed", "PostgreSQL": "self_reported", "Docker": "self_reported"},
+                          tested=("Python", "PostgreSQL")))
+    codes = {r.code: r.text for r in m.reasons}
+    assert codes["VERIFIED_SKILL"] == "Подтверждены тестом: Python"
+    assert codes["SKILL_NOT_PASSED"] == "Проверены тестом, не подтверждены: PostgreSQL"
+    assert codes["SKILL_UNTESTED"] == "Заявлены, тестом не проверялись: Docker"
+    assert "SKILL_GAP" not in codes
+    assert reason_source("SKILL_NOT_PASSED") == "тест"
+
+
+def test_a_failed_check_does_not_move_the_score():
+    skills = {"Python": "self_reported", "PostgreSQL": "resume_confirmed"}
+    plain = score(NEED, _cand(skills))
+    checked = score(NEED, _cand(skills, tested=("Python", "PostgreSQL")))
+    assert checked.score == plain.score and checked.fit == plain.fit
+    assert [f.value for f in checked.factors] == [f.value for f in plain.factors]

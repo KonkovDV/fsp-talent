@@ -12,7 +12,7 @@
 | Документация* | https://github.com/KonkovDV/fsp-talent/tree/main/submission/02-documentation |
 | Презентация* | https://github.com/KonkovDV/fsp-talent/tree/main/submission/03-presentation |
 | Прототип* | https://github.com/KonkovDV/fsp-talent/tree/main/submission/04-prototype — стенд https://89-124-65-102.sslip.io, зеркало https://v1081358.hosted-by-vdsina.com, демо-входы, проверка за 2 минуты, локальный запуск |
-| Дополнительные материалы | https://github.com/KonkovDV/fsp-talent/tree/main/submission/05-additional |
+| Дополнительные материалы | https://github.com/KonkovDV/fsp-talent/tree/main/submission/05-additional — [демо-видео, 3:17](https://github.com/KonkovDV/fsp-talent/blob/main/submission/05-additional/fsp-talent-demo.mp4) |
 
 Если поле просит файл, а не ссылку, берём его из той же папки: документация — `02-documentation/FSP_Talent_documentation.pdf`, презентация — `03-presentation/FSP_Talent.pdf`.
 

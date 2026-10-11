@@ -301,6 +301,9 @@ export default function CandidateProfile() {
               <span>Публичная страница и место в рейтинге
                 <span className="block text-xs text-ink-3">{profile.is_minor ? 'Недоступно до 18 лет.' : 'Имя, регион, категория и результаты ФСП; контакты не публикуются.'}</span></span>
             </label>
+            {profile.public_profile && profile.public_ref && (
+              <a href={`/p/${profile.public_ref}`} className="link text-sm" target="_blank" rel="noreferrer">Моя публичная страница</a>
+            )}
             {askDistribution && (
               <div className="notice-info flex-col" role="alert">
                 <p>Для публичной страницы нужно отдельное согласие на распространение данных (ст. 10.1 152-ФЗ).</p>
