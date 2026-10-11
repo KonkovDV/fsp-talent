@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_salary_floor_is_the_2026_minimum_wage_everywhere():
     # Federal Law of 28.11.2025 No. 429-FZ: 27 093 ₽ a month from 1 January 2026.
     assert settings.MIN_MONTHLY_GROSS == 27_093
-    assert "salary_from_gross < 27093" in (ROOT / "frontend/src/components/InviteDialog.tsx").read_text("utf-8")
+    dialog = (ROOT / "frontend/src/components/InviteDialog.tsx").read_text("utf-8")
+    # audit-3 P1-2: the form reads the floor from GET /public/limits, the number is not copied there.
+    assert "27093" not in dialog and "getLimits" in dialog
     assert "22 440" not in (ROOT / "docs/TRUST_AND_ATS.md").read_text("utf-8")
 
 

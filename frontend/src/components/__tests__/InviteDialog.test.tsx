@@ -8,6 +8,7 @@ vi.mock('../../api/client', () => ({
   createOffer: vi.fn(),
   previewOffer: vi.fn(() => Promise.resolve({ data: {} })),
   apiError: () => 'Приглашение не отправлено',
+  getLimits: vi.fn(() => Promise.resolve({ min_monthly_gross: 27093 })),
 }))
 
 function renderDialog() {
@@ -35,5 +36,20 @@ describe('приглашение', () => {
     await userEvent.clear(from)
     await userEvent.type(from, '180000')
     expect(screen.getByRole('button', { name: 'Отправить приглашение' })).toBeEnabled()
+  })
+
+  it('берёт МРОТ из API и не пропускает вилку ниже него', async () => {
+    renderDialog()
+    await screen.findByRole('button', { name: 'Отправить приглашение' })
+    await new Promise(r => setTimeout(r, 0))
+    const from = screen.getByRole('spinbutton', { name: 'От' })
+    await userEvent.clear(from)
+    await userEvent.type(from, '20000')
+    const to = screen.getByRole('spinbutton', { name: 'До' })
+    await userEvent.clear(to)
+    await userEvent.type(to, '30000')
+    await userEvent.type(screen.getByLabelText(/Должность/i), 'Backend')
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить приглашение' }))
+    expect(await screen.findByText(/не ниже МРОТ 27\s093 ₽/)).toBeInTheDocument()
   })
 })

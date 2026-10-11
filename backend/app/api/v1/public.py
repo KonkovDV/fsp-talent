@@ -98,6 +98,12 @@ async def public_did():
     return did_document(settings.PUBLIC_BASE_URL, public_key_multibase())
 
 
+@router.get("/limits")
+async def limits():
+    """Limits the forms check before sending (audit-3 P1-2): one source, the backend settings."""
+    return {"min_monthly_gross": int(settings.MIN_MONTHLY_GROSS)}
+
+
 @router.get("/demo")
 async def demo_stand():
     """Whether this stand shows the jury trial and the jury accounts. No other settings."""
