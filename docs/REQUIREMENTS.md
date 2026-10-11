@@ -117,7 +117,7 @@
 | 3. Статусы приглашений и откликов видны обеим сторонам | ✅ | `offers.status`, `applications.status`, уведомления |
 | 4. Регистрация по email с подтверждением адреса | ✅ | `app/services/identity.py`: код из 6 цифр или ссылка |
 | Сверх ТЗ, только демо-стенд: гостевой вход без почты | ✅ | `POST /auth/guest`, `app/services/guest.py`: те же согласия, пустой аккаунт на 48 часов, гостя нет в поиске; вне DEMO_MODE ответ 404 |
-| Сверх ТЗ: пример кабинета, если сервер не ответил | ✅ | Вход → «Пример кабинета». Плашка «это пример». Запись с экрана не уходит | `frontend/src/demoFallback.ts` |
+| Сверх ТЗ: пример кабинета, если сервер не ответил | ✅ | Вход → «Пример кабинета». Плашка «это пример». Запись с экрана не уходит; `frontend/src/demoFallback.ts` |
 
 ## Ответы постановщика на Q&A и как они учтены
 
@@ -176,21 +176,21 @@
 | 3.2 ML и NLP для резюме, категоризации и подбора — преимущество | ✅ | Разбор резюме с цитатами, IRT-модель теста, ранжирование, GigaChat и смысловой поиск (эмбеддинги) по флагу |`test_resumes.py`, `test_skills.py` |
 | 3.3 Ссылка на стенд или видео и инструкция локального запуска | ✅ | https://89-124-65-102.sslip.io, [INSTALL.md](INSTALL.md), [deploy/README.md](../deploy/README.md) |н/п (документ) |
 | 3.3 Сквозной сценарий и объяснение механик | ✅ | [Руководство пользователя: полный сценарий](USER_GUIDE.md#полный-сценарий-из-тз-33), [README: 5 минут](../README.md#для-жюри-5-минут) |н/п (документ) |
-| Одна команда приёмки по таблице требований | ✅ сверх ТЗ | `make accept`, [requirements_trace.md](requirements_trace.md) | `python -m app.validation.accept` | `test_accept.py`, `test_validation.py` |
-| Проверка дампа базы и восстановление только с явным подтверждением | ✅ сверх ТЗ | [deploy/README.md](../deploy/README.md) | `deploy/verify_backup.py`, `deploy/restore_db.sh` | `test_backup_check.py` |
+| Одна команда приёмки по таблице требований | ✅ сверх ТЗ | `make accept`, [requirements_trace.md](requirements_trace.md); `python -m app.validation.accept` | `test_accept.py`, `test_validation.py` |
+| Проверка дампа базы и восстановление только с явным подтверждением | ✅ сверх ТЗ | [deploy/README.md](../deploy/README.md); `deploy/verify_backup.py`, `deploy/restore_db.sh` | `test_backup_check.py` |
 | 3.4 Сопроводительная документация по восьми пунктам | ✅ | [SOLUTION.md](SOLUTION.md) |н/п (документ) |
 | 3.5 Открытый код и открытые библиотеки | ✅ | Публичный репозиторий, [LICENSE](../LICENSE) (MIT), таблица лицензий в [SOLUTION.md, гл. 8](SOLUTION.md#8-библиотеки-и-компоненты) |н/п (документ) |
 | 3.5 Frontend, Backend и слой хранения разделены | ✅ | `frontend/`, `backend/`, PostgreSQL |`test_api_layer.py` |
 | 3.5 Docker, Dockerfile, docker-compose.yml | ✅ | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, проверка в CI |`test_compose_gpu_optional.py` |
 | 3.5 OpenAPI: запросы, ответы, коды ошибок | ✅ | `/docs`, `/openapi.json`, [API_ERRORS.md](API_ERRORS.md) | `test_openapi_paths.py` |
-| Ошибка API в форме RFC 9457: класс E01–E20 и прежний код | ✅ сверх ТЗ | `GET /api/v1/problems`, [API_ERRORS.md](API_ERRORS.md) | `app/api/problems.py` | `test_problems.py` |
+| Ошибка API в форме RFC 9457: класс E01–E20 и прежний код | ✅ сверх ТЗ | `GET /api/v1/problems`, [API_ERRORS.md](API_ERRORS.md); `app/api/problems.py` | `test_problems.py` |
 | 3.5 152-ФЗ, согласия, роли, защита паролей и токенов | ✅ | Пять неверных паролей с одного адреса закрывают вход с этого адреса на 15 минут; аккаунт целиком — после 100 (NIST 800-63B), демо-аккаунты жюри не закрываются. Минутные окна Redis остаются. [SOLUTION.md, гл. 10](SOLUTION.md#10-безопасность-и-152-фз) |`test_security.py`, `test_login_lock.py` |
-| Пароли Argon2id, refresh в HttpOnly-cookie, двойная cookie против подделки запроса | ✅ сверх ТЗ | Вход и обновление сессии | `app/core/security.py`, `app/core/csrf.py` | `test_security.py`, `test_doc_facts.py` |
-| Заголовки браузера закрывают камеру, микрофон и геолокацию. Вход ограничен через Redis | ✅ сверх ТЗ | Ответ `/health` и nginx | `BrowserLock` в `app/main.py` | `test_browser_lock.py` |
+| Пароли Argon2id, refresh в HttpOnly-cookie, двойная cookie против подделки запроса | ✅ сверх ТЗ | Вход и обновление сессии; `app/core/security.py`, `app/core/csrf.py` | `test_security.py`, `test_doc_facts.py` |
+| Заголовки браузера закрывают камеру, микрофон и геолокацию. Вход ограничен через Redis | ✅ сверх ТЗ | Ответ `/health` и nginx; `BrowserLock` в `app/main.py` | `test_browser_lock.py` |
 | 3.5 Совместимость с Keycloak | ✅ | OIDC-клиент, [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |`test_fsp_signin.py` |
 | 3.5 Кроссплатформенность, адаптивная вёрстка | ✅ | Все экраны от 390 px, светлая и тёмная темы ([DESIGN.md](DESIGN.md#проверка-интерфейса)) |`Responsiveness.test.tsx` |
 | 3.5 Десятки пользователей одновременно | ✅ | 40 пользователей, 0 ошибок ([LOAD_TEST.md](LOAD_TEST.md)) |`load_api.py` |
-| Гонка черновика ответа и гонка ответа на приглашение: остаётся один победитель | ✅ сверх ТЗ | [LOAD_TEST.md](LOAD_TEST.md), сценарий `races` | `tests/load_api.py` | `test_load_race.py` |
+| Гонка черновика ответа и гонка ответа на приглашение: остаётся один победитель | ✅ сверх ТЗ | [LOAD_TEST.md](LOAD_TEST.md), сценарий `races`; `tests/load_api.py` | `test_load_race.py` |
 | 3.5 Комментарии к сложным решениям, код соответствует документации | ✅ | Докстринги модулей теста, подбора и ФСП; цифры документации сверены с выводом команд |`test_doc_facts.py` |
 
 ## Раздел 5.2. Финальная сдача
