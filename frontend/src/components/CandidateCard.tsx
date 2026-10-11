@@ -79,6 +79,7 @@ const REASON_RU: Record<string, string> = {
   VERIFIED_SKILL: 'Навык подтверждён',
   TEST_SCORE: 'Результат теста',
   SKILL_GAP: 'Нет навыка',
+  SKILL_UNTESTED: 'Тестом не подтверждён',
   FSP_BONUS: 'Протокол ФСП',
   FSP_SCORE: 'Результаты ФСП',
   COLD_SEAT: 'Место для кандидата без теста (правило разнообразия)',

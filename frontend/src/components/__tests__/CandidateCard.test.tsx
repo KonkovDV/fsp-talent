@@ -29,6 +29,24 @@ const card: CandidateCardData = {
 }
 
 describe('карточка кандидата', () => {
+  it('отличает навык без проверки тестом от отсутствующего', async () => {
+    render(<CandidateCard card={{
+      ...card,
+      match: {
+        ...card.match!,
+        reasons: [
+          { code: 'SKILL_UNTESTED', text: 'Заявлены, тестом не подтверждены: PostgreSQL', tone: 'info', source: 'заявлено' },
+          { code: 'SKILL_GAP', text: 'Нет навыков: Go', tone: 'minus', source: 'заявлено' },
+        ],
+      },
+    }} onOffer={() => undefined} />)
+    await userEvent.click(screen.getByRole('button', { name: /Почему в выдаче/ }))
+    const text = screen.getByTestId('match').textContent ?? ''
+    expect(text).toContain('Тестом не подтверждён · заявлено')
+    expect(text).toContain('Нет навыка')
+    expect(text).not.toContain('SKILL_UNTESTED')
+  })
+
   it('складывает вклады полос в оценку работодателя', () => {
     const summed: CandidateCardData = {
       ...card,
