@@ -26,11 +26,20 @@ def _page_lines(sheet: dict, need_id: str, labels: dict[tuple[str, str], int]) -
                      for p in sheet["pairs"] if p["need_id"] == need_id)
 
 
-@needs_repo
-def test_page_sheet_is_the_blind_export():
+def _script():
     spec = importlib.util.spec_from_file_location("blind_sheet_web", ROOT / "scripts" / "blind_sheet_web.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def _confirmed(observed: dict) -> bool:
+    return any(v == "test_confirmed" for v in observed["skills"].values())
+
+
+@needs_repo
+def test_page_sheet_is_the_blind_export():
+    module = _script()
     sheet = json.loads(SHEET.read_text(encoding="utf-8"))
     assert sheet == module.build(str(CSV))
     assert len(sheet["needs"]) == 25 and len(sheet["pairs"]) == 200
@@ -64,3 +73,35 @@ def test_p5_counts_all_seats_when_fewer_than_five():
                                  "label": label}) for i, label in enumerate((3, 2)))
     report = public_report(text)
     assert all(row["p5"] == 1.0 for row in report["rows"])
+
+
+@needs_repo
+def test_no_card_with_a_test_says_there_was_no_test():
+    """33 cards of the CSV say «Теста нет» next to skills marked «тест»: the page must not repeat it."""
+    sheet = json.loads(SHEET.read_text(encoding="utf-8"))
+    with open(CSV, encoding="utf-8-sig", newline="") as fh:
+        csv_cards = {row["pair_id"]: row["candidate_card"] for row in __import__("csv").DictReader(fh)}
+    confirmed = [p for p in sheet["pairs"] if _confirmed(p["observed"])]
+    wrong_in_csv = [p for p in confirmed if "Теста нет" in csv_cards[p["pair_id"]]]
+    assert len(wrong_in_csv) == 33
+    assert not [p["pair_id"] for p in confirmed if "Теста нет" in p["card"]]
+    for pair in wrong_in_csv:
+        assert "не сдан, навыки с пометкой «тест» подтверждены этой попыткой" in pair["card"]
+    for pair in sheet["pairs"]:
+        if pair["observed"].get("test_n"):
+            assert pair["card"] == csv_cards[pair["pair_id"]] and "верных ответов" in pair["card"]
+        # only the test line may differ from the CSV
+        page = [x for x in pair["card"].split(". ") if not x.startswith("Тест")]
+        orig = [x for x in csv_cards[pair["pair_id"]].split(". ") if x != "Теста нет" and not x.startswith("Тест")]
+        assert page == orig
+
+
+def test_card_drops_the_test_line_when_the_attempt_is_unknown():
+    module = _script()
+    observed = {"skills": {"SQL": "test_confirmed"}, "test_n": None}
+    card = "Специализация: Инженерия данных. Грейд: мидл, заявлен. Навыки: SQL (тест). Теста нет. Истории ФСП нет"
+    assert module.fix_card(card, observed, None) == (
+        "Специализация: Инженерия данных. Грейд: мидл, заявлен. Навыки: SQL (тест). Истории ФСП нет")
+    assert "Тест на грейд мидл не сдан" in module.fix_card(card, observed, "middle")
+    plain = {"skills": {"SQL": "self_reported"}, "test_n": None}
+    assert module.fix_card(card, plain, None) == card
