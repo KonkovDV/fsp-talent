@@ -498,6 +498,93 @@ def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tup
     return means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
 
 
+UNCONFIRMED_POLICIES = (
+    ("product", "как в продукте: общий порядок по баллу"),
+    ("demote", "все без подтверждённого грейда после подтверждённых"),
+    ("hide", "без подтверждённого грейда скрыты"),
+)
+
+
+def _unconfirmed(c: dict) -> bool:
+    return c["observed"].get("grade_source") != "assessed"
+
+
+def apply_unconfirmed_policy(ranked: list[str], by_id: dict[str, dict], policy: str) -> list[str]:
+    """Reorder one ranking. The relevance labels are not touched, so a hidden relevant candidate is a loss."""
+    if policy == "product":
+        return list(ranked)
+    confirmed = [cid for cid in ranked if not _unconfirmed(by_id[cid])]
+    if policy == "hide":
+        return confirmed
+    if policy == "demote":
+        return confirmed + [cid for cid in ranked if _unconfirmed(by_id[cid])]
+    raise ValueError(policy)
+
+
+def returned_share(ranked: list[str], labels: dict[str, int], by_id: dict[str, dict], k: int = 20) -> float:
+    """Share of the relevant (label ≥ 2) unconfirmed candidates that reach the top k."""
+    pool = [cid for cid, v in labels.items() if v >= 2 and _unconfirmed(by_id[cid])]
+    if not pool:
+        return float("nan")
+    top = set(ranked[:k])
+    return sum(1 for cid in pool if cid in top) / len(pool)
+
+
+def unconfirmed_study(dataset: dict, rounds: int = 1000, seed: int = 11) -> list[dict]:
+    """Show, demote or hide candidates whose grade the test has not confirmed (Q&A FTT.4).
+
+    Per need: nDCG@10, P@10 and the share of relevant unconfirmed people in the top 20. Δ is paired by need
+    against the product order; 95 % interval — percentile bootstrap over needs (`bootstrap_ci`).
+    """
+    rng = random.Random(0)
+    by_id = {c["id"]: c for c in dataset["candidates"]}
+    labelled = [n for n in dataset["needs"] if _relevant(dataset["labels"][n["id"]]) > 0]
+    per: dict[str, dict[str, list[float]]] = {
+        key: {"ndcg": [], "p10": [], "returned": []} for key, _ in UNCONFIRMED_POLICIES}
+    for need in labelled:
+        labels = dataset["labels"][need["id"]]
+        base = rank(dataset, need, "full", rng)
+        for key, _ in UNCONFIRMED_POLICIES:
+            ranked = apply_unconfirmed_policy(base, by_id, key)
+            per[key]["ndcg"].append(ndcg(ranked, labels))
+            per[key]["p10"].append(_at_k(ranked, labels, 10))
+            share = returned_share(ranked, labels, by_id)
+            if not math.isnan(share):
+                per[key]["returned"].append(share)
+    rows = []
+    for key, title in UNCONFIRMED_POLICIES:
+        d_ndcg = [a - b for a, b in zip(per[key]["ndcg"], per["product"]["ndcg"], strict=True)]
+        d_p10 = [a - b for a, b in zip(per[key]["p10"], per["product"]["p10"], strict=True)]
+        rows.append({
+            "policy": key, "title": title, "needs": len(labelled),
+            "ndcg": statistics.mean(per[key]["ndcg"]), "p10": statistics.mean(per[key]["p10"]),
+            "returned": statistics.mean(per[key]["returned"]) if per[key]["returned"] else float("nan"),
+            "d_ndcg": statistics.mean(d_ndcg), "d_ndcg_ci": bootstrap_ci(d_ndcg, seed=seed, rounds=rounds),
+            "d_p10": statistics.mean(d_p10), "d_p10_ci": bootstrap_ci(d_p10, seed=seed, rounds=rounds),
+        })
+    return rows
+
+
+def unconfirmed_markdown(rows: list[dict], seed: int, n_candidates: int, n_needs: int) -> str:
+    lines = [
+        f"Неподтверждённый грейд: показывать, опускать или скрывать. Зерно {seed}, {n_candidates} кандидатов, "
+        f"{n_needs} потребностей, учтено {rows[0]['needs'] if rows else 0} с релевантными. Δ — к порядку продукта, "
+        "парно по потребностям, 95 % ДИ — бутстреп 1000 повторов. «Возвращены» — доля релевантных без "
+        "подтверждённого грейда, попавших в топ-20.",
+        "",
+        "| Политика | nDCG@10 | Δ nDCG@10 (95 % ДИ) | P@10 | Δ P@10 (95 % ДИ) | Возвращены в топ-20 |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {r['title']} | {r['ndcg']:.4f} | "
+            f"{r['d_ndcg']:+.4f} ({r['d_ndcg_ci'][0]:+.4f}…{r['d_ndcg_ci'][1]:+.4f}) "
+            f"| {r['p10']:.4f} | {r['d_p10']:+.4f} ({r['d_p10_ci'][0]:+.4f}…{r['d_p10_ci'][1]:+.4f}) "
+            f"| {'—' if math.isnan(r['returned']) else _pct(r['returned'])} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
 @dataclass
 class Row:
     method: str
@@ -1087,6 +1174,8 @@ def main() -> None:
     parser.add_argument("--merge-raters", nargs=2, metavar=("A", "B"),
                         help="floor of the mean of two sheets, written as JSONL for --pairs")
     parser.add_argument("--merged", help="where --merge-raters writes the JSONL")
+    parser.add_argument("--unconfirmed", action="store_true",
+                        help="show, demote or hide unconfirmed grades; does not change the product")
     parser.add_argument("--overclaim", default="",
                         help="comma-separated shares who declare one grade too high; print the curve and exit")
     args = parser.parse_args()
@@ -1114,6 +1203,10 @@ def main() -> None:
         return
     if args.overclaim:
         _print_overclaim(args)
+        return
+    if args.unconfirmed:
+        rows = unconfirmed_study(make_dataset(args.candidates, args.needs, args.seed))
+        print(unconfirmed_markdown(rows, args.seed, args.candidates, args.needs))
         return
     if args.pass_floor:
         _print_pass_floor(seed_list(args.seeds, args.seed), args.candidates, args.needs)
