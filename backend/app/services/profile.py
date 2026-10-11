@@ -113,6 +113,10 @@ async def append_new_results(db: AsyncSession, participant: Participant, data: F
     return len(fresh)
 
 
+# A registry answer that would drop more than this share of a profile's registry rows (and more than
+# one row) is treated as a partial answer, not as annulments: nothing is removed and it is logged.
+MAX_REMOVED_SHARE = 0.5
+
 _COMPARED = ("discipline", "place", "total_participants", "is_team", "team_size", "event_date", "role")
 
 
@@ -123,7 +127,8 @@ async def reconcile_results(db: AsyncSession, participant: Participant, data: FS
     `verified_fsp` row whose event the registry no longer lists is removed, and a row whose place,
     field size, team, date or discipline changed is replaced by the corrected line. The credential
     of a removed or replaced row is revoked. Rows the candidate uploaded from a file are not
-    touched. An empty registry answer removes nothing: an outage must not wipe a history.
+    touched. An empty registry answer removes nothing, and neither does one that would drop more than
+    half of the rows (MAX_REMOVED_SHARE): an outage or a partial page must not wipe a history.
     """
     from app.models import VerifiableCredential
 
@@ -140,6 +145,14 @@ async def reconcile_results(db: AsyncSession, participant: Participant, data: FS
             elif any(getattr(row, f) != getattr(line, f) for f in _COMPARED):
                 stale.append(row)
                 replaced += 1
+    dropped = len(stale) - replaced
+    if dropped > 1 and dropped > MAX_REMOVED_SHARE * len(rows):
+        import logging
+        logging.getLogger("app.services.profile").warning(
+            "registry answer for %s drops %d of %d rows; kept as is (partial answer?)",
+            participant.id, dropped, len(rows))
+        stale = [row for row in stale if row.event_id in incoming]   # corrections still apply
+        dropped = 0
     if stale:
         ids = [row.id for row in stale]
         now = datetime.now(UTC)
@@ -150,7 +163,7 @@ async def reconcile_results(db: AsyncSession, participant: Participant, data: FS
         await db.execute(delete(Result).where(Result.id.in_(ids)))
         await db.flush()
     added = await append_new_results(db, participant, data)
-    return {"added": added - replaced, "corrected": replaced, "removed": len(stale) - replaced}
+    return {"added": added - replaced, "corrected": replaced, "removed": dropped}
 
 
 async def _registry_ranks(p: Participant, ranks: list[RegistryRank] | None) -> list[RegistryRank] | None:

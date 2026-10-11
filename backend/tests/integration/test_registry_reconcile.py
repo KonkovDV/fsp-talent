@@ -52,3 +52,31 @@ async def test_annulled_and_corrected_lines_are_applied(db):
         await db.execute(delete(Result).where(Result.participant_id == person.id))
         await db.commit()
         await wipe_people([person.id])
+
+
+async def test_a_partial_registry_answer_removes_nothing(db):
+    person = await _person(db, stamp(), 1)
+    try:
+        fsp_id = f"FSP{uuid.uuid4().hex[:8]}"
+        tag = uuid.uuid4().hex[:6]
+        events = [f"{tag}-{i}" for i in range(5)]
+        full = FSPParticipant(fsp_id=fsp_id, display_name="Тест", region="Москва", birth_date=date(2000, 1, 1),
+                              results=[_line(e, 2) for e in events])
+        assert await append_new_results(db, person, full) == 5
+        # The registry returns one row of five, with a corrected place: the correction applies, nothing is dropped.
+        partial = FSPParticipant(fsp_id=fsp_id, display_name="Тест", region="Москва", birth_date=date(2000, 1, 1),
+                                 results=[_line(events[0], 1)])
+        assert await reconcile_results(db, person, partial) == {"added": 0, "corrected": 1, "removed": 0}
+        rows = {r.event_id: r.place for r in await db.scalars(select(Result).where(Result.participant_id == person.id))}
+        assert rows == {events[0]: 1, **{e: 2 for e in events[1:]}}
+        # One annulment out of five is below the threshold and applies.
+        four = FSPParticipant(fsp_id=fsp_id, display_name="Тест", region="Москва", birth_date=date(2000, 1, 1),
+                              results=[_line(events[0], 1), *[_line(e, 2) for e in events[1:4]]])
+        assert await reconcile_results(db, person, four) == {"added": 0, "corrected": 0, "removed": 1}
+        await db.commit()
+    finally:
+        await db.rollback()
+        await db.execute(delete(VerifiableCredential).where(VerifiableCredential.participant_id == person.id))
+        await db.execute(delete(Result).where(Result.participant_id == person.id))
+        await db.commit()
+        await wipe_people([person.id])

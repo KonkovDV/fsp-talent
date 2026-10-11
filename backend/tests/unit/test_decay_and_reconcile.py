@@ -24,3 +24,4 @@ def test_reconcile_touches_only_registry_rows_and_survives_an_outage():
     assert 'Result.trust_level == "verified_fsp"' in source
     assert "if incoming:" in source          # an empty answer removes nothing
     assert "revoked_at" in source            # the credential of a removed line is revoked
+    assert "MAX_REMOVED_SHARE * len(rows)" in source   # a partial answer is not a mass annulment
