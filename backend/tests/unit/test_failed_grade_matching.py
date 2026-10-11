@@ -79,3 +79,15 @@ def test_benchmark_observes_the_failed_attempt():
         assert _facts(c).failed_grade == o["grade"]
     assert all("failed_grade" not in c["observed"] for c in data["candidates"]
                if c["observed"]["grade_source"] == "assessed")
+
+
+def test_evidence_guard_is_a_sign_rule_with_a_pooled_interval():
+    from app.validation import matching as v
+    rows = v.evaluate(v.make_dataset(60, 6, seed=3))
+    good = {key: {"per_seed": {1: 0.1}, "mean": 0.1, "low": 0.01, "high": 0.2, "n": 6}
+            for key, _ in v.GUARD_ABLATIONS}
+    bad = {**good, "no_fsp": {"per_seed": {1: 0.1}, "mean": 0.1, "low": -0.01, "high": 0.2, "n": 6}}
+    assert not any("Spearman" in f for f in v.checks_ok(rows, True, good))
+    assert any("no_fsp" in f for f in v.checks_ok(rows, True, bad))
+    assert any("Spearman" in f for f in v.checks_ok(rows, True, None))
+    assert "| без оси ФСП |" in v.guard_markdown(good)

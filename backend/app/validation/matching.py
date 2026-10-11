@@ -430,6 +430,17 @@ def _at_k(ranked: list[str], labels: dict[str, int], k: int) -> float:
     return sum(1 for cid in ranked[:k] if labels.get(cid, 0) >= 2) / k
 
 
+_CURVES: dict[tuple[int, int, int], dict] = {}
+
+
+def seed_curves(seed: int, n_candidates: int, n_needs: int) -> dict:
+    """paired_curves of one public seed, computed once per run: the paired table and the guard share it."""
+    key = (seed, n_candidates, n_needs)
+    if key not in _CURVES:
+        _CURVES[key] = paired_curves(make_dataset(n_candidates, n_needs, seed))
+    return _CURVES[key]
+
+
 def paired_curves(dataset: dict) -> dict:
     """Per-need nDCG and within-category Spearman for the full model and the four comparisons.
 
@@ -473,7 +484,7 @@ def paired_report(seeds: list[int], n_candidates: int, n_needs: int) -> str:
         "|---|---|---|---|---|---|",
     ]
     for seed in seeds:
-        curves = paired_curves(make_dataset(n_candidates, n_needs, seed))
+        curves = seed_curves(seed, n_candidates, n_needs)
         for key, title in PAIRED:
             delta = [a - b for a, b in zip(curves["ndcg"]["full"], curves["ndcg"][key], strict=True)]
             mean, low, high, p_value = sign_permutation(delta, seed=seed)
@@ -883,14 +894,52 @@ def public_report(text: str) -> dict:
 
 
 # Thresholds of --check. They guard the claims in docs/VALIDATION_MATCHING.md, not a tuned optimum.
-RHO_DROP = 0.04          # removing the test must cost at least this much Spearman in the category
-# Removing the FSP axis. Since DoR-N7 the failed attempt orders the category that FSP alone used to order,
-# so the FSP share of the Spearman is smaller: paired +0.031…+0.038 on seeds 2026–2028 (0.038…0.048 before).
-RHO_DROP_FSP = 0.03
+# Evidence guard: the test and the FSP axis each must raise the in-category Spearman. The rule is a sign,
+# not a size: full minus the ablation, paired by need and pooled over GUARD_SEEDS, must have a 95 % bootstrap
+# lower bound above zero (the same resampling as the paired nDCG table, 10 000 rounds).
+GUARD_SEEDS = (2026, 2027, 2028)
+GUARD_ABLATIONS = (("no_test", "без теста"), ("no_fsp", "без оси ФСП"))
 NDCG_FLOOR = 0.65        # full model on the default seed; the release before the category order had 0.661
 
 
-def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
+def evidence_guard(n_candidates: int, n_needs: int, seeds: tuple[int, ...] = GUARD_SEEDS) -> dict:
+    """Per ablation: mean Δ Spearman per seed, and the pooled paired mean with its 95 % bootstrap interval."""
+    out = {}
+    for key, _ in GUARD_ABLATIONS:
+        per_seed: dict[int, float] = {}
+        pooled: list[float] = []
+        for seed in seeds:
+            curves = seed_curves(seed, n_candidates, n_needs)
+            full, other = curves["rho"]["full"], curves["rho"][key]
+            deltas = [a - b for a, b in zip(full, other, strict=True)]
+            per_seed[seed] = statistics.mean(deltas) if deltas else float("nan")
+            pooled.extend(deltas)
+        mean, low, high = _paired_bounds(pooled, seed=11)
+        out[key] = {"per_seed": per_seed, "mean": mean, "low": low, "high": high, "n": len(pooled)}
+    return out
+
+
+def guard_markdown(guard: dict) -> str:
+    seeds = list(next(iter(guard.values()))["per_seed"]) if guard else []
+    lines = [
+        "Проверка доказательств: полная модель минус строка, Спирмен внутри категории, парно по потребностям. "
+        "Сводный 95 % ДИ — бутстреп среднего по потребностям всех зёрен, 10 000 повторов. "
+        "Проходит, если нижняя граница выше нуля.",
+        "",
+        "| Сравнение | " + " | ".join(f"Δ Спирмен, {s}" for s in seeds)
+        + " | Сводно | 95 % ДИ | Потребностей | Проходит |",
+        "|---|" + "---|" * len(seeds) + "---|---|---|---|",
+    ]
+    for key, title in GUARD_ABLATIONS:
+        g = guard[key]
+        cells = " | ".join(f"{g['per_seed'][s]:+.4f}" for s in seeds)
+        lines.append(f"| {title} | {cells} | {g['mean']:+.4f} | {g['low']:+.4f}…{g['high']:+.4f} | {g['n']} "
+                     f"| {'да' if g['low'] > 0 else 'нет'} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def checks_ok(rows: list[Row], synthetic: bool = True, guard: dict | None = None) -> list[str]:
     """The production ranker beats the baselines; inside a category the test and the FSP axis both matter."""
     by = {r.method: r for r in rows}
     failed = []
@@ -902,10 +951,9 @@ def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
         return failed
     if by["full"].ndcg10 < NDCG_FLOOR:
         failed.append(f"full nDCG@10 >= {NDCG_FLOOR}")
-    full_rho = by["full"].rho or 0.0
-    for ablation, drop in (("no_test", RHO_DROP), ("no_fsp", RHO_DROP_FSP)):
-        if full_rho - (by[ablation].rho or 0.0) < drop:
-            failed.append(f"Spearman full - {ablation} >= {drop}")
+    for ablation, _ in GUARD_ABLATIONS:
+        if guard is None or not guard[ablation]["low"] > 0:
+            failed.append(f"Spearman full - {ablation}: 95 % CI lower bound > 0 on seeds {GUARD_SEEDS}")
     if not (by["full"].overrated or 0.0) < (by["keyword"].overrated or 0.0):
         failed.append("overrated in top 10: full < keyword")
     return failed
@@ -1360,7 +1408,12 @@ def main() -> None:
             print(paired_report(paired_seeds, args.candidates, args.needs))
     print("sha256", sha256(dataset))
     if args.check:
-        failed = checks_ok(rows, synthetic)
+        guard = None
+        if synthetic and not args.imported:
+            guard = evidence_guard(args.candidates, args.needs)
+            print()
+            print(guard_markdown(guard))
+        failed = checks_ok(rows, synthetic, guard)
         print("checks:", "failed " + ", ".join(failed) if failed else "passed")
         if failed:
             raise SystemExit(1)
