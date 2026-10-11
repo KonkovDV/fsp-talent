@@ -360,6 +360,21 @@ def _scored_roles(matches: dict, ids: list) -> dict:
     return out
 
 
+def _in_pairs(pairs: list[tuple[str, str]], PSI=ProfileSearchIndex):
+    """In one of the specialization × grade pairs: by the search index, a test confirmation or the resume."""
+    confirmed_pair = select(GradeConfirmation.participant_id).where(
+        tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))
+    resume_pair = select(CandidateResume.participant_id).where(
+        tuple_(CandidateResume.specialization, CandidateResume.grade).in_(pairs),
+        CandidateResume.participant_id.not_in(select(GradeConfirmation.participant_id).where(
+            tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))))
+    return or_(
+        tuple_(PSI.role, PSI.grade).in_(pairs),
+        Participant.id.in_(confirmed_pair),
+        Participant.id.in_(resume_pair),
+    )
+
+
 async def search_candidates(
     db: AsyncSession,
     role: str | None = None,
@@ -430,17 +445,7 @@ async def search_candidates(
     span = grade_span if grade_span in ("exact", "near", "wide", "plus_minus", "any") else "near"
     pairs = category_pairs(role, grade, span) if role and grade else None
     if pairs:
-        confirmed_pair = select(GradeConfirmation.participant_id).where(
-            tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))
-        resume_pair = select(CandidateResume.participant_id).where(
-            tuple_(CandidateResume.specialization, CandidateResume.grade).in_(pairs),
-            CandidateResume.participant_id.not_in(select(GradeConfirmation.participant_id).where(
-                tuple_(GradeConfirmation.specialization, GradeConfirmation.grade).in_(pairs))))
-        stmt = stmt.where(or_(
-            tuple_(PSI.role, PSI.grade).in_(pairs),
-            Participant.id.in_(confirmed_pair),
-            Participant.id.in_(resume_pair),
-        ))
+        stmt = stmt.where(_in_pairs(pairs, PSI))
     elif role:
         confirmed_here = select(GradeConfirmation.participant_id).where(
             GradeConfirmation.specialization == role)
@@ -600,13 +605,23 @@ async def search_candidates(
         confirmed={i: matches[i].confirmed for i in all_ids} if matching_service.USE_FIT_TIERS else None,
         fits={i: matches[i].fit or 0.0 for i in all_ids} if matching_service.USE_FIT_TIERS else None)
     cold_seats = {pid for pid, was in zip(ordered, plain, strict=True) if pid in cold and pid != was}
+    # Audit-5 A2: with a grade the default span also keeps the neighbour grade and role, so a stricter
+    # filter can list more people than the role alone. The header says how many sit in the asked pair.
+    in_category = None
+    if role and grade and all_ids:
+        in_category = int(await db.scalar(
+            select(func.count()).select_from(Participant)
+            .join(ProfileSearchIndex, ProfileSearchIndex.participant_id == Participant.id)
+            .where(Participant.id.in_(all_ids), _in_pairs([(role, grade)]))) or 0)
+    elif role and grade:
+        in_category = 0
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
     header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
               "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
               "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
-              "platform_held": platform_held}
+              "platform_held": platform_held, "in_category": in_category}
     if not build_cards:
         # The cache keeps the order and the scores. Cards for one page are built later.
         items = []
@@ -640,7 +655,7 @@ async def search_candidates(
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
             "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
             "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
-            "items": cards}
+            "platform_held": platform_held, "in_category": in_category, "items": cards}
 
 
 def _match_body(m: PoolMatch, cold_seat: bool) -> dict:
