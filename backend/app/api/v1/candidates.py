@@ -163,6 +163,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "results_count": len(p.results),
         "completeness": profile_completeness(
             email_verified=p.email_verified_at is not None,
+            birth_date_known=p.birth_date is not None,
             survey_done=p.survey_at is not None,
             declared_grade=p.declared_grade,
             assessed_grade=p.assessed_grade,
