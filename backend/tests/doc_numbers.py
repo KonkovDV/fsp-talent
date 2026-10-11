@@ -86,7 +86,7 @@ def matching_report() -> tuple[str, str]:
 
 # The total moves with the interpreter and the installed compilers: 73.1 % on Python 3.12 with every compiler (CI),
 # 73.0-73.4 % elsewhere
-# with all compilers (audit-4 F-11). Half a point is that environment gap, not a new figure.
+# (audit-4 F-11). Half a point is that environment gap, not a new figure.
 COVERAGE_TOLERANCE = 0.5
 
 
