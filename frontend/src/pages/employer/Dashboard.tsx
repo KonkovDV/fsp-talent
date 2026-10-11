@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { apiError, getMyEmployerOffers, listNeeds, vacancyApplications } from '../../api/client'
+import { declineReasons } from '../../declineReasons'
 import BankGrid from '../../components/BankGrid'
 import { PageHeader, plural } from '../../components/ui'
 
 interface Need { id: string; title: string; version: number; shortlist_count: number }
-interface OfferRow { status: string; candidate_viewed_at: string | null; contacts_revealed_at: string | null }
+interface OfferRow { status: string; decline_reason?: string | null; candidate_viewed_at: string | null; contacts_revealed_at: string | null }
 
 /** Employer home: three numbers that matter and the next step for each. */
 export default function EmployerDashboard() {
@@ -26,6 +27,7 @@ export default function EmployerDashboard() {
     ['Принято', accepted],
     ['Контакты открыты', offers.filter(o => o.contacts_revealed_at).length],
   ] as const
+  const reasons = declineReasons(offers)
   const funnelScale = Math.max(...funnel.map(([, n]) => n), 1)
 
   const tiles = [
@@ -61,6 +63,11 @@ export default function EmployerDashboard() {
               </li>
           ))}
         </ol>
+        {reasons.length > 0 && (
+          <p className="mt-6 text-sm on-hero-muted" data-testid="decline-reasons">
+            Причины отказа: {reasons.map(([label, n]) => `${label} — ${n}`).join(', ')}
+          </p>
+        )}
       </section>
       <div className="grid gap-4 md:grid-cols-3">
         {tiles.map(t => (
