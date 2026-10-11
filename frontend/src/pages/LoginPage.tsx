@@ -46,20 +46,17 @@ export default function LoginPage() {
     })
   }, [])
 
-  const takeJury = async () => {
+  const takeJury = async (): Promise<string> => {
+    let email = `jury${1 + Math.floor(Math.random() * 10)}@demo.talent`
     try {
-      const email = (await publicJuryFree()).data.email
-      if (/^jury([1-9]|10)@demo\.talent$/.test(email)) {
-        setValue('username', email)
-        setValue('password', 'demo12345')
-        return
-      }
+      const free = (await publicJuryFree()).data.email
+      if (/^jury([1-9]|10)@demo\.talent$/.test(free)) email = free
     } catch {
       // The stand did not answer. A random account is still a way in.
     }
-    const n = 1 + Math.floor(Math.random() * 10)
-    setValue('username', `jury${n}@demo.talent`)
+    setValue('username', email)
     setValue('password', 'demo12345')
+    return email
   }
 
   const onSubmit = async ({ username, password }: Form) => {
@@ -78,13 +75,21 @@ export default function LoginPage() {
     }
   }
 
+  // BR-08: the same one-click entry as «Войти как жюри» on the landing page, straight to the cabinet.
+  const juryLogin = async () => onSubmit({ username: await takeJury(), password: 'demo12345' })
+
   return (
     <AuthShell title="Вход" lead={role === 'participant' ? 'Кабинет кандидата: категория, тест, приглашения.' : 'Кабинет работодателя: потребности, подборка, приглашения.'}
       aside={<>Нет аккаунта? <Link to={`/register?role=${role}`} className="font-medium text-accent hover:underline">Зарегистрироваться</Link></>}>
       <RoleSwitch role={role} base="/login" />
+      {demo && role === 'participant' && (
+        <button type="button" className="btn-primary mb-4 w-full py-3" onClick={juryLogin} disabled={isSubmitting}>
+          Войти как жюри
+        </button>
+      )}
       {role === 'participant' && <>
         <FspSignInButton />
-        {demo && <p className="mt-2 text-xs text-ink-3">демо: FSP001 / test</p>}
+        {demo && <p className="mt-2 text-xs text-ink-3">Вход через ФСП ID на демо: логин FSP001, пароль test (вводится на странице провайдера)</p>}
         <OrDivider />
       </>}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
@@ -122,8 +127,7 @@ export default function LoginPage() {
             Без почты: гостевой аккаунт на 48 часов
           </Link>
         )}
-        <p className="text-xs text-ink-3">Демо-аккаунты, пароль demo12345:</p>
-        <p className="text-xs leading-relaxed text-ink-3">Демо-доступ для жюри: данные синтетические</p>
+        <p className="text-xs leading-relaxed text-ink-3">Демо-аккаунты, пароль demo12345, данные синтетические:</p>
         {DEMO[role].map(([email, note]) => (
           <button key={email} type="button" className="chip-default w-full justify-start hover:border-accent hover:text-accent"
             onClick={() => { setValue('username', email); setValue('password', 'demo12345') }}>
