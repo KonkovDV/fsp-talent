@@ -2,7 +2,8 @@
 import random
 from datetime import date, timedelta
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from app.services.scoring.engine import PER_MONTH_CAP, _result_pool, compute_discipline_score
 
