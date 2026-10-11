@@ -48,8 +48,8 @@ export default function BankGrid() {
                             <Link to={`/employer/search?role=${role}&grade=${grade}`}
                               className={`num flex h-full items-center justify-center gap-1 rounded-md font-display font-bold outline-offset-1 transition-[box-shadow] hover:ring-2 hover:ring-accent ${a > 0.8 ? 'text-accent-ink' : 'text-ink'}`}
                               style={{ background: `rgb(var(--accent) / ${a})` }}
-                              aria-label={`${ROLE_RU[role]}, ${gradeRu(grade)}: ${c.candidates} в поиске, ${c.tested} с тестом`}>
-                              {c.candidates}<span className="font-sans text-xs font-normal">({c.tested})</span>
+                              aria-label={`${ROLE_RU[role]}, ${gradeRu(grade)}: ${c.candidates} в поиске, ${c.tested == null ? `с тестом — число скрыто (меньше ${data.min_cell} по одну из сторон)` : `${c.tested} с тестом`}`}>
+                              {c.candidates}<span className="font-sans text-xs font-normal" title={c.tested == null ? `С тестом или без — меньше ${data.min_cell} человек, число скрыто` : undefined}>({c.tested ?? '—'})</span>
                             </Link>
                           )}
                     </td>
