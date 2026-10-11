@@ -89,6 +89,7 @@ ERROR_CODES: dict[str, str] = {
     "refresh_superseded": "Сессия уже обновлена в другом окне",
     "account_suspended": "Вход закрыт модерацией",
     "csrf_invalid": "Запрос с cookie сессии без совпадающего токена",
+    "nul_byte": "Нулевой байт в адресе, параметрах или теле запроса",
 }
 
 

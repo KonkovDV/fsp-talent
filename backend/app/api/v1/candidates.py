@@ -36,6 +36,7 @@ from app.models import (
 from app.models.complaint import REASONS
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
+from app.models.resume import SurveyHistory
 from app.services.account_close import close_allowed
 from app.services.ai import providers
 from app.services.ai.assistant import parse_resume
@@ -125,6 +126,8 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
         "display_name": p.display_name, "region": p.region,
         "birth_date": p.birth_date.isoformat() if p.birth_date else None,
+        # LEG-06: an adult without a birth date is not shown in search; the cabinet says so.
+        "search_blocker": "birth_date_missing" if p.birth_date is None and not getattr(p, "is_minor", False) else None,
         "email": p.email, "email_verified": p.email_verified_at is not None,
         "demo_reset_available": bool(settings.DEMO_MODE and is_jury(p.email)),
         "telegram": p.telegram, "phone": p.phone, "github": p.github,
@@ -528,7 +531,7 @@ async def get_my_results(
 async def import_certificate(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
                              db: AsyncSession = Depends(get_db)):
     """Skills quoted in a certificate. A confirmed test skill is left as it is. The grade does not move."""
-    from app.services.certificate_evidence import certificate_skills
+    from app.services.certificate_evidence import certificate_skills, is_pdf
     from app.services.protocol_file import text_of_pdf
 
     if await too_many(f"certificate:{_pid(current)}", limit=10, window_seconds=3600):
@@ -540,11 +543,10 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
     raw = await file.read()
     if len(raw) > 2_000_000:
         raise ApiError(413, "payload_too_large", "Файл больше 2 МБ")
+    if not (file.filename or "").lower().endswith(".pdf") or not is_pdf(raw):
+        raise ApiError(422, "validation_error", "Нужен PDF сертификата")
     try:
-        if (file.filename or "").lower().endswith(".pdf"):
-            text = text_of_pdf(raw)
-        else:
-            text = raw.decode("utf-8", errors="replace")
+        text = text_of_pdf(raw)
     except Exception as exc:
         raise ApiError(422, "validation_error", "Файл не читается") from exc
     found = certificate_skills(text)
@@ -562,10 +564,13 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
             row = Skill(participant_id=person.id, name=name, raw_name=name, created_at=now)
             db.add(row)
             existing[name] = row
-        row.source_quote = quote
-        row.trust_level = "resume_confirmed"
-        row.confirmed = True
-        row.confirmed_at = now
+        # AUD-02: the candidate's own file is a quote, not a confirmation. A stronger level stays.
+        # `confirmed` is the "skill is active" flag (a self-declared profile skill has it too, see
+        # services/skills.py); search, vacancies and the public profile read it, so it stays on.
+        if row.trust_level in (None, "", "self_reported"):
+            row.trust_level = "self_reported"
+            row.confirmed = True
+        row.source_quote = row.source_quote or quote
         kept.append(name)
     await db.commit()
     return {"skills": kept, "grade_unchanged": person.assessed_grade == grade_before}
@@ -1143,6 +1148,17 @@ class SurveyIn(BaseModel):
     region: str | None = Field(None, max_length=40)
 
 
+@router.get("/me/survey/history")
+async def survey_history(limit: int = Query(20, ge=1, le=100), current: dict = Depends(get_current_participant),
+                         db: AsyncSession = Depends(get_db)):
+    """TZ 2.1: история опроса. Newest first; every submit of the survey is kept."""
+    rows = await db.scalars(select(SurveyHistory).where(SurveyHistory.participant_id == _pid(current))
+                            .order_by(SurveyHistory.created_at.desc()).limit(limit))
+    return [{"specialization": r.specialization, "industry": r.industry, "work_goal": r.work_goal,
+             "declared_grade": r.declared_grade, "experience_years": r.experience_years,
+             "created_at": r.created_at.isoformat()} for r in rows]
+
+
 @router.put("/me/survey")
 async def save_survey(body: SurveyIn, current: dict = Depends(get_current_participant),
                       db: AsyncSession = Depends(get_db)):
@@ -1182,6 +1198,9 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
     if body.experience_years is not None:
         p.experience_years = body.experience_years
     p.survey_at = datetime.now(UTC)
+    db.add(SurveyHistory(participant_id=p.id, specialization=p.specialization, industry=p.industry,
+                         work_goal=p.work_goal, declared_grade=p.declared_grade,
+                         experience_years=p.experience_years, created_at=p.survey_at))
     # The confirmed grade shown on the card is the one for the chosen specialization.
     await sync_assessed_grade(db, p)
     await rebuild_profile(db, p)

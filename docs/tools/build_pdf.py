@@ -62,6 +62,8 @@ def _links(text: str, name: str) -> str:
 def _part(name: str, index: int) -> str:
     text = _links((DOCS / name).read_text(encoding="utf-8"), name)
     body = markdown.markdown(text, extensions=["tables", "fenced_code", "sane_lists"])
+    # Pictures sit next to the Markdown in docs/; the HTML is loaded without a base URL.
+    body = re.sub(r'<img src="(?!https?:|file:)([^"]+)"', lambda m: f'<img src="{(DOCS / m.group(1)).as_uri()}"', body)
     body = re.sub(r'<pre><code class="language-mermaid">(.*?)</code></pre>',
                   lambda m: f'<div class="mermaid">{m.group(1)}</div>', body, flags=re.S)
     return f'<section class="part" id="part-{index}">{body}</section>'
@@ -98,6 +100,7 @@ blockquote { margin: 8pt 0; padding: 4pt 10pt; border-left: 3pt solid #402FFF; b
 details > summary { font-weight: 600; }
 .mermaid { text-align: center; margin: 8pt 0; break-inside: avoid; }
 .mermaid svg { max-width: 100%; height: auto; }
+.part img { max-width: 100%; height: auto; break-inside: avoid; }
 .cover { height: 250mm; display: flex; flex-direction: column; justify-content: space-between; }
 .cover img { width: 70mm; }
 .cover .title { font-family: 'JetBrains Mono', monospace; font-size: 26pt; font-weight: 700; line-height: 1.15; margin-top: 30mm; }

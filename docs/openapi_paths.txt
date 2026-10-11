@@ -63,6 +63,7 @@
 /api/v1/candidates/me/resumes/{resume_id}
 /api/v1/candidates/me/salary-market
 /api/v1/candidates/me/survey
+/api/v1/candidates/me/survey/history
 /api/v1/candidates/me/visibility
 /api/v1/candidates/survey-options
 /api/v1/employer/ats-sandbox
@@ -76,6 +77,7 @@
 /api/v1/employer/integrations/{endpoint_id}/rotate
 /api/v1/employer/me
 /api/v1/employer/me/hiring-practice
+/api/v1/employer/me/staff
 /api/v1/employer/reputation
 /api/v1/fsp-id-demo/login
 /api/v1/guide/ask
