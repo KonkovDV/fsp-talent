@@ -140,12 +140,13 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
                 exposure: dict[str, float] | None = None,
                 misspec: tuple[float, float] | None = None,
                 control: dict[str, float] | None = None,
-                known: set[tuple] | None = None, remember: set[tuple] | None = None) -> Session:
+                known: set[tuple] | None = None, remember: set[tuple] | None = None,
+                item_limit: int | None = None) -> Session:
     state = State(spec=spec, target=target)
     keys: list[str] = []
     answers = []
     while True:
-        verdict = evaluate(state)
+        verdict = evaluate(state, item_limit=item_limit)
         if verdict.stop_reason == "extend" and not state.extended:
             state.extended = True
             continue
@@ -506,6 +507,7 @@ class Report:
     spec_rows: list[tuple[str, float, str, int]] = field(default_factory=list)
     overlap_spec: float = 0.0
     adjacent_auc: list[AdjacentAuc] = field(default_factory=list)
+    adjacent_auc_express: list[AdjacentAuc] = field(default_factory=list)
 
 
 @dataclass
@@ -516,6 +518,14 @@ class AdjacentAuc:
     n_upper: int
     auc: float
     ci: tuple[float, float]
+
+
+def express_sessions(people: list[Person], truth: Truth, offsets: dict[str, float], seed: int) -> list[Session]:
+    """The jury express mode of the product: the same bank and selector, at most cat.EXPRESS_ITEMS items."""
+    from app.services.cat import EXPRESS_ITEMS
+    rng = random.Random(seed)
+    return [run_session(theta, spec, target, truth, rng, offsets=offsets, item_limit=EXPRESS_ITEMS)
+            for theta, spec, target in people]
 
 
 def auc(lower: list[float], upper: list[float]) -> float:
@@ -1208,6 +1218,7 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
         fixed_form=fixed_form(seed=seed) if extras else None,
         stolen=stolen_sessions(truth, offsets, seed + 31) if extras else None,
         adjacent_auc=adjacent_auc(clean_sessions, draws=1000 if extras else 200),
+        adjacent_auc_express=adjacent_auc(express_sessions(people, truth, offsets, seed + 41)) if extras else [],
     )
 
 
@@ -1493,8 +1504,20 @@ def _auc_lines(r: Report) -> list[str]:
     mean = statistics.mean(row.auc for row in r.adjacent_auc)
     lines.append(f"| среднее по парам | — | {_dec(mean)} | — |")
     lines.append("")
-    lines.append("Экспресс-режима теста в продукте нет, поэтому сравнения «полный тест против экспресс-теста» нет.")
-    lines.append("")
+    if r.adjacent_auc_express:
+        lines += ["Экспресс-режим жюри: тот же банк и тот же выбор заданий, не больше 15 вопросов. Те же люди.",
+                  "", "| Пара грейдов | Людей | AUC экспресс | 95 % ДИ | AUC полный |", "|---|---|---|---|---|"]
+        full = {(row.lower, row.upper): row.auc for row in r.adjacent_auc}
+        for row in r.adjacent_auc_express:
+            paired = full.get((row.lower, row.upper), float("nan"))
+            lines.append(f"| {row.lower} / {row.upper} | {row.n_lower} / {row.n_upper} | {_dec(row.auc)} | "
+                         f"{_dec(row.ci[0])}–{_dec(row.ci[1])} | {_dec(paired)} |")
+        express_mean = statistics.mean(row.auc for row in r.adjacent_auc_express)
+        lines.append(f"| среднее по парам | — | {_dec(express_mean)} | — | {_dec(mean)} |")
+        lines.append("")
+    else:
+        lines.append("Экспресс-режим (15 вопросов, 5 минут) есть в продукте, в этом прогоне он не моделировался.")
+        lines.append("")
     return lines
 
 

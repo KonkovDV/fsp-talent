@@ -62,7 +62,7 @@ def test_report_lines_use_a_comma_and_add_the_mean():
     from app.validation.assessment import AdjacentAuc, _auc_lines
     rows = [AdjacentAuc("junior", "middle", 30, 30, 0.9, (0.85, 0.95)),
             AdjacentAuc("middle", "senior", 30, 30, 0.8, (0.7, 0.9))]
-    text = "\n".join(_auc_lines(SimpleNamespace(adjacent_auc=rows)))
+    text = "\n".join(_auc_lines(SimpleNamespace(adjacent_auc=rows, adjacent_auc_express=[])))
     assert "| 0,900 | 0,850–0,950 |" in text
     assert "| среднее по парам | — | 0,850 | — |" in text
-    assert "Экспресс-режима" in text
+    assert "Экспресс-режим (15 вопросов, 5 минут) есть в продукте" in text
