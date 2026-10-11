@@ -349,6 +349,30 @@ async def evaluate_pairs(request: Request):
         raise ApiError(422, "validation_error", str(exc)) from exc
 
 
+@router.get("/assessment/simulate")
+async def simulate_assessment(request: Request, spec: str = Query("backend", max_length=20),
+                              grade: str | None = Query("middle", max_length=10),
+                              theta: float | None = Query(None, ge=-3.5, le=3.5),
+                              target: str | None = Query(None, max_length=10),
+                              seed: int | None = Query(None, ge=1, le=2**31 - 1),
+                              batch: int = Query(0, ge=0, le=50)):
+    """Expert mode: the live adaptive test on a simulated candidate of the chosen level (JS-02).
+
+    Same selector, 3PL posterior, stop rule and grade decision as the real test. Steps carry the family,
+    difficulty level and right/wrong only: no item text, options or keys. Nothing is read or stored.
+    """
+    from app.api.v1.auth import client_address
+    from app.validation.expert_mode import simulate
+
+    if await too_many(f"public:simulate:{client_address(request)}", limit=EVALUATE_PER_MINUTE):
+        raise ApiError(429, "rate_limited")
+    try:
+        return await asyncio.to_thread(simulate, spec=spec, grade=grade, theta=theta, target=target,
+                                       seed=seed, batch=batch)
+    except ValueError as exc:
+        raise ApiError(422, "validation_error", f"Недопустимое значение: {exc}") from exc
+
+
 @router.post("/credentials/verify")
 async def verify_posted(request: Request, db: AsyncSession = Depends(get_db)):
     """Verify a W3C Verifiable Credential submitted as JSON.

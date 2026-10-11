@@ -138,6 +138,7 @@
 /api/v1/problems/{problem}
 /api/v1/public/assessment/items
 /api/v1/public/assessment/psychometrics
+/api/v1/public/assessment/simulate
 /api/v1/public/candidates/{ref}
 /api/v1/public/candidates/{ref}/profile.pdf
 /api/v1/public/categories/{role}/{grade}/ranking

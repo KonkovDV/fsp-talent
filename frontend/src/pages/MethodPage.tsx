@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { apiError, itemPsychometrics, methodWeights, previewPublicExam } from '../api/client'
 import ExamPreview, { type Exam } from '../components/ExamPreview'
 import PublicShell from '../components/PublicShell'
@@ -180,6 +181,15 @@ export default function MethodPage() {
               JavaScript занимает 50 % плана frontend, 35 % mobile и 25 % fullstack, а семейство JavaScript в банке одно. В симуляции
               контроль экспозиции считает долю по всем сессиям, поэтому узкая специализация проходит под целью 0,40. Живой банк считает
               долю внутри своей специализации. Банк расширяется: следующие семейства — для frontend, mobile и devops.
+            </p>
+          </section>
+          <section className="card p-5">
+            <h2 className="font-display text-lg font-bold text-ink">Режим эксперта</h2>
+            <p className="mt-1 text-sm text-ink-2">
+              На странице <Link to="/jury" className="link">«Режим жюри»</Link> выберите уровень — сервер проведёт этот же тест
+              на виртуальном кандидате: тот же выбор заданий, та же модель оценки и то же правило остановки. По шагам видно задание,
+              ответ и оценку уровня с погрешностью, затем итоговый грейд. Повтор на новых заданиях и пакет из 50 прогонов
+              показывают, как часто грейд совпадает. Текст заданий и ключи не показываются, в базу ничего не пишется.
             </p>
           </section>
           <section className="card p-5">
