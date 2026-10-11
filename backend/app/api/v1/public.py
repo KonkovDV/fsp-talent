@@ -177,6 +177,8 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
     cat = p.category
     return {
         "id": str(p.id),
+        # The name is shown only on the page the person opened: public_profile + distribution consent + 18
+        # (_public_filter). Everyone else gets 404, not a page (ST-03/ST-04).
         "display_name": p.display_name,
         "region": p.region,
         "primary_role": cat.primary_role if cat else None,
@@ -529,6 +531,7 @@ def public_handle(participant_id) -> str:
     """How a person appears in a public list: no name, a stable short tag (the /jury page promises no names).
 
     The name stays on the person's own public page, which they opened with a separate consent.
+    The list carries no participant_id, so a row does not lead to that page (ST-03).
     """
     return f"Участник {str(participant_id).replace('-', '')[:4].upper()}"
 
@@ -565,7 +568,7 @@ async def get_leaderboard(
     return [
         {
             "rank": i + 1,
-            "participant_id": str(ds.participant_id),
+            # ST-03: no participant_id — it opened /p/{id} and the name behind the «no names» list.
             "display_name": public_handle(ds.participant_id),
             "region": p.region,
             "discipline": ds.discipline,
