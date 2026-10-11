@@ -10,6 +10,7 @@ import { useFavorites } from '../../hooks/useFavorites'
 import InviteDialog from '../../components/InviteDialog'
 import TaskDialog from '../../components/TaskDialog'
 import { Empty, PageHeader, Skeleton, plural } from '../../components/ui'
+import { searchCount } from '../../searchCount'
 
 const ROLES = ['backend', 'frontend', 'fullstack', 'ml', 'devops', 'security', 'embedded', 'mobile', 'qa', 'analyst', 'data']
 const DISCS = ['algorithmic', 'product', 'security', 'bas', 'robotics', 'ai']
@@ -74,6 +75,7 @@ export default function EmployerSearch() {
     },
   })
   const cards: CandidateCardData[] = data?.items ?? []
+  const count = searchCount(data?.total ?? 0, data?.in_category)
   const label = 'field-label'
 
   return (
@@ -181,7 +183,7 @@ export default function EmployerSearch() {
           {parsed.isError && <p className="notice-error mb-4" role="alert">{apiError(parsed.error, 'Не удалось разобрать запрос')}</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{data.total}</span> {plural(data.total, ['кандидат', 'кандидата', 'кандидатов'])}{data.total > cards.length ? ` — на экране первые ${cards.length}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}{data.in_category != null && data.in_category < data.total ? ` Точно в выбранной категории — ${data.in_category}, остальные — соседний грейд или смежная специализация.` : ''}{data.text_blend === 'rules+meaning' ? ' Смысл запроса — 15%, слова — 85%.' : ' Смысловой поиск выключен: порядок по словам.'}{(data.platform_held ?? 0) > 0 ? ` Площадка не показала ${data.platform_held}. Уровень компании в этом списке не пишется.` : ''}</p>
+              <p className="text-sm text-ink-2"><span className="num font-semibold text-ink">{count.main}</span> {plural(count.main, ['кандидат', 'кандидата', 'кандидатов'])}{data.in_category != null ? ' в выбранной категории' : ''}{count.related > 0 ? `, ещё ${count.related} похожих: соседний грейд или смежная специализация` : ''}{data.total > cards.length ? ` — на экране первые ${cards.length} из ${data.total}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}.{data.text_blend === 'rules+meaning' ? ' Смысл запроса — 15%, слова — 85%.' : ' Смысловой поиск выключен: порядок по словам.'}{(data.platform_held ?? 0) > 0 ? ` Площадка не показала ${data.platform_held}. Уровень компании в этом списке не пишется.` : ''}</p>
               {data.recommended_categories?.length > 0 && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Сильнее всего:
                   {data.recommended_categories.filter((c: { candidates: number | null }) => (c.candidates ?? 0) >= 5).map((c: { role: string; grade: string; candidates: number }) => (

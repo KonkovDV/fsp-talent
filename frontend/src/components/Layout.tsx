@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
-import { signOut } from '../api/client'
+import { useQuery } from '@tanstack/react-query'
+import { api, signOut } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { Brand } from './Brand'
 import GuideBox from './GuideBox'
@@ -27,6 +28,9 @@ const EMPLOYER_LINKS = [
   { to: '/employer/vacancies', label: 'Вакансии', end: false },
   { to: '/employer/company', label: 'Компания', end: false },
   { to: '/employer/integrations', label: 'Интеграции', end: false },
+]
+// Staff only. The server answers 404 to everyone else, so the links stay hidden for them.
+const STAFF_LINKS = [
   { to: '/employer/moderation', label: 'Модерация', end: false },
   { to: '/employer/methodist', label: 'Методист', end: false },
 ]
@@ -34,7 +38,15 @@ const EMPLOYER_LINKS = [
 export default function Layout() {
   const { userRole, guestUntil } = useAuthStore()
   const navigate = useNavigate()
-  const links = userRole === 'participant' ? CANDIDATE_LINKS : EMPLOYER_LINKS
+  const staff = useQuery({
+    queryKey: ['staff'],
+    queryFn: () => api.get('/methodist').then(() => true, () => false),
+    enabled: userRole === 'employer',
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  const links = userRole === 'participant' ? CANDIDATE_LINKS
+    : staff.data ? [...EMPLOYER_LINKS, ...STAFF_LINKS] : EMPLOYER_LINKS
   const roleLabel = userRole === 'participant' ? 'Кандидат' : 'Работодатель'
   const exit = () => { void signOut().then(() => navigate('/')) }
 

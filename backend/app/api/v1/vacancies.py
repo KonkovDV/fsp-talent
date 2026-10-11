@@ -243,8 +243,11 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         })
         if hit is None:
             continue
-        cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied, "can_apply": not needs_guardian}))
-    cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+        cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied,
+                                    "can_apply": not needs_guardian and not hit["needs_test"]}))
+    if candidate["grade"]:
+        cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+    # Without a grade the rows keep the query order: newest vacancy first.
     return cards
 
 
@@ -292,6 +295,8 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
     })
     if hit is None:
         raise HTTPException(403, "Профиль не подходит под условия вакансии")
+    if hit["needs_test"]:
+        raise HTTPException(403, "Сначала подтвердите грейд тестом: вакансия ждёт определённый грейд")
     db.add(Application(vacancy_id=vacancy.id, candidate_id=participant.id, status="applied"))
     db.add(ConsentLog(participant_id=participant.id, event_type="vacancy_applied", actor_id=participant.id,
                       meta={"vacancy_id": str(vacancy.id)}))
