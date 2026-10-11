@@ -33,6 +33,7 @@
 |---|---|
 | **Экспресс-тест за 5 минут** | [главная стенда](https://89-124-65-102.sslip.io) → «Пройти экспресс-тест за 5 минут»: без регистрации, свободный аккаунт жюри, 15 заданий, грейд не меняется |
 | **Стенд** | https://89-124-65-102.sslip.io — страница для жюри: [/jury](https://89-124-65-102.sslip.io/jury); зеркало https://v1081358.hosted-by-vdsina.com (тот же сервер и база) |
+| **Запуск у себя** | `docker compose up -d --build --wait` на свежем клоне, без правок: [за 5 минут](#запуск-у-себя-за-5-минут) |
 | **Видео-демо** | [submission/05-additional/fsp-talent-demo.mp4](submission/05-additional/fsp-talent-demo.mp4) (3:17) |
 | **Демо-входы** | `jury1@demo.talent` … `jury10@demo.talent`, `hr@sibcode.demo`, `fsp001@demo.talent`; пароль `demo12345` ([все аккаунты](#демо-аккаунты)) |
 | **Презентация** | [PDF](submission/03-presentation/FSP_Talent_presentation.pdf), [PPTX](submission/03-presentation/FSP_Talent_presentation.pptx) |
@@ -153,7 +154,7 @@
 - [Границы применимости](#границы-применимости)
 - [Внедрение в ФСП](#внедрение-в-фсп)
 - [Персональные данные и безопасность](#персональные-данные-и-безопасность)
-- [Быстрый старт](#быстрый-старт)
+- [Запуск у себя за 5 минут](#запуск-у-себя-за-5-минут)
 - [Развёртывание на сервере](#развёртывание-на-сервере)
 - [Тесты и проверки](#тесты-и-проверки)
 - [Демо-режим и промышленный контур](#демо-режим-и-промышленный-контур)
@@ -437,43 +438,53 @@ LCB = max по подмножествам до 5 событий (μ − σ); п�
 
 Полный разбор и сверка с OWASP ASVS: [SOLUTION.md, гл. 10](docs/SOLUTION.md#10-безопасность-и-152-фз).
 
-## Быстрый старт
+## Запуск у себя за 5 минут
 
-Нужны Docker 24+ с Compose 2.17+, 4 ГБ свободной памяти и свободные порты 80 и 8025. Видеокарта не используется.
-
-`make doctor` до первого запуска проверяет Docker, Compose, память, диск, порты, `.env` и образы и печатает ✓ / ✗ с подсказкой, что исправить.
+Одна команда на свежем клоне. Ничего править не нужно: файл `.env` не обязателен, демо-данные загружаются сами.
 
 ```bash
 git clone https://github.com/KonkovDV/fsp-talent.git
 cd fsp-talent
-make demo
-```
-
-<details>
-<summary>Windows (PowerShell), без make</summary>
-
-```powershell
-git clone https://github.com/KonkovDV/fsp-talent.git
-cd fsp-talent
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up -d --build --wait
-docker compose exec -T -u appuser backend python -m seed.generate_seed
 ```
 
-Те же шаги одной командой: `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1`.
-
-</details>
-
-`make demo` создаёт `.env` из примера (править не нужно), собирает и поднимает девять контейнеров, ждёт проверки здоровья, применяет миграции и загружает демо-данные. Первый запуск занимает 5–10 минут.
+Команда возвращает управление, когда всё готово: база, API, фоновые задачи и демо-данные. Дальше:
 
 | Адрес | Что там |
 |---|---|
 | http://localhost | Кабинеты кандидата и работодателя, страница жюри `/jury` |
 | http://localhost/docs | Swagger UI, спецификация OpenAPI 3.1 |
-| http://localhost:8025 | Mailpit: письма с кодами подтверждения и уведомления |
-| http://localhost/health | Состояние и коммит сборки (поле `build`) |
+| http://localhost:8025 | Mailpit: письма с кодами подтверждения |
+| http://localhost/health | Состояние стенда |
 
-Порт 80 занят, нет make или что-то не стартует — [docs/INSTALL.md](docs/INSTALL.md), раздел частых проблем.
+Демо-входы те же, что на стенде, пароль `demo12345`: `jury1@demo.talent` … `jury10@demo.talent`, `hr@sibcode.demo`, `fsp001@demo.talent`.
+
+Проверить, что демо-данные на месте (должно быть «18/18 OK»):
+
+```bash
+docker compose run --rm backend python -m seed.demo_check
+```
+
+Остановить и удалить всё, включая данные: `docker compose down -v`.
+
+**Что нужно.** Docker 24+ с Compose 2.24+ (Docker Desktop 4.27+), 4 ГБ свободной памяти, 5 ГБ на диске, свободный порт 80. Видеокарта, Python, Node.js и `make` не нужны. С `make` то же самое: `make demo`, проверка до запуска: `make doctor`.
+
+**Сколько ждать.** Первый запуск — 5–10 минут: скачивание и сборка образов. Повторный — секунды.
+
+**Если что-то не так**
+
+| Ситуация | Что сделать |
+|---|---|
+| Порт 80 занят (`port is already allocated`) | `HTTP_PORT=8080 PUBLIC_BASE_URL=http://localhost:8080 docker compose up -d --build --wait`, сайт будет на http://localhost:8080. Порты почты и API так же: `MAIL_PORT`, `API_PORT`, `FRONTEND_PORT`. Значения можно записать в `.env` |
+| Mac на Apple Silicon (M1–M4) | Команды те же. Базовые образы публикуются под arm64, сборка идёт нативно |
+| Windows | Docker Desktop с WSL 2. Команды те же, в PowerShell. Клонируйте лучше внутрь WSL (`\\wsl$\...`), так сборка быстрее. Без `make` есть `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1` |
+| `unknown flag: --wait` или ошибка про `env_file` | Старый Compose. Обновите Docker Desktop, или создайте `.env` (`cp .env.example .env`) и запустите `make demo` |
+| Сборка упала на `apt-get`, `pip` или `npm` | Нет доступа к зеркалам или к прокси. Повторите команду: кэш сохранится, сборка продолжится с места остановки |
+| Что-то не стало `healthy` | `docker compose ps` и `docker compose logs backend demo-seed` |
+
+**Без интернета.** Нужен только для первой сборки (образы, pip, npm). После неё стенд работает полностью офлайн: внешних вызовов нет, языковые модели по умолчанию выключены, почта уходит в локальный Mailpit. Чтобы запустить на машине без сети, соберите на машине с сетью и перенесите образы: `docker save` и `docker load`.
+
+Подробности и частые проблемы — [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Развёртывание на сервере
 
