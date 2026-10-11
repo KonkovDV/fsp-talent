@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, FileCheck2, UserRound } from 'lucide-react'
 import { apiError, askPublicGuide, categoryRanking, telegramAchievements, telegramVacancies } from '../api/client'
 import { GRADES, ROLE_RU, gradeRu } from '../labels'
 import PublicShell from '../components/PublicShell'
+import Term from '../components/Term'
 import { PageHeader } from '../components/ui'
 
 const PATHS: {
   title: string
   who: string
   to: string
-  steps: { go: string; see: string; to: string }[]
+  steps: { go: string; see: ReactNode; to: string }[]
 }[] = [
   {
     title: 'Работодатель',
@@ -41,9 +42,9 @@ const PATHS: {
     who: 'третья сторона',
     to: '/method',
     steps: [
-      { go: 'Как устроен тест', to: '/method', see: 'Порог, информация у порога, Симпсон–Хеттер (ограничение частоты показа задания), карантин. Страница грейд не ставит.' },
-      { go: 'Проверка удостоверения', to: '/badge', see: 'Подпись W3C и QR документа did:web. Имени в краткой карточке нет.' },
-      { go: 'Подбор на своей разметке', to: '/evaluate', see: 'nDCG (качество порядка выдачи), P@10 (доля релевантных в первой десятке) и MAP (средняя точность). Пары не сохраняются, банк не читается.' },
+      { go: 'Как устроен тест', to: '/method', see: <>Порог уровня, самые полезные задания у порога, <Term term="метод Симпсона–Хеттера">ограничение частоты показа одного задания</Term>, карантин утёкших заданий. Страница грейд не ставит.</> },
+      { go: 'Проверка удостоверения', to: '/badge', see: <>Электронная подпись по стандарту W3C и QR-код с <Term term="did:web — адрес ключа издателя на его домене">адресом ключа издателя</Term>. Имени в краткой карточке нет.</> },
+      { go: 'Подбор на своей разметке', to: '/evaluate', see: <><Term term="nDCG@10">Качество порядка выдачи</Term>, <Term term="P@10">доля подходящих в первой десятке</Term> и <Term term="MAP">средняя точность</Term>. Пары не сохраняются, банк не читается.</> },
       { go: 'Рейтинг', to: '/leaderboard', see: 'Публичный список без имени.' },
     ],
   },
@@ -205,8 +206,8 @@ export default function JuryPage() {
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-ink-2">
           <li>Грейд ставит только тест выбранного уровня. Протокол, разряд, свидетельство и файл его не меняют и не понижают.</li>
           <li>Имя, аватар и контакты закрыты, пока кандидат не принял приглашение.</li>
-          <li>Нижняя граница ФСП — отдельная ось порядка. Разброс на карточке — та же оценка, среднее ± неопределённость.</li>
-          <li>Модель пары двигает только верхние 50 фактора «Запрос», и только если на сервере есть файл весов. Формула BM25 в порядок списка не входит.</li>
+          <li><Term term="LCB — нижняя граница доверительного интервала">Осторожная оценка ФСП</Term> (нижняя граница уровня) — отдельная ось порядка. Разброс на карточке — та же оценка, среднее ± неопределённость.</li>
+          <li>Модель пары двигает только верхние 50 фактора «Запрос», и только если на сервере есть файл весов. <Term term="BM25">Поиск по ключевым словам</Term> в порядок списка не входит.</li>
         </ul>
       </section>
 
