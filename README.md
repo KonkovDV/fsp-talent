@@ -535,6 +535,7 @@ Caddy сам получает сертификат Let's Encrypt, контейн
 | [docs/INSTALL.md](docs/INSTALL.md) | Локальный запуск, развёртывание на сервере, обновление, откат, резервные копии, частые проблемы |
 | [submission/03-presentation/FSP_Talent_presentation.pdf](submission/03-presentation/FSP_Talent_presentation.pdf) | Презентация для жюри ([PPTX](submission/03-presentation/FSP_Talent_presentation.pptx)); `docs/pitch.*` — старый черновик |
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Каждое требование ТЗ и ответы постановщика на Q&A: где увидеть и где в коде |
+| [docs/ORGANIZER_DECISIONS.md](docs/ORGANIZER_DECISIONS.md) | Решения организаторов с Q&A: на каждое — тест или файл, которым это проверить |
 | [docs/VALIDATION_ASSESSMENT.md](docs/VALIDATION_ASSESSMENT.md) | Проверка теста на грейд |
 | [docs/VALIDATION_MATCHING.md](docs/VALIDATION_MATCHING.md) | Проверка подбора |
 | [docs/MODEL_CARDS.md](docs/MODEL_CARDS.md) | Карточки моделей и правил: назначение, вход и выход, метрики, выключатель, что уходит провайдеру |
