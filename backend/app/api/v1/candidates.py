@@ -337,7 +337,8 @@ class ProfileUpdate(BaseModel):
     job_search: Literal["active", "open", "not_looking"] | None = None
     salary_from_gross: int | None = Field(None, ge=0, le=100_000_000)
     salary_to_gross: int | None = Field(None, ge=0, le=100_000_000)
-    birth_date: date | None = None
+    # SEC3-05: 0001-01-01 passed the 18+ filter as an age of two thousand years.
+    birth_date: date | None = Field(None, ge=date(1900, 1, 1))
     expected_version: int | None = Field(None, ge=0)
 
 
@@ -420,6 +421,10 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
             # the date changes only through support, with the guardian when the person is a minor.
             raise ApiError(409, "birth_date_locked",
                            "Дата рождения уже сохранена. Исправить её можно только через поддержку.")
+        if p.birth_date != born:
+            # SEC3-04: the date decides the guardian's consent and the 18+ filters, so setting it is logged.
+            db.add(ConsentLog(participant_id=p.id, event_type="birth_date_set", actor_id=p.id,
+                              meta={"minor": age_on(born, date.today()) < 18, "was_minor_flag": bool(p.is_minor)}))
         p.birth_date = born
         p.is_minor = age_on(born, date.today()) < 18
     for field in ("salary_from_gross", "salary_to_gross"):
