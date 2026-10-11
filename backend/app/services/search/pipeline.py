@@ -735,11 +735,14 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         if names & group:
             names |= group
     skills: dict[uuid.UUID, dict[str, str]] = {}
+    checked: dict[uuid.UUID, set[str]] = {}
     if names:
-        for pid, name, trust in await db.execute(
-                select(Skill.participant_id, Skill.name, Skill.trust_level).where(
+        for pid, name, trust, items in await db.execute(
+                select(Skill.participant_id, Skill.name, Skill.trust_level, Skill.test_items).where(
                     Skill.participant_id.in_(ids), Skill.confirmed.is_(True), Skill.name.in_(names))):
             skills.setdefault(pid, {})[name] = trust
+            if items:
+                checked.setdefault(pid, set()).add(name)
     people = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ids)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ids)))}
@@ -817,6 +820,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             work_formats=tuple(p.work_formats or ()) if p else (),
             tested_at=conf.confirmed_at if conf else None,
             failed_grade=failed_targets.get((pid, role_name)) if role_name else None,
+            tested_skills=frozenset(checked.get(pid, ())),
         )
         m = match_score(need, facts)
         adjusted, note = penalised(m.score, marks.get(pid))
