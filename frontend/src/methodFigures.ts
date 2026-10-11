@@ -7,6 +7,7 @@ export const FIGURES: [string, string, string][] = [
   ['65,8 %', 'точный итоговый грейд после пути по правилам продукта; в пределах ступени 98,8 %', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
   ['34 %', 'максимальная доля показов одного ключа, 2000 кандидатов', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
   ['69 %', 'максимальная доля показов одного ключа внутри специализации (fullstack, js_eval:3); по всем специализациям 34 %', 'cd backend && python -m app.validation.assessment --n 2000 --seed 7'],
+  ['0,632', 'доля подходящих в первой десятке подбора, P@10 на размеченных парах, среднее трёх зёрен; сортировка по резюме — 0,559', 'cd backend && python -m app.validation.matching'],
 ]
 
 export const SIMULATION_KEY_SHARE = FIGURES[5][0]
