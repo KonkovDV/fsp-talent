@@ -424,6 +424,17 @@ def topic_fails(topics: dict[str, tuple[int, int]]) -> bool:
     return any(n >= TOPIC_FLOOR_N and right < TOPIC_FLOOR * n for n, right in topics.values())
 
 
+def skill_tallies(rows: list[tuple[tuple[str, ...], bool]]) -> dict[str, tuple[int, int]]:
+    """Right answers and items per skill tag, every tag that had at least one item."""
+    seen: Counter = Counter()
+    right: Counter = Counter()
+    for skills, correct in rows:
+        for s in skills:
+            seen[s] += 1
+            right[s] += int(correct)
+    return {s: (right[s], seen[s]) for s in seen}
+
+
 def skill_scores(rows: list[tuple[tuple[str, ...], bool]], min_items: int = 3) -> dict[str, float]:
     """Share of right answers per skill tag, for skills with at least `min_items` items."""
     seen: Counter = Counter()

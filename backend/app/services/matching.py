@@ -206,7 +206,7 @@ REASON_SOURCE = {
     "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП", "FSP_NO_LIFT": "ФСП",
     "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП",
     "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
-    "SKILL_UNTESTED": "заявлено",
+    "SKILL_UNTESTED": "заявлено", "SKILL_NOT_PASSED": "тест",
     "RELATED_SKILL": "заявлено",
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
     "CONGESTION": "очередь",
@@ -259,6 +259,8 @@ class CandidateFacts:
     p_up: float | None = None             # P(θ ≥ cut of the next grade); used only by GRADE_MODEL=expected
     fail_rate: float | None = None        # π for a declared grade; None keeps the legacy 0.85 factor
     tested_at: datetime | None = None     # confirmation date; None leaves the test factor unchanged
+    # Profile skills a finished test had items on (F24b). Read only by the explanation, never by the score.
+    tested_skills: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -487,7 +489,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     wanted = [(s, 1.0) for s in need.skills] + [(s, 0.5) for s in need.nice if s not in need.skills]
     if wanted:
         total = got = 0.0
-        confirmed, related, missing, untested = [], [], [], []
+        confirmed, related, missing, untested, not_passed = [], [], [], [], []
         for skill, w in wanted:
             credit, how = _skill_credit(skill, c.skills)
             if not use_trust and credit > 0 and not how.startswith("related"):
@@ -500,7 +502,8 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                 confirmed.append(skill)
             elif how != "missing" and not how.startswith("related"):
                 # In the profile, but no test confirmed it. Not the same as a missing skill (SKILL_GAP).
-                untested.append(skill)
+                # F24b: a finished test with items on it is "checked, not confirmed"; otherwise never checked.
+                (not_passed if skill in c.tested_skills else untested).append(skill)
             elif how.startswith("related") and credit > 0:
                 related.append(f"{skill} ≈ {how.split(':', 1)[1]}")
             elif how == "missing" and w == 1.0:
@@ -512,10 +515,13 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                   f"Навыки: {have_n} из {len(need.skills)} обязательных")
         if confirmed:
             _note(plus, reasons, "plus", "VERIFIED_SKILL", "Подтверждены тестом: " + ", ".join(confirmed))
+        # F24/F24b: only the explanation changes; the credit above already weighs these by TRUST.
+        if not_passed:
+            _note(info, reasons, "info", "SKILL_NOT_PASSED",
+                  "Проверены тестом, не подтверждены: " + ", ".join(not_passed))
         if untested:
-            # F24: only the explanation changes; the credit above already weighs these by TRUST.
             _note(info, reasons, "info", "SKILL_UNTESTED",
-                  "Заявлены, тестом не подтверждены: " + ", ".join(untested))
+                  "Заявлены, тестом не проверялись: " + ", ".join(untested))
         if related:
             _note(info, reasons, "info", "RELATED_SKILL",
                   "Близкие технологии (частичный зачёт): " + ", ".join(related))

@@ -771,19 +771,32 @@ async def _update_item_stats(db: AsyncSession, answered: list[TestSessionItem], 
 
 async def _confirm_skills(db: AsyncSession, session: TestSession, answered: list[TestSessionItem],
                           now: datetime) -> list[tuple[str, float]]:
-    """Skills the test confirmed (≥ 75 % right on ≥ 3 items). Declared skills stay declarations."""
-    scores = cat.skill_scores([(tuple(it.skills), bool(it.is_correct)) for it in answered])
+    """Skills the test confirmed (≥ 75 % right on ≥ 3 items). Declared skills stay declarations.
+
+    F24b: every skill of the profile that had items in this session also keeps the share and the item
+    count of this attempt, passed or not, so the card can say "checked by the test, not confirmed".
+    A skill outside the profile gets no row from a failed check.
+    """
+    rows = [(tuple(it.skills), bool(it.is_correct)) for it in answered]
+    tallies = cat.skill_tallies(rows)
+    scores = cat.skill_scores(rows)
     confirmed = []
-    for raw, share in scores.items():
+    for raw, (right, items) in tallies.items():
         name = normalize_skill(raw)
-        if not name or share < SKILL_CONFIRM_SHARE:
+        if not name:
+            continue
+        share = right / items
+        row = await db.scalar(select(Skill).where(Skill.participant_id == session.participant_id, Skill.name == name))
+        if row is not None:
+            row.test_share, row.test_items, row.tested_at = round(share, 4), items, now
+        if raw not in scores or scores[raw] < SKILL_CONFIRM_SHARE:
             continue
         confirmed.append((name, share))
         quote = f"Тест {now:%d.%m.%Y}: {round(share * 100)}% верных ответов"
-        row = await db.scalar(select(Skill).where(Skill.participant_id == session.participant_id, Skill.name == name))
         if row is None:
             db.add(Skill(participant_id=session.participant_id, name=name, raw_name=raw, source_quote=quote,
-                         trust_level="test_confirmed", confirmed=True, confirmed_at=now))
+                         trust_level="test_confirmed", confirmed=True, confirmed_at=now,
+                         test_share=round(share, 4), test_items=items, tested_at=now))
         else:
             if row.trust_level != "test_confirmed" or row.confirmed_at is None:
                 row.confirmed_at = now
