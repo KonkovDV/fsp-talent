@@ -7,7 +7,7 @@ import PublicShell from '../components/PublicShell'
 import Term from '../components/Term'
 import { PageHeader, Skeleton } from '../components/ui'
 import { GRADE_RU, ROLE_RU } from '../labels'
-import { FIGURES, SIMULATION_KEY_SHARE, shareLabel } from '../methodFigures'
+import { FIGURES, FIGURES_AS_OF, SIMULATION_KEY_SHARE, shareLabel } from '../methodFigures'
 
 interface Cut { grade: string; cut: number; information: number; se_after_12: number | null }
 interface Point { theta: number; information: number }
@@ -150,6 +150,11 @@ export default function MethodPage() {
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Цифры проверки</h2>
             <p className="mt-1 text-sm text-ink-2">Каждая цифра печатается своей командой из каталога репозитория. Это тот же прогон, что в README.</p>
+            <p data-testid="figures-as-of" className="mt-1 text-xs text-ink-3">
+              Отчёт от {FIGURES_AS_OF.date}, коммит{' '}
+              <a className="font-mono underline" href={`https://github.com/KonkovDV/fsp-talent/commit/${FIGURES_AS_OF.commit}`} target="_blank" rel="noopener">{FIGURES_AS_OF.commit}</a>.
+              Сборка стенда — в <a className="underline" href="/health" target="_blank" rel="noopener">/health</a>.
+            </p>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
               {FIGURES.map(([value, text, command]) => (
                 <li key={value} className="rounded-lg border border-line bg-sunken/40 p-3">

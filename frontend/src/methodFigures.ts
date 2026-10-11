@@ -12,6 +12,9 @@ export const FIGURES: [string, string, string][] = [
   ['+0,032', 'подбор против сортировки по резюме (число заявленных нужных навыков, затем специализация и грейд): разница nDCG@10, 95 % ДИ +0,011…+0,054', 'cd backend && python -m app.validation.matching'],
 ]
 
+/** When and on which commit the figures above were last printed by their commands. Update together with FIGURES. */
+export const FIGURES_AS_OF = { date: '11.10.2026', commit: '13f4cc5' }
+
 export const SIMULATION_KEY_SHARE = FIGURES[5][0]
 
 export function shareLabel(share: number): string {
