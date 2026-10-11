@@ -707,6 +707,9 @@ def check_minor():
     token = tokens["access_token"]
     status, me = call("GET", "/candidates/me", token=token)
     assert me["is_minor"] and not me["minor_consent_given"], me
+    # SD-08: an adult first birth date does not undo the 15–17 signup.
+    status, older = call("PUT", "/candidates/me/profile", {"birth_date": "1990-01-01"}, token=token)
+    assert status == 422 and older["error"]["code"] == "age_mismatch", older
     guardian = f"parent-{int(time.time() * 1000)}@example.com"
     status, asked = call("POST", "/candidates/me/guardian", {"guardian_email": guardian}, token=token)
     assert status == 200, asked
