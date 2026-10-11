@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { publicStats, type StandStats } from '../api/client'
 
 const ITEMS: [keyof StandStats, string][] = [
@@ -8,19 +8,24 @@ const ITEMS: [keyof StandStats, string][] = [
   ['companies', 'компаний'],
 ]
 
-/** Four live totals from /public/stats. Nothing is shown while loading or on error: no made-up numbers. */
+/**
+ * Four live totals from /public/stats. The landing page sits outside QueryShell (React Query loads
+ * with the next route), so this uses a plain effect. Nothing is shown while loading or on error.
+ */
 export default function StandCounts() {
-  const { data } = useQuery({
-    queryKey: ['public-stats'], retry: false, staleTime: 60_000,
-    queryFn: () => publicStats().then(r => r.data),
-  })
+  const [data, setData] = useState<StandStats | null>(null)
+  useEffect(() => {
+    let alive = true
+    publicStats().then(r => { if (alive) setData(r.data) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
   if (!data) return null
   return (
     <dl data-testid="stand-counts" className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
       {ITEMS.map(([key, label]) => (
         <div key={key} className="flex flex-col-reverse">
           <dt className="text-xs text-white/85">{label}</dt>
-          <dd className="font-display text-3xl font-bold">{data[key].toLocaleString('ru-RU')}</dd>
+          <dd className="font-display text-3xl font-bold">{Number(data[key]).toLocaleString('ru-RU')}</dd>
         </div>
       ))}
     </dl>
