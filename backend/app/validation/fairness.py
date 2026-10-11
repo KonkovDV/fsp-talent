@@ -49,7 +49,10 @@ def need_rows(dataset: dict) -> list[dict]:
     rng = random.Random(dataset["seed"])
     for need in dataset["needs"]:
         order = [cid for cid in rank(dataset, need, "full", rng) if role_of[cid] == need["role"]]
-        rows.append({axis: [marks[axis][cid] for cid in order] for axis in marks})
+        row = {axis: [marks[axis][cid] for cid in order] for axis in marks}
+        labels_here = dataset["labels"][need["id"]]
+        row["relevant"] = [labels_here.get(cid, 0) >= 2 for cid in order]
+        rows.append(row)
     return rows
 
 
@@ -130,6 +133,43 @@ def report(rows: list[dict], rounds: int) -> tuple[str, dict]:
     return "\n".join(lines), summary
 
 
+SMALL_SHARE = 0.02   # DCWP rules for NYC LL144 (06.04.2023): a category under 2 % of the data may be left out of IR
+
+
+def language_diagnosis(rows: list[dict]) -> list[tuple[str, int, float, float, int, float]]:
+    """Per code language: n places, share of the pool, IR of selection against the largest group, relevant
+    places (label ≥ 2) and the selection rate among relevant places. A group with few relevant places reaches the
+    top 10 mostly by ties of non-skill factors, so its point IR says little. Report only."""
+    cells: dict[str, list[int]] = {}
+    for row in rows:
+        for place, (value, rel) in enumerate(zip(row["language"], row["relevant"], strict=True)):
+            cell = cells.setdefault(value, [0, 0, 0, 0])
+            cell[0] += 1
+            cell[1] += place < TOP
+            cell[2] += rel
+            cell[3] += rel and place < TOP
+    total = sum(c[0] for c in cells.values())
+    largest = max(cells, key=lambda g: cells[g][0])
+    base = cells[largest][1] / cells[largest][0]
+    out = []
+    for g in sorted(cells, key=lambda x: -cells[x][0]):
+        n, k, rel, rel_k = cells[g]
+        out.append((g, n, n / total, (k / n) / base if base else 1.0, rel, rel_k / rel if rel else float("nan")))
+    return out
+
+
+def diagnosis_markdown(rows: list[dict]) -> str:
+    diag = language_diagnosis(rows)
+    lines = ["", "Разбор по языку кода: IR отбора против самой большой группы, доля в пуле и отбор среди "
+             "релевантных (метка ≥ 2).", "",
+             "| Язык | n | Доля в пуле | IR против самой большой группы | Релевантных мест | Доля в топ-10 среди "
+             "релевантных |", "|---|---|---|---|---|---|"]
+    for g, n, share, ir, rel, rel_rate in diag:
+        mark = " (< 2 %)" if share < SMALL_SHARE else ""
+        lines.append(f"| {g}{mark} | {n} | {share:.1%} | {ir:.3f} | {rel} | {rel_rate:.3f} |")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", default="10", help="число зёрен от 2026 или список через запятую")
@@ -149,6 +189,7 @@ def main() -> None:
         sel, sco = summary[f"{axis}_min_sel"], summary[f"{axis}_min_score"]
         verdict = "проходит" if min(sel, sco) + 1e-9 >= FLOOR else "ниже 4/5"
         print(f"{NAMES[axis]}: мин. IR отбора {sel:.3f}, мин. IR балла {sco:.3f}, порог {FLOOR} — {verdict}")
+    print(diagnosis_markdown(rows))
 
 
 if __name__ == "__main__":

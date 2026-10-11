@@ -53,3 +53,14 @@ def test_hidden_group_clears_the_four_fifths_rule():
     majority_in_top = 1 - minority_in_top
     ratio = (minority_in_top / 0.5) / (majority_in_top / 0.5)
     assert ratio == 1.0
+
+
+def test_language_diagnosis_compares_to_largest_group_and_counts_relevant():
+    from app.validation.fairness import diagnosis_markdown, language_diagnosis
+    rows = [{"language": ["Python"] * 20 + ["C#"] * 2,
+             "relevant": [True] * 5 + [False] * 15 + [True, False]}]
+    diag = {g: rest for g, *rest in language_diagnosis(rows)}
+    assert diag["Python"][2] == 1.0          # IR of the largest group is 1
+    assert diag["C#"][3] == 1                # one relevant C# place
+    assert diag["C#"][4] == 0.0              # C# sits at places 20–21, out of the top 10
+    assert "(< 2 %)" not in diagnosis_markdown(rows) or diag["C#"][1] < 0.02

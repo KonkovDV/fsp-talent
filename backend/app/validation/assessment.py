@@ -1965,12 +1965,44 @@ def parity_markdown(p: Parity, seed: int) -> str:
     ])
 
 
+def spec_exposure_study(n: int, seed: int) -> list[tuple[str, CohortReport, float, float]]:
+    """The clean cohort twice on the same people and streams: exposure share over all sessions (the main report)
+    and over the specialization's own sessions (what the live bank does, `services.assessment.bank_state`).
+    Returns (label, report, κ of pass vs truth, RMSE of θ̂). Report only."""
+    rng = random.Random(seed)
+    truth = Truth.draw(rng)
+    people = population(n, random.Random(seed + 1))
+    _, pretest = cohort(population(n, rng), truth, rng)
+    offsets = calibrate(pretest)
+    out = []
+    for label, by_spec in (("знаменатель — все сессии (основной отчёт)", False),
+                           ("знаменатель — своя специализация (как в продукте)", True)):
+        report, sessions = cohort(people, truth, random.Random(0), offsets=offsets, stream=seed + 61,
+                                  by_spec=by_spec)
+        kappa = _binary_kappa([s.passed for s in sessions], [s.theta >= CUTS[s.target] for s in sessions])
+        rmse = math.sqrt(statistics.mean((s.theta_hat - s.theta) ** 2 for s in sessions))
+        out.append((label, report, kappa, rmse))
+    return out
+
+
+def spec_exposure_markdown(rows: list[tuple[str, CohortReport, float, float]], seed: int) -> str:
+    lines = [f"Зерно {seed}, сценарий «без утечки», те же люди и случайные потоки.", "",
+             "| Доля показов считается | Макс. доля ключа в специализации | Макс. по всем | Точность | "
+             "Точность вне ±0,5 | κ решения с истиной | Точный грейд | RMSE θ̂ |", "|---|---|---|---|---|---|---|---|"]
+    for label, r, kappa, rmse in rows:
+        lines.append(f"| {label} | {r.spec_max_exposure:.1%} | {r.max_exposure:.1%} | {r.accuracy:.1%} | "
+                     f"{r.accuracy_clear:.1%} | {kappa:.3f} | {r.exact_grade:.1%} | {rmse:.3f} |")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--md", type=str, default=None, help="write the markdown table to this file")
     parser.add_argument("--check", action="store_true", help="fail when the clean scenario breaks CHECKS")
+    parser.add_argument("--spec-exposure", action="store_true",
+                        help="clean cohort with the global and the per-specialization exposure denominator")
     parser.add_argument("--parity", action="store_true",
                         help="print only the same-scale rows (questionnaire base, κw vs truth) and exit")
     parser.add_argument("--grid", action="store_true",
@@ -1982,6 +2014,9 @@ def main() -> None:
     parser.add_argument("--extend", action="store_true",
                         help="measure one optional extension of 6 items; does not change the product")
     args = parser.parse_args()
+    if args.spec_exposure:
+        print(spec_exposure_markdown(spec_exposure_study(args.n, args.seed), args.seed))
+        return
     if args.parity:
         print(parity_markdown(parity(parity_sessions(args.n, args.seed)), args.seed))
         return
