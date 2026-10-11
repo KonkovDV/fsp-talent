@@ -13243,7 +13243,7 @@
           },
           "401": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
                 }
@@ -13253,7 +13253,7 @@
           },
           "403": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
                 }
@@ -13263,7 +13263,7 @@
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
                 }
@@ -13273,7 +13273,7 @@
           },
           "409": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
                 }
@@ -13283,7 +13283,7 @@
           },
           "422": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
                 }
@@ -13293,13 +13293,21 @@
           },
           "429": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
-            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After"
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "summary": "Model Processor",
