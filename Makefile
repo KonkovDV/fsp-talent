@@ -22,7 +22,7 @@ help:
 	@echo "make check     — сквозная проверка API на запущенном стенде"
 	@echo "make load      — 40 пользователей одновременно в течение минуты"
 	@echo "make docs-pdf  — собрать docs/FSP_Talent_documentation.pdf (нужны Python, Node.js и Chromium)"
-	@echo "make docs-pitch — собрать docs/pitch.html и docs/pitch.pptx (PDF сохраняется из PowerPoint)"
+	@echo "make docs-pitch — собрать старый черновик docs/pitch.html и docs/pitch.pptx (сданная презентация — submission/03-presentation)"
 
 doctor:
 	@LOCAL=$(LOCAL) bash scripts/doctor.sh

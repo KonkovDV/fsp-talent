@@ -1,15 +1,14 @@
 # Презентация
 
+Финальная презентация команды, 31 слайд.
+
 | Файл | Формат |
 |---|---|
-| [FSP_Talent.pdf](FSP_Talent.pdf) | PDF, его и загружаем в форму |
-| [FSP_Talent.pptx](FSP_Talent.pptx) | PowerPoint |
-| [FSP_Talent.html](FSP_Talent.html) | HTML-версия |
+| [FSP_Talent_presentation.pdf](FSP_Talent_presentation.pdf) | PDF — основной файл, его и загружаем в форму |
+| [FSP_Talent_presentation.pptx](FSP_Talent_presentation.pptx) | PowerPoint, исходник того же PDF |
 
-Файлы скопированы без изменений из `docs/pitch.pdf`, `docs/pitch.pptx` и `docs/pitch.html`. Финальная версия презентации будет обновлена.
+Файлы положены без изменений в том виде, в каком их сдал владелец проекта.
 
-HTML-версия берёт скриншоты из `docs/assets/`, поэтому с картинками она открывается из [docs/pitch.html](https://github.com/KonkovDV/fsp-talent/blob/main/docs/pitch.html) в клоне репозитория.
+## Старый черновик
 
-## Чем это не является
-
-Это не отдельный источник чисел. Каждое число на слайдах проверяется по [SOLUTION.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/SOLUTION.md) и таблице «Цифры, которые можно проверить» в корневом README; запрещённые формулировки в `docs/pitch.html` ловит `tests/unit/test_pitch_claims.py`.
+`docs/pitch.html`, `docs/pitch.pptx`, `docs/pitch.pdf` и генератор `docs/tools/build_pitch.mjs` — ранний черновик слайдов, собранный скриптом. Это не сданная презентация: часть цифр в нём устарела. Актуальные цифры — в таблице «Цифры, которые можно проверить» в корневом README и в [SOLUTION.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/SOLUTION.md).

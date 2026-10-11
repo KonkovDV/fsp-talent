@@ -428,7 +428,7 @@ curl -s https://$SITE_ADDRESS/health    # "build" — коммит отката
 
 Для настоящих пользователей `FSP_ID_MODE=oidc` и данные клиента Keycloak Федерации. Проверить вход через настоящий OIDC-провайдер можно локально: `docker compose --profile fsp-id up -d` поднимает Keycloak 26.0.7 с демо-реалмом из `deploy/keycloak`, в `.env` ставится `FSP_ID_MODE=oidc`. Без профиля Keycloak не запускается, вход идёт через встроенного демо-провайдера.
 
-Презентация `docs/pitch.pdf` сохраняется из `docs/pitch.pptx` средствами PowerPoint («Сохранить как → PDF»).
+Сданная презентация лежит в `submission/03-presentation/` (`FSP_Talent_presentation.pdf` и `.pptx`). `docs/pitch.pdf`, `docs/pitch.pptx` и `make docs-pitch` — старый черновик, собранный скриптом; его цифры частично устарели.
 
 ## 12. Если что-то пошло не так
 
