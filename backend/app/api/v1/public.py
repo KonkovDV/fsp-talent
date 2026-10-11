@@ -416,7 +416,7 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
     if role not in SPECIALIZATIONS or grade not in GRADES:
         raise ApiError(404, "not_found", "Такой категории нет")
     scores = list(await db.execute(
-        select(GradeConfirmation.p_pass, GradeConfirmation.theta)
+        select(GradeConfirmation.p_pass, GradeConfirmation.theta, GradeConfirmation.participant_id)
         .join(Participant, Participant.id == GradeConfirmation.participant_id)
         .join(CategoryAssignment, and_(
             CategoryAssignment.participant_id == Participant.id,
@@ -433,7 +433,9 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
             # to employers inside the product, never on a public page (audit-5 A1b, 152-FZ art. 10.1).
             *_public_filter(),
         )))
-    values = [(float(score), None if theta is None else float(theta)) for score, theta in scores if score is not None]
+    # The participant id only makes the order stable; rank_pairs never prints it.
+    values = [(float(score), None if theta is None else float(theta), str(pid))
+              for score, theta, pid in scores if score is not None]
     if len(values) < BANK_MIN:
         # k-anonymity over the public set: fewer than five people can point at one person (audit-3 P1-1).
         # "hidden" tells an empty cell from a hidden one; it does not reveal how many people are there.
@@ -556,7 +558,10 @@ async def get_leaderboard(
             .order_by(DisciplineScore.participant_id, DisciplineScore.lcb.desc())
         )
         q = q.where(DisciplineScore.id.in_(best))
-    rows = (await db.execute(q.order_by(DisciplineScore.lcb.desc()).limit(limit))).all()
+    # RG-05: an equal lower bound falls back to the score and then to the participant id, so a tie
+    # keeps one order between requests instead of the order of the query plan.
+    rows = (await db.execute(q.order_by(DisciplineScore.lcb.desc(), DisciplineScore.score.desc(),
+                                        DisciplineScore.participant_id).limit(limit))).all()
     return [
         {
             "rank": i + 1,
