@@ -45,6 +45,7 @@ from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
 from app.services.demo_reset import JURY_BIRTH, clear_jury, is_jury, restore_consents
 from app.services.employer_score import company_score
+from app.services.field_cipher import public_ref
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
@@ -148,6 +149,8 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "assessed_at": p.assessed_at.isoformat() if p.assessed_at else None,
         "grade_locked_until": p.grade_locked_until.isoformat() if p.grade_locked_until else None,
         "is_visible": p.is_visible, "public_profile": p.public_profile, "show_city": p.show_city,
+        # SEC3-01: the address of the person's own public page; employers never see it next to the card.
+        "public_ref": public_ref(p.id),
         "show_stack": p.show_stack, "show_fsp": p.show_fsp, "show_experience": p.show_experience,
         "soft_skills": list(p.soft_skills or []),
         "job_search": p.job_search,

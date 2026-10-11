@@ -35,16 +35,18 @@ describe('карточка кандидата', () => {
       match: {
         ...card.match!,
         reasons: [
-          { code: 'SKILL_UNTESTED', text: 'Заявлены, тестом не подтверждены: PostgreSQL', tone: 'info', source: 'заявлено' },
+          { code: 'SKILL_UNTESTED', text: 'Заявлены, тестом не проверялись: PostgreSQL', tone: 'info', source: 'заявлено' },
+          { code: 'SKILL_NOT_PASSED', text: 'Проверены тестом, не подтверждены: SQL', tone: 'info', source: 'тест' },
           { code: 'SKILL_GAP', text: 'Нет навыков: Go', tone: 'minus', source: 'заявлено' },
         ],
       },
     }} onOffer={() => undefined} />)
     await userEvent.click(screen.getByRole('button', { name: /Почему в выдаче/ }))
     const text = screen.getByTestId('match').textContent ?? ''
-    expect(text).toContain('Тестом не подтверждён · заявлено')
+    expect(text).toContain('Тестом не проверялся · заявлено')
+    expect(text).toContain('Проверен тестом, не подтверждён · тест')
     expect(text).toContain('Нет навыка')
-    expect(text).not.toContain('SKILL_UNTESTED')
+    expect(text).not.toMatch(/SKILL_UNTESTED|SKILL_NOT_PASSED/)
   })
 
   it('складывает вклады полос в оценку работодателя', () => {

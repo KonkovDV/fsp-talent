@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -180,6 +180,12 @@ class Skill(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     # When the skill became evidence (a test or a resume quote). A declaration has no such date.
     confirmed_at = Column(DateTime(timezone=True))
+    # Latest finished test that had items on this skill, passed or not (F24b). None: no test checked it.
+    # The confirmation rule stays in trust_level; these fields only let the card tell "checked, not confirmed"
+    # from "never checked". Per-item history stays in test_session_items.
+    test_share = Column(Float)
+    test_items = Column(Integer)
+    tested_at = Column(DateTime(timezone=True))
     participant = relationship("Participant", back_populates="skills")
     __table_args__ = (UniqueConstraint("participant_id", "name", name="uq_participant_skill"),)
 

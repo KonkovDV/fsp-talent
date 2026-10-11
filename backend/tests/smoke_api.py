@@ -307,13 +307,15 @@ def main():
     check_messages(offer["id"], employer_token, participant_token)
     status, bell = call("GET", "/notifications", token=employer_token)
     assert status == 200 and any(n["kind"] == "offer_accepted" for n in bell["items"]), bell
-    status, public = call("GET", f"/public/candidates/{me['id']}")
+    status, _ = call("GET", f"/public/candidates/{me['id']}")
+    assert status == 404    # SEC3-01: the participant id (the blind search card id) opens no public page
+    status, public = call("GET", f"/public/candidates/{me['public_ref']}")
     assert status == 200 and "fsp_id" not in public and public["display_name"], public
     status, board = call("GET", "/public/leaderboard?discipline=algorithmic")
     assert status == 200 and board and "fsp_id" not in board[0]
     assert all(row["display_name"].startswith("Участник ") for row in board)    # /jury: a list without names
     assert board == sorted(board, key=lambda row: -row["lcb"])
-    status, credentials = call("GET", f"/public/credentials/{me['id']}")
+    status, credentials = call("GET", f"/public/credentials/{me['public_ref']}")
     assert status == 200 and credentials and credentials[0]["valid"]
     status, verified = call("GET", f"/public/credentials/verify/{credentials[0]['id']}")
     assert status == 200 and verified["valid"]

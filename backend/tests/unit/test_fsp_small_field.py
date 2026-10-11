@@ -1,4 +1,4 @@
-"""Audit-4 F-1: no number of small-field results outweighs one win among 200, and monotonicity holds."""
+"""No number of small-field results outweighs one win among 200, and monotonicity holds."""
 import random
 from datetime import date, timedelta
 

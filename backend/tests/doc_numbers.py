@@ -26,7 +26,7 @@ VALIDATION = ROOT / "docs" / "VALIDATION_MATCHING.md"
 FIGURES = ROOT / "frontend" / "src" / "methodFigures.ts"
 
 
-# audit-3 P2-3: a run reports every mismatch at once, not the first one only.
+# A run reports every mismatch at once, not the first one only.
 PROBLEMS: list[str] = []
 
 
@@ -86,7 +86,7 @@ def matching_report() -> tuple[str, str]:
 
 # The total moves with the interpreter and the installed compilers: 73.1 % on Python 3.12 with every compiler (CI),
 # 73.0-73.4 % elsewhere
-# (audit-4 F-11). Half a point is that environment gap, not a new figure.
+#. Half a point is that environment gap, not a new figure.
 COVERAGE_TOLERANCE = 0.5
 
 

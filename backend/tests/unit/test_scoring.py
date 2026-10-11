@@ -100,7 +100,7 @@ def test_many_participations_do_not_beat_a_few_wins():
     many = compute_discipline_score(padded, reference_date=ref)
     few = compute_discipline_score(wins, reference_date=ref)
     assert few["lcb"] > many["lcb"] and few["score"] > many["score"]
-    # Participation alone is the empty history: it neither lifts nor lowers the bound (audit 2026-10, H-3).
+    # Participation alone is the empty history: it neither lifts nor lowers the bound.
     empty = compute_discipline_score([], reference_date=ref)
     assert many["lcb"] == empty["lcb"] and many["score"] == empty["score"]
     # A participation added to wins changes nothing: it is not evidence of skill and not a penalty.

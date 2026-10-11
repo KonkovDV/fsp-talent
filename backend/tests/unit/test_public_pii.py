@@ -1,4 +1,4 @@
-"""Audit 2026-10, H-1 / N-13: no /public route hands out a person's data around the publication consent."""
+"""No /public route hands out a person's data around the publication consent."""
 from __future__ import annotations
 
 import inspect

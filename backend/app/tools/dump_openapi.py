@@ -1,4 +1,4 @@
-"""Write the OpenAPI document of the app with sorted keys (NEW-16).
+"""Write the OpenAPI document of the app with sorted keys.
 
     python -m app.tools.dump_openapi > ../docs/openapi.json
 

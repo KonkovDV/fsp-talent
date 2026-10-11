@@ -1,4 +1,4 @@
-"""NEW-17: /health names the build commit, so the jury can match the stand to a commit."""
+"""/health names the build commit, so the jury can match the stand to a commit."""
 from pathlib import Path
 
 import pytest

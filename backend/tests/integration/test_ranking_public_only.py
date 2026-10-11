@@ -1,4 +1,4 @@
-"""Audit-5 A1b: the public ranking counts only public adults; a minor with a guardian's consent never appears."""
+"""The public ranking counts only public adults; a minor with a guardian's consent never appears."""
 from __future__ import annotations
 
 from datetime import date

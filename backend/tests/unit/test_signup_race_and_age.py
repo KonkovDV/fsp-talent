@@ -1,4 +1,4 @@
-"""audit-3 P3-1 (race answers 202, not 409 email_taken) and P3-2 (the 18+ checkbox opens nothing adult-only)."""
+"""A signup race answers 202, not 409 email_taken, and the 18+ checkbox opens nothing adult-only."""
 import inspect
 from datetime import date
 

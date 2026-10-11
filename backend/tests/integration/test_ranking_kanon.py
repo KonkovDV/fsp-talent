@@ -1,4 +1,4 @@
-"""Audit-5 A1: a public category ranking needs at least BANK_MIN people; four stay hidden, five are shown."""
+"""A public category ranking needs at least BANK_MIN people; four stay hidden, five are shown."""
 from __future__ import annotations
 
 from types import SimpleNamespace

@@ -786,6 +786,43 @@ async def test_vacancy_write_exam_and_apply(quiet):
     assert applied["status"] == "applied"
 
 
+async def test_application_webhook_carries_no_candidate_contacts(quiet, monkeypatch):
+    """LEG-03: the application.created event left with name, email, phone and Telegram for any https hook."""
+    from app.services import webhooks
+
+    sent = []
+
+    async def capture(_db, employer_id, event, payload):
+        sent.append((event, payload))
+
+    async def nothing(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(webhooks, "enqueue", capture)
+    monkeypatch.setattr(webhooks, "deliver_due", nothing)
+    company = _company()
+    person = _person(email="anya.real@example.com", phone="+79991234567", telegram="@anya_real",
+                     display_name="Анна Смирнова")
+    category = SimpleNamespace(primary_role="backend", grade="middle", grade_source="assessed")
+    vacancy = SimpleNamespace(
+        id=_uid(), employer_id=company.id, employer=company, title="Бэкенд", role="backend", grade="junior",
+        grade_match="plus_minus", discipline=None, min_rank=None, skills=[], allows_minors=True, is_open=True,
+    )
+    db = Bag()
+    db.gets = [person, vacancy]
+    db.scalar_q = [category]
+    db.scalars_q = [[], []]
+    assert (await vacancies.apply(vacancy.id, _current("participant", person.id), db))["status"] == "applied"
+    (event, payload), = sent
+    assert event == "application.created"
+    assert payload["candidate"]["ref"] == str(person.id)
+    assert payload["candidate"]["category"] == {"specialization": "backend", "grade": "middle"}
+    blob = str(payload)
+    for secret in ("Анна", "Смирнова", "anya.real@example.com", "+79991234567", "@anya_real"):
+        assert secret not in blob
+    assert not {"name", "email", "phone", "telegram"} & set(payload["candidate"])
+
+
 async def test_task_create_list_and_review(quiet):
     company = _company()
     current = _current("employer", company.id)
@@ -881,13 +918,13 @@ async def test_public_profile_credential_and_pdf(quiet):
     )
     db = Bag()
     db.scalar_q = [person]
-    card = await public.get_public_profile(person.id, db)
+    card = await public.get_public_profile(public.public_ref(person.id), db)
     assert card["display_name"] == "Аня" and card["skills"]
 
     db.scalar_q = [person]
     from app.services.pdf_profile import _font
     if _font() is not None:
-        pdf = await public.public_profile_pdf(person.id, db)
+        pdf = await public.public_profile_pdf(public.public_ref(person.id), db)
         assert pdf.media_type == "application/pdf"
     else:  # no Cyrillic font on this machine: a clean 503, not a bare 500 (SD-07)
         with pytest.raises(ApiError) as no_font:
@@ -903,7 +940,7 @@ async def test_public_profile_credential_and_pdf(quiet):
 
     db.scalar_q = [person.id]
     db.scalars_q = [[credential]]
-    listed = await public.get_credentials(person.id, db)
+    listed = await public.get_credentials(public.public_ref(person.id), db)
     assert listed[0]["id"]
 
     db.gets = [credential]

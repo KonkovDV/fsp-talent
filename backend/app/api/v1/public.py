@@ -30,7 +30,7 @@ from app.models.profile import DisciplineScore
 from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.category_rank import rank_pairs
-from app.services.field_cipher import blind_index
+from app.services.field_cipher import blind_index, participant_from_ref, public_ref
 from app.services.formula_sheet import formula_sheet
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.guardian import token_participant, token_valid
@@ -72,6 +72,14 @@ def _public_skill(s: Skill) -> dict:
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "confirmed_at": s.confirmed_at.isoformat() if s.confirmed_at else None,
     }
+
+
+def _ref_id(ref: str) -> uuid.UUID:
+    """SEC3-01: public pages take the public ref only. A participant id from the blind search is not a ref: 404."""
+    pid = participant_from_ref(ref)
+    if pid is None:
+        raise HTTPException(404, "Публичный профиль не найден")
+    return pid
 
 
 class PublicGuideIn(BaseModel):
@@ -161,8 +169,9 @@ async def issuer():
     return issuer_document()
 
 
-@router.get("/candidates/{participant_id}")
-async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+@router.get("/candidates/{ref}")
+async def get_public_profile(ref: str, db: AsyncSession = Depends(get_db)):
+    participant_id = _ref_id(ref)
     p = await db.scalar(
         select(Participant)
         .where(Participant.id == participant_id, *_public_filter())
@@ -176,7 +185,9 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
         raise HTTPException(404, "Публичный профиль не найден")
     cat = p.category
     return {
-        "id": str(p.id),
+        "id": public_ref(p.id),
+        # The name is shown only on the page the person opened: public_profile + distribution consent + 18
+        # (_public_filter). Everyone else gets 404, not a page (ST-03/ST-04).
         "display_name": p.display_name,
         "region": p.region,
         "primary_role": cat.primary_role if cat else None,
@@ -185,7 +196,7 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
         "stack": cat.stack if cat else [],
         "explanation": cat.explanation if cat else [],
         "skills": [_public_skill(s) for s in p.skills if s.confirmed],
-        "profile_pdf": f"/api/v1/public/candidates/{p.id}/profile.pdf",
+        "profile_pdf": f"/api/v1/public/candidates/{public_ref(p.id)}/profile.pdf",
         "discipline_scores": [
             {
                 "discipline": ds.discipline,
@@ -203,8 +214,9 @@ async def get_public_profile(participant_id: uuid.UUID, db: AsyncSession = Depen
     }
 
 
-@router.get("/candidates/{participant_id}/profile.pdf")
-async def public_profile_pdf(participant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+@router.get("/candidates/{ref}/profile.pdf")
+async def public_profile_pdf(ref: str, db: AsyncSession = Depends(get_db)):
+    participant_id = _ref_id(ref)
     p = await db.scalar(
         select(Participant)
         .where(Participant.id == participant_id, *_public_filter())
@@ -337,6 +349,30 @@ async def evaluate_pairs(request: Request):
         raise ApiError(422, "validation_error", str(exc)) from exc
 
 
+@router.get("/assessment/simulate")
+async def simulate_assessment(request: Request, spec: str = Query("backend", max_length=20),
+                              grade: str | None = Query("middle", max_length=10),
+                              theta: float | None = Query(None, ge=-3.5, le=3.5),
+                              target: str | None = Query(None, max_length=10),
+                              seed: int | None = Query(None, ge=1, le=2**31 - 1),
+                              batch: int = Query(0, ge=0, le=50)):
+    """Expert mode: the live adaptive test on a simulated candidate of the chosen level (JS-02).
+
+    Same selector, 3PL posterior, stop rule and grade decision as the real test. Steps carry the family,
+    difficulty level and right/wrong only: no item text, options or keys. Nothing is read or stored.
+    """
+    from app.api.v1.auth import client_address
+    from app.validation.expert_mode import simulate
+
+    if await too_many(f"public:simulate:{client_address(request)}", limit=EVALUATE_PER_MINUTE):
+        raise ApiError(429, "rate_limited")
+    try:
+        return await asyncio.to_thread(simulate, spec=spec, grade=grade, theta=theta, target=target,
+                                       seed=seed, batch=batch)
+    except ValueError as exc:
+        raise ApiError(422, "validation_error", f"Недопустимое значение: {exc}") from exc
+
+
 @router.post("/credentials/verify")
 async def verify_posted(request: Request, db: AsyncSession = Depends(get_db)):
     """Verify a W3C Verifiable Credential submitted as JSON.
@@ -363,8 +399,9 @@ async def verify_posted(request: Request, db: AsyncSession = Depends(get_db)):
     return {"valid": signed and not revoked, "signature": signed, "revoked": revoked}
 
 
-@router.get("/credentials/{participant_id}")
-async def get_credentials(participant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+@router.get("/credentials/{ref}")
+async def get_credentials(ref: str, db: AsyncSession = Depends(get_db)):
+    participant_id = _ref_id(ref)
     visible = await db.scalar(
         select(Participant.id).where(Participant.id == participant_id, *_public_filter())
     )
@@ -381,13 +418,22 @@ async def get_credentials(participant_id: uuid.UUID, db: AsyncSession = Depends(
         revoked = vc.revoked_at is not None
         out.append({
             "id": str(vc.id),
-            "credential": vc.credential_json,
+            "credential": _without_subject_id(vc.credential_json),
+            # Checked on the signed original. The listed copy hides the subject id, so it does not verify as is.
             "signature": signed,
             "revoked": revoked,
             "valid": signed and not revoked,
             "issued_at": vc.issued_at.isoformat() if vc.issued_at else None,
         })
     return out
+
+
+def _without_subject_id(credential: dict) -> dict:
+    """The subject id of a signed credential is the participant id: a public list must not hand it out (SEC3-01)."""
+    subject = credential.get("credentialSubject")
+    if not isinstance(subject, dict) or "id" not in subject:
+        return credential
+    return {**credential, "credentialSubject": {k: v for k, v in subject.items() if k != "id"}}
 
 
 @router.get("/credentials/{credential_id}/status")
@@ -529,6 +575,7 @@ def public_handle(participant_id) -> str:
     """How a person appears in a public list: no name, a stable short tag (the /jury page promises no names).
 
     The name stays on the person's own public page, which they opened with a separate consent.
+    The list carries no participant_id, so a row does not lead to that page (ST-03).
     """
     return f"Участник {str(participant_id).replace('-', '')[:4].upper()}"
 
@@ -565,7 +612,7 @@ async def get_leaderboard(
     return [
         {
             "rank": i + 1,
-            "participant_id": str(ds.participant_id),
+            # ST-03: no participant_id — it opened /p/{id} and the name behind the «no names» list.
             "display_name": public_handle(ds.participant_id),
             "region": p.region,
             "discipline": ds.discipline,

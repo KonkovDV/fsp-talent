@@ -100,7 +100,7 @@ def test_tested_skills_and_grade_outrank_declared_ones():
 def test_no_fsp_history_is_neutral_not_a_penalty():
     without = score(NEED, _cand(fsp_lcb=None))
     weak_fsp = score(NEED, _cand(fsp_lcb=0.05))
-    # Audit 2026-10 (H-2): a weak FSP line used to pull the score under "no history". It must not.
+    # A weak FSP line used to pull the score under "no history". It must not.
     assert weak_fsp.score >= without.score
     assert any("Нет истории ФСП" in line for line in without.info)
     assert next(f for f in without.factors if f.key == "fsp").value is None
@@ -696,7 +696,7 @@ def test_city_and_format_raise_the_score_only_when_the_need_names_them():
 
 
 def test_fsp_history_never_lowers_a_tested_candidate_regression_h2():
-    """Audit 2026-10, H-2: test 0.80 plus one plain participation used to drop the evidence to 0.43."""
+    """Test 0.80 plus one plain participation used to drop the evidence to 0.43."""
     for test_p in (0.2, 0.5, 0.8, 0.95):
         plain = score(NEED, _cand(grade_source="assessed", test_p=test_p, fsp_lcb=None))
         for lcb in (0.0, 0.04, 0.159, 0.2, 0.418, 0.55, 0.9):

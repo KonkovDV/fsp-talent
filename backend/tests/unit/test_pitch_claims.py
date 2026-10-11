@@ -1,6 +1,6 @@
 """Claims from external audits that are wrong for this code must not reach the pitch or the docs.
 
-docs-analysis part 3: «Wilson LCB» (the axis is empirical-Bayes shrinkage with LCB = μ − σ),
+Known wrong claims: «Wilson LCB» (the axis is empirical-Bayes shrinkage with LCB = μ − σ),
 «test-retest ≥ 0,80» (grade agreement on a retest is κ = 0,47), «AUC ≥ 0,88» (an unmeasured threshold;
 the measured adjacent-grade AUC is in VALIDATION_ASSESSMENT),
 «the reranker needs a GPU» (bge-reranker-v2-m3 runs on CPU), P×L×D×C and the status-weighted

@@ -240,7 +240,7 @@ class ParticipantRegister(BaseModel):
     # Under 18: registration is open from 15; the card waits for the guardian's consent (services/guardian.py).
     age_15_17: bool = False
     consents: list[str] = Field(default_factory=list, max_length=10)
-    # LEG-06: search shows a person only with a birth date on file (a checkbox is not an age). Asked here so a
+    # Search shows a person only with a birth date on file (a checkbox is not an age). Asked here so a
     # new adult is not silently hidden until they find the profile field. Still optional for API clients.
     birth_date: date | None = None
 
@@ -282,7 +282,7 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
         await db.flush()
     except IntegrityError:
         # A parallel registration of the same address won the race. Answer as for any address (202), so the
-        # response does not tell whether the e-mail exists (audit-3 P3-1); the winner gets the letter.
+        # response does not tell whether the e-mail exists; the winner gets the letter.
         await db.rollback()
         return VerificationSent(email=email, role="participant", expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
     for kind in body.consents:
@@ -324,7 +324,7 @@ async def register_employer(body: EmployerRegister, request: Request, db: AsyncS
         await db.flush()
     except IntegrityError:
         # A parallel registration of the same address won the race. Answer as for any address (202), so the
-        # response does not tell whether the e-mail exists (audit-3 P3-1); the winner gets the letter.
+        # response does not tell whether the e-mail exists; the winner gets the letter.
         await db.rollback()
         return VerificationSent(email=email, role="employer", expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
     for kind in body.consents:
@@ -396,7 +396,7 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm,
     email = normalize_email(form.username)
     ip = visitor_ip(request) if request is not None else "-"
     # Windows per account × address and per address: a stranger's attempts do not close the door for
-    # the owner (stand audit I-01). The printed demo accounts are signed in many times a minute.
+    # the owner. The printed demo accounts are signed in many times a minute.
     await _limit(f"login:{role}", f"{email}|{ip}", limit=60 if settings.DEMO_MODE else 5)
     await _limit("login-ip", ip, limit=300 if settings.DEMO_MODE else 30)
     if "@" not in email:

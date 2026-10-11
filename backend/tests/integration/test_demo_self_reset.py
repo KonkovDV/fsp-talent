@@ -1,4 +1,4 @@
-"""DoR-04: a juror on the demo stand starts over without touching anybody else."""
+"""A juror on the demo stand starts over without touching anybody else."""
 from datetime import timedelta
 
 import pytest
