@@ -610,6 +610,9 @@ def _ids(payload, key="id"):
 IDOR_PUBLIC = ("/api/v1/public/", "/api/v1/vacancies/{vacancy_id}", "/api/v1/vacancies/{vacancy_id}/apply")
 
 
+OTHER_EMPLOYER, OTHER_EMPLOYER_COMPANY = "hr@cloudwhale.demo", "Облачный кит"
+
+
 def check_idor(owner_employer, owner_candidate):
     """Every route with an object id from app.routes: another employer and another candidate get no 2xx."""
     owned: dict[str, list[str]] = {}
@@ -624,14 +627,19 @@ def check_idor(owner_employer, owner_candidate):
     collect("task_id", "/tasks/", owner_employer)
     collect("vacancy_id", "/vacancies/mine", owner_employer)
     collect("application_id", "/vacancies/applications", owner_employer)
-    collect("offer_id", "/candidates/me/offers", owner_candidate)
+    # Only invitations the "other" employer did not send: the seed gives FSP001 one from cloudwhale too
+    # (DEMO_INVITES), and withdrawing your own invitation is not an IDOR.
+    status, invites = call("GET", "/candidates/me/offers", token=owner_candidate)
+    if status == 200:
+        owned.setdefault("offer_id", []).extend(
+            [o["id"] for o in invites if o["company"] != OTHER_EMPLOYER_COMPANY][:2])
     collect("session_id", "/assessment/history", owner_candidate, "session_id")
     collect("result_id", "/candidates/me/results", owner_candidate)
     collect("notification_id", "/notifications", owner_candidate)
     for task_id in owned.get("task_id", []):
         collect("submission_id", f"/tasks/{task_id}/submissions", owner_employer)
     other_employer = call("POST", "/auth/employer/token",
-                          form={"username": "hr@cloudwhale.demo", "password": "demo12345"})[1]["access_token"]
+                          form={"username": OTHER_EMPLOYER, "password": "demo12345"})[1]["access_token"]
     other_candidate = _login("nofsp@demo.talent")
     root = BASE.rsplit("/api/v1", 1)[0]
     with urllib.request.urlopen(root + "/openapi.json") as response:
@@ -733,8 +741,8 @@ def check_assessment():
     assert status == 200 and before["specialization"] == "security" and before["grade_source"] != "assessed", before
     weak = _run_test(token, "junior", _wrong_answer)
     result = weak["result"]
-    # The seed may leave an earlier confirmation of this specialization; a failed run must not earn a grade.
-    assert not result["passed"] and result["earned_grade"] is None, result
+    # The seed never tests the demo logins (seed._reserved), so a failed run leaves no grade at all.
+    assert not result["passed"] and result["confirmed_grade"] is None and result["earned_grade"] is None, result
     status, again = call("POST", "/assessment/start", {"target_grade": "junior"}, token=token)
     assert status == 429 and again["error"]["code"] == "retake_cooldown", again
     # Stepping down after a failure does not wait for the retake interval.
