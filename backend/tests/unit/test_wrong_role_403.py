@@ -12,7 +12,8 @@ def signed(monkeypatch):
     monkeypatch.setattr(deps, "_open_account", ok)
 
     def use(role):
-        monkeypatch.setattr(deps, "decode_token", lambda t: {"sub": "6f1c1a52-9d1e-4a39-9c39-3a1d2b0c0a11", "role": role})
+        payload = {"sub": "6f1c1a52-9d1e-4a39-9c39-3a1d2b0c0a11", "role": role}
+        monkeypatch.setattr(deps, "decode_token", lambda t: payload)
     return use
 
 
