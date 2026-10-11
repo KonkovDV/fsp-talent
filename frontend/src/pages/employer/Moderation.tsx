@@ -25,14 +25,31 @@ interface Factor { enrolled: boolean; unlocked: boolean; unlocked_until: string 
 export default function Moderation() {
   const qc = useQueryClient()
   const [code, setCode] = useState('')
+  // Same gate as the nav: /employer/me/staff. Non-staff never call /moderation/totp (that desk answers 404).
+  const staff = useQuery({
+    queryKey: ['staff'],
+    queryFn: () => api.get<{ is_staff: boolean }>('/employer/me/staff').then(r => r.data.is_staff, () => false),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
   const factor = useQuery({
     queryKey: ['moderation-totp'],
     queryFn: () => api.get<Factor>('/moderation/totp').then(r => r.data),
+    enabled: staff.data === true,
+    retry: false,
   })
   const unlock = useMutation({
     mutationFn: (value: string) => api.post<Factor>('/moderation/totp', { code: value }).then(r => r.data),
     onSuccess: next => { setCode(''); qc.setQueryData(['moderation-totp'], next) },
   })
+  if (staff.isLoading) return <Skeleton className="h-40" />
+  if (!staff.data) {
+    return (
+      <Empty title="Раздел недоступен">
+        Стол модерации открыт только сотрудникам платформы. В меню кабинета этой ссылки нет.
+      </Empty>
+    )
+  }
   if (factor.isLoading) return <Skeleton className="h-40" />
   if (factor.isError) return <p className="notice-error" role="alert">{apiError(factor.error, 'Раздел недоступен')}</p>
   if (factor.data?.enrolled && !factor.data.unlocked) {

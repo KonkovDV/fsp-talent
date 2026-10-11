@@ -12,10 +12,13 @@ vi.mock('../../api/client', async () => {
 })
 
 const AI = { kinds: [], items: [], can_edit: false, in_use: null }
-const reply = (factor: object) => (url: string) => Promise.resolve({
-  data: url === '/moderation/totp' ? factor
-    : url === '/moderation/complaints' ? [] : url === '/moderation/ai-providers' ? AI : { model_ready: false, items: [] },
-})
+const reply = (factor: object, staff = true) => (url: string) => {
+  if (url === '/employer/me/staff') return Promise.resolve({ data: { is_staff: staff } })
+  if (url === '/moderation/totp') return Promise.resolve({ data: factor })
+  if (url === '/moderation/complaints') return Promise.resolve({ data: [] })
+  if (url === '/moderation/ai-providers') return Promise.resolve({ data: AI })
+  return Promise.resolve({ data: { model_ready: false, items: [] } })
+}
 
 function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -40,6 +43,14 @@ describe('второй фактор стола модерации', () => {
     get.mockImplementation(reply({ enrolled: false, unlocked: false, unlocked_until: null }))
     show()
     expect(await screen.findByText('Жалоб нет')).toBeInTheDocument()
+    expect(screen.queryByTestId('totp-form')).not.toBeInTheDocument()
+  })
+
+  it('обычному работодателю не зовёт totp и показывает «недоступен»', async () => {
+    get.mockImplementation(reply({ enrolled: false, unlocked: false, unlocked_until: null }, false))
+    show()
+    expect(await screen.findByText('Раздел недоступен')).toBeInTheDocument()
+    expect(get).not.toHaveBeenCalledWith('/moderation/totp')
     expect(screen.queryByTestId('totp-form')).not.toBeInTheDocument()
   })
 })

@@ -354,7 +354,9 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <button onClick={() => setOpen(o => !o)} aria-expanded={open} className="btn-ghost -ml-3 gap-1 text-sm">
+          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+            aria-controls={`why-${card.candidate_id}`} id={`why-btn-${card.candidate_id}`}
+            className="btn-secondary btn-sm gap-1">
             <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
             Почему в выдаче
           </button>
@@ -401,7 +403,8 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
       {aiNote && <AiNote needId={aiNote.needId} candidateId={card.candidate_id} />}
 
       {open && (
-        <div className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 motion-safe:animate-rise">
+        <div id={`why-${card.candidate_id}`} role="region" aria-labelledby={`why-btn-${card.candidate_id}`}
+          className="grid gap-5 border-t border-line bg-sunken/60 px-5 py-4 text-sm sm:grid-cols-2 sm:px-6 motion-safe:animate-rise">
           {card.match ? (
             <div data-testid="match">
               {card.why.filter(line => line.startsWith('Подтверждено ФСП')).map(line => (
