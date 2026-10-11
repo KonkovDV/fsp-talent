@@ -17,6 +17,7 @@ const participantSchema = z.object({
   password: passwordRule,
   is_adult: z.boolean(),
   age_15_17: z.boolean(),
+  birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Укажите дату рождения'),
 }).refine(v => v.is_adult || v.age_15_17, { message: 'Регистрация открыта с 15 лет', path: ['age_15_17'] })
 const employerSchema = z.object({
   company_name: z.string().min(2, 'Название компании'),
@@ -102,6 +103,10 @@ export default function RegisterPage() {
             <input id="password" {...pf.register('password')} type="password" className="input" autoComplete="new-password" />
             <p className="field-hint">Не короче 8 символов, не длиннее 72 байт (кириллица: до 36 букв).</p>
             {err(pf.formState.errors.password?.message)}</div>
+          <div><label className="field-label" htmlFor="birth_date">Дата рождения</label>
+            <input id="birth_date" {...pf.register('birth_date')} type="date" className="input" autoComplete="bday" />
+            <p className="field-hint">Без даты работодатели вас в поиске не увидят: возраст проверяется по дате, а не по отметке.</p>
+            {err(pf.formState.errors.birth_date?.message)}</div>
           <label className="flex items-start gap-2.5 text-sm text-ink">
             <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...pf.register('is_adult')} />
             <span>Мне исполнилось 18 лет<span className="block text-xs text-ink-3">Если нет, карточка скрыта от работодателей до согласия родителя.</span></span>

@@ -195,7 +195,7 @@ export const publicJuryFree = () => api.get<{ email: string }>('/public/jury-fre
 export const guestLogin = (role: Role, consents: string[]) =>
   api.post<{ access_token: string; role: Role; guest_until: string }>('/auth/guest', { role, consents })
 export const registerParticipant = (data: {
-  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; consents: string[]
+  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; birth_date?: string; consents: string[]
 }) => api.post('/auth/participant/register', data)
 export const registerEmployer = (data: object) => api.post('/auth/employer/register', data)
 export const verifyEmail = (data: { email?: string; code?: string; token?: string; role?: Role }) =>

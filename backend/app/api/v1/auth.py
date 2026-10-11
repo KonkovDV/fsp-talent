@@ -6,7 +6,7 @@ tokens; a new person gets an account built from the FSP registry only after acce
 An account linked to FSP ID in the profile (/candidates/me/fsp/*) signs in the same way.
 """
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -239,6 +239,9 @@ class ParticipantRegister(BaseModel):
     # Under 18: registration is open from 15; the card waits for the guardian's consent (services/guardian.py).
     age_15_17: bool = False
     consents: list[str] = Field(default_factory=list, max_length=10)
+    # LEG-06: search shows a person only with a birth date on file (a checkbox is not an age). Asked here so a
+    # new adult is not silently hidden until they find the profile field. Still optional for API clients.
+    birth_date: date | None = None
 
 
 @router.post("/participant/register", response_model=VerificationSent, status_code=202)
@@ -247,6 +250,15 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     reject_reserved(email)
     if not body.is_adult and not body.age_15_17:
         raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
+    if body.birth_date is not None:
+        from app.services.profile import age_on
+        if body.birth_date > date.today():
+            raise ApiError(422, "validation_error", "Дата рождения ещё не наступила")
+        years = age_on(body.birth_date, date.today())
+        if years < 15:
+            raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
+        if (years >= 18) != body.is_adult:
+            raise ApiError(422, "validation_error", "Дата рождения не совпадает с отметкой «18 лет»")
     check_required_consents("participant", body.consents)
     await _charge_registration(request, email, "participant")
     p = await _account(db, "participant", email)
@@ -263,6 +275,8 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     p.password_hash = _password_hash(body.password)
     p.display_name = (body.display_name or "").strip() or p.display_name
     p.is_minor = not body.is_adult
+    if body.birth_date is not None:
+        p.birth_date = body.birth_date
     try:
         await db.flush()
     except IntegrityError:
