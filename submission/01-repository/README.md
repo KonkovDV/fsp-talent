@@ -6,7 +6,7 @@
 
 ## Стек
 
-Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Celery, PostgreSQL 16, Redis 7.2, React 18, Vite 6, TypeScript, Tailwind CSS. Всё поднимается в Docker Compose: девять контейнеров, видеокарта не нужна. Схема сервисов — в [README](../../README.md#архитектура), ключевые решения коротко — в [ARCHITECTURE.md](../../ARCHITECTURE.md).
+Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Celery, PostgreSQL 16, Redis 7.2, React 18, Vite 6, TypeScript, Tailwind CSS. Всё поднимается в Docker Compose: девять контейнеров, видеокарта не нужна. Схема сервисов — в [README](../../README.md#как-устроено), ключевые решения коротко — в [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Запуск одной командой
 
