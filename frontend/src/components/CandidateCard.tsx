@@ -5,6 +5,24 @@ import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 import AiNote from './AiNote'
 
+/** Competitor idea 5: what the card's evidence confirms and what it does not (claim boundary). */
+export function claimBoundary(card: Pick<CandidateCardData, 'grade' | 'grade_source' | 'grade_borderline' | 'skill_evidence'>,
+                              hasFsp: boolean): { yes: string[]; no: string[] } {
+  const yes: string[] = []
+  if (card.grade_source === 'assessed') {
+    yes.push(`Тест: знания по специализации на уровне ${gradeRu(card.grade)}${card.grade_borderline ? ' (на границе уровня)' : ''}`)
+  }
+  if (hasFsp) yes.push('ФСП: места в протоколах соревнований из реестра')
+  if (card.skill_evidence && Object.keys(card.skill_evidence).length > 0) yes.push('Навыки с источником: тест, ФСП или цитата из резюме')
+  const no = [
+    'опыт коммерческой разработки и его длительность',
+    'руководство командой и soft skills',
+    'навыки без указанного источника — их назвал сам кандидат',
+  ]
+  if (card.grade_source !== 'assessed') no.unshift('грейд — он заявлен кандидатом, тестом не подтверждён')
+  return { yes, no }
+}
+
 export interface CandidateCardData {
   candidate_id: string
   role: string | null
@@ -246,6 +264,16 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
             {disc ? <><RankBadge rank={disc.best_rank} assignedAt={disc.rank_assigned_at} orderRef={disc.rank_order_ref} /><span className="text-ink-2">{disc.label}</span></>
               : <span className="text-ink-3">Без истории ФСП</span>}
           </div>
+          {(() => {
+            const b = claimBoundary(card, Boolean(disc))
+            return (
+              <details className="text-xs text-ink-2">
+                <summary className="cursor-pointer">Что подтверждено и что нет</summary>
+                {b.yes.length > 0 && <p className="mt-1">Подтверждает: {b.yes.join('; ')}.</p>}
+                <p className="mt-1">Не подтверждает: {b.no.join('; ')}.</p>
+              </details>
+            )
+          })()}
           {(card.matched_skills.length > 0 || card.missing_skills.length > 0 || card.stack.length > 0) && (
             <div className="flex flex-wrap gap-1.5">
               {card.matched_skills.map(s => <span key={s} className="chip-active">{skillChip(s, card.skill_evidence)}</span>)}
