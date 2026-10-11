@@ -1,4 +1,4 @@
-"""Audit-5 A8: a shared need ranking never carries one company's exclusions to another company."""
+"""A shared need ranking never carries one company's exclusions to another company."""
 from __future__ import annotations
 
 from sqlalchemy import delete

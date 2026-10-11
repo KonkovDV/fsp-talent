@@ -1,4 +1,4 @@
-"""Audit-4 F-11: README, INSTALL and DESIGN publish one number of UI tests."""
+"""README, INSTALL and DESIGN publish one number of UI tests."""
 import re
 from pathlib import Path
 

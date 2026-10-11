@@ -13,7 +13,7 @@ def test_a_tenth_of_a_point_is_the_same_coverage():
 
 
 def test_the_interpreter_gap_is_the_same_coverage():
-    assert coverage_within(73.4, 73.0)  # audit-4 F-11: 3.13 with all compilers vs 3.12 in CI
+    assert coverage_within(73.4, 73.0)  # 3.13 with all compilers vs 3.12 in CI
 
 
 def test_more_than_half_a_point_is_a_different_coverage():

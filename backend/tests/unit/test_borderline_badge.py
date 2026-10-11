@@ -1,4 +1,4 @@
-"""NEW-2 product side: a grade within one SE of its cut is marked on the card, not hidden."""
+"""Product side: a grade within one SE of its cut is marked on the card, not hidden."""
 import inspect
 
 from app.services.cat import CUTS, is_borderline

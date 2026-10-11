@@ -33,7 +33,7 @@ async def shared_scope(db, employer_id, industry: str | None) -> str | None:
 
     `drop_refused` removes people who blocked the company and people who excluded its industry. Two
     companies without blocks and with the same industry get the same exclusions, so they may share a
-    cached ranking keyed by that industry. A company with any block gets its own ranking (audit-5 A8).
+    cached ranking keyed by that industry. A company with any block gets its own ranking.
     """
     from app.models import CandidateBlock
     blocked = await db.scalar(select(CandidateBlock.participant_id).where(

@@ -1,4 +1,4 @@
-"""The published path list and the full document are the OpenAPI surface (NEW-16).
+"""The published path list and the full document are the OpenAPI surface.
 
 A new or removed route, or any change of a schema, fails this test until the snapshots are
 regenerated: `python -m app.tools.dump_openapi > ../docs/openapi.json`.

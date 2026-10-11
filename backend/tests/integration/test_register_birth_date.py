@@ -1,4 +1,4 @@
-"""LEG-06: a birth date given at signup is stored and must agree with the 18+ tick."""
+"""A birth date given at signup is stored and must agree with the 18+ tick."""
 from datetime import date
 from types import SimpleNamespace
 

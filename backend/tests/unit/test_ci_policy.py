@@ -1,4 +1,4 @@
-"""Audit 2026-10 (second opinion, N-6 / P0-5): CI runs with a read-only token and the deploy does not edit config."""
+"""CI runs with a read-only token and the deploy does not edit config."""
 from __future__ import annotations
 
 from pathlib import Path

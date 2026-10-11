@@ -1,4 +1,4 @@
-"""audit-4 F-3: the start-up rescore must see RLS-protected rows, or it wipes the resume stack from search."""
+"""The start-up rescore must see RLS-protected rows, or it wipes the resume stack from search."""
 from __future__ import annotations
 
 import uuid

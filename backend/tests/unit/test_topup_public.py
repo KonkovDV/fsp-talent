@@ -1,4 +1,4 @@
-"""DoR-10 / S2: the public showcase top-up only adds, and the bank gives no total to subtract from."""
+"""The public showcase top-up only adds, and the bank gives no total to subtract from."""
 from app.services.search.pipeline import BANK_MIN, bank_cells
 from seed.topup_public import CELLS, TARGET, missing_for
 
@@ -25,7 +25,7 @@ def test_key_cells_cover_main_categories():
 
 
 def test_a_hidden_cell_cannot_be_recovered_by_differencing():
-    """V-SOTA-08: the bank answer carries no per-role or overall total next to a hidden cell."""
+    """The bank answer carries no per-role or overall total next to a hidden cell."""
     cells = bank_cells([("backend", "junior", 7, 3), ("backend", "middle", 3, 1), ("backend", "senior", 6, 2)])
     hidden = [c for c in cells if c["hidden"]]
     assert hidden == [{"role": "backend", "grade": "middle", "hidden": True, "candidates": None, "tested": None}]

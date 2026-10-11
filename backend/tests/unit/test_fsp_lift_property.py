@@ -1,4 +1,4 @@
-"""Audit 2026-10 H-2 / audit-2 N-7 (P0-2): linking an FSP history never lowers the employer score.
+"""Linking an FSP history never lowers the employer score.
 
 Property test over the whole matching input space (hypothesis). Before the fix FSP_LIFT="mean"
 averaged the test with the FSP factor, so a candidate with test 0.80 and one plain participation fell

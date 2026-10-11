@@ -1,7 +1,7 @@
-"""Audit 2026-10 H-3 / audit-2 P0-2: the FSP axis is monotone in the evidence (hypothesis).
+"""The FSP axis is monotone in the evidence (hypothesis).
 
 v3 took the five strongest events by q·w including zeros; 48 % of random additions lowered the bound
-and 37.5 % of random histories sat under the empty history (audit-2). v4 scores only result events
+and 37.5 % of random histories sat under the empty history. v4 scores only result events
 (q > 0) and takes the best subset, so adding any event never lowers the bound and nothing is below LCB0.
 """
 from __future__ import annotations

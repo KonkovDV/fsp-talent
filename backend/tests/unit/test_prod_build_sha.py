@@ -1,4 +1,4 @@
-"""Audit-4 F-7: the production stand reports the deployed commit in /health."""
+"""The production stand reports the deployed commit in /health."""
 from pathlib import Path
 
 import yaml

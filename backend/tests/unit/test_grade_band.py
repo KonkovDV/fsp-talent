@@ -1,4 +1,4 @@
-"""NEW-2: a grade decision near the cut is marked as borderline and reported separately."""
+"""A grade decision near the cut is marked as borderline and reported separately."""
 from app.validation.assessment import BAND_Z, CUTS, Session, _bootstrap_ci, borderline
 
 

@@ -92,7 +92,7 @@ class Settings(BaseSettings):
 
     # Practice code runs. SANDBOX_SOCKET: the sandbox container (no network, Python and Node).
     # Empty: a local child process, Python only. SANDBOX_REQUIRED refuses that fallback.
-    # Secure by default (audit M-1): the fallback runs candidate code inside the API container next
+    # Secure by default: the fallback runs candidate code inside the API container next
     # to SECRET_KEY and the database, so it needs an explicit SANDBOX_REQUIRED=false (tests, laptop).
     SANDBOX_SOCKET: str = ""
     SANDBOX_TOKEN: str = ""

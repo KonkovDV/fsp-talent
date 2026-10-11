@@ -1,4 +1,4 @@
-"""audit-4 F-2: a passed test never scores below "not tested", at any probability, SE or age."""
+"""A passed test never scores below "not tested", at any probability, SE or age."""
 from datetime import UTC, datetime, timedelta
 
 from hypothesis import given, settings
