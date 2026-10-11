@@ -108,11 +108,14 @@ describe('«Разметить самому»', () => {
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).labels).toEqual({})
   })
 
-  it('объясняет отказ, когда никому не поставили 2 или 3', async () => {
-    evaluatePairs.mockRejectedValue({ response: { data: { error: { code: 'validation_error', message: 'Нужна хотя бы одна потребность с кандидатом на оценку 2 или 3' } } } })
+})
+
+describe('разметка без релевантных (раньше 422)', () => {
+  it('все оценки 0: запрос не уходит, объясняем, что нужно', async () => {
     wrap(<SelfLabel sheet={sheet} />)
     await userEvent.click(screen.getByRole('button', { name: 'Начать' }))
-    for (let i = 0; i < 8; i++) await userEvent.keyboard('0')
-    expect(await screen.findByRole('alert')).toHaveTextContent('2 или 3')
+    for (let i = 0; i < firstNeed.length; i++) await userEvent.keyboard('0')
+    expect(await screen.findByTestId('self-no-relevant')).toBeInTheDocument()
+    expect(evaluatePairs).not.toHaveBeenCalled()
   })
 })

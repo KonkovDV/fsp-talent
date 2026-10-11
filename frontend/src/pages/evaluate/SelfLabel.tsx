@@ -48,6 +48,9 @@ function save(state: Saved) {
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch { /* private mode: labels live until reload */ }
 }
 
+/** True when at least one pair is rated 2 or 3: the minimum the backend needs to score. */
+export const hasRelevant = (labels: Labels) => Object.values(labels).some(v => v >= 2)
+
 /** The same JSONL the upload mode takes: the backend does all the maths. */
 export function toJsonl(sheet: BlindSheet, labels: Labels): string {
   const needs = new Map(sheet.needs.map(n => [n.id, n]))
@@ -147,7 +150,14 @@ export default function SelfLabel({ sheet }: { sheet: BlindSheet }) {
 
   useEffect(() => { save({ needId, labels }) }, [needId, labels])
 
-  const submit = useCallback((l: Labels) => { if (Object.keys(l).length) run.mutate(toJsonl(sheet, l)) }, [run, sheet])
+  // The backend answers 422 when no need has a candidate rated 2 or 3; say so here instead of sending.
+  const [noRelevant, setNoRelevant] = useState(false)
+  const submit = useCallback((l: Labels) => {
+    if (!Object.keys(l).length) return
+    if (!hasRelevant(l)) { run.reset(); setNoRelevant(true); return }
+    setNoRelevant(false)
+    run.mutate(toJsonl(sheet, l))
+  }, [run, sheet])
 
   const rate = useCallback((value: Label) => {
     if (!pair) return
@@ -251,6 +261,11 @@ export default function SelfLabel({ sheet }: { sheet: BlindSheet }) {
         </section>
       )}
       <div ref={resultRef}>
+        {noRelevant && (
+          <p className="notice-info mt-4 text-sm" role="status" data-testid="self-no-relevant">
+            Посчитать пока нельзя: нужна хотя бы одна карточка с оценкой 2 или 3. Оцените ещё одну потребность или измените оценки.
+          </p>
+        )}
         {run.isPending && <p className="mt-4 text-sm text-ink-2" role="status">Считаем…</p>}
         {run.isError && (
           <p className="notice-error mt-4" role="alert">
