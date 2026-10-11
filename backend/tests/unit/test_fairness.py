@@ -64,3 +64,25 @@ def test_language_diagnosis_compares_to_largest_group_and_counts_relevant():
     assert diag["C#"][3] == 1                # one relevant C# place
     assert diag["C#"][4] == 0.0              # C# sits at places 20–21, out of the top 10
     assert "(< 2 %)" not in diagnosis_markdown(rows) or diag["C#"][1] < 0.02
+
+
+def test_equal_fit_ratio_removes_a_gap_explained_by_fit():
+    """C# has only weak-fit places, so its raw rate is low; inside each fit level it is treated like Python."""
+    from app.validation.fairness import stratified_ratio
+    # 12 Python places: 6 fit (label 3, all in top), 6 not (label 0, below top 10 except none);
+    # 4 C# places: all label 0 below the top. Same rule for both groups inside a label.
+    language = ["Python"] * 6 + ["Python"] * 4 + ["C#"] * 4 + ["Python"] * 2
+    label = [3] * 6 + [0] * 4 + [0] * 4 + [0] * 2
+    rows = [{"language": language, "label": label}]
+    # top 10 = 6 fitting Python + 4 non-fitting Python; C# non-fitting sit at places 10-13
+    ratio = stratified_ratio(rows, "language", "C#", "Python")
+    assert ratio == 0.0   # at label 0 Python got 4 of 6 into the top, C# 0 of 4: the order, not fit
+    fair = [{"language": ["Python"] * 6 + ["C#", "Python"] * 2 + ["C#", "Python"] * 2,
+             "label": [3] * 6 + [0] * 8}]
+    assert abs(stratified_ratio(fair, "language", "C#", "Python") - 1.0) < 1e-9
+
+
+def test_equal_fit_ratio_is_none_without_overlap():
+    from app.validation.fairness import stratified_ratio
+    rows = [{"language": ["Python", "C#"], "label": [3, 0]}]
+    assert stratified_ratio(rows, "language", "C#", "Python") is None

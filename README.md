@@ -588,6 +588,7 @@ Caddy сам получает сертификат Let's Encrypt, контейн
 | [docs/LOAD_TEST.md](docs/LOAD_TEST.md) | Нагрузочная проверка |
 | [docs/FSP_INTEGRATION.md](docs/FSP_INTEGRATION.md) | ФСП ID (OIDC, Keycloak) и контракт реестра ФСП |
 | [docs/TRUST_AND_ATS.md](docs/TRUST_AND_ATS.md) | Защита от фиктивных вакансий, интеграция с ATS |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Модель угроз: атака, защита, где измерено |
 | [docs/API_ERRORS.md](docs/API_ERRORS.md) | Коды ошибок API |
 | [docs/DESIGN.md](docs/DESIGN.md) | Дизайн-система «Протокол» по брендбуку ФСП |
 | [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md) | Сторонние компоненты и лицензии |

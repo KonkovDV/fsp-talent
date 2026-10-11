@@ -52,6 +52,7 @@ def need_rows(dataset: dict) -> list[dict]:
         row = {axis: [marks[axis][cid] for cid in order] for axis in marks}
         labels_here = dataset["labels"][need["id"]]
         row["relevant"] = [labels_here.get(cid, 0) >= 2 for cid in order]
+        row["label"] = [labels_here.get(cid, 0) for cid in order]
         rows.append(row)
     return rows
 
@@ -170,6 +171,45 @@ def diagnosis_markdown(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def stratified_ratio(rows: list[dict], axis: str, group: str, reference: str) -> float | None:
+    """Mantel-Haenszel ratio of top-10 rates, group against reference, inside strata of equal true fit
+    (the hidden relevance label 0..3 of the pair). A raw impact ratio mixes two things: a group may have fewer
+    places that truly fit, or the order may push it down at the same fit. Only the second is unfair. A ratio
+    near 1 here means the raw gap is explained by fit; one under 0.8 points at the order. Report only."""
+    strata: dict[int, list[int]] = {}
+    for row in rows:
+        for place, (value, label) in enumerate(zip(row[axis], row["label"], strict=True)):
+            if value not in (group, reference):
+                continue
+            cell = strata.setdefault(label, [0, 0, 0, 0])   # group n, group top, reference n, reference top
+            base = 0 if value == group else 2
+            cell[base] += 1
+            cell[base + 1] += place < TOP
+    num = den = 0.0
+    for n1, a, n0, b in strata.values():
+        total = n1 + n0
+        if n1 == 0 or n0 == 0:
+            continue
+        num += a * n0 / total
+        den += b * n1 / total
+    return num / den if den > 0 else None
+
+
+def equal_fit_markdown(rows: list[dict], axis: str = "language") -> str:
+    diag = language_diagnosis(rows) if axis == "language" else []
+    reference = diag[0][0] if diag else None
+    if reference is None:
+        return ""
+    lines = ["", f"IR отбора при равной истинной релевантности (Мантель–Хензель по меткам 0–3, опора: {reference}).",
+             "Сырой IR смешивает две причины: у группы меньше мест, которые действительно подходят, или порядок "
+             "опускает её при той же релевантности. Нечестна только вторая.", "",
+             "| Язык | n | Сырой IR против опоры | IR при равной релевантности |", "|---|---|---|---|"]
+    for g, n, _share, ir, _rel, _rate in diag[1:]:
+        mh = stratified_ratio(rows, axis, g, reference)
+        lines.append(f"| {g} | {n} | {ir:.3f} | {'—' if mh is None else f'{mh:.3f}'} |")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", default="10", help="число зёрен от 2026 или список через запятую")
@@ -190,6 +230,7 @@ def main() -> None:
         verdict = "проходит" if min(sel, sco) + 1e-9 >= FLOOR else "ниже 4/5"
         print(f"{NAMES[axis]}: мин. IR отбора {sel:.3f}, мин. IR балла {sco:.3f}, порог {FLOOR} — {verdict}")
     print(diagnosis_markdown(rows))
+    print(equal_fit_markdown(rows))
 
 
 if __name__ == "__main__":
