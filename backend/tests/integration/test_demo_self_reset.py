@@ -7,11 +7,13 @@ from sqlalchemy import func, select
 from app.api.errors import ApiError
 from app.api.v1 import candidates as api
 from app.models import Participant, Skill
+from app.services.field_cipher import email_is
 from tests.integration.conftest import PASSWORD_HASH, now, stamp, wipe_people
 
 
 async def _person(db, email: str) -> tuple[Participant, bool]:
-    found = await db.scalar(select(Participant).where(Participant.email == email))
+    # `email` holds ciphertext; the app looks a person up by the blind index (models/participant.py).
+    found = await db.scalar(select(Participant).where(email_is(Participant, email)))
     if found is not None:
         return found, False
     person = Participant(email=email, display_name="Жюри", password_hash=PASSWORD_HASH,
