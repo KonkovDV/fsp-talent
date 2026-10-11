@@ -28,3 +28,12 @@ def test_parity_rows_are_consistent():
     assert low <= p.kappa_ability <= high or abs(low - high) < 1e-9
     text = parity_markdown(p, 3)
     assert "верить анкете" in text and "только по θ̂" in text
+
+
+def test_spec_exposure_study_runs_both_denominators():
+    from app.validation.assessment import spec_exposure_markdown, spec_exposure_study
+    rows = spec_exposure_study(120, 3)
+    assert len(rows) == 2 and "своя специализация" in rows[1][0]
+    for _, report, kappa, rmse in rows:
+        assert 0.0 <= report.spec_max_exposure <= 1.0 and rmse > 0 and -1.0 <= kappa <= 1.0
+    assert "RMSE" in spec_exposure_markdown(rows, 3)
