@@ -99,6 +99,18 @@ const REASON_RU: Record<string, string> = {
   PAY_GAP: 'Вилка не сходится',
   SALARY_HISTORY: 'Отказ из-за вилки',
   CONGESTION: 'Много приглашений',
+  TEST_FRESH: 'Давность теста',
+  FSP_NO_LIFT: 'ФСП учтены, место не опускают',
+  FIT_TIER: 'Ярус соответствия',
+  PLACE_MATCH: 'Город совпадает',
+  PLACE_OTHER: 'Другой город',
+  PLACE_OPEN: 'Город не указан',
+  FORMAT_MATCH: 'Формат подходит',
+  FORMAT_PART: 'Формат частично',
+  FORMAT_OTHER: 'Другой формат',
+  INTERVIEW_PASSED: 'Собеседование пройдено',
+  INTERVIEW_FAILED: 'Собеседование не пройдено',
+  INTERVIEW_NO_SHOW: 'Не пришёл на собеседование',
   ...JOB_SEARCH_BADGE,
 }
 

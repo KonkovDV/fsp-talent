@@ -29,7 +29,7 @@ const EMPLOYER_LINKS = [
   { to: '/employer/company', label: 'Компания', end: false },
   { to: '/employer/integrations', label: 'Интеграции', end: false },
 ]
-// Staff only. The server answers 404 to everyone else, so the links stay hidden for them.
+// Staff only. /employer/me/staff says whether to draw them; the desks answer 404 to everyone else.
 const STAFF_LINKS = [
   { to: '/employer/moderation', label: 'Модерация', end: false },
   { to: '/employer/methodist', label: 'Методист', end: false },
@@ -40,7 +40,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const staff = useQuery({
     queryKey: ['staff'],
-    queryFn: () => api.get('/methodist').then(() => true, () => false),
+    queryFn: () => api.get<{ is_staff: boolean }>('/employer/me/staff').then(r => r.data.is_staff, () => false),
     enabled: userRole === 'employer',
     staleTime: 5 * 60_000,
     retry: false,
