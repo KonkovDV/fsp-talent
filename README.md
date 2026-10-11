@@ -42,12 +42,12 @@
 | Пункт ТЗ | Где увидеть |
 |---|---|
 | 3.3 Демо: регистрация → опрос → тест → категория → поиск работодателем → контакт; отклик на вакансию | Стенд https://89-124-65-102.sslip.io, 9 шагов в разделе [«Для жюри: 5 минут»](#для-жюри-5-минут) |
-| 3.3 Механика тестирования | https://89-124-65-102.sslip.io/method; [docs/VALIDATION_ASSESSMENT.md](docs/VALIDATION_ASSESSMENT.md): 17 семейств и 2 концептуальных пула по 5 уровней; на 2000 сессиях выдано 85 ключей «семейство:уровень» и 18 561 разное задание |
+| 3.3 Механика тестирования | https://89-124-65-102.sslip.io/method; [docs/VALIDATION_ASSESSMENT.md](docs/VALIDATION_ASSESSMENT.md): 17 семейств с вычисляемым ответом по 5 уровней сложности и 2 концептуальных пула (`backend/app/items/families/`, ответы перепроверяет `tests/unit/test_item_families.py`) |
 | 3.3 Механика подбора | https://89-124-65-102.sslip.io/method; [docs/VALIDATION_MATCHING.md](docs/VALIDATION_MATCHING.md) |
-| 3.4 Документация, 8 разделов | [docs/SOLUTION.md](docs/SOLUTION.md) и [PDF](docs/FSP_Talent_documentation.pdf) |
+| 3.4 Документация, 8 пунктов ТЗ | [docs/SOLUTION.md](docs/SOLUTION.md), главы 1–9, и [PDF](docs/FSP_Talent_documentation.pdf) |
 | 3.5 Открытый код без обфускации | Этот репозиторий, лицензия [LICENSE](LICENSE), сторонние — [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md) |
 | 5.2 Сдача: репозиторий, презентация, стенд, документация | Репозиторий; [docs/pitch.pdf](docs/pitch.pdf); стенд https://89-124-65-102.sslip.io; [PDF документации](docs/FSP_Talent_documentation.pdf) |
-| 6 Критерии оценки | [«Как решение отвечает на критерии оценки»](#как-решение-отвечает-на-критерии-оценки); доступность: 13 экранов проверяются axe в `frontend/e2e/a11y.spec.ts` |
+| 6 Критерии оценки | [«Как решение отвечает на критерии оценки»](#как-решение-отвечает-на-критерии-оценки); доступность: 15 экранов проверяются axe (список `screens` в `frontend/e2e/a11y.spec.ts`) |
 
 ## Для жюри: 5 минут
 
