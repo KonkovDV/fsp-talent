@@ -827,12 +827,25 @@ async def _category_percentiles(db, cats: dict) -> dict:
     return out
 
 
+# Method behind each confirmed trust level. Bump the tag when the method changes.
+SKILL_METHODS = {"test_confirmed": "test/cat-3pl", "resume_confirmed": "resume-quote/2026-10"}
+
+
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
                        fsp_choice: dict | None = None, scored: dict | None = None,
                        full_card: bool = True) -> list[dict]:
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ordered)))}
+    # Where each confirmed skill comes from, when, and by which method (competitor idea 5). Self-reported
+    # skills have no entry: nothing confirmed them.
+    provenance: dict = {}
+    for sk in await db.scalars(select(Skill).where(Skill.participant_id.in_(ordered),
+                                                   Skill.trust_level.in_(tuple(SKILL_METHODS)))):
+        when = sk.confirmed_at or sk.created_at
+        provenance.setdefault(sk.participant_id, {})[sk.name] = {
+            "source": sk.trust_level, "verified_at": when.date().isoformat() if when else None,
+            "method_version": SKILL_METHODS[sk.trust_level]}
     # NEW-2: a test decision within one SE of the cut is shown as "on the border", not hidden.
     borderline: set = set()
     for c in await db.scalars(select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ordered))):
@@ -952,6 +965,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             "grade": header_grade,
             "grade_source": header_source,
             "grade_borderline": pid in borderline,
+            "skill_provenance": provenance.get(pid, {}),
             "also_primary": also_primary,
             "region": shown_region(p.region, show_city),
             "experience_years": experience,

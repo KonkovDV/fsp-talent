@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import CandidateCard, { claimBoundary, type CandidateCardData } from '../CandidateCard'
+import CandidateCard, { claimBoundary, skillProvenance, type CandidateCardData } from '../CandidateCard'
 
 const card: CandidateCardData = {
   candidate_id: '11111111-1111-1111-1111-111111111111',
@@ -111,5 +111,12 @@ describe('карточка кандидата', () => {
     expect(b.no.join(' ')).toMatch(/опыт коммерческой разработки/)
     render(<CandidateCard card={{ ...card, match: undefined }} onOffer={() => undefined} />)
     expect(screen.getByText('Что подтверждено и что нет')).toBeInTheDocument()
+  })
+
+  it('у подтверждённого навыка есть источник, дата и методика; без поля API — ничего', () => {
+    const card2 = { skill_provenance: { Python: { source: 'test_confirmed', verified_at: '2026-10-01', method_version: 'test/cat-3pl' } } }
+    expect(skillProvenance('Python', card2)).toBe('Источник: тест, 2026-10-01; методика test/cat-3pl')
+    expect(skillProvenance('Go', card2)).toBeUndefined()
+    expect(skillProvenance('Python', {})).toBeUndefined()
   })
 })

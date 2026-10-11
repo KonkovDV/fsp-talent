@@ -39,6 +39,8 @@ export interface CandidateCardData {
   matched_skills: string[]
   missing_skills: string[]
   skill_evidence?: Record<string, string>
+  /** Optional (older API answers omit it): source, date and method of each confirmed skill. */
+  skill_provenance?: Record<string, { source: string; verified_at: string | null; method_version: string }>
   why: string[]
   shortlisted?: boolean
   hidden?: boolean
@@ -118,6 +120,13 @@ interface Props {
 }
 
 const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет')
+
+export function skillProvenance(name: string, card: Pick<CandidateCardData, 'skill_provenance'>): string | undefined {
+  const p = card.skill_provenance?.[name]
+  if (!p) return undefined
+  const how = p.source === 'test_confirmed' ? 'тест' : p.source === 'resume_confirmed' ? 'цитата из резюме' : p.source
+  return `Источник: ${how}${p.verified_at ? `, ${p.verified_at}` : ''}; методика ${p.method_version}`
+}
 
 function skillChip(name: string, evidence?: Record<string, string>): string {
   const trust = evidence?.[name]
@@ -276,9 +285,9 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
           })()}
           {(card.matched_skills.length > 0 || card.missing_skills.length > 0 || card.stack.length > 0) && (
             <div className="flex flex-wrap gap-1.5">
-              {card.matched_skills.map(s => <span key={s} className="chip-active">{skillChip(s, card.skill_evidence)}</span>)}
+              {card.matched_skills.map(s => <span key={s} className="chip-active" title={skillProvenance(s, card)}>{skillChip(s, card.skill_evidence)}</span>)}
               {card.missing_skills.map(s => <span key={s} className="chip-missing">нет {s}</span>)}
-              {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default">{skillChip(s, card.skill_evidence)}</span>)}
+              {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default" title={skillProvenance(s, card)}>{skillChip(s, card.skill_evidence)}</span>)}
             </div>
           )}
           {!!card.soft_skills?.length && (
