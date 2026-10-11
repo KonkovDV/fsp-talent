@@ -2,14 +2,14 @@
 
 Инструкция для эксперта, который разворачивает решение на своей машине, и для оператора сервера (ТЗ 3.3, 3.4). Разделы 1–10 — локальный запуск, раздел 11 — продуктивная установка с HTTPS, резервными копиями, обновлением и откатом. Тот же путь, что в разделах 3–4, описан в `.github/workflows/ci.yml` (задание `compose-e2e`: `make demo` и `make check` на чистой машине).
 
-Время первого запуска — 5–10 минут: столько уходит на сборку образов. Повторный запуск занимает меньше минуты.
+Время первого запуска — около 5 минут (замер 11.10.2026 на чистой машине с 8 ядрами: 4,5 минуты вместе со скачиванием и сборкой образов). Повторный запуск — секунды.
 
 ## 1. Что понадобится
 
 | Что | Версия | Как проверить |
 |---|---|---|
 | Docker Engine или Docker Desktop | 24 и новее | `docker --version` |
-| Docker Compose v2 | 2.17 и новее (нужен флаг `--wait`) | `docker compose version` |
+| Docker Compose v2 | 2.24 и новее (необязательный `.env` и флаг `--wait`) | `docker compose version` |
 | Git | любая | `git --version` |
 | Свободная память | 4 ГБ | всё вместе занимает около 1,5 ГБ |
 | Место на диске | 5 ГБ | образы и зависимости |
@@ -34,29 +34,23 @@ cd fsp-talent
 
 ## 3. Запустить одной командой
 
-**Linux и macOS**
+**Linux, macOS, Windows (PowerShell) — одинаково**
 
 ```bash
-make demo
-```
-
-**Windows (PowerShell)**
-
-```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up -d --build --wait
-docker compose exec -T -u appuser backend python -m seed.generate_seed
 ```
 
-Тот же запуск без набора команд: в папке проекта выполните `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1`. Скрипт сам создаст `.env`, дождётся контейнеров и загрузит демо-данные. Повторный запуск безопасен.
+`.env` создавать не нужно: настройки берутся из `.env.example`, свой `.env` (если есть) их перекрывает. Команда завершается, когда все контейнеры `healthy` и демо-данные загружены. С `make` то же самое: `make demo`. На Windows можно и так: `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1`.
 
 Письмо с кодом подтверждения на этом запуске не приходит в Gmail и на другую почту. Откройте http://localhost:8025: это локальный ящик Mailpit. Своя почта нужна только стенду жюри и задаётся в `deploy/.env` (`SMTP_HOST` и соседние поля).
 
-`make demo` выполняет те же три шага:
+Что происходит внутри:
 
-1. Создаёт `.env` из `.env.example`, если файла ещё нет. Править его не нужно. Ключ подписи токенов контейнер сам создаст при первом старте и сохранит в томе `vc_keys`.
-2. Собирает образы, поднимает контейнеры и ждёт, пока база, backend, worker, beat и frontend станут `healthy`. Миграции базы применяются при старте backend.
-3. Загружает демо-данные. Повторный запуск безопасен: уже загруженное не дублируется.
+1. Настройки читаются из `.env.example` и необязательного `.env`. Ключ подписи токенов контейнер сам создаёт при первом старте и сохраняет в томе `vc_keys`, так что опубликованных секретов в работе нет.
+2. Образ backend собирается один раз и используется для API, worker, beat и загрузчика демо-данных. Контейнеры стартуют по проверкам здоровья: база и Redis, затем API (миграции применяются при его старте), затем worker и beat.
+3. Сервис `demo-seed` после готовности API загружает демо-данные и становится `healthy`; `--wait` ждёт именно его. Повторный запуск безопасен: уже загруженное не дублируется. При `DEMO_MODE=false` загрузка пропускается.
+
+Проверка демо-данных: `docker compose run --rm backend python -m seed.demo_check` (или `make demo-check`), ожидается «18/18 OK».
 
 В конце команда печатает адреса и демо-входы.
 
@@ -434,9 +428,10 @@ curl -s https://$SITE_ADDRESS/health    # "build" — коммит отката
 
 | Симптом | Причина и решение |
 |---|---|
-| `port is already allocated` для 80 | Порт занят другим сервером. Задайте в `.env` `HTTP_PORT=8080` и `PUBLIC_BASE_URL=http://localhost:8080`, затем `make demo` |
-| `unknown flag: --wait` | Compose старше 2.17. Обновите Docker Desktop или запустите без флага и подождите минуту: `docker compose up -d --build` |
-| `env file .env not found` | Не создан `.env`. Выполните `cp .env.example .env` (Windows: `Copy-Item .env.example .env`) |
+| `port is already allocated` | Порт занят. Задайте в `.env` (или в окружении) `HTTP_PORT=8080` и `PUBLIC_BASE_URL=http://localhost:8080`; для почты, API и фронтенда — `MAIL_PORT`, `API_PORT`, `FRONTEND_PORT`. Затем повторите запуск |
+| `unknown flag: --wait` или ошибка разбора `env_file` | Compose старше 2.24. Обновите Docker Desktop (4.27+) или плагин compose |
+| Сборка падает на `apt-get` с `500 Internal Server Error` | Временный сбой зеркала Debian. Сборка повторяет попытку сама; если не помогло, запустите команду ещё раз |
+| `demo-seed` завершился с ошибкой | `docker compose logs demo-seed`; повторный `docker compose up -d --wait` безопасен |
 | `backend` не становится `healthy` | Посмотрите `docker compose logs backend`. Если там `SECRET_KEY is a published placeholder`, том `vc_keys` недоступен на запись: задайте `SECRET_KEY` в `.env` |
 | Вход не работает, `503` | Redis не запущен: `docker compose ps redis`, затем `docker compose up -d redis` |
 | Письмо с кодом не пришло | На локальном стенде откройте Mailpit http://localhost:8025. Код можно запросить повторно через минуту. На стенде жюри с `MAIL_MODE=console` письма не уходят: код регистрации показывается на экране, код сброса пароля — нет |

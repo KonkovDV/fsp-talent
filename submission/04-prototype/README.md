@@ -54,19 +54,53 @@
 
 Подробный проход на 9 шагов — в разделе [«Для жюри: 5 минут»](https://github.com/KonkovDV/fsp-talent#для-жюри-5-минут) корневого README, полный сценарий ТЗ 3.3 на 15 шагов — в [USER_GUIDE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/USER_GUIDE.md).
 
-## Как поднять стенд локально
+## Запуск у себя за 5 минут
 
-Актуальный способ запуска одной командой описан в корневом README, раздел [«Быстрый старт»](https://github.com/KonkovDV/fsp-talent#быстрый-старт). Ниже — короткая версия.
-
-Нужны Docker 24+ с Compose 2.17+, 4 ГБ свободной памяти и свободные порты 80 и 8025.
+Одна команда на свежем клоне. Ничего править не нужно: файл `.env` не обязателен, демо-данные загружаются сами.
 
 ```bash
 git clone https://github.com/KonkovDV/fsp-talent.git
 cd fsp-talent
-make demo
+docker compose up -d --build --wait
 ```
 
-Первый запуск занимает 5–10 минут. Сайт — http://localhost, Swagger UI — http://localhost/docs, письма с кодами — http://localhost:8025. Демо-входы те же. На Windows без make: `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1`. Подробности и частые проблемы — [INSTALL.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/INSTALL.md).
+Команда возвращает управление, когда всё готово: база, API, фоновые задачи и демо-данные. Дальше:
+
+| Адрес | Что там |
+|---|---|
+| http://localhost | Кабинеты кандидата и работодателя, страница жюри `/jury` |
+| http://localhost/docs | Swagger UI, спецификация OpenAPI 3.1 |
+| http://localhost:8025 | Mailpit: письма с кодами подтверждения |
+| http://localhost/health | Состояние стенда |
+
+Демо-входы те же, что на стенде, пароль `demo12345`: `jury1@demo.talent` … `jury10@demo.talent`, `hr@sibcode.demo`, `fsp001@demo.talent`.
+
+Проверить, что демо-данные на месте (должно быть «18/18 OK»):
+
+```bash
+docker compose run --rm backend python -m seed.demo_check
+```
+
+Остановить и удалить всё, включая данные: `docker compose down -v`.
+
+**Что нужно.** Docker 24+ с Compose 2.24+ (Docker Desktop 4.27+), 4 ГБ свободной памяти (стенд занимает около 0,7 ГБ), 5 ГБ на диске (образы около 1,3 ГБ), свободный порт 80. Видеокарта, Python, Node.js и `make` не нужны. С `make` то же самое: `make demo`, проверка до запуска: `make doctor`.
+
+**Сколько ждать.** Мы замерили на чистой машине (Linux, 8 ядер, пустой кэш Docker): первый запуск 4,5 минуты вместе со скачиванием образов и сборкой, повторный — секунды.
+
+**Если что-то не так**
+
+| Ситуация | Что сделать |
+|---|---|
+| Порт 80 занят (`port is already allocated`) | `HTTP_PORT=8080 PUBLIC_BASE_URL=http://localhost:8080 docker compose up -d --build --wait`, сайт будет на http://localhost:8080. Порты почты и API так же: `MAIL_PORT`, `API_PORT`, `FRONTEND_PORT`. Значения можно записать в `.env` |
+| Mac на Apple Silicon (M1–M4) | Работает как есть: все образы есть под arm64, собираются нативно, эмуляция не нужна |
+| Windows | Docker Desktop с WSL 2. Команды те же, в PowerShell. Клонируйте лучше внутрь WSL (`\\wsl$\...`), так сборка быстрее. Без `make` есть `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1` |
+| `unknown flag: --wait` или ошибка про `env_file` | Старый Compose. Обновите Docker Desktop, или создайте `.env` (`cp .env.example .env`) и запустите `make demo` |
+| Сборка упала на `apt-get`, `pip` или `npm` | Нет доступа к зеркалам или к прокси. Повторите команду: кэш сохранится, сборка продолжится с места остановки |
+| Что-то не стало `healthy` | `docker compose ps` и `docker compose logs backend demo-seed` |
+
+**Без интернета.** Нужен только для первой сборки (образы, pip, npm). После неё стенд работает полностью офлайн: внешних вызовов нет, языковые модели по умолчанию выключены, почта уходит в локальный Mailpit. Чтобы запустить на машине без сети, соберите на машине с сетью и перенесите образы: `docker save` и `docker load`.
+
+Подробности и частые проблемы — [docs/INSTALL.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/INSTALL.md).
 
 ## Что проверено и чем это не является
 
