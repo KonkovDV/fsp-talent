@@ -98,8 +98,7 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # One-shot: loads the demo data (idempotent, adds only what is missing) once the API is healthy,
-  # then exits 0. So plain `docker compose up` gives a ready demo. Skipped when DEMO_MODE=false.
+  # Loads the demo data (idempotent, adds only what is missing) once the API is healthy. So plain `docker compose up` gives a ready demo. Skipped when DEMO_MODE=false.
   demo-seed:
     image: fsp-talent-backend:local
     pull_policy: never
@@ -109,7 +108,15 @@ services:
       REDIS_URL: redis://redis:6379/0
       DEMO_MODE: ${DEMO_MODE:-true}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
-    command: ["sh", "-c", "if [ \"$$DEMO_MODE\" = true ]; then python -m seed.generate_seed; else echo 'DEMO_MODE=false: seed skipped'; fi"]
+    # Stays up (idle) after seeding so `docker compose up --wait` waits for the data and reports a seed failure.
+    command: ["sh", "-c", "rm -f /tmp/seeded; if [ \"$$DEMO_MODE\" = true ]; then python -m seed.generate_seed || exit 1; else echo 'DEMO_MODE=false: seed skipped'; fi; touch /tmp/seeded; exec sleep infinity"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/seeded"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
+      start_period: 600s
+    mem_limit: 1g
     volumes: [vc_keys:/secrets]
     depends_on:
       backend: {condition: service_healthy}
