@@ -394,7 +394,18 @@ export const issueMyPassport = () => api.post<MyPassport>('/candidates/me/passpo
 export const revokeMyCredential = (id: string) => api.post(`/candidates/me/credentials/${id}/revoke`)
 export const getPublicPassport = (id: string) => api.get<PublicPassport>(`/public/passport/${id}`)
 export interface EvaluateRow { method: string; title: string; ndcg10: number; ndcg_ci: [number, number] | null; p10: number; map: number }
-export interface EvaluateReport { pairs: number; needs: number; judged_needs: number; sha256: string; rows: EvaluateRow[] }
+export interface EvaluateNeedRow {
+  need_id: string; role: string | null; grade: string | null; judged: number; relevant: number; k: number
+  p_at_k_model: number; p_at_k_resume: number; ndcg10_model: number; ndcg10_resume: number
+  top: { candidate_id: string; label: number }[]
+}
+export interface EvaluatePairedDelta {
+  mean: number | null; ci: [number, number] | null; needs: number; model_better: number; resume_better: number
+}
+export interface EvaluateReport {
+  pairs: number; needs: number; judged_needs: number; sha256: string; rows: EvaluateRow[]
+  per_need?: EvaluateNeedRow[]; paired_delta?: EvaluatePairedDelta
+}
 export const evaluatePairs = (text: string) =>
   api.post<EvaluateReport>('/public/evaluate', text, { headers: { 'Content-Type': 'text/plain' } })
 export const credentialStatus = (id: string) => api.get(`/public/credentials/${id}/status`)

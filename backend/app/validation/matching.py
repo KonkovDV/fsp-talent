@@ -867,12 +867,15 @@ def public_report(text: str) -> dict:
         raise ValueError("Нужна хотя бы одна потребность с кандидатом на оценку 2 или 3")
     rows = {row.method: row for row in evaluate(dataset)}
     pairs = sum(len(labels) for labels in dataset["labels"].values())
+    from app.validation.per_need import paired_delta, per_need
+    breakdown = per_need(dataset)
     return {
         "pairs": pairs, "needs": len(dataset["needs"]), "judged_needs": len(judged),
         "sha256": sha256(dataset),
         "rows": [{"method": m, "title": TITLES[m].strip(), "ndcg10": round(rows[m].ndcg10, 4),
                   "ndcg_ci": [round(v, 4) for v in rows[m].ndcg_ci] if rows[m].ndcg_ci else None,
                   "p10": round(rows[m].p10, 4), "map": round(rows[m].map, 4)} for m in PUBLIC_METHODS],
+        "per_need": breakdown, "paired_delta": paired_delta(breakdown),
     }
 
 
