@@ -819,7 +819,7 @@ async def test_candidate_profile_market_and_growth(quiet):
     db.scalars_q = [[]]
     profile = await candidates.get_my_profile(current, db)
     assert profile["display_name"] == "Аня" and profile["discoverable"] is True
-    assert profile["completeness"]["total"] == 8
+    assert profile["completeness"]["total"] == 9
     assert "skills" in profile["completeness"]["missing"]
     assert "city" not in profile["completeness"]["missing"]
 

@@ -298,6 +298,10 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
         "min_rank": vacancy.min_rank, "skills": vacancy.skills or [],
         "allows_minors": vacancy.allows_minors, "is_open": True,
     })
+    if hit is None and participant.birth_date is None and not vacancy.allows_minors:
+        # SDK-02: the 18+ tick is not an age; without a birth date an adult-only vacancy stays closed. Say so.
+        raise HTTPException(403, "Укажите дату рождения в профиле: без неё отклик открыт только на вакансии "
+                                 "для 16–17 лет")
     if hit is None:
         raise HTTPException(403, "Профиль не подходит под условия вакансии")
     if hit["needs_test"]:
