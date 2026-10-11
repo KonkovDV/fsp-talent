@@ -31,18 +31,18 @@
 | NFR-10 | Токен без подписи отвергается | `test_unsigned_token_is_rejected` |
 | TC-01 | Короткий пробный тест не подтверждает грейд | `test_express_stops_on_its_count_and_does_not_confirm_a_grade` |
 | TC-02 | Случайные ответы не проходят грейд | `test_random_guessing_does_not_pass` |
-| AUD-01 | GPU не нужен: базовый compose без видеокарты (M-5) | `test_base_compose_requests_no_gpu` |
+| AUD-01 | GPU не нужен: базовый compose без видеокарты | `test_base_compose_requests_no_gpu` |
 | AUD-02 | Токен CI только на чтение (N-6) | `test_workflow_token_is_read_only_by_default` |
 | AUD-03 | Цитата LLM должна называть навык (N-3) | `test_prompt_injection_cannot_pin_a_skill_to_an_unrelated_quote` |
-| AUD-04 | Поиск по ФСП ID — только публичный профиль с согласием (H-1) | `test_achievements_lookup_requires_public_profile_consent_and_adult` |
-| AUD-05 | История ФСП никогда не опускает работодательский балл (H-2) | `test_fsp_history_never_lowers_the_employer_score` |
-| AUD-06 | Новое событие не опускает ось ФСП, участие — не штраф (H-3) | `test_adding_any_event_never_lowers_the_bound` |
+| AUD-04 | Поиск по ФСП ID — только публичный профиль с согласием | `test_achievements_lookup_requires_public_profile_consent_and_adult` |
+| AUD-05 | История ФСП никогда не опускает работодательский балл | `test_fsp_history_never_lowers_the_employer_score` |
+| AUD-06 | Новое событие не опускает ось ФСП, участие — не штраф | `test_adding_any_event_never_lowers_the_bound` |
 | AUD-07 | Устаревшие баллы пересчитываются при старте | `test_the_container_rescores_after_schema_sync_and_before_serving` |
 | AUD-08 | Демо-логины сид не трогает | `test_no_sql_pattern_on_the_encrypted_email_column` |
 | AUD-09 | МРОТ 27 093 ₽ в бэкенде, фронте и документах | `test_salary_floor_is_the_2026_minimum_wage_everywhere` |
 | AUD-10 | Решение Python в песочнице не может форкаться | `test_python_children_get_no_processes` |
 | AUD-11 | Сокет песочницы не доступен всем | `test_socket_is_owner_and_group_only` |
 | AUD-12 | Затухание ФСП пересчитывается каждую ночь | `test_fsp_scores_are_recomputed_every_night` |
-| AUD-13 | Грейд на границе помечен на карточке (NEW-2) | `test_card_carries_the_flag_only_for_the_assessed_header_grade` |
+| AUD-13 | Грейд на границе помечен на карточке | `test_card_carries_the_flag_only_for_the_assessed_header_grade` |
 
-Строки AUD — исправления аудита 11.10.2026 (`docs/audit/`, PR #238–#255). Ссылки проверяет `tests/unit/test_accept.py`: битая ссылка на тест роняет CI.
+Строки AUD — исправления по внешнему разбору 11.10.2026, PR #238–#255. Ссылки проверяет `tests/unit/test_accept.py`: битая ссылка на тест роняет CI.

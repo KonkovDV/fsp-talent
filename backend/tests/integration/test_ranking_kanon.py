@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, select
 
 import app.api.v1.public as public
 from app.models import CategoryAssignment, GradeConfirmation, Participant
+from app.services.identity import give_consent
 from app.services.profile import rebuild_profile
 from app.services.search.pipeline import BANK_MIN
 from tests.integration.conftest import stamp, wipe_people
@@ -25,6 +26,8 @@ async def _cell(db) -> int:
 
 async def _confirmed(db, tag: str, index: int) -> Participant:
     person = await _person(db, tag, index * 5 + 4)            # index*5+4 -> declared grade "lead"
+    person.public_profile = True                              # the ranking is a public page (A1b)
+    await give_consent(db, "participant", person.id, "pd_distribution")
     db.add(GradeConfirmation(participant_id=person.id, specialization=ROLE, grade=GRADE, p_pass=0.8 + index / 100))
     await db.flush()
     await rebuild_profile(db, person)

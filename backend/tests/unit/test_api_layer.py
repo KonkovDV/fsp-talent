@@ -360,7 +360,7 @@ async def test_favorites_keep_only_people_still_in_search(monkeypatch):
 
 async def test_moderation_desk_lists_and_closes(quiet, monkeypatch):
     monkeypatch.setattr(settings, "DEMO_MODE", True)
-    company = _company()
+    company = _company(is_methodist=True, email="moderator@fsp.example")
     current = _current("employer", company.id)
     when = NOW
     complaint = SimpleNamespace(id=_uid(), reason="не_вакансия", vacancy_id=_uid(), offer_id=None, created_at=when)

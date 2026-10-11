@@ -76,7 +76,7 @@ describe('поиск работодателя', () => {
   it('объясняет, сколько человек точно в выбранной паре, и сколько скрыла площадка', async () => {
     searchCandidates.mockResolvedValue({ data: { total: 25, in_category: 18, platform_held: 2, items: [declared], recommended_categories: [] } })
     renderPage(<EmployerSearch />)
-    expect(await screen.findByText(/Точно в выбранной категории — 18/)).toBeInTheDocument()
+    expect(await screen.findByText(/кандидатов в выбранной категории, ещё 7 похожих/)).toBeInTheDocument()
     expect(screen.getByText(/Площадка не показала 2/)).toBeInTheDocument()
   })
 

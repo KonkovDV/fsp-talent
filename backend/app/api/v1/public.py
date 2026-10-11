@@ -428,10 +428,14 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
             GradeConfirmation.grade == grade,
             GradeConfirmation.p_pass.is_not(None),
             visible_in_search(),
+            # A public page counts only public adults: 18+ by birth date, a public profile and a consent to
+            # distribution, like every other public endpoint. A minor with a guardian's consent is visible
+            # to employers inside the product, never on a public page (audit-5 A1b, 152-FZ art. 10.1).
+            *_public_filter(),
         )))
     values = [float(score) for score in scores if score is not None]
     if len(values) < BANK_MIN:
-        # k-anonymity: a ranking of fewer than five people can point at one person (audit-3 P1-1).
+        # k-anonymity over the public set: fewer than five people can point at one person (audit-3 P1-1).
         # "hidden" tells an empty cell from a hidden one; it does not reveal how many people are there.
         return {"total": 0, "items": [], "min_cell": BANK_MIN, "hidden": bool(values), "role": role, "grade": grade}
     page = rank_scores(values)

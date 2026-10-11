@@ -123,7 +123,7 @@ def _open_obj(target: Any) -> None:
     table, fields = spec
     owner = str(target.id)
     for name in fields:
-        raw = getattr(target, name)
+        raw = target.__dict__.get(name)        # only what was just loaded: no lazy IO for expired columns
         if not isinstance(raw, str) or not raw.startswith(PREFIX):
             continue
         try:
@@ -156,3 +156,6 @@ def install() -> None:
 
     for model in (Participant, Employer, Offer, EmailVerification):
         event.listen(model, "load", lambda target, context: _open_obj(target))
+        # refresh(), populate_existing and a reload of expired attributes fire "refresh", not "load";
+        # without this the object kept the ciphertext and PATCH /employer/me answered with "enc:v1:...".
+        event.listen(model, "refresh", lambda target, context, attrs: _open_obj(target))

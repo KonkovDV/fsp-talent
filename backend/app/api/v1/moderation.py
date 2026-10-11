@@ -18,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_employer
 from app.api.errors import ApiError
-from app.core.config import settings
 from app.core.database import get_db
+from app.core.demo_guard import PUBLISHED_EMAILS
 from app.core.ratelimit import too_many
 from app.models import AiProvider, Complaint, Employer, ItemDraft, OfferFlag, Participant, Vacancy
 from app.models.ai_provider import open_secret, seal_secret
@@ -32,7 +32,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 DRAFTS_PER_MINUTE = 5
 
-MODERATORS = frozenset({"hr@sibcode.demo"})
+# No account is a moderator by its address or by DEMO_MODE. The printed demo employer (hr@sibcode.demo)
+# is used by the jury and by anyone who reads the README, so it must not see candidates' names,
+# suspend accounts or change the AI provider (stand ST-UI-01).
+# Staff is granted from the server console: `python -m app.services.staff`.
 LABELS = {
     "не_вакансия": "fake",
     "зарплата_не_та": "salary",
@@ -42,16 +45,20 @@ LABELS = {
 }
 
 
-def may_moderate(demo: bool, email: str | None) -> bool:
-    return bool(demo) and (email or "") in MODERATORS
+def is_staff(employer) -> bool:
+    """Only an employer granted the staff flag from the console. Neither DEMO_MODE nor an address opens it.
+
+    A printed demo login stays out even if an older seed set the flag: the stand database keeps that row.
+    """
+    if employer is None or not bool(getattr(employer, "is_methodist", False)):
+        return False
+    return (getattr(employer, "email", None) or "").strip().lower() not in PUBLISHED_EMAILS
 
 
 async def _staff(current: dict, db: AsyncSession, *, factor: bool = True) -> Employer:
     """The demo moderator or a methodist. Drafts and quarantine use this; complaints stay on the desk."""
     employer = await db.get(Employer, uuid.UUID(current["sub"]))
-    allowed = employer is not None and (
-        getattr(employer, "is_methodist", False) or may_moderate(settings.DEMO_MODE, employer.email))
-    if not allowed:
+    if not is_staff(employer):
         raise ApiError(404, "not_found", "Раздел не найден")
     if factor and employer.totp_secret and not totp.unlocked(employer.totp_verified_at, datetime.now(UTC)):
         raise ApiError(403, "totp_required")
@@ -60,7 +67,7 @@ async def _staff(current: dict, db: AsyncSession, *, factor: bool = True) -> Emp
 
 async def _desk(current: dict, db: AsyncSession, *, factor: bool = True) -> Employer:
     employer = await db.get(Employer, uuid.UUID(current["sub"]))
-    if employer is None or not may_moderate(settings.DEMO_MODE, employer.email):
+    if not is_staff(employer):
         raise ApiError(404, "not_found", "Раздел не найден")
     if factor and employer.totp_secret and not totp.unlocked(employer.totp_verified_at, datetime.now(UTC)):
         raise ApiError(403, "totp_required")
