@@ -20328,17 +20328,16 @@
         ]
       }
     },
-    "/api/v1/public/candidates/{participant_id}": {
+    "/api/v1/public/candidates/{ref}": {
       "get": {
-        "operationId": "get_public_profile_api_v1_public_candidates__participant_id__get",
+        "operationId": "get_public_profile_api_v1_public_candidates__ref__get",
         "parameters": [
           {
             "in": "path",
-            "name": "participant_id",
+            "name": "ref",
             "required": true,
             "schema": {
-              "format": "uuid",
-              "title": "Participant Id",
+              "title": "Ref",
               "type": "string"
             }
           }
@@ -20427,17 +20426,16 @@
         ]
       }
     },
-    "/api/v1/public/candidates/{participant_id}/profile.pdf": {
+    "/api/v1/public/candidates/{ref}/profile.pdf": {
       "get": {
-        "operationId": "public_profile_pdf_api_v1_public_candidates__participant_id__profile_pdf_get",
+        "operationId": "public_profile_pdf_api_v1_public_candidates__ref__profile_pdf_get",
         "parameters": [
           {
             "in": "path",
-            "name": "participant_id",
+            "name": "ref",
             "required": true,
             "schema": {
-              "format": "uuid",
-              "title": "Participant Id",
+              "title": "Ref",
               "type": "string"
             }
           }
@@ -21021,17 +21019,16 @@
         ]
       }
     },
-    "/api/v1/public/credentials/{participant_id}": {
+    "/api/v1/public/credentials/{ref}": {
       "get": {
-        "operationId": "get_credentials_api_v1_public_credentials__participant_id__get",
+        "operationId": "get_credentials_api_v1_public_credentials__ref__get",
         "parameters": [
           {
             "in": "path",
-            "name": "participant_id",
+            "name": "ref",
             "required": true,
             "schema": {
-              "format": "uuid",
-              "title": "Participant Id",
+              "title": "Ref",
               "type": "string"
             }
           }

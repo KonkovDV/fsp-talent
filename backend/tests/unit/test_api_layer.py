@@ -881,13 +881,13 @@ async def test_public_profile_credential_and_pdf(quiet):
     )
     db = Bag()
     db.scalar_q = [person]
-    card = await public.get_public_profile(person.id, db)
+    card = await public.get_public_profile(public.public_ref(person.id), db)
     assert card["display_name"] == "Аня" and card["skills"]
 
     db.scalar_q = [person]
     from app.services.pdf_profile import _font
     if _font() is not None:
-        pdf = await public.public_profile_pdf(person.id, db)
+        pdf = await public.public_profile_pdf(public.public_ref(person.id), db)
         assert pdf.media_type == "application/pdf"
     else:  # no Cyrillic font on this machine: a clean 503, not a bare 500 (SD-07)
         with pytest.raises(ApiError) as no_font:
@@ -903,7 +903,7 @@ async def test_public_profile_credential_and_pdf(quiet):
 
     db.scalar_q = [person.id]
     db.scalars_q = [[credential]]
-    listed = await public.get_credentials(person.id, db)
+    listed = await public.get_credentials(public.public_ref(person.id), db)
     assert listed[0]["id"]
 
     db.gets = [credential]

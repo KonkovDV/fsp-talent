@@ -159,3 +159,33 @@ def install() -> None:
         # refresh(), populate_existing and a reload of expired attributes fire "refresh", not "load";
         # without this the object kept the ciphertext and PATCH /employer/me answered with "enc:v1:...".
         event.listen(model, "refresh", lambda target, context, attrs: _open_obj(target))
+
+
+# SEC3-01 / ST-04: the public page is addressed by a reversible ref, not by the participant id that employers see
+# in the blind search. One AES block over the 16 id bytes is a keyed permutation: the same id always gives the
+# same ref, and the id cannot be read off the ref without SECRET_KEY. A raw id is not a ref and opens nothing.
+_REF_LEN = 22
+
+
+def _ref_cipher():
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    return Cipher(algorithms.AES(_derive(b"public-ref")), modes.ECB())  # noqa: S305 - one block, a PRP by design
+
+
+def public_ref(participant_id: uuid.UUID | str) -> str:
+    raw = uuid.UUID(str(participant_id)).bytes
+    enc = _ref_cipher().encryptor()
+    return base64.urlsafe_b64encode(enc.update(raw) + enc.finalize()).decode().rstrip("=")
+
+
+def participant_from_ref(ref: str) -> uuid.UUID | None:
+    if len(ref) != _REF_LEN:
+        return None
+    try:
+        block = base64.urlsafe_b64decode(ref + "==")
+    except (ValueError, TypeError):
+        return None
+    if len(block) != 16:
+        return None
+    dec = _ref_cipher().decryptor()
+    return uuid.UUID(bytes=dec.update(block) + dec.finalize())
