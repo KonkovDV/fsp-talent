@@ -5,6 +5,7 @@ import { Pencil, Plus } from 'lucide-react'
 import {
   apiError, compareNeed, needExam, createNeed, draftNeed, draftNeedFromUrl, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
 } from '../../api/client'
+import { NEED_EXAMPLES } from '../../needExamples'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import { useFavorites } from '../../hooks/useFavorites'
 import InviteDialog from '../../components/InviteDialog'
@@ -160,6 +161,12 @@ export default function EmployerNeeds() {
             <label className={field} htmlFor="n-paste">Текст вакансии</label>
             <textarea id="n-paste" value={form.paste} onChange={e => setForm({ ...form, paste: e.target.value })} rows={4}
               placeholder="Вставьте текст. Сайт вакансий не открывается: разбираются только эти строки." className="input" aria-label="Текст вакансии" />
+            <div className="mt-2 flex flex-wrap items-center gap-2" aria-label="Примеры потребности">
+              <span className="text-xs text-ink-3">Пример:</span>
+              {NEED_EXAMPLES.map(ex => (
+                <button key={ex.label} type="button" className="chip-default hover:border-accent" onClick={() => setForm({ ...form, paste: ex.text })}>{ex.label}</button>
+              ))}
+            </div>
             <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate(undefined)}>Разобрать текст</button>
             <label className={field} htmlFor="n-url">Или одна открытая ссылка</label>
             <input id="n-url" value={form.pageUrl} onChange={e => setForm({ ...form, pageUrl: e.target.value })} placeholder="https://…" className="input" aria-label="Ссылка на страницу вакансии" />
