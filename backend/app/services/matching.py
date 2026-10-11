@@ -31,10 +31,15 @@ GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "м�
 # A missing FSP history is omitted, not scored as zero. docs/VALIDATION_MATCHING.md has the ablations.
 FIT_KEYS = ("skills", "grade", "role", "text", "industry", "conditions")
 EVIDENCE_KEYS = ("test", "fsp")
+# Tuned 11.10.2026 on dedicated seeds 301–305 only (grid over skills/grade/role weights, EVIDENCE_WEIGHT,
+# DECLARED_GRADE, UNTESTED, SKILL_GATE, RELATED_CREDIT); seeds 2026–2028 and 4001–4005 were not used for the
+# choice and report the result. Before: skills 0.50, grade 0.20, role 0.20, EVIDENCE_WEIGHT 0.40.
+# DECLARED_GRADE stays 0.85 by product rule (a declared grade never equals a confirmed one), although 1.0 scored
+# slightly higher on 301–305. docs/VALIDATION_MATCHING.md, section "Настройка весов".
 WEIGHTS = {
-    "skills": 0.50,
-    "grade": 0.20,
-    "role": 0.20,
+    "skills": 0.45,
+    "grade": 0.30,
+    "role": 0.25,
     "text": 0.05,
     "industry": 0.05,
     # City and format together, five hundredths of the fit. Omitted when the need names neither.
@@ -47,7 +52,7 @@ UNTESTED = 0.20
 PASS_TEST_FLOOR = True
 PASS_FLOOR = UNTESTED + 0.05
 # Weight of the evidence next to the fit (fit has weight 1).
-EVIDENCE_WEIGHT = 0.40
+EVIDENCE_WEIGHT = 0.30
 # Width of one fit tier, used only while USE_FIT_TIERS is on.
 # Sweep on 07.10.2026, seeds 2026–2028, 800 candidates and 80 needs:
 # `python -m app.validation.matching --tier-delta 0.02,0.03,0.05,0.08,0.10`

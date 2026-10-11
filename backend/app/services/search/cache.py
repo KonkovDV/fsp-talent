@@ -14,7 +14,7 @@ from app.core.redis_client import get_redis
 EPOCH_KEY = "search-bank-epoch"
 TTL_S = 300
 # Bump when a stored row would label the card with the wrong category or omit a new field.
-RANK_VERSION = 7
+RANK_VERSION = 8
 # Matches allows offset <= 200 and limit <= 50. One stored ranking covers every page.
 WINDOW = 250
 _COMPANY_KEYS = ("shortlisted", "invited", "contacts_closed")
