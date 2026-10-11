@@ -16,6 +16,13 @@ async def _try(address: str, email: str, password: str) -> int:
         return r.status_code
 
 
+async def _retry_after(address: str, email: str, password: str) -> str | None:
+    transport = httpx.ASGITransport(app=app, client=(address, 40000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post("/api/v1/auth/employer/token", data={"username": email, "password": password})
+        return r.headers.get("retry-after")
+
+
 async def test_wrong_passwords_from_one_address_do_not_lock_another(db):
     tag = stamp()
     email = f"dbtest-lock-{tag}@example.com"
@@ -30,6 +37,11 @@ async def test_wrong_passwords_from_one_address_do_not_lock_another(db):
         assert codes[:5] == [401] * 5 and codes[5] == 429
         assert await _try("198.51.100.7", email, "dbtest-pass") == 200
         assert await _try("203.0.113.9", email, "dbtest-pass") == 429
+        # The minute window answers first with its own Retry-After (60). Once it is gone the 15-minute
+        # per-address lock is still there and says how long it lasts.
+        for key in await redis.keys(f"auth:login:*{email}*"):
+            await redis.delete(key)
+        assert await _retry_after("203.0.113.9", email, "dbtest-pass") == "900"
     finally:
         await db.rollback()
         await wipe_people([], [company.id])
@@ -39,7 +51,10 @@ async def test_the_account_cap_spares_demo_accounts_and_decays(db, monkeypatch):
     """100 failures lock an ordinary account, never a published demo one; an expired lock starts over."""
     from datetime import UTC, datetime, timedelta
 
+    from app.core.config import settings
     from app.services.login_lock import ACCOUNT_LOCK_AFTER
+    # The exemption exists only on a demo stand; do not depend on the DEMO_MODE of the test environment.
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
     tag = stamp()
     plain = Employer(email=f"dbtest-cap-{tag}@example.com", company_name=f"Cap {tag}", password_hash=PASSWORD_HASH,
                      email_verified_at=now(), failed_logins=ACCOUNT_LOCK_AFTER - 1)

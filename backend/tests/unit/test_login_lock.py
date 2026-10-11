@@ -76,3 +76,10 @@ def test_an_expired_account_lock_starts_the_count_again():
     assert count == 1 and until is None
     active = NOW + timedelta(minutes=5)
     assert next_failure(ACCOUNT_LOCK_AFTER, NOW, locked_until=active)[1] is not None
+
+
+def test_retry_after_counts_down_to_the_end_of_the_lock():
+    until = NOW + timedelta(minutes=15)
+    assert login_lock.seconds_left(until, NOW) == 900
+    assert login_lock.seconds_left(until, NOW + timedelta(minutes=14, seconds=59, microseconds=500)) == 1
+    assert login_lock.seconds_left(until.replace(tzinfo=None), NOW + timedelta(minutes=5)) == 600

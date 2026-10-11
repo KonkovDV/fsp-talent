@@ -391,12 +391,14 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm,
     redis = await get_redis()
     pair = login_lock.pair_key(role, email, ip)
     if await login_lock.pair_locked(redis, pair):
-        raise ApiError(429, "rate_limited", "С этого адреса вход закрыт на 15 минут после нескольких неверных паролей.")
+        raise ApiError(429, "rate_limited", "С этого адреса вход закрыт на 15 минут после нескольких неверных паролей.",
+                       headers={"Retry-After": str(int(login_lock.LOCK_FOR.total_seconds()))})
     account = await _account(db, role, email)
     now = datetime.now(UTC)
     protected = login_lock.demo_protected(email, settings.DEMO_PROTECTED_SUFFIXES, settings.DEMO_MODE)
     if account is not None and not protected and still_locked(account.locked_until, now):
-        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после множества неверных паролей.")
+        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после множества неверных паролей.",
+                       headers={"Retry-After": str(login_lock.seconds_left(account.locked_until, now))})
     stored = account.password_hash if account is not None else None
     if not password_matches(form.password, stored):
         await login_lock.pair_failed(redis, pair)

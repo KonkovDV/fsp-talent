@@ -27,6 +27,12 @@ def still_locked(until: datetime | None, now: datetime) -> bool:
     return moment > now
 
 
+def seconds_left(until: datetime, now: datetime) -> int:
+    """Retry-After for a lock: whole seconds until it runs out, at least one."""
+    moment = until if until.tzinfo else until.replace(tzinfo=now.tzinfo)
+    return max(1, int((moment - now).total_seconds()))
+
+
 def next_failure(count: int, now: datetime, *, lockable: bool = True,
                  locked_until: datetime | None = None) -> tuple[int, datetime | None]:
     """The account-wide counter. Locks only after ACCOUNT_LOCK_AFTER, and never a published demo account.
