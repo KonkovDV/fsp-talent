@@ -1231,6 +1231,46 @@ def stolen_sessions(truth: Truth, offsets: dict[str, float] | None, seed: int,
     return StolenSessions(n=n, honest=honest / n, stolen=stolen_pass / n, fixed=fixed / n)
 
 
+def _wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    if n == 0:
+        return 0.0, 0.0
+    p = k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return centre - half, centre + half
+
+
+def _stolen_one(args: tuple[int, int, int]) -> tuple[int, StolenSessions]:
+    """Same truth, calibration and seed offset (+31) as run(n, seed), only with stolen_n people."""
+    seed, n_calib, stolen_n = args
+    rng = random.Random(seed)
+    truth = Truth.draw(rng)
+    population(n_calib, random.Random(seed + 1))
+    _, pretest = cohort(population(n_calib, rng), truth, rng)
+    return seed, stolen_sessions(truth, calibrate(pretest), seed + 31, n=stolen_n)
+
+
+def stolen_study(seeds: list[int], n_calib: int, stolen_n: int) -> str:
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor() as pool:
+        rows = sorted(pool.map(_stolen_one, [(s, n_calib, stolen_n) for s in seeds]))
+    lines = [f"Атака «20 сессий»: {stolen_n} человек на зерно, калибровка на {n_calib}, зёрна "
+             f"{', '.join(map(str, seeds))}. Те же правда, калибровка и зерно (+31), что в основном прогоне.", "",
+             "| Зерно | Честно | После атаки | Фиксированный банк |", "|---|---|---|---|"]
+    tot = {"honest": 0, "stolen": 0, "fixed": 0}
+    for seed, r in rows:
+        lines.append(f"| {seed} | {r.honest:.1%} | {r.stolen:.1%} | {r.fixed:.1%} |")
+        for key in tot:
+            tot[key] += round(getattr(r, key) * r.n)
+    total = stolen_n * len(rows)
+    cells = []
+    for key in ("honest", "stolen", "fixed"):
+        lo, hi = _wilson(tot[key], total)
+        cells.append(f"{tot[key] / total:.1%} ({lo:.1%}–{hi:.1%})")
+    lines.append(f"| Все ({total}), 95 % ДИ Уилсона | " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
 def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
     rng = random.Random(seed)
     truth = Truth.draw(rng)
@@ -2021,7 +2061,14 @@ def main() -> None:
                         help="family cap and knife grid; does not change product constants")
     parser.add_argument("--extend", action="store_true",
                         help="measure one optional extension of 6 items; does not change the product")
+    parser.add_argument("--stolen", action="store_true",
+                        help="only the «20 sessions» attack on --seeds with --stolen-n people per seed")
+    parser.add_argument("--stolen-n", type=int, default=400)
+    parser.add_argument("--seeds", default="7,201,202,203,204,205")
     args = parser.parse_args()
+    if args.stolen:
+        print(stolen_study([int(x) for x in args.seeds.split(",")], args.n, args.stolen_n))
+        return
     if args.spec_exposure:
         print(spec_exposure_markdown(spec_exposure_study(args.n, args.seed), args.seed))
         return
