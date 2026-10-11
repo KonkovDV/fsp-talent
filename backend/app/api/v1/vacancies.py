@@ -29,6 +29,7 @@ from app.models.participant import adult_confirmed
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
 from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
+from app.services.reputation import applications_by_employer
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
 from app.services.trust_level import next_step, trust_level, vacancy_limit
@@ -234,6 +235,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         .limit(_VACANCY_SCAN_LIMIT)
     ))
     cards = []
+    # Anti-fake-vacancy signal on every card: does this company open applications at all.
+    responsive = await applications_by_employer(db, sorted({v.employer_id for v in rows}, key=str))
     for vacancy in rows:
         hit = match_vacancy(candidate, {
             "role": vacancy.role, "grade": vacancy.grade, "grade_match": vacancy.grade_match,
@@ -244,7 +247,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         if hit is None:
             continue
         cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied,
-                                    "can_apply": not needs_guardian and not hit["needs_test"]}))
+                                    "can_apply": not needs_guardian and not hit["needs_test"],
+                                    "company_responsiveness": responsive.get(vacancy.employer_id)}))
     if candidate["grade"]:
         cards.sort(key=lambda c: (-c["coverage"], c["title"]))
     # Without a grade the rows keep the query order: newest vacancy first.

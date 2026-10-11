@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getPublicCompany } from '../api/client'
 import PublicShell from '../components/PublicShell'
+import Responsiveness from '../components/Responsiveness'
 import { Empty, Skeleton, rub } from '../components/ui'
 import { ROLE_RU, gradeRu } from '../labels'
 
@@ -35,6 +36,12 @@ export default function CompanyPage() {
         {company.rating && (
           <p className="text-sm text-ink-2">
             Балл компании {company.rating.score} из 10, {company.rating.label}. {company.rating.note}
+          </p>
+        )}
+        <Responsiveness fact={company.reputation?.applications} className="text-sm text-ink-2" />
+        {company.reputation?.acceptance?.shown && (
+          <p className="text-sm text-ink-2" data-testid="acceptance">
+            Приглашения компании принимают не реже {Math.round((company.reputation.acceptance.lower ?? 0) * 100)} % (по {company.reputation.acceptance.n} ответам)
           </p>
         )}
         {company.about && <p className="max-w-prose text-ink-2">{company.about}</p>}

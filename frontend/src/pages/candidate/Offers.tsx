@@ -9,6 +9,7 @@ import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 import { PERK_RU } from '../../labels'
 import { netLine } from '../../money'
+import Responsiveness, { type ResponsivenessFact } from '../../components/Responsiveness'
 
 interface Offer {
   id: string; company: string; company_id?: string; role: string; contact_method: string | null; salary_from: number; salary_to: number
@@ -17,7 +18,7 @@ interface Offer {
   work_format: string; message: string | null; status: string; created_at: string; expires_at: string | null
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
     trust_level?: number; trust_label?: string
-    reputation?: { reply: { shown: boolean; lower?: number; n: number }; complaints: { shown: boolean; count?: number; n: number } }
+    reputation?: { reply: { shown: boolean; lower?: number; n: number }; complaints: { shown: boolean; count?: number; n: number }; applications?: ResponsivenessFact }
     rating?: { score: number; label: string; demo: boolean; note: string } }
   contacts_revoked_at?: string | null; unread_messages?: number
 }
@@ -127,6 +128,7 @@ export default function CandidateOffers() {
                   {o.company_profile?.reputation?.reply?.shown && (
                     <p className="text-xs text-ink-3">После согласия отвечают не реже {Math.round((o.company_profile.reputation.reply.lower ?? 0) * 100)}% (по {o.company_profile.reputation.reply.n})</p>
                   )}
+                  <Responsiveness fact={o.company_profile?.reputation?.applications} />
                   {o.company_profile?.rating && (
                     <p className="mt-1 text-xs text-ink-2">Балл компании {o.company_profile.rating.score} из 10, {o.company_profile.rating.label}. {o.company_profile.rating.note}</p>
                   )}
