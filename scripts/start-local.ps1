@@ -19,8 +19,7 @@ if (-not (Test-Path .env)) {
 docker compose up -d --build --wait
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-docker compose exec -T -u appuser backend python -m seed.generate_seed
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# Demo data is loaded by the demo-seed service; --wait above already waited for it.
 
 Write-Host ''
 Write-Host 'Готово.'

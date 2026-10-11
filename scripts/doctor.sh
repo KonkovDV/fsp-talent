@@ -85,10 +85,10 @@ check_docker() {
   v="$(first_version "$(docker compose version 2>/dev/null)")"
   if [ -z "$v" ]; then
     bad "docker compose v2 не найден (нужна команда «docker compose», не «docker-compose»)" "установите плагин docker-compose-plugin или обновите Docker Desktop"
-  elif ver_ge "$v" 2.17; then
+  elif ver_ge "$v" 2.24; then
     ok "docker compose $v"
   else
-    bad "docker compose $v: нужна 2.17 и новее (флаг --wait)" "обновите Docker Desktop или плагин compose"
+    bad "docker compose $v: нужна 2.24 и новее (необязательный .env и --wait)" "обновите Docker Desktop или плагин compose"
   fi
 
   mem="$(docker info --format '{{.MemTotal}}' 2>/dev/null)"
@@ -134,6 +134,8 @@ check_docker() {
 
   while read -r image; do
     [ -n "$image" ] || continue
+    # Built locally from ./backend (backend, worker, beat, demo-seed), never pulled.
+    [[ "$image" == *:local ]] && continue
     # Keycloak runs only under the fsp-id profile (docs/INSTALL.md, 11.10).
     if [[ "$image" == *keycloak* ]] && [[ "${COMPOSE_PROFILES:-}$(env_value COMPOSE_PROFILES)" != *fsp-id* ]]; then
       continue

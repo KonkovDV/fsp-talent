@@ -30,7 +30,6 @@ doctor:
 demo:
 	@test -f .env || cp .env.example .env
 	$(COMPOSE) up -d --build --wait
-	docker compose exec -T -u appuser backend python -m seed.generate_seed
 	@echo ""
 	@echo "Готово. Сайт: http://localhost  API: http://localhost/docs  Почта: http://localhost:8025"
 	@echo "Демо-входы, пароль demo12345: fsp001@demo.talent (кандидат), hr@sibcode.demo (работодатель)"
@@ -52,7 +51,7 @@ seed:
 	docker compose exec -T -u appuser backend python -m seed.generate_seed
 
 demo-check:
-	docker compose exec -T -u appuser backend python -m seed.demo_check
+	docker compose run --rm --no-deps demo-seed python -m seed.demo_check
 
 demo-reset:
 	docker compose exec -T -u appuser backend python -m seed.reset_demo
