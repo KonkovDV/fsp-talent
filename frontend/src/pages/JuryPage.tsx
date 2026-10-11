@@ -192,7 +192,7 @@ export default function JuryPage() {
                   <li key={step.go} className="text-sm">
                     <p className="font-medium text-ink"><span className="text-ink-3">{i + 1}. </span>{step.go}
                       {' '}
-                      <Link to={step.to} className="text-accent hover:underline">Открыть</Link>
+                      <Link to={step.to} className="text-accent underline underline-offset-2">Открыть</Link>
                     </p>
                     <p className="mt-0.5 text-ink-2">{step.see}</p>
                   </li>
