@@ -180,7 +180,7 @@ export default function JuryPage() {
         </div>
         {rankError && <p className="notice-error" role="alert">{rankError}</p>}
         {ranks && (ranks.length === 0
-          ? <p className="text-sm text-ink-2">В этой категории подтверждённых тестом нет.</p>
+          ? <p className="text-sm text-ink-2" data-testid="rank-hidden">Меньше 5 публичных профилей — скрыто (k-анонимность: по малой группе можно узнать человека).</p>
           : <ol className="text-sm text-ink">{ranks.map(row => <li key={row.place}>{row.place}. тест {Math.round(row.test * 100)} %</li>)}</ol>)}
       </section>
 
