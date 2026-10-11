@@ -447,8 +447,8 @@ async def main(extra_candidates: int | None = None) -> None:
                     existing.password_hash = password_hash
                     existing.email_verified_at = existing.email_verified_at or now
                 continue
-            employer = Employer(company_name=name, email=email, password_hash=password_hash, email_verified_at=now,
-                                is_methodist=email == "hr@sibcode.demo")
+            # A printed demo login is never staff: anyone who reads the README can sign in with it.
+            employer = Employer(company_name=name, email=email, password_hash=password_hash, email_verified_at=now)
             db.add(employer)
             await db.flush()
             _consents(db, "employer", employer.id, now)

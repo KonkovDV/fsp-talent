@@ -7,6 +7,7 @@ import pytest
 
 from app.api.errors import ApiError
 from app.api.v1 import moderation
+from app.core import config
 from app.services import totp
 
 RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # "12345678901234567890", RFC 6238 appendix B, SHA-1
@@ -58,10 +59,11 @@ def desk(monkeypatch):
     async def never(*args, **kwargs):
         return False
     monkeypatch.setattr(moderation, "too_many", never)
-    monkeypatch.setattr(moderation.settings, "DEMO_MODE", True)
+    monkeypatch.setattr(config.settings, "DEMO_MODE", True)
     eid = uuid.uuid4()
     secret = totp.new_secret()
-    employer = SimpleNamespace(id=eid, email="hr@sibcode.demo", totp_secret=totp.seal_secret(str(eid), secret),
+    employer = SimpleNamespace(id=eid, email="moderator@fsp.example", is_methodist=True,
+                               totp_secret=totp.seal_secret(str(eid), secret),
                                totp_last_step=None, totp_verified_at=None)
     return SimpleNamespace(db=Db(employer), current={"sub": str(eid)}, secret=secret, employer=employer)
 
