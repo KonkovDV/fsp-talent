@@ -386,6 +386,29 @@ class Retest:
     weighted_kappa: float      # quadratic weighted kappa of the two earned grades
     own_overlap: float = 0.0   # share of the second test's item keys the same person already saw in the first
     decision_consistency: float = 0.0  # predicted repeat agreement at the product's 0.75 rule
+    # NEW-2: the band is what the first test itself can see, |θ̂ − cut| / SE < 1 ("borderline").
+    borderline_share: float = 0.0
+    agreement_confident: float = 1.0
+    agreement_confident_ci: tuple[float, float] = (1.0, 1.0)
+    agreement_borderline: float = 1.0
+
+
+BAND_Z = 1.0   # |θ̂ − cut| / SE below this is "on the border": the decision is shown with a mark
+
+
+def borderline(session: Session) -> bool:
+    """Observable at decision time: the estimate sits within one standard error of the target's cut."""
+    return abs(session.theta_hat - CUTS[session.target]) < BAND_Z * max(session.se, 1e-9)
+
+
+def _bootstrap_ci(flags: list[bool], seed: int = 2026, draws: int = 2000) -> tuple[float, float]:
+    """Percentile bootstrap 95 % interval of a share. Fixed seed: the report is reproducible."""
+    if not flags:
+        return (1.0, 1.0)
+    rng = random.Random(seed)
+    n = len(flags)
+    means = sorted(sum(flags[rng.randrange(n)] for _ in range(n)) / n for _ in range(draws))
+    return (means[int(0.025 * draws)], means[int(0.975 * draws) - 1])
 
 
 def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float],
@@ -399,7 +422,14 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
     p2 = statistics.mean(b.passed for _, _, _, b in pairs)
     po, pe = statistics.mean(agree), p1 * p2 + (1 - p1) * (1 - p2)
     clear = [ok for (theta, target, _, _), ok in zip(pairs, agree, strict=True) if abs(theta - CUTS[target]) > 0.5]
+    band = [borderline(a) for _, _, a, _ in pairs]
+    confident = [ok for ok, b in zip(agree, band, strict=True) if not b]
+    edge = [ok for ok, b in zip(agree, band, strict=True) if b]
     return Retest(
+        borderline_share=statistics.mean(band) if band else 0.0,
+        agreement_confident=statistics.mean(confident) if confident else 1.0,
+        agreement_confident_ci=_bootstrap_ci(confident),
+        agreement_borderline=statistics.mean(edge) if edge else 1.0,
         pairs=len(pairs), agreement=po, kappa=(po - pe) / (1 - pe) if pe < 1 else 1.0,
         decision_consistency=_decision_consistency([a for _, _, a, _ in pairs]),
         agreement_clear=statistics.mean(clear) if clear else 1.0,
@@ -1249,6 +1279,10 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"- Точный грейд в сценарии «без утечки»: {r.clean.exact_grade:.1%}, в пределах одной ступени: "
         f"{r.clean.within_one:.1%}, завышение: {r.clean.overgrade:.1%}.",
         f"- Взвешенная каппа повторного теста (квадратичные веса по грейду): {r.retest.weighted_kappa:.2f}.",
+        f"- Зона неопределённости (NEW-2): решение «на границе», если |θ̂ − порог| < SE по первому тесту. "
+        f"Таких {r.retest.borderline_share:.1%}. У уверенных решений повтор даёт тот же итог в "
+        f"{r.retest.agreement_confident:.1%} (95 % ДИ бутстрепа {r.retest.agreement_confident_ci[0]:.1%}–"
+        f"{r.retest.agreement_confident_ci[1]:.1%}), у пограничных — в {r.retest.agreement_borderline:.1%}.",
         f"- Ключ от другого экземпляра того же семейства: сдают {r.transfer_pass:.1%}. "
         f"Ключ от того же экземпляра (фиксированный банк): сдают {r.fixed_pass:.1%}.",
         f"- Второй сигнал утечки (CUSUM): поймано {r.cusum_leaked} утёкших ключей, "
