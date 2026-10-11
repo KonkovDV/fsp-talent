@@ -51,6 +51,7 @@ from app.models import (
     TaskSubmission,
     Vacancy,
 )
+from app.services import login_lock
 from app.services.account_export import (
     employer_record,
     participant_record,
@@ -374,23 +375,39 @@ async def resend_verification(body: ResendIn, db: AsyncSession = Depends(get_db)
 
 # ── login ───────────────────────────────────────────────────────────────────
 
-async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -> TokenOut:
+async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm,
+                 request: Request | None = None) -> TokenOut:
+    from app.core.redis_client import get_redis
+    from app.services.identity import visitor_ip
     email = normalize_email(form.username)
-    # The printed demo account is the one the interface suite signs in with, many times a minute.
-    await _limit(role, email, limit=60 if settings.DEMO_MODE else 5)
+    ip = visitor_ip(request) if request is not None else "-"
+    # Windows per account × address and per address: a stranger's attempts do not close the door for
+    # the owner (stand audit I-01). The printed demo accounts are signed in many times a minute.
+    await _limit(f"login:{role}", f"{email}|{ip}", limit=60 if settings.DEMO_MODE else 5)
+    await _limit("login-ip", ip, limit=300 if settings.DEMO_MODE else 30)
     if "@" not in email:
         raise ApiError(401, "invalid_credentials",
                        "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
+    redis = await get_redis()
+    pair = login_lock.pair_key(role, email, ip)
+    if await login_lock.pair_locked(redis, pair):
+        raise ApiError(429, "rate_limited", "С этого адреса вход закрыт на 15 минут после нескольких неверных паролей.",
+                       headers={"Retry-After": str(int(login_lock.LOCK_FOR.total_seconds()))})
     account = await _account(db, role, email)
     now = datetime.now(UTC)
-    if account is not None and still_locked(account.locked_until, now):
-        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после нескольких неверных паролей.")
+    protected = login_lock.demo_protected(email, settings.DEMO_PROTECTED_SUFFIXES, settings.DEMO_MODE)
+    if account is not None and not protected and still_locked(account.locked_until, now):
+        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после множества неверных паролей.",
+                       headers={"Retry-After": str(login_lock.seconds_left(account.locked_until, now))})
     stored = account.password_hash if account is not None else None
     if not password_matches(form.password, stored):
+        await login_lock.pair_failed(redis, pair)
         if account is not None:
-            account.failed_logins, account.locked_until = next_failure(account.failed_logins or 0, now)
+            account.failed_logins, account.locked_until = next_failure(
+                account.failed_logins or 0, now, lockable=not protected, locked_until=account.locked_until)
             await db.commit()
         raise ApiError(401, "invalid_credentials")
+    await login_lock.pair_cleared(redis, pair)
     if account is not None and (account.failed_logins or account.locked_until):
         account.failed_logins = 0
         account.locked_until = None
@@ -406,15 +423,15 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
 
 
 @router.post("/participant/token", response_model=TokenOut)
-async def login_participant(response: Response, form: OAuth2PasswordRequestForm = Depends(),
+async def login_participant(request: Request, response: Response, form: OAuth2PasswordRequestForm = Depends(),
                             db: AsyncSession = Depends(get_db)):
-    return deliver(response, await _login(db, "participant", form))
+    return deliver(response, await _login(db, "participant", form, request))
 
 
 @router.post("/employer/token", response_model=TokenOut)
-async def login_employer(response: Response, form: OAuth2PasswordRequestForm = Depends(),
+async def login_employer(request: Request, response: Response, form: OAuth2PasswordRequestForm = Depends(),
                          db: AsyncSession = Depends(get_db)):
-    return deliver(response, await _login(db, "employer", form))
+    return deliver(response, await _login(db, "employer", form, request))
 
 
 class GuestIn(BaseModel):
