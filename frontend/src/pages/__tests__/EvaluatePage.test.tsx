@@ -20,15 +20,16 @@ const report = {
   ],
 }
 
-function show() {
+async function show() {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><MemoryRouter><EvaluatePage /></MemoryRouter></QueryClientProvider>)
+  await userEvent.click(screen.getByRole('tab', { name: 'Загрузить JSONL' }))
 }
 
 describe('подбор на своей разметке', () => {
   it('отправляет пример и показывает метрики модели и базовой линии', async () => {
     evaluatePairs.mockResolvedValue({ data: report })
-    show()
+    await show()
     await userEvent.click(screen.getByRole('button', { name: 'Вставить пример' }))
     await userEvent.click(screen.getByRole('button', { name: 'Посчитать' }))
     const sent = evaluatePairs.mock.calls[0][0] as string
@@ -47,7 +48,7 @@ describe('подбор на своей разметке', () => {
           p_at_k_resume: 0.6667, ndcg10_model: 0.5, ndcg10_resume: 0.9, top: [{ candidate_id: 'f3', label: 0 }] },
       ],
       paired_delta: { mean: -0.1, ci: [-0.4, 0.2], needs: 2, model_better: 1, resume_better: 1 } } })
-    show()
+    await show()
     await userEvent.click(screen.getByRole('button', { name: 'Вставить пример' }))
     await userEvent.click(screen.getByRole('button', { name: 'Посчитать' }))
     expect(await screen.findByTestId('paired-delta')).toHaveTextContent('−0,100')
@@ -60,7 +61,7 @@ describe('подбор на своей разметке', () => {
 
   it('показывает причину отказа', async () => {
     evaluatePairs.mockRejectedValue({ response: { data: { error: { code: 'validation_error', message: 'Строка 1: это не JSON' } } } })
-    show()
+    await show()
     await userEvent.type(screen.getByLabelText(/Пары, одна на строку/), 'oops')
     await userEvent.click(screen.getByRole('button', { name: 'Посчитать' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Строка 1: это не JSON')

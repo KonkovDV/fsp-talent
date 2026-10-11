@@ -694,6 +694,7 @@ class Row:
     rho_ci: tuple[float, float] | None = None
     over_declared: float | None = None    # part of overrated whose grade was only declared
     over_assessed: float | None = None    # part of overrated whose test confirmed that grade
+    p5: float | None = None               # P@min(5, n): the /evaluate «Разметить самому» summary
 
 
 METHODS = ("random", "keyword", "full", "no_quota", "no_trust", "no_test", "no_fsp", "no_evidence", "no_related")
@@ -711,7 +712,7 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
     by_id = {c["id"]: c for c in dataset["candidates"]}
     hidden = bool(dataset["candidates"]) and "theta" in (dataset["candidates"][0].get("truth") or {})
     for method in METHODS:
-        nd, pr, ap, rho, over, below = [], [], [], [], [], []
+        nd, pr, pr5, ap, rho, over, below = [], [], [], [], [], [], []
         declared_part, assessed_part = [], []
         for need in needs:
             labels = dataset["labels"][need["id"]]
@@ -723,6 +724,7 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
             ranked = rank(pool, need, method, rng)
             nd.append(ndcg(ranked, labels))
             pr.append(precision(ranked, labels))
+            pr5.append(precision(ranked, labels, 5))
             ap.append(average_precision(ranked, labels))
             if hidden:
                 over.append(overrated_share(ranked, by_id))
@@ -738,7 +740,8 @@ def evaluate(dataset: dict, seed: int = 1) -> list[Row]:
                         statistics.mean(below) if below else None,
                         bootstrap_ci(nd), bootstrap_ci(rho) if rho else None,
                         over_declared=statistics.mean(declared_part) if declared_part else None,
-                        over_assessed=statistics.mean(assessed_part) if assessed_part else None))
+                        over_assessed=statistics.mean(assessed_part) if assessed_part else None,
+                        p5=statistics.mean(pr5)))
     return rows
 
 
@@ -891,7 +894,8 @@ def public_report(text: str) -> dict:
         "sha256": sha256(dataset),
         "rows": [{"method": m, "title": TITLES[m].strip(), "ndcg10": round(rows[m].ndcg10, 4),
                   "ndcg_ci": [round(v, 4) for v in rows[m].ndcg_ci] if rows[m].ndcg_ci else None,
-                  "p10": round(rows[m].p10, 4), "map": round(rows[m].map, 4)} for m in PUBLIC_METHODS],
+                  "p10": round(rows[m].p10, 4), "p5": round(rows[m].p5, 4),
+                  "map": round(rows[m].map, 4)} for m in PUBLIC_METHODS],
         "per_need": breakdown, "paired_delta": paired_delta(breakdown),
     }
 
