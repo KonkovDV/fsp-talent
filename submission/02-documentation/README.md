@@ -28,7 +28,7 @@
 | [DESIGN.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/DESIGN.md) | Дизайн-система «Протокол» по брендбуку ФСП |
 | [THIRD_PARTY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/THIRD_PARTY.md) | Сторонние компоненты и лицензии |
 | [requirements_trace.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/requirements_trace.md) | Прослеживаемость: требование → проверка, `make accept` |
-| [ARCHITECTURE.md](https://github.com/KonkovDV/fsp-talent/blob/main/ARCHITECTURE.md) | Ключевые архитектурные решения коротко |
+| [ARCHITECTURE.md](https://github.com/KonkovDV/fsp-talent/blob/main/ARCHITECTURE.md) | Главные архитектурные решения коротко |
 
 ## Что измерено и чем это не является
 

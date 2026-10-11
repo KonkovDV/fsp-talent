@@ -1,4 +1,4 @@
-"""DoR-N7: a failed test at the shown, unconfirmed grade lowers the grade the need-fit reads."""
+"""A failed test at the shown, unconfirmed grade lowers the grade the need-fit reads."""
 from app.services.matching import CandidateFacts, NeedSpec, grade_for_matching, reason_source, score
 from app.services.session_marks import latest_failed_targets
 from app.validation.matching import _facts, make_dataset

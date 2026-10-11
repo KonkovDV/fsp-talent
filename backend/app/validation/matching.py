@@ -4,7 +4,7 @@ Labelled employer–candidate pairs do not exist for the hackathon, so the bench
 Each candidate has a hidden truth (real skills, real level) and noisy observations the platform sees:
 declared skills miss 25 % of the real ones and add 15 % false ones; the declared grade is one level too high
 for 30 % of people; a test (taken by 45 %) confirms real skills and measures the level, and a failed attempt is
-observed as `failed_grade` (the production search reads it the same way, DoR-N7); 55 % have FSP history
+observed as `failed_grade` (the production search reads it the same way); 55 % have FSP history
 whose LCB correlates with the level. Relevance labels come from the hidden truth only:
 
     3  role matches, all required skills are real, real grade equals the requested one
