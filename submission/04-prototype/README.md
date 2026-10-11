@@ -83,16 +83,16 @@ docker compose run --rm backend python -m seed.demo_check
 
 Остановить и удалить всё, включая данные: `docker compose down -v`.
 
-**Что нужно.** Docker 24+ с Compose 2.24+ (Docker Desktop 4.27+), 4 ГБ свободной памяти (стенд занимает около 0,7 ГБ), 5 ГБ на диске (образы около 1,3 ГБ), свободный порт 80. Видеокарта, Python, Node.js и `make` не нужны. С `make` то же самое: `make demo`, проверка до запуска: `make doctor`.
+**Что нужно.** Docker 24+ с Compose 2.24+ (Docker Desktop 4.27+), 4 ГБ свободной памяти, 5 ГБ на диске, свободный порт 80. Видеокарта, Python, Node.js и `make` не нужны. С `make` то же самое: `make demo`, проверка до запуска: `make doctor`.
 
-**Сколько ждать.** Мы замерили на чистой машине (Linux, 8 ядер, пустой кэш Docker): первый запуск 4,5 минуты вместе со скачиванием образов и сборкой, повторный — секунды.
+**Сколько ждать.** Первый запуск — 5–10 минут: скачивание и сборка образов. Повторный — секунды.
 
 **Если что-то не так**
 
 | Ситуация | Что сделать |
 |---|---|
 | Порт 80 занят (`port is already allocated`) | `HTTP_PORT=8080 PUBLIC_BASE_URL=http://localhost:8080 docker compose up -d --build --wait`, сайт будет на http://localhost:8080. Порты почты и API так же: `MAIL_PORT`, `API_PORT`, `FRONTEND_PORT`. Значения можно записать в `.env` |
-| Mac на Apple Silicon (M1–M4) | Работает как есть: все образы есть под arm64, собираются нативно, эмуляция не нужна |
+| Mac на Apple Silicon (M1–M4) | Команды те же. Базовые образы публикуются под arm64, сборка идёт нативно |
 | Windows | Docker Desktop с WSL 2. Команды те же, в PowerShell. Клонируйте лучше внутрь WSL (`\\wsl$\...`), так сборка быстрее. Без `make` есть `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1` |
 | `unknown flag: --wait` или ошибка про `env_file` | Старый Compose. Обновите Docker Desktop, или создайте `.env` (`cp .env.example .env`) и запустите `make demo` |
 | Сборка упала на `apt-get`, `pip` или `npm` | Нет доступа к зеркалам или к прокси. Повторите команду: кэш сохранится, сборка продолжится с места остановки |
