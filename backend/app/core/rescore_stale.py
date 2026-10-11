@@ -15,25 +15,34 @@ import sys
 logger = logging.getLogger("app.core.rescore_stale")
 
 
-async def stale_participant_ids(db) -> list:
-    from sqlalchemy import select
+async def stale_participant_ids(db, max_age_hours: float | None = None) -> list:
+    """Old scoring version, or (nightly) computed more than max_age_hours ago.
+
+    Decay runs from the date of the computation, so a score left alone for a month compares
+    candidates against different reference dates (audit 2026-10, item 5). The nightly pass fixes that.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import or_, select
 
     from app.models.profile import DisciplineScore
     from app.services.scoring.engine import VERSION
 
-    rows = await db.execute(
-        select(DisciplineScore.participant_id).where(DisciplineScore.scoring_version != VERSION).distinct()
-    )
+    stale = DisciplineScore.scoring_version != VERSION
+    if max_age_hours is not None:
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        stale = or_(stale, DisciplineScore.computed_at < cutoff, DisciplineScore.computed_at.is_(None))
+    rows = await db.execute(select(DisciplineScore.participant_id).where(stale).distinct())
     return list(rows.scalars())
 
 
-async def rescore_stale() -> tuple[int, int]:
+async def rescore_stale(max_age_hours: float | None = None) -> tuple[int, int]:
     from app.core.database import AsyncSessionLocal
     from app.models.participant import Participant
     from app.services.profile import rebuild_profile
 
     async with AsyncSessionLocal() as db:
-        ids = await stale_participant_ids(db)
+        ids = await stale_participant_ids(db, max_age_hours)
     done = failed = 0
     for pid in ids:
         try:

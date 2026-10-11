@@ -84,6 +84,15 @@ def compute_embeddings(self, participant_id: str):
         raise self.retry(exc=exc, countdown=120) from exc
 
 
+@celery_app.task(name="app.workers.tasks.rescore_fsp_nightly")
+def rescore_fsp_nightly():
+    """Rebuild every profile whose FSP score is older than 20 hours or of an older method version."""
+    from app.core.rescore_stale import rescore_stale
+
+    done, failed = run_async(rescore_stale(max_age_hours=20))
+    logger.info("nightly rescore: %d participants, %d failed", done, failed)
+
+
 @celery_app.task(name="app.workers.tasks.expire_offers")
 def expire_offers():
     async def _inner():

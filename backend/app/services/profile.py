@@ -113,6 +113,46 @@ async def append_new_results(db: AsyncSession, participant: Participant, data: F
     return len(fresh)
 
 
+_COMPARED = ("discipline", "place", "total_participants", "is_team", "team_size", "event_date", "role")
+
+
+async def reconcile_results(db: AsyncSession, participant: Participant, data: FSPParticipant) -> dict[str, int]:
+    """Make the registry rows of a profile match the registry (audit M-3).
+
+    v1 only appended: an annulled or corrected protocol line stayed in the score for good. Now a
+    `verified_fsp` row whose event the registry no longer lists is removed, and a row whose place,
+    field size, team, date or discipline changed is replaced by the corrected line. The credential
+    of a removed or replaced row is revoked. Rows the candidate uploaded from a file are not
+    touched. An empty registry answer removes nothing: an outage must not wipe a history.
+    """
+    from app.models import VerifiableCredential
+
+    rows = list(await db.scalars(select(Result).where(
+        Result.participant_id == participant.id, Result.trust_level == "verified_fsp")))
+    incoming = {r.event_id: r for r in data.results}
+    stale: list[Result] = []
+    replaced = 0
+    if incoming:
+        for row in rows:
+            line = incoming.get(row.event_id)
+            if line is None:
+                stale.append(row)
+            elif any(getattr(row, f) != getattr(line, f) for f in _COMPARED):
+                stale.append(row)
+                replaced += 1
+    if stale:
+        ids = [row.id for row in stale]
+        now = datetime.now(UTC)
+        for vc in await db.scalars(select(VerifiableCredential).where(VerifiableCredential.result_id.in_(ids))):
+            vc.revoked_at = vc.revoked_at or now
+            vc.result_id = None
+        await db.flush()
+        await db.execute(delete(Result).where(Result.id.in_(ids)))
+        await db.flush()
+    added = await append_new_results(db, participant, data)
+    return {"added": added - replaced, "corrected": replaced, "removed": len(stale) - replaced}
+
+
 async def _registry_ranks(p: Participant, ranks: list[RegistryRank] | None) -> list[RegistryRank] | None:
     """Ranks to write. None means keep the rows already stored (the real registry was not fetched)."""
     if ranks is not None:
