@@ -51,7 +51,8 @@ def test_shrinkage_keeps_one_event_away_from_the_extremes():
     strong = compute_discipline_score([ev(1, 200, "regional")])
     weak = compute_discipline_score([ev(80, 80, "other")])
     assert 0.30 < strong["score"] < 0.95
-    assert 0 < weak["score"] < 0.30
+    # A plain participation is not evidence (v4): the score stays at the prior, it is not pulled under it.
+    assert weak["score"] == pytest.approx(0.30, abs=1e-4)
 
 
 def test_empty_history_is_the_prior():
@@ -99,11 +100,12 @@ def test_many_participations_do_not_beat_a_few_wins():
     many = compute_discipline_score(padded, reference_date=ref)
     few = compute_discipline_score(wins, reference_date=ref)
     assert few["lcb"] > many["lcb"] and few["score"] > many["score"]
-    # Participation alone stays under the prior: it cannot lift the lower bound above an empty history's mean.
-    assert many["score"] < compute_discipline_score([], reference_date=ref)["score"]
-    # A participation added to a win lowers the mean instead of padding it.
+    # Participation alone is the empty history: it neither lifts nor lowers the bound (audit 2026-10, H-3).
+    empty = compute_discipline_score([], reference_date=ref)
+    assert many["lcb"] == empty["lcb"] and many["score"] == empty["score"]
+    # A participation added to wins changes nothing: it is not evidence of skill and not a penalty.
     mixed = compute_discipline_score(wins + padded[:1], reference_date=ref)
-    assert mixed["score"] < few["score"]
+    assert mixed["lcb"] == few["lcb"] and mixed["score"] == few["score"]
 
 
 def test_participation_scores_nothing_and_the_cap_drops_the_weakest():

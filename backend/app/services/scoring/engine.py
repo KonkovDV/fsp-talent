@@ -16,21 +16,24 @@ Per event e (competition_status is NOT used):
   d_e = 2^(-months / HALF_LIFE_MONTHS)             recency
   w_e = d_e / sqrt(team_size)                      evidence weight: a team result says less about the individual
 
-Only the EVENT_CAP strongest events (by q·w) enter the sums. A long list cannot crowd out a few real results.
+Only events with a result (q > 0) enter the score. A plain participation is counted on the
+profile (events_count) and never enters the sums: it can neither lift nor lower the score.
 
-Per discipline (empirical-Bayes shrinkage to the population prior):
-  n_eff = sum(w_e)                                 over the capped events
+The score is the best lower bound over subsets of at most EVENT_CAP result events (exhaustive
+search, the empty subset is the baseline):
+  n_eff = sum(w_e)                                 over the chosen events
   mu    = (sum(w_e * q_e) + K * PRIOR_MEAN) / (n_eff + K)
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
-  lcb   = mu - sigma                               ranking key (conservative)
+  lcb   = max over subsets (mu - sigma)            ranking key (conservative)
 
-A plain participation scores 0. It does not lift the mean, and because a zero still
-enters the count it can lower the lower bound. The best-subset bound that does not fall
-is `lcb_star`. It was measured on the holdout seeds and not shipped: nDCG dropped past
-the allowed bound (docs/VALIDATION_MATCHING.md). Team results reduce evidence
-weight (wider sigma) instead of lowering the level; the team contribution is not separated (Q&A).
-The score composition is unchanged in v3.2.0. The rank is not computed here: it is a registry fact
-(discipline, rank, assignment date, order number) stored beside the score and it still does not enter it.
+Monotonicity (v4.0.0, audit 2026-10): adding any event never lowers lcb, and no history at all is
+the floor (LCB0). The v3 rule took the five strongest events by q·w including zeros, so a plain
+participation could push the bound below an empty history. That broke the stated goal (sport must
+help or at least not hurt) and was replaced. Team results reduce evidence weight (wider sigma)
+instead of lowering the level; the team contribution is not separated (Q&A).
+The rank is not computed here: it is a registry fact stored beside the score and does not enter it.
+The reference date must be the same for everyone compared: callers pass it explicitly
+(services.profile.scoring_reference_date); the date.today() default is kept for old callers only.
 All constants are expert priors; any change to the score must bump VERSION.
 """
 from __future__ import annotations
@@ -40,15 +43,16 @@ from datetime import date
 from itertools import combinations
 from typing import TypedDict
 
-VERSION = "v3.2.0"
+VERSION = "v4.0.0"
 HALF_LIFE_MONTHS = 18.0
 PRIOR_STRENGTH = 2.0      # K: prior counts as two full-weight events
 PRIOR_MEAN = 0.30
 PRIOR_VAR = 0.04
 # How many events a subset may contain. The rest stay on the profile. The bound uses the best subset.
 EVENT_CAP = 5
-# Exhaustive search is cheap up to this many events (2^12 − 1 subsets, capped at EVENT_CAP).
-EXACT_SUBSET_LIMIT = 12
+# Exhaustive search over result events (q > 0). C(16, ≤5) = 6 884 subsets, a few milliseconds.
+# Past this many result events in one discipline the pool is the strongest ones by q·w (documented limit).
+EXACT_SUBSET_LIMIT = 16
 
 # Result class -> quality. Monotone in the result; the same for every competition status.
 RESULT_CLASSES: dict[str, float] = {
@@ -209,17 +213,23 @@ def best_subset_greedy(weighted: list[tuple[float, float, EventInput]]) -> list[
     return best
 
 
-def compute_discipline_score(events: list[EventInput], reference_date: date | None = None) -> DisciplineResult:
-    ref = reference_date or date.today()
-    weighted = []
+def _result_pool(events: list[EventInput], ref: date) -> list[tuple[float, float, EventInput]]:
+    """(q, w, event) for events with a result. Participations (q = 0) never enter the score."""
+    pool = []
     for e in events:
         q = event_quality(e["place"], e["total_participants"], e["competition_status"])
-        w = event_weight(e["event_date"], e["team_size"], ref)
-        weighted.append((q, w, e))
-    # The shipped score is still the five strongest events. The best-subset bound is lcb_star,
-    # measured on the holdout and not used here: it missed the nDCG bar (see VALIDATION_MATCHING).
-    ranked = sorted(weighted, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:EVENT_CAP]
-    chosen = ranked
+        if q <= 0:
+            continue
+        pool.append((q, event_weight(e["event_date"], e["team_size"], ref), e))
+    if len(pool) > EXACT_SUBSET_LIMIT:
+        pool = sorted(pool, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:EXACT_SUBSET_LIMIT]
+    return pool
+
+
+def compute_discipline_score(events: list[EventInput], reference_date: date | None = None) -> DisciplineResult:
+    """Best-subset lower bound over result events. Monotone: an added event never lowers lcb."""
+    ref = reference_date or date.today()
+    chosen = best_subset_exact(_result_pool(events, ref))
     mu, sigma, lcb = posterior([(q, w) for q, w, _ in chosen])
     n_eff = sum(w for _, w, _ in chosen)
     top = sorted(chosen, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:3]
@@ -236,30 +246,5 @@ def compute_discipline_score(events: list[EventInput], reference_date: date | No
 
 
 def lcb_star(events: list[EventInput], reference_date: date | None = None) -> DisciplineResult:
-    """Lower bound of the best subset. Not the shipped score: the holdout rejected it for nDCG."""
-    ref = reference_date or date.today()
-    weighted = []
-    for e in events:
-        q = event_quality(e["place"], e["total_participants"], e["competition_status"])
-        w = event_weight(e["event_date"], e["team_size"], ref)
-        weighted.append((q, w, e))
-    if len(weighted) <= EXACT_SUBSET_LIMIT:
-        pool = weighted
-    else:
-        pool = [item for item in weighted if item[0] > 0]
-        if len(pool) > EXACT_SUBSET_LIMIT:
-            pool = sorted(pool, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:EXACT_SUBSET_LIMIT]
-    chosen = best_subset_exact(pool)
-    mu, sigma, lcb = posterior([(q, w) for q, w, _ in chosen])
-    n_eff = sum(w for _, w, _ in chosen)
-    top = sorted(chosen, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:3]
-    return DisciplineResult(
-        score=round(mu, 4),
-        sigma=round(sigma, 4),
-        lcb=round(lcb, 4),
-        confidence=round(n_eff / (n_eff + PRIOR_STRENGTH), 4) if events else 0.0,
-        events_count=len(events),
-        team_events_count=sum(1 for e in events if e["team_size"] > 1),
-        top_event_ids=[e["id"] for _, _, e in top],
-        scoring_version=VERSION,
-    )
+    """Alias kept for the validation scripts: since v4.0.0 the shipped score is the best-subset bound."""
+    return compute_discipline_score(events, reference_date)

@@ -6,7 +6,8 @@ from app.validation.fsp_axis import REF, farm, farm_is_under_two_wins, populatio
 def test_forty_online_appearances_stay_under_two_wins():
     padded, wins, ok = farm_is_under_two_wins()
     assert ok
-    assert round(padded, 2) == 0.01
+    # v4: a farm of participations is the empty history (0.16), never below it; two wins stay at 0.54.
+    assert round(padded, 2) == 0.16
     assert round(wins, 2) == 0.54
 
 
