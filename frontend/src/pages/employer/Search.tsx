@@ -51,11 +51,16 @@ export default function EmployerSearch() {
     fresh_days: freshDays,
   }
   // Filters edit a draft; the list on screen changes only on «Найти» and stays visible while the new one loads.
-  const [submitted, setSubmitted] = useState<Params>({ role: url.get('role') || undefined, grade: url.get('grade') || undefined })
+  // The URL opens the search already applied: the same keys the draft builds, so no «filters changed» on first load.
+  const fromUrl = (r: string, g: string): Params => ({
+    role: r || undefined, grade: g || undefined, grade_span: r && g ? gradeSpan : undefined,
+  })
+  const [submitted, setSubmitted] = useState<Params>(() => fromUrl(url.get('role') ?? '', url.get('grade') ?? ''))
   useEffect(() => {
     const r = url.get('role') ?? '', g = url.get('grade') ?? ''
     setRole(r); setGrade(g)
-    setSubmitted(prev => ({ ...prev, role: r || undefined, grade: g || undefined }))
+    setSubmitted(prev => ({ ...prev, ...fromUrl(r, g) }))
+    // gradeSpan is read once per URL change on purpose: the user's later choice goes through «Применить».
   }, [url])
   const { data, isFetching, isLoading, isError, error } = useQuery({
     queryKey: ['search', submitted],
