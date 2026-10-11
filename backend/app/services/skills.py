@@ -222,7 +222,8 @@ def with_resume_token(participant_id: str, parsed: dict) -> dict:
         (item.get("name") or "", (item.get("source_quote") or "").strip())
         for item in parsed.get("skills") or []
     ]
-    pairs = [(name, quote) for name, quote in pairs if name and quote]
+    # Defence in depth (N-3): only a quote that names its skill is signed as resume evidence.
+    pairs = [(name, quote) for name, quote in pairs if name and quote and quote_names_skill(name, quote)]
     return {**parsed, "resume_token": sign_resume_evidence(participant_id, pairs) if pairs else None}
 
 
@@ -264,6 +265,22 @@ def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str,
 
 def skill_line(name: str, trust_level: str) -> str:
     return f"{name} ({TRUST_RU.get(trust_level, TRUST_RU['self_reported'])})"
+
+
+# A model quote longer than this is not a quote of one skill; it is a paragraph that happens to contain it.
+MAX_QUOTE_CHARS = 200
+
+
+def quote_names_skill(skill: str, quote: str) -> bool:
+    """The quote itself names this skill (an alias from the taxonomy, word-bounded).
+
+    Audit 2026-10 (second opinion, N-3; OWASP LLM01/LLM05): a substring check alone let a model, or a
+    prompt injection inside the resume, pin "Kubernetes" to the quote "опыт". The pair (skill, quote) is
+    accepted only when the deterministic extractor finds that very skill inside the quote.
+    """
+    if not quote or len(quote) > MAX_QUOTE_CHARS:
+        return False
+    return any(found.skill == skill for found in extract_skills(quote))
 
 
 def is_grounded(evidence: str, text: str) -> bool:

@@ -20,6 +20,13 @@ from app.services.code_lab import (
 )
 from app.services.tasks import check_answer, stored_reference, validate_reference
 
+
+@pytest.fixture(autouse=True)
+def _local_runner(monkeypatch):
+    """These tests exercise the local child-process runner, which production refuses by default."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "SANDBOX_REQUIRED", False)
+
 SOLVE = "def solve(xs):\n    return sum(x for x in xs if x > 0)\n"
 
 

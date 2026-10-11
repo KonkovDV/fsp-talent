@@ -79,10 +79,14 @@ def test_evidence_does_not_pull_another_category_over_a_matching_one():
 
 
 def test_test_and_fsp_lines_carry_their_contribution():
-    m = score(NEED, _cand(grade_source="assessed", test_p=0.9, fsp_lcb=0.2))
+    m = score(NEED, _cand(grade_source="assessed", test_p=0.5, fsp_lcb=0.55))
     points = {r.code: r.points for r in m.reasons if r.points is not None}
-    assert set(points) == {"TEST_SCORE", "FSP_SCORE"}
-    assert points["TEST_SCORE"] > points["FSP_SCORE"] > 0
+    assert set(points) == {"TEST_SCORE", "FSP_BONUS"}
+    assert points["TEST_SCORE"] > 0 and points["FSP_BONUS"] > 0
+    # A history under the test is shown as counted, carries no points and does not move the score.
+    low = score(NEED, _cand(grade_source="assessed", test_p=0.9, fsp_lcb=0.2))
+    assert any(r.code == "FSP_NO_LIFT" for r in low.reasons)
+    assert low.score == score(NEED, _cand(grade_source="assessed", test_p=0.9, fsp_lcb=None)).score
 
 
 def test_tested_skills_and_grade_outrank_declared_ones():
@@ -96,7 +100,8 @@ def test_tested_skills_and_grade_outrank_declared_ones():
 def test_no_fsp_history_is_neutral_not_a_penalty():
     without = score(NEED, _cand(fsp_lcb=None))
     weak_fsp = score(NEED, _cand(fsp_lcb=0.05))
-    assert without.score > weak_fsp.score
+    # Audit 2026-10 (H-2): a weak FSP line used to pull the score under "no history". It must not.
+    assert weak_fsp.score >= without.score
     assert any("Нет истории ФСП" in line for line in without.info)
     assert next(f for f in without.factors if f.key == "fsp").value is None
 
@@ -544,7 +549,8 @@ def test_a_lower_tier_cannot_overtake_with_a_test():
 
 
 def test_fsp_never_lowers_score():
-    """The rejected boost (FSP only raises evidence) has the property. It is not the shipped score."""
+    """Shipped since the 2026-10 audit: an FSP history only raises the evidence, never lowers the score."""
+    assert matching_mod.FSP_LIFT == "boost"
     rng = random.Random(3001)
     previous_lift = matching_mod.FSP_LIFT
     matching_mod.FSP_LIFT = "boost"
@@ -687,3 +693,13 @@ def test_city_and_format_raise_the_score_only_when_the_need_names_them():
     assert any(line.startswith("Город совпадает") for line in same.plus)
     assert any("Другой город" in line for line in other.minus)
     assert any("не штрафуется" in line for line in unnamed.info)
+
+
+def test_fsp_history_never_lowers_a_tested_candidate_regression_h2():
+    """Audit 2026-10, H-2: test 0.80 plus one plain participation used to drop the evidence to 0.43."""
+    for test_p in (0.2, 0.5, 0.8, 0.95):
+        plain = score(NEED, _cand(grade_source="assessed", test_p=test_p, fsp_lcb=None))
+        for lcb in (0.0, 0.04, 0.159, 0.2, 0.418, 0.55, 0.9):
+            with_fsp = score(NEED, _cand(grade_source="assessed", test_p=test_p, fsp_lcb=lcb))
+            assert with_fsp.score + 1e-9 >= plain.score, (test_p, lcb)
+            assert with_fsp.employer + 1e-12 >= plain.employer, (test_p, lcb)

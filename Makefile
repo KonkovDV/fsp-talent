@@ -1,8 +1,12 @@
 # Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
+# GPU=1 adds docker-compose.gpu.yml (NVIDIA Container Toolkit required). The default runs on any Docker host.
+export GIT_SHA ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+COMPOSE := docker compose$(if $(GPU), -f docker-compose.yml -f docker-compose.gpu.yml,)
+
 .PHONY: help demo up down reset seed demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
 
 help:
-	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск)"
+	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск); с видеокартой: make demo GPU=1"
 	@echo "make up        — запустить уже собранные контейнеры"
 	@echo "make down      — остановить, данные сохраняются"
 	@echo "make reset     — остановить и удалить данные (база, ключи)"
@@ -20,7 +24,7 @@ help:
 
 demo:
 	@test -f .env || cp .env.example .env
-	docker compose up -d --build --wait
+	$(COMPOSE) up -d --build --wait
 	docker compose exec -T -u appuser backend python -m seed.generate_seed
 	@echo ""
 	@echo "Готово. Сайт: http://localhost  API: http://localhost/docs  Почта: http://localhost:8025"
@@ -28,7 +32,7 @@ demo:
 
 up:
 	@test -f .env || cp .env.example .env
-	docker compose up -d --wait
+	$(COMPOSE) up -d --wait
 
 down:
 	docker compose down

@@ -92,9 +92,11 @@ class Settings(BaseSettings):
 
     # Practice code runs. SANDBOX_SOCKET: the sandbox container (no network, Python and Node).
     # Empty: a local child process, Python only. SANDBOX_REQUIRED refuses that fallback.
+    # Secure by default (audit M-1): the fallback runs candidate code inside the API container next
+    # to SECRET_KEY and the database, so it needs an explicit SANDBOX_REQUIRED=false (tests, laptop).
     SANDBOX_SOCKET: str = ""
     SANDBOX_TOKEN: str = ""
-    SANDBOX_REQUIRED: bool = False
+    SANDBOX_REQUIRED: bool = True
 
     # Verifiable Credentials (W3C VC 2.0, Data Integrity eddsa-jcs-2022)
     VC_PRIVATE_KEY_PATH: str = "/secrets/vc_ed25519.pem"
@@ -111,9 +113,9 @@ class Settings(BaseSettings):
     SMTP_STARTTLS: bool = False
     SMTP_SSL: bool = False
     EMAIL_CODE_TTL_MINUTES: int = 30
-    # Floor for a monthly gross fork. 22 440 ₽ is the minimum wage from 1 January 2025.
-    # Raise it when the owner confirms the figure for the current year.
-    MIN_MONTHLY_GROSS: int = 22_440
+    # Floor for a monthly gross fork: the federal minimum wage, 27 093 ₽ from 1 January 2026
+    # (Federal Law of 28.11.2025 No. 429-FZ, art. 1 of 82-FZ). Update every January.
+    MIN_MONTHLY_GROSS: int = 27_093
 
     # FSP registry API (FSP_MODE=real): the contract we propose is in docs/FSP_INTEGRATION.md
     FSP_API_URL: str = ""

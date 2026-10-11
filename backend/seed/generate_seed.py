@@ -171,6 +171,25 @@ def showcase_adds(counts: dict[tuple[str, str], int]) -> list[tuple[str, str, in
     return adds
 
 
+DEMO_LOGINS = ("fsp001@demo.talent", "fsp002@demo.talent", "nofsp@demo.talent")
+
+
+def _reserved(person: Participant) -> bool:
+    """Demo logins the smoke test and the jury use, jurors and load-test profiles.
+
+    `Participant.email` is AES-GCM ciphertext in the database, so SQL `LIKE`/`NOT IN` on it never
+    matches a plaintext address. The ORM opens it on load; filter here, in Python.
+    """
+    email = (person.email or "").lower()
+    return email in DEMO_LOGINS or email.startswith("jury") and email.endswith("@demo.talent") \
+        or email.startswith("extra") and email.endswith("@load.talent")
+
+
+def _showcase(person: Participant, prefix: str = "showcase-") -> bool:
+    email = (person.email or "").lower()
+    return email.startswith(prefix) and email.endswith("@demo.talent")
+
+
 async def _sit_grade(db, person: Participant, grade: str) -> bool:
     """One real session, answered correctly, so the grade comes from the test."""
     from app.services import assessment
@@ -212,8 +231,8 @@ async def fill_showcase() -> None:
         counts = {(role, grade): n for role, grade, n in rows}
         created = 0
         for spec, grade, missing in showcase_adds(counts):
-            have = await db.scalar(select(func.count()).select_from(Participant).where(
-                Participant.email.like(f"showcase-{spec}-{grade}-%@demo.talent"))) or 0
+            have = sum(1 for person in await db.scalars(select(Participant).where(Participant.email.is_not(None)))
+                       if _showcase(person, f"showcase-{spec}-{grade}-"))
             skills = _SHOWCASE_SKILLS[spec]
             for n in range(have + 1, have + 1 + missing):
                 email = f"showcase-{spec}-{grade}-{n:02d}@demo.talent"
@@ -234,16 +253,15 @@ async def fill_showcase() -> None:
                 await rebuild_profile(db, person)
                 created += 1
         await db.commit()
-        targets = list(await db.scalars(select(Participant).where(
-            Participant.email.like("showcase-%@demo.talent"), Participant.assessed_grade.is_(None))))
+        targets = [person for person in await db.scalars(select(Participant).where(
+            Participant.email.is_not(None), Participant.assessed_grade.is_(None))) if _showcase(person)]
         spare_rows = (await db.execute(
             select(Participant, ProfileSearchIndex.role, ProfileSearchIndex.grade)
             .join(ProfileSearchIndex, ProfileSearchIndex.participant_id == Participant.id)
             .where(visible, Participant.assessed_grade.is_(None),
-                   ProfileSearchIndex.role.is_not(None), ProfileSearchIndex.grade.is_not(None),
-                   Participant.email.notin_(("fsp001@demo.talent", "fsp002@demo.talent", "nofsp@demo.talent")),
-                   Participant.email.notlike("jury%@demo.talent"))
-            .limit(25))).all()
+                   ProfileSearchIndex.role.is_not(None), ProfileSearchIndex.grade.is_not(None))
+            .order_by(Participant.id))).all()
+        spare_rows = [row for row in spare_rows if not _reserved(row[0])][:25]
         sat = passed = 0
         for person in targets:
             email = person.email
@@ -358,7 +376,6 @@ async def ensure_pay_wishes() -> None:
     from app.core.rls import bypass_rls
     bypass_rls()
     floors = (220_000, 240_000, 280_000, 285_000, 290_000, 295_000)
-    protected = ("fsp001@demo.talent", "fsp002@demo.talent", "nofsp@demo.talent")
     async with AsyncSessionLocal() as db:
         # The demo need asks for Python and PostgreSQL, so the wishes have to sit in that pool.
         from app.models.profile import ProfileSearchIndex
@@ -370,11 +387,9 @@ async def ensure_pay_wishes() -> None:
                 Participant.is_visible.is_(True),
                 Participant.job_search != "not_looking",
                 Participant.salary_from_gross.is_(None),
-                Participant.email.notin_(protected),
-                Participant.email.notlike("jury%@demo.talent"),
-                Participant.email.notlike("extra%@load.talent"),
                 in_demo_need,
-            ).limit(len(floors))))
+            ).order_by(Participant.id)))
+        people = [person for person in people if not _reserved(person)][:len(floors)]
         for person, floor in zip(people, floors):
             person.salary_from_gross = floor
             person.salary_to_gross = floor + 40_000
@@ -394,7 +409,6 @@ async def ensure_category_market() -> None:
     from app.models.profile import ProfileSearchIndex
     bypass_rls()
     floors = (190_000, 230_000, 260_000, 300_000, 340_000, 380_000)
-    protected = ("fsp001@demo.talent", "fsp002@demo.talent", "nofsp@demo.talent")
     in_demo_need = ProfileSearchIndex.skills_tsv.op("@@")(func.to_tsquery("simple", "Python & PostgreSQL"))
     async with AsyncSessionLocal() as db:
         people = list(await db.scalars(
@@ -406,13 +420,10 @@ async def ensure_category_market() -> None:
                 CategoryAssignment.grade == "middle",
                 Participant.is_visible.is_(True),
                 Participant.salary_from_gross.is_(None),
-                Participant.email.notin_(protected),
-                Participant.email.notlike("jury%@demo.talent"),
-                Participant.email.notlike("extra%@load.talent"),
                 or_(ProfileSearchIndex.participant_id.is_(None), ~in_demo_need),
             )
-            .order_by(Participant.email)
-            .limit(len(floors))))
+            .order_by(Participant.id)))
+        people = [person for person in people if not _reserved(person)][:len(floors)]
         for person, floor in zip(people, floors):
             person.salary_from_gross = floor
             person.salary_to_gross = floor + 40_000

@@ -34,6 +34,8 @@ services:
     restart: unless-stopped
 
   backend:
+    # The sandbox socket is 0660, owner uid/gid 10001 (sandbox image). Join its group to connect.
+    group_add: ["10001"]
     build: ../backend
     env_file: .env
     environment:

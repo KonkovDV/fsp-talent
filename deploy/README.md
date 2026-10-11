@@ -6,7 +6,7 @@
 4. Демо-данные: `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T -u appuser backend python -m seed.generate_seed`. Пользователь обязателен: сид от root создаёт ключ подписи, который приложение не читает, и проверка удостоверения отвечает 500.
 5. Вернуть показ жюри: `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T -u appuser backend python -m seed.reset_demo`. Затем войти как `jury1@demo.talent` с паролем `demo12345`.
 6. Проверка: `curl https://$SITE_ADDRESS/health`.
-7. Языковая модель, если она нужна на стенде: в `deploy/.env` задать `AI_ENABLED=true`, `YANDEX_MODEL=yandexgpt-5.1/latest` и `YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest`. Ключ и идентификатор каталога остаются только в этом файле. `SECRET_KEY` и `FIELD_ENCRYPTION_KEY` при обновлении кода не меняют, том `vc_keys` не удаляют.
+7. Языковая модель, если она нужна на стенде: оператор вручную задаёт в `deploy/.env` `AI_ENABLED=true`, `YANDEX_MODEL=yandexgpt-5.1/latest` и `YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest`. Ключ и идентификатор каталога остаются только в этом файле. `SECRET_KEY` и `FIELD_ENCRYPTION_KEY` при обновлении кода не меняют, том `vc_keys` не удаляют. Конвейер CI файл `deploy/.env` не правит: включение модели меняет обработку ПДн и решается человеком.
 
 Снаружи открыт только Caddy. База и Redis не публикуются. Миграции применяются при старте backend.
 

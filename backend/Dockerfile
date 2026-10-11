@@ -21,4 +21,8 @@ RUN sed -i 's/\r$//' /entrypoint.sh \
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --retries=8 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["sh", "-c", "alembic upgrade head && python -m app.core.schema_sync && python -m app.core.app_login && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-*}\""]
+# Commit of the build, shown in /health (NEW-17). Last layer so a new commit does not bust the cache.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
+CMD ["sh", "-c", "alembic upgrade head && python -m app.core.schema_sync && python -m app.core.rescore_stale && python -m app.core.app_login && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-*}\""]

@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege by default (audit 2026-10, N-6): every job gets a read-only GITHUB_TOKEN unless it
+# asks for more itself (sign-sbom asks for id-token). https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -45,6 +50,8 @@ jobs:
       SECRET_KEY: test-secret-key-for-ci-only
       FSP_MODE: mock
       AI_ENABLED: 'false'
+      # No sandbox container in this job: the local runner is allowed here explicitly (audit M-1).
+      SANDBOX_REQUIRED: 'false'
       # Letters go to files; the smoke test reads confirmation codes from there.
       MAIL_MODE: file
       MAIL_FILE_DIR: /tmp/fsp-talent-mail
@@ -102,9 +109,12 @@ jobs:
       # unimportable module and a dead API path, which all reached main before.
       - name: Apply migrations
         run: cd backend && alembic upgrade head && python -m app.core.schema_sync --dry-run
+      # Demo data and the smoke run need the demo stand (seed refuses otherwise, ff1640b); unit tests above do not.
       - name: Seed demo data
+        env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: cd backend && python -m seed.generate_seed
       - name: API smoke test
+        env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: |
           cd backend
           uvicorn app.main:app --host 127.0.0.1 --port 8010 > /tmp/api.log 2>&1 &
@@ -227,7 +237,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build backend
-        run: docker build -t fsp-talent-backend:${{ github.sha }} ./backend
+        run: docker build --build-arg GIT_SHA=${{ github.sha }} -t fsp-talent-backend:${{ github.sha }} ./backend
       - name: Build frontend
         run: docker build -t fsp-talent-frontend:${{ github.sha }} ./frontend
       # The same limits as in compose: a solution must not reach the network or outlive its run.
@@ -261,21 +271,7 @@ jobs:
           script: |
             cd /opt/fsp-talent
             git pull origin main
-            # Model names only. The key already lives in deploy/.env and is not printed.
-            if [ -f deploy/.env ]; then
-              if grep -q '^YANDEX_MODEL=' deploy/.env; then
-                sed -i 's|^YANDEX_MODEL=.*|YANDEX_MODEL=yandexgpt-5.1/latest|' deploy/.env
-              else
-                printf '\nYANDEX_MODEL=yandexgpt-5.1/latest\n' >> deploy/.env
-              fi
-              if grep -q '^YANDEX_CHECK_MODEL=' deploy/.env; then
-                sed -i 's|^YANDEX_CHECK_MODEL=.*|YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest|' deploy/.env
-              else
-                printf 'YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest\n' >> deploy/.env
-              fi
-              if grep -q '^YANDEX_API_KEY=.' deploy/.env && grep -q '^AI_ENABLED=' deploy/.env; then
-                sed -i 's|^AI_ENABLED=.*|AI_ENABLED=true|' deploy/.env
-              fi
-            fi
+            # The server env file is the operator's and changes only by hand (deploy/README.md). The pipeline never
+            # rewrites it: turning on the language model changes the processing of personal data and needs review.
             docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"

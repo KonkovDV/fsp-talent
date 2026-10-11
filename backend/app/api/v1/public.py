@@ -432,23 +432,47 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
 _FORMAT_RU = {"remote": "удалённо", "hybrid": "гибрид", "office": "офис"}
 
 
+# Audit 2026-10 (H-1, N-13): the lookup by FSP ID is a public disclosure of personal data (152-FZ art. 10.1).
+# It answers only for a profile its owner made public with an active distribution consent and a confirmed
+# adult birth date, exactly like /candidates/{id}. A hidden, minor, unknown or deleted ID gets the same
+# empty answer, so the endpoint is no oracle for which FSP IDs exist. The limits fail closed: without Redis
+# the sequential FSP IDs could be walked without bound.
+TELEGRAM_PER_IP_PER_MINUTE = 10
+TELEGRAM_SITE_PER_MINUTE = 300
+
+
+async def _telegram_limits(request: Request, kind: str) -> None:
+    from app.api.v1.auth import client_address
+    from app.core.ratelimit import RateLimitUnavailable
+
+    try:
+        if await too_many(f"public:telegram:{kind}:{client_address(request)}", limit=TELEGRAM_PER_IP_PER_MINUTE,
+                          window_seconds=60, fail_closed=True):
+            raise ApiError(429, "rate_limited")
+        if await too_many(f"public:telegram:{kind}:site", limit=TELEGRAM_SITE_PER_MINUTE, window_seconds=60,
+                          fail_closed=True):
+            raise ApiError(429, "rate_limited")
+    except RateLimitUnavailable as e:
+        raise ApiError(503, "unavailable", "Сервис временно недоступен") from e
+
+
 @router.get("/telegram/achievements")
 async def telegram_achievements(request: Request, fsp_id: str = Query(min_length=4, max_length=12),
                                 db: AsyncSession = Depends(get_db)):
-    """Sport lines for one FSP ID. No name, no contacts, and the grade is not in the answer."""
-    from app.api.v1.auth import client_address
-
-    if await too_many(f"public:telegram:{client_address(request)}", limit=30, window_seconds=60):
-        raise ApiError(429, "rate_limited")
+    """Sport lines for one FSP ID with a public profile. No name, no contacts, and no grade."""
+    await _telegram_limits(request, "achievements")
     cleaned = clean_fsp_id(fsp_id)
     if cleaned is None:
         raise ApiError(422, "validation_error", "ФСП ID выглядит как FSP001")
     person = await db.scalar(select(Participant).where(
-        Participant.fsp_id == cleaned, Participant.deleted_at.is_(None), Participant.suspended_at.is_(None)))
+        Participant.fsp_id == cleaned, Participant.deleted_at.is_(None), Participant.suspended_at.is_(None),
+        *_public_filter()))
     rows = []
     if person is not None:
-        found = list(await db.scalars(select(Result).where(Result.participant_id == person.id)
-                                      .order_by(Result.event_date.desc()).limit(8)))
+        # Registry lines only: an uploaded file or an annulled protocol is not a public sport result.
+        found = list(await db.scalars(select(Result).where(
+            Result.participant_id == person.id, Result.trust_level == "verified_fsp")
+            .order_by(Result.event_date.desc()).limit(8)))
         rows = [{
             "discipline": DISCIPLINE_LABELS.get(row.discipline, row.discipline),
             "year": row.event_date.year,
@@ -463,7 +487,7 @@ async def telegram_vacancies(request: Request, db: AsyncSession = Depends(get_db
     """Open vacancies for a messenger. Company and role only: no candidate names."""
     from app.api.v1.auth import client_address
 
-    if await too_many(f"public:telegram:{client_address(request)}", limit=30, window_seconds=60):
+    if await too_many(f"public:telegram:vacancies:{client_address(request)}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
     found = (await db.execute(
         select(Vacancy, Employer.company_name)

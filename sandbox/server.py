@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler
 from runner import available_languages, run
 
 SOCKET = os.environ.get("SANDBOX_SOCKET", "/run/sandbox/sandbox.sock")
+SOCKET_MODE = int(os.environ.get("SANDBOX_SOCKET_MODE", "660"), 8) & 0o770   # never world-accessible
 TOKEN = os.environ.get("SANDBOX_TOKEN", "")
 SLOTS = threading.BoundedSemaphore(int(os.environ.get("SANDBOX_CONCURRENCY", "2")))
 MAX_BODY = 64 * 1024
@@ -94,7 +95,9 @@ def main() -> None:
     if os.path.exists(SOCKET):
         os.unlink(SOCKET)
     with Server(SOCKET, Handler) as server:
-        os.chmod(SOCKET, 0o666)   # the API runs under another uid in its own container
+        # Audit M-1: owner and group only. The API container joins this uid's group (group_add in
+        # compose), so no other local user can reach the runner even with the token.
+        os.chmod(SOCKET, SOCKET_MODE)
         server.serve_forever()
 
 
