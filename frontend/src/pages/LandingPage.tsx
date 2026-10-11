@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { BadgeCheck, FileSignature, ShieldCheck } from 'lucide-react'
 import { SiteFooter } from '../components/chrome'
 import { PublicHeader } from '../components/PublicShell'
+import StandCounts from '../components/StandCounts'
 import JuryQuickStart from '../components/JuryQuickStart'
 import RussiaNetwork from '../components/RussiaNetwork'
 import { CategoryPlate } from '../components/ui'
@@ -165,6 +166,7 @@ export default function LandingPage() {
                 <Link to="/register?role=employer" className="btn min-h-12 bg-white px-6 text-base text-[#2A1DD6] hover:bg-white/90">Найти кандидата</Link>
                 <Link to="/register" className="btn min-h-12 border border-white/60 px-6 text-base text-white hover:bg-white/10">Я ищу работу</Link>
               </div>
+              <StandCounts />
               <JuryQuickStart />
             </div>
             <figure>

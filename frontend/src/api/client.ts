@@ -296,6 +296,8 @@ const form = (username: string, password: string) =>
 
 export const resetMyDemo = () => api.post('/candidates/me/demo/reset')
 export const publicDemo = () => api.get<{ demo_mode: boolean; mail_console: boolean }>('/public/demo')
+export type StandStats = { candidates: number; with_fsp: number; families: number; companies: number }
+export const publicStats = () => api.get<StandStats>('/public/stats')
 export const publicJuryFree = () => api.get<{ email: string }>('/public/jury-free')
 export const guestLogin = (role: Role, consents: string[]) =>
   api.post<{ access_token: string; role: Role; guest_until: string }>('/auth/guest', { role, consents })
