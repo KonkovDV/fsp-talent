@@ -113,3 +113,4 @@ fpdf2 распространяется по LGPL-3.0. Решение не мен
 - Демо-компании, кандидаты, вакансии и протоколы соревнований вымышлены и сгенерированы `backend/seed/`.
 - Задания теста — собственные параметрические семейства решения (`backend/app/items/`).
 - Структура валидации разбора резюме и вакансий (`backend/app/validation/nlp.py`: метрика `prf`, два шаблона резюме, ручной набор вакансий) повторяет andercat2/fsp-career `backend/validation/nlp_validation.py`, лицензия MIT, © 2026 Команда «ФСП Карьера». Код и данные написаны заново.
+- Внешняя проверка подбора (`backend/app/validation/external_human.py`) скачивает набор [NataliaVanetik/vacancy-resume-matching-dataset](https://github.com/NataliaVanetik/vacancy-resume-matching-dataset) с коммита `7ee8f043c6e31ee94cb67f5e60b069901b533adf`, лицензия GPL-3.0. Набор не входит в репозиторий и с решением не распространяется. Скрипт кладёт его во временную папку и сверяет sha256 каждого файла.
