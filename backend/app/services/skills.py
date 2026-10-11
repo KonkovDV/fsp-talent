@@ -148,8 +148,41 @@ def _patterns() -> list[tuple[re.Pattern, str, bool]]:
     return pats
 
 
+# Negation (NegEx, Chapman et al. 2001, doi:10.1006/jbin.2001.1029): an explicit trigger phrase shortly before a
+# skill, inside the same clause, means the text says the person does NOT have it. Like NegEx, the triggers are
+# phrases, not a bare «не»: «не первый год с Python», «не новичок в Docker», «не раз настраивал» stay positive.
+_RU_VERBS = (r"работал\w*|работаю|знаю|знаком\w*|использовал\w*|использую|владею|пробовал\w*|умею|применял\w*"
+             r"|изучал\w*|сталкивал\w*|писал\w*|имею\s+опыта")
+_NEG_TRIGGER = re.compile(
+    r"(?<![\w-])(?:"
+    rf"не\s+(?:{_RU_VERBS})|нет\s+(?:опыта|навыков|знаний)|отсутству\w*\s+опыт\w*"
+    r"|хочу\s+(?:изучить|освоить|попробовать)|планирую(?:\s+(?:изучить|освоить))?"
+    r"|no\s+(?:experience|knowledge|exposure)|not\s+(?:familiar|experienced)|never\s+(?:used|worked|tried)"
+    r")(?![\w-])", re.IGNORECASE)
+# «без» / «without» negate only the word right after them: «без Docker», but not «без переработок с Python».
+_NEG_ADJACENT = re.compile(r"(?<![\w-])(?:без|without)\s+$", re.IGNORECASE)
+# A clause ends at sentence punctuation, a comma, a bracket or a contrastive conjunction.
+_CLAUSE_END = re.compile(r"[.;:!?,()\[\]\n•|]|(?<!\w)(?:но|а|однако|зато|but|however)(?!\w)", re.IGNORECASE)
+_NEG_WINDOW_WORDS = 3
+_WORD = re.compile(r"\w+")
+
+
+def is_negated(text: str, start: int) -> bool:
+    """A trigger phrase stands at most three words before `start` in the same clause, or «без» right before it."""
+    left = text[max(0, start - 120):start]
+    ends = list(_CLAUSE_END.finditer(left))
+    if ends:
+        left = left[ends[-1].end():]
+    if _NEG_ADJACENT.search(left):
+        return True
+    return any(len(_WORD.findall(left[t.end():])) <= _NEG_WINDOW_WORDS for t in _NEG_TRIGGER.finditer(left))
+
+
 def extract_skills(text: str) -> list[ExtractedSkill]:
-    """Rule-based extraction. Folding is 1:1 per character, so offsets stay valid for the original text."""
+    """Rule-based extraction. Folding is 1:1 per character, so offsets stay valid for the original text.
+
+    A negated mention («не работал с Kubernetes») is skipped; a later plain mention of the same skill still counts.
+    """
     folded = text.translate(_LOOKALIKES)
     found: dict[str, ExtractedSkill] = {}
     taken: list[tuple[int, int]] = []
@@ -157,7 +190,7 @@ def extract_skills(text: str) -> list[ExtractedSkill]:
         if canonical in found:
             continue
         for haystack in ((text, folded) if ascii_alias else (text,)):
-            m = pattern.search(haystack)
+            m = next((m for m in pattern.finditer(haystack) if not is_negated(text, m.start())), None)
             if m and not any(s < m.end() and m.start() < e for s, e in taken):
                 found[canonical] = ExtractedSkill(canonical, text[m.start():m.end()], m.start(), m.end())
                 taken.append((m.start(), m.end()))

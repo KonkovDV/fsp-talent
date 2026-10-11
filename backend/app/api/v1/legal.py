@@ -23,6 +23,18 @@ def _summary(doc) -> dict:
             "required": doc.required, "sha256": doc.sha256}
 
 
+@router.get("/legal/processor")
+async def model_processor():
+    """Which model processor (if any) gets the anonymised resume now; the consent text points here."""
+    from app.services.ai import providers
+
+    current = await providers.refresh()
+    if current is None:
+        return {"enabled": False, "label": None}
+    kind = providers.KINDS.get(current.kind)
+    return {"enabled": True, "label": kind.label if kind else current.kind}
+
+
 @router.get("/legal/documents")
 async def list_documents(role: str | None = None):
     return [_summary(d) for d in documents().values() if role is None or role in d.roles]

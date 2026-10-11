@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.docs import install_docs
 from app.api.errors import install_error_handlers
+from app.api.openapi_problem import install_problem_openapi
 from app.api.v1.router import api_router
 from app.core.body_limit import LimitRequestBody
 from app.core.config import PUBLISHED_SECRETS, settings
@@ -139,6 +140,7 @@ async def request_timing(request: Request, call_next):
 
 install_error_handlers(app)
 install_docs(app)
+install_problem_openapi(app)
 app.include_router(api_router)
 
 

@@ -110,6 +110,12 @@ def _run(verify: dict) -> str:
         value = con.execute(verify["query"]).fetchone()[0]
         con.close()
         return str(value)
+    if runner == "bash":
+        _require(shutil.which("bash"), "bash")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = subprocess.run(["bash", "-c", verify["code"]], capture_output=True, text=True, timeout=10, cwd=tmp)
+        assert out.returncode == 0, out.stderr
+        return out.stdout.strip()
     if runner == "ipaddress":
         return str(eval(verify["expr"]))  # noqa: S307 - our own expression
     raise AssertionError(runner)
@@ -206,3 +212,128 @@ def test_kotlin_and_csharp_show_the_python_answer():
             assert item.language == lang and marker in item.code
             assert item.options[item.correct] == expect
             assert item.verify["expect"] == expect and item.verify["runner"] == lang
+
+
+BASH = shutil.which("bash")
+
+
+def _run_bash(script: str) -> str:
+    with tempfile.TemporaryDirectory() as tmp:
+        out = subprocess.run([BASH, "-c", script], capture_output=True, text=True, timeout=10, cwd=tmp)
+    return out.stdout.strip()
+
+
+@pytest.mark.parametrize("family_id", ["docker_ops", "k8s_ops", "linux_shell"])
+@pytest.mark.parametrize("level", [1, 2, 3, 4, 5])
+def test_devops_family_is_deterministic_typed_and_varied(family_id, level):
+    """Same seed, same item; 60 seeds give 30+ different items; the key is a whole number typed by the candidate."""
+    from app.items import typed_answer
+
+    family = FAMILIES[family_id]
+    first = family.generate(random.Random(11), level, "devops")
+    again = family.generate(random.Random(11), level, "devops")
+    assert first == again
+    seen = set()
+    for seed in range(60):
+        item = family.generate(random.Random(seed), level, "devops")
+        assert typed_answer(family.kind, item) == item.options[item.correct], (family_id, level, item.options)
+        assert int(item.options[item.correct]) >= 0
+        seen.add((item.stem, item.code))
+    assert len(seen) >= 30, (family_id, level, len(seen))
+
+
+def _k8s_reference(p: dict) -> int:
+    """Kubernetes rules written out again, apart from the generator."""
+    import math
+    kind = p["kind"]
+    if kind == "requests":
+        return p["replicas"] * (p["cpu"] + p["sidecar"])
+    if kind == "rolling":
+        r = p["replicas"]
+        if p["ask_top"]:
+            s = p["surge"]
+            return r + (-(-r * int(s[:-1]) // 100) if s.endswith("%") else int(s))
+        u = p["unavailable"]
+        return r - (r * int(u[:-1]) // 100 if u.endswith("%") else int(u))
+    if kind == "hpa":
+        want = math.ceil(p["current"] * p["metric"] / p["target"])
+        return min(p["hi"], max(p["lo"], want))
+    if kind == "schedule":
+        placed, left = 0, p["replicas"]
+        for cpu_free, mem_free in p["nodes"]:      # greedy placement one pod at a time
+            while left and cpu_free >= p["cpu"] and mem_free >= p["mem"]:
+                cpu_free, mem_free, left, placed = cpu_free - p["cpu"], mem_free - p["mem"], left - 1, placed + 1
+        return left
+    raise AssertionError(kind)
+
+
+def _docker_reference(p: dict, item) -> int:
+    kind = p["kind"]
+    if kind == "port":
+        host, inside = p["spec"].split(":")[-2:]
+        assert f"{host}:{inside}" in item.code
+        return int(host if p["ask_host"] else inside)
+    if kind == "cache":
+        dirty = False
+        rebuilt = 0
+        for text, takes in p["steps"]:
+            if takes and not dirty:
+                if takes == ["*"]:
+                    dirty = any(c not in p["ignored"] for c in p["changed"])
+                else:
+                    dirty = bool(set(takes) & set(p["changed"]))
+            if dirty and text.startswith("RUN"):
+                rebuilt += 1
+            assert text in item.code
+        return rebuilt
+    if kind == "multistage":
+        return p["final"] + p["extra"] + p["artifact"]
+    if kind == "layers":
+        return p["base"] + p["unpacked"] + (0 if p["together"] else p["archive"])
+    raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("family_id", ["docker_ops", "k8s_ops"])
+def test_container_keys_match_a_separate_reference(family_id):
+    family = FAMILIES[family_id]
+    for level in family.levels:
+        for seed in range(80):
+            item = family.generate(random.Random(seed), level, "devops")
+            p = item.verify["params"]
+            ref = _k8s_reference(p) if family_id == "k8s_ops" else _docker_reference(p, item)
+            assert str(ref) == item.options[item.correct] == item.verify["expect"], (level, seed, p)
+
+
+def test_cron_key_matches_a_minute_by_minute_walk():
+    family = FAMILIES["linux_shell"]
+
+    def fires(field: str, value: int, top: int) -> bool:
+        allowed = set()
+        for part in field.split(","):
+            rng_part, _, step = part.partition("/")
+            lo, hi = (0, top) if rng_part == "*" else (
+                tuple(map(int, rng_part.split("-"))) if "-" in rng_part else (int(rng_part), int(rng_part)))
+            allowed.update(range(lo, hi + 1, int(step or 1)))
+        return value in allowed
+
+    for seed in range(120):
+        item = family.generate(random.Random(seed), 4, "devops")
+        p = item.verify["params"]
+        assert f"{p['minute']} {p['hour']} * * *" in item.code
+        t, waited = p["now"], 0
+        while True:
+            t, waited = (t + 1) % 1440, waited + 1
+            if fires(p["minute"], t % 60, 59) and fires(p["hour"], t // 60, 23):
+                break
+        assert str(waited) == item.options[item.correct], (p, waited)
+
+
+@pytest.mark.parametrize("level", [1, 2, 3, 5])
+def test_shell_keys_match_bash(level):
+    """grep, chmod, the text pipeline and exit codes: the script itself runs in bash and prints the key."""
+    _require(BASH, "bash")
+    family = FAMILIES["linux_shell"]
+    for seed in range(25):
+        item = family.generate(random.Random(seed), level, "devops")
+        assert item.verify["runner"] == "bash"
+        assert _run_bash(item.code) == item.options[item.correct], (level, seed, item.code)

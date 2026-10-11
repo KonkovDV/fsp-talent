@@ -1,7 +1,8 @@
 """Claims from external audits that are wrong for this code must not reach the pitch or the docs.
 
 docs-analysis part 3: «Wilson LCB» (the axis is empirical-Bayes shrinkage with LCB = μ − σ),
-«test-retest ≥ 0,80» (grade agreement on a retest is κ = 0,47), «AUC ≥ 0,88» (never measured),
+«test-retest ≥ 0,80» (grade agreement on a retest is κ = 0,47), «AUC ≥ 0,88» (an unmeasured threshold;
+the measured adjacent-grade AUC is in VALIDATION_ASSESSMENT),
 «the reranker needs a GPU» (bge-reranker-v2-m3 runs on CPU), P×L×D×C and the status-weighted
 formula (all competitions weigh the same), and subjective scores (88/100, 97 %).
 """
@@ -15,7 +16,7 @@ FILES = ["README.md", "docs/SOLUTION.md", "docs/INSTALL.md", "docs/pitch.html", 
 FORBIDDEN = [
     r"[Ww]ilson",
     r"(retest|ретест|повторн\w+ сдач\w*)[^.\n]{0,40}≥\s*0[,.]8",
-    r"\bAUC\b",
+    r"\bAUC\s*≥\s*0[,.]88",
     r"(требует|нужн\w*|необходим\w*)[^.\n]{0,30}\bGPU\b",
     r"P\s*[×x]\s*L\s*[×x]\s*D\s*[×x]\s*C",
     r"\b88\s*/\s*100\b",
