@@ -12,8 +12,9 @@ whose LCB correlates with the level. Relevance labels come from the hidden truth
     1  role matches or is adjacent, at least half of the required skills are real
     0  otherwise
 
-Rankers: random, the resume baseline (count of declared required skills, then role and declared grade), the
-production order (app.services.search.pipeline.order_pool on the factor score) and its ablations.
+Rankers: random, keyword search (Okapi BM25 of the need text against the profile text), the resume baseline
+(count of declared required skills, then role and declared grade), the production order
+(app.services.search.pipeline.order_pool on the factor score) and its ablations.
 «Без квоты для новичков» is the previous sort by score alone. Besides nDCG@10, P@min(10, n) and MAP
 the run reports the Spearman correlation between the order inside the category the employer sees (same role,
 same shown grade) and the hidden ability θ, two top-10 shares (shown grade above the real one, and real grade
@@ -32,6 +33,7 @@ import hashlib
 import json
 import math
 import random
+import re
 import statistics
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -238,6 +240,60 @@ def _spec(n: dict) -> NeedSpec:
 # score: the product order. category_first is a measurement only; main() sets it from --order.
 ORDER_MODEL = "score"
 
+# Keyword-search baseline: Okapi BM25 with the textbook constants. The need text holds what an employer writes
+# about the job (specialisation, grade, required and wanted skills); the profile text holds what a candidate
+# shows (specialisation, shown grade, every declared skill, whatever its proof). City and work format are
+# conditions, not keywords, and stay out of both texts. IDF and the average length come from the pool ranked.
+BM25_K1 = 1.2
+BM25_B = 0.75
+_TOKEN = re.compile(r"[0-9a-zа-яё#+]+")
+
+
+def _tokens(text: str) -> list[str]:
+    return _TOKEN.findall(text.lower())
+
+
+def _role_words(role: str | None) -> str:
+    from app.services.survey import SPECIALIZATIONS
+
+    return f"{role or ''} {SPECIALIZATIONS.get(role, '') if role else ''}"
+
+
+def need_text(need: dict) -> str:
+    """What a keyword search gets from the need: specialisation, grade, required and wanted skills."""
+    return " ".join([_role_words(need.get("role")), str(need.get("grade") or ""),
+                     *(need.get("skills") or ()), *(need.get("nice") or ())])
+
+
+def profile_text(observed: dict) -> str:
+    """What a keyword search sees in a profile: specialisation, shown grade and every declared skill."""
+    return " ".join([_role_words(observed.get("role")), str(observed.get("grade") or ""),
+                     *sorted(observed.get("skills") or {})])
+
+
+def bm25_rank(cands: list[dict], need: dict, k1: float = BM25_K1, b: float = BM25_B) -> list[str]:
+    """Okapi BM25 of the need text over the pool's profile texts; ties broken by candidate id."""
+    docs = [(c["id"], _tokens(profile_text(c.get("observed") or {}))) for c in cands]
+    if not docs:
+        return []
+    n = len(docs)
+    avg = sum(len(t) for _, t in docs) / n or 1.0
+    df: dict[str, int] = {}
+    for _, toks in docs:
+        for term in set(toks):
+            df[term] = df.get(term, 0) + 1
+    query = _tokens(need_text(need))
+    idf = {t: math.log(1.0 + (n - df.get(t, 0) + 0.5) / (df.get(t, 0) + 0.5)) for t in set(query)}
+    scored = []
+    for cid, toks in docs:
+        tf: dict[str, int] = {}
+        for term in toks:
+            tf[term] = tf.get(term, 0) + 1
+        norm = k1 * (1.0 - b + b * len(toks) / avg)
+        value = sum(idf[t] * tf[t] * (k1 + 1.0) / (tf[t] + norm) for t in query if t in tf)
+        scored.append((-value, cid))
+    return [cid for _, cid in sorted(scored)]
+
 
 def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str]:
     cands = dataset["candidates"]
@@ -245,6 +301,8 @@ def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str
         ids = [c["id"] for c in cands]
         rng.shuffle(ids)
         return ids
+    if method == "bm25":
+        return bm25_rank(cands, need)
     if method == "keyword":
         def key(c):
             o = c["observed"]
@@ -395,6 +453,7 @@ def below_need_share(ranked: list[str], need: dict, by_id: dict[str, dict], k: i
 
 
 PAIRED = (
+    ("bm25", "поиск по ключевым словам"),
     ("keyword", "по резюме"),
     ("no_test", "без теста"),
     ("no_fsp", "без оси ФСП"),
@@ -502,6 +561,77 @@ def paired_report(seeds: list[int], n_candidates: int, n_needs: int) -> str:
             f"| {seed} | нуль релевантных | {curves['zeros']} из {curves['needs']} | "
             f"P@min(10, R) {curves['p_capped']:.3f} | R-precision {curves['r_precision']:.3f} | |"
         )
+    lines.append("")
+    return "\n".join(lines)
+
+
+HEADLINE_BASES = (("bm25", "поиск по ключевым словам (BM25)"), ("keyword", "сортировка по резюме"))
+HEADLINE_AGAINST = {"bm25": "поиска по ключевым словам", "keyword": "сортировки по резюме"}
+
+
+def baseline_deltas(seeds: list[int], n_candidates: int, n_needs: int, rounds: int = 10000) -> dict:
+    """Full model minus each base, nDCG@10 and P@10, paired by need and pooled over the seeds.
+
+    The needs are the ones `evaluate` scores (at least one candidate labelled 2 or higher). The 95 % interval is the
+    percentile bootstrap of the paired mean over the pooled needs, `rounds` resamples, resampling seed 11.
+    """
+    per = {key: {"ndcg": [], "p10": []} for key in ("full", *(k for k, _ in HEADLINE_BASES))}
+    by_seed: dict[int, dict[str, dict[str, float]]] = {}
+    for seed in seeds:
+        dataset = make_dataset(n_candidates, n_needs, seed)
+        rng = random.Random(0)
+        needs = [n for n in dataset["needs"] if _relevant(dataset["labels"][n["id"]]) > 0]
+        local = {key: {"ndcg": [], "p10": []} for key in per}
+        for need in needs:
+            labels = dataset["labels"][need["id"]]
+            for key in per:
+                ranked = rank(dataset, need, key, rng)
+                local[key]["ndcg"].append(ndcg(ranked, labels))
+                local[key]["p10"].append(precision(ranked, labels))
+        for key in per:
+            for metric in ("ndcg", "p10"):
+                per[key][metric].extend(local[key][metric])
+        by_seed[seed] = {key: {m: statistics.mean(v) for m, v in local[key].items()} for key in per}
+    out: dict = {"seeds": list(seeds), "needs": len(per["full"]["ndcg"]), "by_seed": by_seed,
+                 "level": {key: {m: statistics.mean(v) for m, v in per[key].items()} for key in per}}
+    for key, _ in HEADLINE_BASES:
+        out[key] = {}
+        for metric in ("ndcg", "p10"):
+            deltas = [a - b for a, b in zip(per["full"][metric], per[key][metric], strict=True)]
+            mean, low, high = _paired_bounds(deltas, seed=11, rounds=rounds)
+            out[key][metric] = {"mean": mean, "low": low, "high": high,
+                                "wins": sum(1 for d in deltas if d > 0) / len(deltas),
+                                "losses": sum(1 for d in deltas if d < 0) / len(deltas)}
+    return out
+
+
+def _signed(value: float) -> str:
+    return f"{value:+.3f}".replace(".", ",").replace("-", "−")
+
+
+def baseline_markdown(result: dict) -> str:
+    seeds = ", ".join(map(str, result["seeds"]))
+    lines = [
+        f"Полная модель против двух баз на зёрнах {seeds}: разница по потребностям, сводно "
+        f"{result['needs']} потребностей с релевантными кандидатами. 95 % ДИ — парный бутстреп среднего "
+        "по потребностям, 10 000 повторов.",
+        "",
+        "| База | nDCG@10 базы | Δ nDCG@10 | 95 % ДИ | P@10 базы | Δ P@10 | 95 % ДИ | nDCG модели выше / ниже |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for key, title in HEADLINE_BASES:
+        row, level = result[key], result["level"][key]
+        nd, pr = row["ndcg"], row["p10"]
+        lines.append(
+            f"| {title} | {level['ndcg']:.3f} | {nd['mean']:+.3f} | {nd['low']:+.3f}…{nd['high']:+.3f} "
+            f"| {level['p10']:.3f} | {pr['mean']:+.3f} | {pr['low']:+.3f}…{pr['high']:+.3f} "
+            f"| {nd['wins'] * 100:.0f} % / {nd['losses'] * 100:.0f} % |")
+    full = result["level"]["full"]
+    lines += ["", f"Полная модель: nDCG@10 {full['ndcg']:.3f}, P@10 {full['p10']:.3f}.", ""]
+    head = [f"против {HEADLINE_AGAINST[key]} {_signed(result[key]['ndcg']['mean'])} "
+            f"({_signed(result[key]['ndcg']['low'])}…{_signed(result[key]['ndcg']['high'])})"
+            for key, _ in HEADLINE_BASES]
+    lines.append("Заголовок, Δ nDCG@10 (95 % ДИ): " + ", ".join(head) + ".")
     lines.append("")
     return "\n".join(lines)
 
@@ -696,8 +826,11 @@ class Row:
     over_assessed: float | None = None    # part of overrated whose test confirmed that grade
 
 
-METHODS = ("random", "keyword", "full", "no_quota", "no_trust", "no_test", "no_fsp", "no_evidence", "no_related")
-TITLES = {"random": "Случайный порядок", "keyword": "Базовая линия «по резюме»: заявленные навыки и грейд",
+METHODS = ("random", "bm25", "keyword", "full", "no_quota", "no_trust", "no_test", "no_fsp", "no_evidence",
+           "no_related")
+TITLES = {"random": "Случайный порядок",
+          "bm25": "Поиск по ключевым словам (BM25): текст потребности против текста профиля",
+          "keyword": "Базовая линия «по резюме»: заявленные навыки и грейд",
           "full": "ФСП Талант: оценка соответствия", "no_quota": "  без квоты для новичков",
           "no_trust": "  без весов доверия к навыкам",
           "no_test": "  без теста", "no_fsp": "  без оси ФСП", "no_evidence": "  без теста и без ФСП",
@@ -772,7 +905,7 @@ def _pct(value: float | None) -> str:
 
 def seeds_table(seeds: list[int], n_candidates: int, n_needs: int) -> tuple[str, dict[str, dict[str, float]]]:
     """The same benchmark on several seeds: mean and spread, so one lucky seed cannot carry a claim."""
-    keys = ("keyword", "full", "no_test", "no_fsp", "no_evidence")
+    keys = ("bm25", "keyword", "full", "no_test", "no_fsp", "no_evidence")
     per: dict[str, dict[str, list[float]]] = {
         k: {"ndcg": [], "p10": [], "rho": [], "over": [], "below": [], "declared": [], "assessed": []}
         for k in keys
@@ -1409,6 +1542,7 @@ def main() -> None:
         if not args.imported and not args.fsp_events:
             print()
             print(paired_report(paired_seeds, args.candidates, args.needs))
+            print(baseline_markdown(baseline_deltas(paired_seeds, args.candidates, args.needs)))
     print("sha256", sha256(dataset))
     if args.check:
         guard = None
