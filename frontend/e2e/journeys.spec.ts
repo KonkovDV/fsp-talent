@@ -129,7 +129,7 @@ test('кандидат проходит регистрацию и пробный
       salary_from_gross: 150000,
       salary_to_gross: 180000,
       work_format: 'remote',
-      contact_method: 'email',
+      contact_method: 'hr@sibcode.demo',
     },
   })
   expect(created.ok(), await created.text()).toBeTruthy()

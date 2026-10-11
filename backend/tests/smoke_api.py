@@ -269,12 +269,12 @@ def main():
     status, offer = call("POST", "/offers/", {
         "candidate_id": me["id"], "salary_from_gross": 180000, "salary_to_gross": 260000,
         "role": "Backend-разработчик", "work_format": "remote", "message": "Ждём в команде",
-        "contact_method": "Telegram @sibcode_hr",
+        "contact_method": "@sibcode_hr",
     }, token=employer_token)
     assert status == 201, offer
     status, seen = call("GET", "/candidates/me/offers", token=participant_token)
     mine = next(o for o in seen if o["id"] == offer["id"])
-    assert status == 200 and mine["contact_method"] == "Telegram @sibcode_hr", mine
+    assert status == 200 and mine["contact_method"] == "@sibcode_hr", mine
     status, listed = call("GET", "/offers/", token=employer_token)
     assert next(o for o in listed if o["id"] == offer["id"])["candidate_viewed_at"], "viewed status not recorded"
     status, no_salary = call("POST", "/vacancies/", {"title": "Без вилки", "skills": ["Python"]}, token=employer_token)
