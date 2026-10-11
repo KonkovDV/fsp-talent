@@ -35,8 +35,8 @@ from app.services.webhooks import (
     check_url,
     deliver_due,
     enqueue,
-    new_secret,
     first_delivery,
+    new_secret,
     signature_ok,
 )
 
