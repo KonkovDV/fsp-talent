@@ -53,3 +53,17 @@ describe('приглашение', () => {
     expect(await screen.findByText(/не ниже МРОТ 27\s093 ₽/)).toBeInTheDocument()
   })
 })
+
+describe('приглашение: активный оффер (409)', () => {
+  it('после 409 кнопка отправки выключена', async () => {
+    const client = await import('../../api/client')
+    vi.mocked(client.createOffer).mockRejectedValueOnce({ response: { status: 409, data: { detail: 'Активный оффер этому кандидату уже есть' } } })
+    renderDialog()
+    await userEvent.type(screen.getByLabelText(/Должность/i), 'Backend')
+    await userEvent.type(screen.getByLabelText(/связ/i), '@hr_team')
+    const send = screen.getByRole('button', { name: 'Отправить приглашение' })
+    await userEvent.click(send)
+    await screen.findByText('Приглашение не отправлено')
+    expect(send).toBeDisabled()
+  })
+})
