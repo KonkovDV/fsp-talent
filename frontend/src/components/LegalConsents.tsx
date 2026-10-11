@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FileText, X } from 'lucide-react'
 import { legalDocument, legalDocuments, type LegalDoc, type Role } from '../api/client'
 import Modal from './Modal'
+import DemoStandNotice from './DemoStandNotice'
 
 /** Reads a legal document in a modal. The text is the exact version the person agrees to. */
 export function LegalDocModal({ kind, onClose }: { kind: string; onClose: () => void }) {
@@ -20,6 +21,7 @@ export function LegalDocModal({ kind, onClose }: { kind: string; onClose: () => 
           <button onClick={onClose} aria-label="Закрыть" className="btn-icon"><X size={18} /></button>
         </div>
         <div className="overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-relaxed text-ink">
+          <DemoStandNotice className="mb-4 whitespace-normal" />
           {isLoading ? 'Загрузка…' : data?.body_md.replace(/^# .*\n+/, '').replace(/\*\*/g, '')}
         </div>
       </div>

@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { legalDocuments, legalProcessor, type LegalDoc } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import { LegalDocModal } from '../components/LegalConsents'
+import DemoStandNotice from '../components/DemoStandNotice'
 import { PageHeader, Skeleton } from '../components/ui'
 
 /** Every legal text the platform asks people to accept, with version and SHA-256 of the exact wording. */
@@ -14,6 +16,7 @@ export default function LegalPage() {
     <PublicShell>
       <PageHeader title="Документы и согласия"
         lead="Согласие на обработку персональных данных — отдельный документ, как требует 152-ФЗ. В профиле видно, какую версию вы приняли, и любое согласие можно отозвать." />
+      <DemoStandNotice className="mb-4" withPolicyLink />
       {isLoading && <Skeleton className="h-48" />}
       <div className="card overflow-x-auto p-0" tabIndex={0} role="region" aria-label="Таблица документов">
         <table className="protocol">
@@ -22,7 +25,9 @@ export default function LegalPage() {
             {docs.map(d => (
               <tr key={d.kind}>
                 <td><button onClick={() => setOpen(d.kind)} className="text-left font-medium text-accent hover:underline">{d.title}</button>
-                  {!d.required && <span className="block text-xs text-ink-3">по желанию</span>}</td>
+                  {d.consent === false
+                    ? <span className="block text-xs text-ink-3">для ознакомления, принимать не нужно</span>
+                    : !d.required && <span className="block text-xs text-ink-3">по желанию</span>}</td>
                 <td className="text-ink-2">{d.roles.map(r => (r === 'participant' ? 'кандидат' : 'работодатель')).join(', ')}</td>
                 <td className="num text-ink-2">{d.version}</td>
                 <td className="font-mono text-xs text-ink-3">{d.sha256.slice(0, 16)}…</td>
@@ -32,7 +37,7 @@ export default function LegalPage() {
         </table>
       </div>
       <div className="card mt-4 space-y-2 text-sm text-ink-2">
-        <p><span className="font-medium text-ink">Оператор.</span> Демонстрационный стенд: команда проекта «ФСП Талант». Наименование, ОГРН/ИНН и адрес оператора эксплуатации указываются в согласиях до запуска.</p>
+        <p><span className="font-medium text-ink">Оператор.</span> Демонстрационный стенд: команда-участник хакатона «Лидеры цифровой трансформации — 2026». В промышленном контуре оператор — ФСП или владелец платформы; наименование, ОГРН/ИНН и адрес публикуются до запуска. Подробно — в <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>
         <p data-testid="processor"><span className="font-medium text-ink">Помощник на основе модели.</span>{' '}
           {processor?.enabled
             ? `Сейчас обработчик — ${processor.label}; серверы в Российской Федерации, резюме передаётся без имени и контактов.`

@@ -23,6 +23,9 @@ class LegalDocument:
     required: bool
     body_md: str
     sha256: str
+    # False for a document the person reads but does not accept (the privacy policy, 152-FZ art. 18.1 part 2):
+    # it is published on /legal and /privacy, never asked as a checkbox and never stored as a consent row.
+    consent: bool = True
 
 
 def _parse(path: Path) -> LegalDocument:
@@ -40,6 +43,7 @@ def _parse(path: Path) -> LegalDocument:
         roles=tuple(r.strip() for r in meta["roles"].split(",") if r.strip()),
         required=meta.get("required", "false").lower() == "true",
         body_md=body, sha256=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        consent=meta.get("consent", "true").lower() != "false",
     )
 
 
@@ -59,4 +63,9 @@ def get_document(kind: str) -> LegalDocument | None:
 
 
 def required_kinds(role: str) -> list[str]:
-    return [d.kind for d in documents().values() if d.required and role in d.roles]
+    return [d.kind for d in documents().values() if d.required and d.consent and role in d.roles]
+
+
+def consent_documents() -> list[LegalDocument]:
+    """Documents a person accepts and can withdraw; the privacy policy is read-only and not among them."""
+    return [d for d in documents().values() if d.consent]

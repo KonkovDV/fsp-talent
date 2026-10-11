@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiError, apiErrorCode, guestLogin, legalDocuments, publicDemo, registerEmployer, registerParticipant, type Role } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { ConsentChecklist, requiredKinds } from '../components/LegalConsents'
+import DemoStandNotice from '../components/DemoStandNotice'
 import AuthShell, { RoleSwitch } from '../components/AuthShell'
 import FspSignInButton, { OrDivider } from '../components/FspSignInButton'
 import { passwordRule } from '../passwordRule'
@@ -89,6 +90,7 @@ export default function RegisterPage() {
         ? 'Пройдёте опрос и тест — получите категорию, которую видят работодатели.'
         : 'Опишете, кого ищете, — подборка с объяснением появится сразу.'}
       aside={<>Есть аккаунт? <Link to={`/login?role=${role}`} className="font-medium text-accent hover:underline">Войти</Link></>}>
+      <DemoStandNotice className="mb-4" />
       <RoleSwitch role={role} base="/register" />
       {role === 'participant' && <><FspSignInButton label="Продолжить через ФСП ID" /><OrDivider /></>}
       {role === 'participant' ? (
@@ -123,6 +125,8 @@ export default function RegisterPage() {
             в карточке отдельным подтверждённым блоком.
           </p>
           <ConsentChecklist role={role} value={consents} onChange={setConsents} />
+          <p className="text-xs text-ink-3">Как мы обращаемся с данными — в{' '}
+            <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>
           {error && <p className="notice-error" role="alert">{error}</p>}
           <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full py-3">
             {submitting ? 'Отправляем код…' : 'Получить код на email'}
@@ -144,6 +148,8 @@ export default function RegisterPage() {
             <input id="inn" {...ef.register('inn')} inputMode="numeric" className="input" />
             {err(ef.formState.errors.inn?.message)}</div>
           <ConsentChecklist role={role} value={consents} onChange={setConsents} />
+          <p className="text-xs text-ink-3">Как мы обращаемся с данными — в{' '}
+            <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>
           {error && <p className="notice-error" role="alert">{error}</p>}
           <button type="submit" disabled={submitting || missing.length > 0} className="btn-primary w-full py-3">
             {submitting ? 'Отправляем код…' : 'Получить код на email'}

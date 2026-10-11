@@ -37,6 +37,7 @@ const PublicProfile = page(() => import('./pages/PublicProfile'))
 const CompanyPage = page(() => import('./pages/CompanyPage'))
 const NotFoundPage = page(() => import('./pages/NotFoundPage'))
 const LegalPage = page(() => import('./pages/LegalPage'))
+const PrivacyPage = page(() => import('./pages/PrivacyPage'))
 const FspIdDemoPage = page(() => import('./pages/FspIdDemoPage'))
 const FspSignInCallback = page(() => import('./pages/FspSignInCallback'))
 const EvaluatePage = page(() => import('./pages/EvaluatePage'))
@@ -104,6 +105,7 @@ export default function App() {
         <Route path="/passport/:id" element={<PassportPage />} />
         <Route path="/evaluate" element={<EvaluatePage />} />
         <Route path="/legal" element={<LegalPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/p/:id" element={<PublicProfile />} />
         <Route path="/companies/:id" element={<CompanyPage />} />
         <Route path="/fsp-id/authorize" element={<FspIdDemoPage />} />

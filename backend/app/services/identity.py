@@ -165,7 +165,8 @@ def check_required_consents(role: str, accepted: list[str]) -> None:
     missing = [k for k in required_kinds(role) if k not in set(accepted)]
     if missing:
         raise ApiError(422, "consent_required", details={"missing": missing})
-    unknown = [k for k in accepted if get_document(k) is None or role not in get_document(k).roles]
+    docs = {k: get_document(k) for k in accepted}
+    unknown = [k for k, d in docs.items() if d is None or not d.consent or role not in d.roles]
     if unknown:
         raise ApiError(422, "consent_unknown", details={"unknown": unknown})
 
@@ -186,7 +187,7 @@ async def consent_is_current(db: AsyncSession, subject_type: str, subject_id: uu
 async def give_consent(db: AsyncSession, subject_type: str, subject_id: uuid.UUID, kind: str,
                        request: Request | None = None) -> Consent:
     doc = get_document(kind)
-    if doc is None or subject_type not in doc.roles:
+    if doc is None or not doc.consent or subject_type not in doc.roles:
         raise ApiError(404, "consent_unknown")
     current = await active_consent(db, subject_type, subject_id, kind)
     if current is not None and current.version == doc.version and current.sha256 == doc.sha256:
