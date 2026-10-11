@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -25,6 +24,7 @@ from app.core.idempotency import (
 )
 from app.core.ratelimit import RateLimitUnavailable, too_many
 from app.models import AccessLog, CandidateInterest, CategoryAssignment, Employer, Offer, OfferFlag, Participant
+from app.services.contact import contact_ok
 from app.services.market import market_flag, quartiles, reason_shares, role_median, salary_gap_hint
 from app.services.notify import Outbox, notify, salary
 from app.services.offer_perks import PERKS, clean_perks
@@ -36,7 +36,6 @@ from app.services.search.pipeline import visible_in_search
 from app.services.trust_level import invite_limit, next_step, trust_level
 
 router = APIRouter(prefix="/offers", tags=["offers"])
-_CONTACT_LINK = re.compile(r"https?://|www\.", re.IGNORECASE)
 
 
 def _eid(current: dict) -> uuid.UUID:
@@ -66,8 +65,8 @@ class OfferCreate(BaseModel):
         floor = settings.MIN_MONTHLY_GROSS
         if self.salary_from_gross < floor or self.salary_to_gross < floor:
             raise ValueError(f"Вилка не ниже {floor} ₽ в месяц до вычета НДФЛ")
-        if _CONTACT_LINK.search(self.contact_method):
-            raise ValueError("Ссылку в способ связи писать нельзя: укажите почту, телефон или Telegram")
+        if not contact_ok(self.contact_method):
+            raise ValueError("Способ связи: почта, @ник в Telegram или телефон в формате +79991234567")
         self.perks = clean_perks(self.perks)
         return self
 
