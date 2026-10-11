@@ -19,7 +19,8 @@ def test_missing_only_tops_up_to_the_target_and_never_removes():
 
 def test_key_cells_cover_main_categories():
     for cell in [("backend", "middle"), ("frontend", "junior"), ("frontend", "middle"),
-                 ("frontend", "senior"), ("ml", "junior"), ("ml", "middle")]:
+                 ("frontend", "senior"), ("ml", "junior"), ("ml", "middle"),
+                 ("data", "junior"), ("data", "middle"), ("data", "senior")]:
         assert cell in CELLS
 
 
@@ -29,3 +30,10 @@ def test_a_hidden_cell_cannot_be_recovered_by_differencing():
     hidden = [c for c in cells if c["hidden"]]
     assert hidden == [{"role": "backend", "grade": "middle", "hidden": True, "candidates": None, "tested": None}]
     assert all(set(c) == {"role", "grade", "hidden", "candidates", "tested"} for c in cells)
+
+
+def test_synthetic_profiles_do_not_get_the_printed_password():
+    from app.core.security import verify_password
+    from seed.generate_seed import DEMO_PASSWORD
+    from seed.topup_public import unusable_password_hash
+    assert not verify_password(DEMO_PASSWORD, unusable_password_hash())

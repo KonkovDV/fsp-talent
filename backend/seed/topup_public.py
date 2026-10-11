@@ -10,13 +10,15 @@ and the public filter stay as they are.
 from __future__ import annotations
 
 import asyncio
+import random
+import secrets
 from datetime import UTC, date, datetime
 
 from sqlalchemy import and_, func, select
 
 from app.api.v1.public import _public_filter
 from app.core.database import AsyncSessionLocal
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.legal import documents
 from app.models import CategoryAssignment, Consent, GradeConfirmation, Participant, Skill
 from app.services.identity import active_consent
@@ -30,13 +32,20 @@ from seed.generate_seed import (
     SHOWCASE_SPECS,
     _consents,
     _refuse_production,
-    _sit_grade,
 )
 
 TARGET = 6
 PREFIX = "public-"
 BIRTH = date(1996, 3, 1)
-CELLS = tuple((spec, grade) for spec in SHOWCASE_SPECS for grade in SHOWCASE_CORE)
+# DoR-10 also names «data»: the seed's showcase has no data row, so its skills live here.
+SPECS = (*SHOWCASE_SPECS, "data")
+SKILLS = {**_SHOWCASE_SKILLS, "data": ["Python", "SQL", "Airflow", "Spark"]}
+CELLS = tuple((spec, grade) for spec in SPECS for grade in SHOWCASE_CORE)
+
+
+def unusable_password_hash() -> str:
+    """Nobody knows it: a visitor cannot sign in as a synthetic profile and delete it to empty a cell."""
+    return hash_password(secrets.token_urlsafe(32))
 
 
 def missing_for(counts: dict[tuple[str, str], int], target: int = TARGET) -> list[tuple[str, str, int]]:
@@ -84,6 +93,44 @@ async def backfill_jury(db) -> int:
     return fixed
 
 
+async def sit_like_a_person(db, person: Participant, grade: str, email: str) -> bool:
+    """A real session through the service, but not a perfect one: each answer is right with a share drawn
+    per profile (seeded by the address), so places inside a category differ instead of six ties at 100 %."""
+    from app.services import assessment
+    rng = random.Random(email)
+    share = rng.uniform(0.5, 0.85)
+    session, item = await assessment.start_session(db, person.id, person.specialization, grade, code_language="python")
+    for _ in range(25):
+        token = assessment.item_token(session.id, item.seq, item.id)
+        right = rng.random() < share
+        n = len(item.options or []) or 1
+        pick = item.correct_index if right else (item.correct_index + 1) % n
+        if item.typed:
+            value = int(item.options[item.correct_index])
+            session, item, finished = await assessment.answer_item(
+                db, session.id, person.id, token, answer_text=str(value if right else value + 1))
+        else:
+            session, item, finished = await assessment.answer_item(db, session.id, person.id, token, pick)
+        if finished is not None:
+            break
+    await db.refresh(person)
+    return person.assessed_grade == grade
+
+
+async def relock_synthetic(db, password_hash: str) -> int:
+    """Profiles an earlier top-up created with the printed demo password get an unusable one."""
+    count = 0
+    for person in await db.scalars(select(Participant).where(Participant.email.is_not(None))):
+        email = (person.email or "").lower()
+        if email.startswith(PREFIX) and email.endswith("@demo.talent") and person.password_hash \
+                and verify_password(DEMO_PASSWORD, person.password_hash):
+            person.password_hash = password_hash
+            person.token_epoch = int(person.token_epoch or 0) + 1
+            count += 1
+    await db.commit()
+    return count
+
+
 async def topup(target: int = TARGET) -> dict:
     from app.core.rls import bypass_rls
     bypass_rls()
@@ -93,12 +140,13 @@ async def topup(target: int = TARGET) -> dict:
         # Emails are ciphertext in the database: find our own rows in Python.
         ours = [p.email.lower() for p in await db.scalars(select(Participant).where(Participant.email.is_not(None)))
                 if (p.email or "").lower().startswith(PREFIX) and p.email.lower().endswith("@demo.talent")]
-        password_hash = hash_password(DEMO_PASSWORD)
+        password_hash = unusable_password_hash()
+        relocked = await relock_synthetic(db, password_hash)
         dist = documents()["pd_distribution"]
         added = passed = 0
         for spec, grade, need in missing_for(before, target):
             n = 0
-            while need > 0 and n < 99:
+            while need > 0 and n < target * 4:
                 n += 1
                 email = f"{PREFIX}{spec}-{grade}-{n:02d}@demo.talent"
                 if email in ours:
@@ -112,7 +160,7 @@ async def topup(target: int = TARGET) -> dict:
                     industry="fintech", work_goal="job", survey_at=now, job_search="open")
                 db.add(person)
                 await db.flush()
-                for name in _SHOWCASE_SKILLS[spec]:
+                for name in SKILLS[spec]:
                     db.add(Skill(participant_id=person.id, name=name, raw_name=name,
                                  trust_level="self_reported", confirmed=True))
                 _consents(db, "participant", person.id, now)
@@ -122,7 +170,7 @@ async def topup(target: int = TARGET) -> dict:
                 await db.commit()
                 added += 1
                 try:
-                    ok = await _sit_grade(db, person, grade)
+                    ok = await sit_like_a_person(db, person, grade, email)
                 except Exception as exc:  # one failed sitting must not stop the top-up
                     await db.rollback()
                     print(f"topup test skipped {email}: {type(exc).__name__}")
@@ -133,9 +181,10 @@ async def topup(target: int = TARGET) -> dict:
                     need -= 1
         after = await public_counts(db)
     short = [f"{s}/{g}={after.get((s, g), 0)}" for s, g in CELLS if after.get((s, g), 0) < BANK_MIN]
-    print(f"topup_public jury_fixed={jury_fixed} added={added} passed={passed} "
+    print(f"topup_public jury_fixed={jury_fixed} relocked={relocked} added={added} passed={passed} "
           f"cells_below_{BANK_MIN}={len(short)} {' '.join(short)}")
-    return {"jury_fixed": jury_fixed, "added": added, "passed": passed, "before": before, "after": after}
+    return {"jury_fixed": jury_fixed, "relocked": relocked, "added": added, "passed": passed,
+            "before": before, "after": after}
 
 
 def main() -> None:
