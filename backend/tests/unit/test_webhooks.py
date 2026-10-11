@@ -32,3 +32,62 @@ def test_the_stand_sandbox_is_allowed(monkeypatch):
     from app.core.config import settings
     monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "http://localhost")
     assert check_url("http://localhost/api/v1/integrations/sandbox/abc").endswith("/abc")
+
+
+@pytest.mark.parametrize("url", [
+    # SEC3-02: another port of the stand host
+    "http://localhost:8000/api/v1/integrations/sandbox/abc",
+    "http://localhost:6379/api/v1/integrations/sandbox/abc",
+    # SEC3-02: «..» after the sandbox prefix, plain and percent-encoded (httpx collapses it to /metrics)
+    "http://localhost/api/v1/integrations/sandbox/../../../../metrics",
+    "http://localhost/api/v1/integrations/sandbox/%2e%2e/%2e%2e/admin",
+    "http://localhost/api/v1/integrations/sandbox/%252e%252e/x",
+    "http://localhost/api/v1/integrations/sandbox/./x",
+    "http://localhost/api/v1/integrations/sandbox\\..\\x",
+    # any other path of the stand
+    "http://localhost/api/v1/employer/integrations",
+])
+def test_the_stand_host_only_takes_the_sandbox_receiver(monkeypatch, url):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "http://localhost")
+    with pytest.raises(ValueError):
+        check_url(url)
+
+
+def test_the_sandbox_on_the_default_port_written_out_is_allowed(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "https://stand.example")
+    assert check_url("https://stand.example:443/api/v1/integrations/sandbox/abc").endswith("/abc")
+
+
+async def test_delivery_connects_to_the_checked_address(monkeypatch):
+    """SEC3-03: the name is resolved once; the request goes to that IP, not to a second (rebound) answer."""
+    import httpx
+
+    from app.services import page_draft, webhooks
+
+    answers = iter(["93.184.216.34", "127.0.0.1"])
+    monkeypatch.setattr(page_draft, "public_ip", lambda host: next(answers))
+    seen = {}
+
+    async def fake_send(self, request):
+        seen["host"] = request.url.host
+        seen["header"] = request.headers.get("host")
+        seen["sni"] = request.extensions.get("sni_hostname")
+        return httpx.Response(204, request=request)
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", fake_send)
+    code, _ = await webhooks.post_delivery("https://ats.example/hook", "whsec_x", "d-1", "{}")
+    assert code == 204
+    assert seen == {"host": "93.184.216.34", "header": "ats.example", "sni": "ats.example"}
+
+
+async def test_delivery_to_a_private_answer_is_refused(monkeypatch):
+    from app.services import page_draft, webhooks
+
+    def private(host):
+        raise page_draft.PageDraftError("Адрес страницы не публичный")
+
+    monkeypatch.setattr(page_draft, "public_ip", private)
+    with pytest.raises(ValueError):
+        await webhooks.post_delivery("https://rebind.example/hook", "whsec_x", "d-1", "{}")

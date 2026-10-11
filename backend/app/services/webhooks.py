@@ -13,10 +13,11 @@ import base64
 import hashlib
 import hmac
 import json
+import posixpath
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -79,9 +80,11 @@ def check_url(url: str) -> str:
     if parts.username or parts.password or not parts.hostname:
         raise ValueError("некорректный адрес")
     base = urlsplit(settings.PUBLIC_BASE_URL)
-    own = (parts.scheme == base.scheme and parts.hostname == base.hostname
-           and parts.path.startswith(_OWN_PATH))
-    if own:
+    if parts.scheme == base.scheme and parts.hostname == base.hostname:
+        # SEC3-02: the own-host exception is the sandbox receiver only: same port, and a path that stays
+        # under it after decoding and normalisation (httpx collapses «../», so «/sandbox/../../metrics» is /metrics).
+        if _port(parts) != _port(base) or not _own_path(parts.path):
+            raise ValueError("на адрес стенда — только приёмник песочницы")
         return url.strip()
     if parts.scheme != "https":
         raise ValueError("снаружи принимается только https")
@@ -90,6 +93,30 @@ def check_url(url: str) -> str:
     except ProviderError as exc:
         raise ValueError(str(exc)) from exc
     return url.strip()
+
+
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _port(parts) -> int | None:
+    try:
+        return parts.port or _DEFAULT_PORTS.get(parts.scheme)
+    except ValueError:
+        return None
+
+
+def _own_path(path: str) -> bool:
+    raw = unquote(unquote(path))
+    if "\\" in raw or any(seg in ("..", ".") for seg in raw.split("/")):
+        return False
+    return posixpath.normpath(raw).startswith(_OWN_PATH.rstrip("/")) and raw.startswith(_OWN_PATH)
+
+
+def _is_own(url: str) -> bool:
+    from app.core.config import settings
+
+    parts, base = urlsplit(url), urlsplit(settings.PUBLIC_BASE_URL)
+    return parts.scheme == base.scheme and parts.hostname == base.hostname
 
 
 def new_secret() -> str:
@@ -124,8 +151,19 @@ async def enqueue(db, employer_id: uuid.UUID, event_type: str, payload: dict) ->
 async def post_delivery(url: str, secret: str, delivery_id: str, payload: str) -> tuple[int, str]:
     body = payload.encode()
     headers = sign_headers(secret, delivery_id, body, datetime.now(UTC))
+    transport = None
+    if not _is_own(url):
+        # SEC3-03: resolve once and connect to that checked address (DNS rebinding between check and send).
+        from app.services.page_draft import PageDraftError, _Pinned, public_ip
+
+        host = urlsplit(url).hostname or ""
+        try:
+            transport = _Pinned(host, public_ip(host))
+        except PageDraftError as exc:
+            raise ValueError(f"адрес не публичный: {exc}") from exc
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0), trust_env=False, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0), trust_env=False, follow_redirects=False,
+                                     transport=transport) as client:
             response = await client.post(url, content=body, headers=headers)
     except httpx.HTTPError as exc:
         return 0, type(exc).__name__
