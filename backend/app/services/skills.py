@@ -148,8 +148,38 @@ def _patterns() -> list[tuple[re.Pattern, str, bool]]:
     return pats
 
 
+# Negation (NegEx, Chapman et al. 2001, doi:10.1006/jbin.2001.1029): a trigger shortly before a skill, inside
+# the same clause, means the text says the person does NOT have it: «не работал с Kubernetes», «без Docker»,
+# «нет опыта с Kafka», «хочу изучить Go», «no experience with Rust».
+_NEG_TRIGGER = re.compile(
+    r"(?<!\w)(?:не|нет|без|хочу\s+изучить|планирую|no|not|never|without)(?!\w)", re.IGNORECASE)
+# Pseudo-negations: «не только Python», «не менее 3 лет с Java» do not deny the skill.
+_NEG_PSEUDO = re.compile(r"(?:не|not)\s+(?:только|менее|меньше|ниже|хуже|позднее|позже|only)(?!\w)", re.IGNORECASE)
+# A clause ends at sentence punctuation, a comma, a bracket or a contrastive conjunction.
+_CLAUSE_END = re.compile(r"[.;:!?,()\[\]\n•|]|(?<!\w)(?:но|а|однако|зато|but|however)(?!\w)", re.IGNORECASE)
+_NEG_WINDOW_WORDS = 3
+_WORD = re.compile(r"\w+")
+
+
+def is_negated(text: str, start: int) -> bool:
+    """A negation trigger stands at most three words before `start`, in the same clause."""
+    left = text[max(0, start - 120):start]
+    ends = list(_CLAUSE_END.finditer(left))
+    if ends:
+        left = left[ends[-1].end():]
+    for trigger in _NEG_TRIGGER.finditer(left):
+        if _NEG_PSEUDO.match(left, trigger.start()):
+            continue
+        if len(_WORD.findall(left[trigger.end():])) <= _NEG_WINDOW_WORDS:
+            return True
+    return False
+
+
 def extract_skills(text: str) -> list[ExtractedSkill]:
-    """Rule-based extraction. Folding is 1:1 per character, so offsets stay valid for the original text."""
+    """Rule-based extraction. Folding is 1:1 per character, so offsets stay valid for the original text.
+
+    A negated mention («не работал с Kubernetes») is skipped; a later plain mention of the same skill still counts.
+    """
     folded = text.translate(_LOOKALIKES)
     found: dict[str, ExtractedSkill] = {}
     taken: list[tuple[int, int]] = []
@@ -157,7 +187,7 @@ def extract_skills(text: str) -> list[ExtractedSkill]:
         if canonical in found:
             continue
         for haystack in ((text, folded) if ascii_alias else (text,)):
-            m = pattern.search(haystack)
+            m = next((m for m in pattern.finditer(haystack) if not is_negated(text, m.start())), None)
             if m and not any(s < m.end() and m.start() < e for s, e in taken):
                 found[canonical] = ExtractedSkill(canonical, text[m.start():m.end()], m.start(), m.end())
                 taken.append((m.start(), m.end()))
