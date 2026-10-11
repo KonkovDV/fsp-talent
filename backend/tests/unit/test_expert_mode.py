@@ -1,7 +1,6 @@
 """JS-02: expert mode runs the live CAT on a simulated candidate and gives away no item content."""
 import json
 import random
-import time
 
 import pytest
 from starlette.requests import Request
@@ -58,10 +57,20 @@ def test_no_item_text_options_or_keys_leave_the_module():
         assert f'"{word}"' not in blob
 
 
-def test_batch_of_fifty_reports_agreement_quickly():
-    started = time.perf_counter()
+def test_batch_of_fifty_reports_agreement_in_bounded_work(monkeypatch):
+    # Work is counted, not timed: a 2 s wall-clock limit failed under a loaded CI box (3.6 s @26145d5) while
+    # the same call takes 0.3 s on an idle one. One session plus 50 repeats, each capped at MAX_ITEMS items.
+    sessions = []
+    real_run = expert_mode.run_session
+
+    def counted(*args, **kwargs):
+        session = real_run(*args, **kwargs)
+        sessions.append(session.n)
+        return session
+
+    monkeypatch.setattr(expert_mode, "run_session", counted)
     out = simulate(grade="middle", seed=7, batch=50)
-    assert time.perf_counter() - started < 2.0
+    assert len(sessions) == 51 and all(1 <= n <= MAX_ITEMS for n in sessions)
     batch = out["batch"]
     assert batch["n"] == 50 and sum(batch["grades"].values()) == 50
     assert 0.0 <= batch["same_as_first"] <= 1.0 and 0.0 <= batch["same_as_truth"] <= 1.0
