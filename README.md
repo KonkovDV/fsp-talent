@@ -3,25 +3,37 @@
 </p>
 
 <p align="center">
-  <img alt="Лицензия MIT" src="https://img.shields.io/badge/лицензия-MIT-1f6feb">
+  <a href="https://github.com/KonkovDV/fsp-talent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/KonkovDV/fsp-talent/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://89-124-65-102.sslip.io"><img alt="Стенд онлайн" src="https://img.shields.io/badge/стенд-онлайн-2ea043"></a>
+  <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/лицензия-MIT-1f6feb"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776ab">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-OpenAPI_3.1-009688">
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61dafb">
   <img alt="PostgreSQL 16 + pgvector" src="https://img.shields.io/badge/PostgreSQL-16_+_pgvector-336791">
-  <img alt="Автопроверка axe по правилам WCAG 2.2 AA: 0 нарушений" src="https://img.shields.io/badge/axe_(WCAG_2.2_AA)-0_нарушений_автопроверки-2ea043">
   <img alt="152-ФЗ" src="https://img.shields.io/badge/152--ФЗ-согласия_ст._9_и_10.1-6f42c1">
-  <img alt="W3C VC 2.0" src="https://img.shields.io/badge/W3C_VC-2.0-555">
 </p>
 
 # ФСП Талант
 
-**команда Дмитрия Конькова** · [стенд](https://89-124-65-102.sslip.io) · [репозиторий](https://github.com/KonkovDV/fsp-talent)
+**Работодатель приглашает разработчика по подтверждённому тестом грейду, а не по резюме.**
 
-Живой стенд с демо-входами · 1875 ключей заданий проверены запуском · API-ключи и вебхуки для ATS · юридический пакет
+**команда Дмитрия Конькова** · [стенд](https://89-124-65-102.sslip.io) · [репозиторий](https://github.com/KonkovDV/fsp-talent)
 
 Платформа подбора ИТ-специалистов для ФСП с обратной механикой: грейд подтверждает адаптивный тест, работодатель сам приходит к кандидату с вакансией и вилкой, а контакты открываются только с согласия кандидата.
 
 **[Стенд](https://89-124-65-102.sslip.io)** · [страница жюри /jury](https://89-124-65-102.sslip.io/jury) · [видео 3:17](submission/05-additional/fsp-talent-demo.mp4) · [презентация PDF](submission/03-presentation/FSP_Talent_presentation.pdf) · [документация PDF](docs/FSP_Talent_documentation.pdf) · [что сверх ТЗ](docs/BEYOND_TZ.md) · пароль демо-входов `demo12345`
+
+<table>
+<tr>
+<td width="50%"><a href="https://89-124-65-102.sslip.io"><img src="docs/img/stand-landing.jpg" alt="Главная стенда: приглашение по результату, вход для жюри"></a></td>
+<td width="50%"><a href="https://89-124-65-102.sslip.io/jury"><img src="docs/img/stand-jury.jpg" alt="Страница жюри: демо-входы и сквозной сценарий ТЗ 3.3"></a></td>
+</tr>
+</table>
+
+| Кандидату | Работодателю | ФСП |
+|---|---|---|
+| 1. Опрос и заявленный грейд | 1. Потребность обычным текстом | 1. Вход через ФСП ID |
+| 2. Адаптивный тест подтверждает грейд | 2. Подборка с объяснением «почему он здесь» | 2. Результаты соревнований — отдельная ось подбора |
+| 3. Приглашения с вилкой, контакты — после согласия | 3. Приглашение с вилкой, выгрузка в ATS | 3. Удостоверение W3C VC 2.0 с проверкой подписи |
 
 ## Проверьте нас за 3 минуты
 
