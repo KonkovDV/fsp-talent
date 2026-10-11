@@ -10,8 +10,12 @@ from __future__ import annotations
 import argparse
 import random
 from collections import Counter
+from pathlib import Path
+import sys
 
-from app.services import cat
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # `python tests/stop_reasons.py` from backend/
+
+from app.services import cat  # noqa: E402
 
 SPECS = ("backend", "frontend", "data", "qa")
 
