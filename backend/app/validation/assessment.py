@@ -141,7 +141,8 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
                 misspec: tuple[float, float] | None = None,
                 control: dict[str, float] | None = None,
                 known: set[tuple] | None = None, remember: set[tuple] | None = None,
-                item_limit: int | None = None) -> Session:
+                item_limit: int | None = None,
+                responder=None) -> Session:
     state = State(spec=spec, target=target)
     keys: list[str] = []
     answers = []
@@ -177,10 +178,17 @@ def run_session(theta: float, spec: str, target: str, truth: Truth, rng: random.
             correct = True
         elif attack == "transfer":
             correct = rng.random() < (collision or {}).get(ch.family.id, 0.0)
+        elif attack == "transfer_or_own":
+            # The copied key is right only on a collision; otherwise the person answers on own ability.
+            correct = (rng.random() < (collision or {}).get(ch.family.id, 0.0)
+                       or rng.random() < p3(theta, ch.a * truth.a_mult[key], LEVEL_B[ch.level] + truth.offsets[key], c))
         elif guesser:
             correct = rng.random() < c
         elif leaked_family and ch.family.id == leaked_family:
             correct = True
+        elif responder is not None:
+            # Validation only: an answer model the scorer does not share (see construction_check.py).
+            correct = rng.random() < responder(theta, ch, c, key, rng)
         elif misspec is not None:
             sigma_a, sigma_b = misspec
             a_star = ch.a * math.exp(rng.gauss(0.0, sigma_a))
