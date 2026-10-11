@@ -5,8 +5,8 @@ import { ROLE_RU, gradeRu } from '../labels'
 export function PageHeader({ title, lead, actions }: { title: string; lead?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="page-head">
-      <div className="min-w-0">
-        <h1 className="page-title">{title}</h1>
+      <div className="min-w-0 max-w-full">
+        <h1 className="page-title" title={typeof title === 'string' ? title : undefined}>{title}</h1>
         {lead && <p className="page-lead">{lead}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

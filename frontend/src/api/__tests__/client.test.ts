@@ -1,7 +1,7 @@
 import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAuthStore } from '../../store/authStore'
-import { api } from '../client'
+import { api, apiError } from '../client'
 
 function jwt(exp: number) {
   return `h.${btoa(JSON.stringify({ exp, sub: 'person-1' }))}.s`
@@ -61,5 +61,25 @@ describe('обновление access-токена', () => {
     ])).resolves.toHaveLength(2)
     expect(exits).toBe(1)
     stop()
+  })
+})
+
+
+describe('apiError — русские тексты валидации', () => {
+  function err(data: unknown) {
+    return { response: { data } }
+  }
+
+  it('переводит типичные сообщения pydantic/422', () => {
+    expect(apiError(err({ detail: [{ loc: ['body', 'limit'], msg: 'Input should be less than or equal to 50', type: 'less_than_equal' }] }), 'x'))
+      .toBe('limit: Значение должно быть не больше 50')
+    expect(apiError(err({ detail: [{ msg: 'Field required' }] }), 'x')).toBe('Обязательное поле')
+    expect(apiError(err({ detail: 'Input should be a valid UUID, invalid character' }), 'x')).toBe('Некорректный идентификатор')
+    expect(apiError(err({ detail: "Input should be 'reviewing', 'accepted' or 'rejected'" }), 'x'))
+      .toBe("Допустимые значения: 'reviewing', 'accepted' или 'rejected'")
+  })
+
+  it('оставляет уже русское сообщение envelope', () => {
+    expect(apiError(err({ error: { code: 'conflict', message: 'Уже есть такая запись' } }), 'x')).toBe('Уже есть такая запись')
   })
 })
