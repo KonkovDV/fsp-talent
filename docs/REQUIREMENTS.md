@@ -180,7 +180,7 @@
 | 3.5 Docker, Dockerfile, docker-compose.yml | ✅ | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, проверка в CI |
 | 3.5 OpenAPI: запросы, ответы, коды ошибок | ✅ | `/docs`, `/openapi.json`, [API_ERRORS.md](API_ERRORS.md) |
 | Ошибка API в форме RFC 9457: класс E01–E20 и прежний код | ✅ сверх ТЗ | `GET /api/v1/problems`, [API_ERRORS.md](API_ERRORS.md) | `app/api/problems.py` |
-| 3.5 152-ФЗ, согласия, роли, защита паролей и токенов | ✅ | Пять неверных паролей подряд закрывают вход на 15 минут. Минутное окно Redis остаётся. [SOLUTION.md, гл. 10](SOLUTION.md#10-безопасность-и-152-фз) |
+| 3.5 152-ФЗ, согласия, роли, защита паролей и токенов | ✅ | Пять неверных паролей с одного адреса закрывают вход с этого адреса на 15 минут; аккаунт целиком — после 100 (NIST 800-63B), демо-аккаунты жюри не закрываются. Минутные окна Redis остаются. [SOLUTION.md, гл. 10](SOLUTION.md#10-безопасность-и-152-фз) |
 | Пароли Argon2id, refresh в HttpOnly-cookie, двойная cookie против подделки запроса | ✅ сверх ТЗ | Вход и обновление сессии | `app/core/security.py`, `app/core/csrf.py` |
 | Заголовки браузера закрывают камеру, микрофон и геолокацию. Вход ограничен через Redis | ✅ сверх ТЗ | Ответ `/health` и nginx | `BrowserLock` в `app/main.py` |
 | 3.5 Совместимость с Keycloak | ✅ | OIDC-клиент, [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |

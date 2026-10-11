@@ -190,12 +190,13 @@ export type Role = 'participant' | 'employer'
 const form = (username: string, password: string) =>
   [new URLSearchParams({ username, password }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }] as const
 
+export const resetMyDemo = () => api.post('/candidates/me/demo/reset')
 export const publicDemo = () => api.get<{ demo_mode: boolean; mail_console: boolean }>('/public/demo')
 export const publicJuryFree = () => api.get<{ email: string }>('/public/jury-free')
 export const guestLogin = (role: Role, consents: string[]) =>
   api.post<{ access_token: string; role: Role; guest_until: string }>('/auth/guest', { role, consents })
 export const registerParticipant = (data: {
-  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; consents: string[]
+  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; birth_date?: string; consents: string[]
 }) => api.post('/auth/participant/register', data)
 export const registerEmployer = (data: object) => api.post('/auth/employer/register', data)
 export const verifyEmail = (data: { email?: string; code?: string; token?: string; role?: Role }) =>
@@ -365,6 +366,7 @@ export const methodWeights = () => api.get<{
 }>('/public/method/weights')
 
 export const surveyOptions = () => api.get('/candidates/survey-options')
+export const surveyHistory = () => api.get('/candidates/me/survey/history')
 export const saveSurvey = (data: {
   specialization: string; industry: string; work_goal: string; declared_grade?: string | null; experience_years?: number | null
   salary_from_gross?: number | null; salary_to_gross?: number | null; salary_basis?: 'gross' | 'net'

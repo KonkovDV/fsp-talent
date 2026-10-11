@@ -1,13 +1,26 @@
-"""Marks that do not move the grade: a hidden tab, a copied stem, and a request to look again."""
+"""Marks that do not move the grade: a hidden tab, a copied stem, a paste, the risk level, a request to look again."""
 from __future__ import annotations
 
 TAB_LEAVE_CAP = 30
 INTEGRITY_FACTOR = 0.85
 INTEGRITY_LINE = (
-    "На тесте отмечены быстрые верные ответы или уход со вкладки. "
+    "На тесте несколько сигналов нечестного прохождения (уровень риска «умеренный» или выше). "
     "Место умножено на 0,85. Грейд не изменён."
 )
 COPY_CAP = 30
+PASTE_CAP = 30
+# Integrity risk level (W6): points from independent signals, one signal alone is not a violation
+# (Codility Integrity Risk, HackerRank). The place factor applies from "moderate" up; the grade never moves.
+LEVELS = ((4, "high"), (2, "moderate"), (1, "low"), (0, "none"))
+LEVEL_LABELS = {"none": "нет", "low": "низкий", "moderate": "умеренный", "high": "высокий"}
+PENALISED_LEVELS = ("moderate", "high")
+SIGNAL_LABELS = {
+    "tab_leaves": "вкладка теста скрывалась 2 и более раз",
+    "copies": "текст задания копировали",
+    "pastes": "в поле ответа вставляли текст",
+    "fast_correct": "быстрые верные ответы на трудные задания",
+    "similarity": "ответ совпал с ключом другого варианта или подпись задания не сошлась",
+}
 DISPUTE_TEXT = (
     "Решение принято автоматически по правилам теста. "
     "Пересмотр — вручную в течение 5 рабочих дней. Пересдача доступна по обычным правилам. "
@@ -27,6 +40,45 @@ def note_copy(flags: dict | None) -> dict:
     out = dict(flags or {})
     out["copies"] = min(COPY_CAP, int(out.get("copies") or 0) + 1)
     return out
+
+
+def note_paste(flags: dict | None) -> dict:
+    """Count one paste into an answer field. The grade fields are not touched."""
+    out = dict(flags or {})
+    out["pastes"] = min(PASTE_CAP, int(out.get("pastes") or 0) + 1)
+    return out
+
+
+def integrity_level(flags: dict | None) -> dict:
+    """Deterministic risk level from signal points. A trial and a vacancy test get no level.
+
+    tab hidden ≥ 2 times: 1; stem copied: 1; paste into an answer: 1; ≥ 2 fast right answers on items the
+    candidate was unlikely to solve (or a fast run in one family): 2; key of another variant or a broken
+    item signature: 2. 0 → none, 1 → low, 2–3 → moderate, ≥ 4 → high.
+    """
+    flags = flags or {}
+    if flags.get("vacancy_id") or flags.get("mode") == "express":
+        return {"level": "none", "points": 0, "signals": []}
+    points = {
+        "tab_leaves": 1 if int(flags.get("tab_leaves") or 0) >= 2 else 0,
+        "copies": 1 if int(flags.get("copies") or 0) > 0 else 0,
+        "pastes": 1 if int(flags.get("pastes") or 0) > 0 else 0,
+        "fast_correct": 2 if int(flags.get("fast_correct") or 0) >= 2 or flags.get("pace_review") else 0,
+        "similarity": 2 if flags.get("variant_review") or flags.get("integrity_review") else 0,
+    }
+    total = sum(points.values())
+    level = next(name for floor, name in LEVELS if total >= floor)
+    return {"level": level, "points": total, "signals": [k for k, v in points.items() if v]}
+
+
+def integrity_line(flags: dict | None) -> str | None:
+    """What the candidate and the employer read: the level and the signals, never «you cheated»."""
+    info = integrity_level(flags)
+    if info["level"] == "none":
+        return None
+    signals = "; ".join(SIGNAL_LABELS[s] for s in info["signals"])
+    tail = " Место умножено на 0,85." if info["level"] in PENALISED_LEVELS else " Место не меняется."
+    return f"Уровень риска честности: {LEVEL_LABELS[info['level']]} ({signals}).{tail} Грейд не изменён."
 
 
 def latest_grade_flags(rows: list[tuple]) -> dict:
@@ -68,17 +120,14 @@ def latest_failed_targets(rows: list[tuple]) -> dict:
 
 
 def integrity_flagged(flags: dict | None) -> bool:
-    """A grade test with a fast-correct run or a hidden tab. A trial and a vacancy test do not count."""
-    flags = flags or {}
-    if flags.get("vacancy_id") or flags.get("mode") == "express":
-        return False
-    return bool(flags.get("pace_review")) or int(flags.get("tab_leaves") or 0) > 0
+    """A grade test at risk level «moderate» or higher. A trial and a vacancy test do not count."""
+    return integrity_level(flags)["level"] in PENALISED_LEVELS
 
 
 def penalised(score: float, flags: dict | None) -> tuple[float, str | None]:
     if not integrity_flagged(flags):
         return score, None
-    return round(score * INTEGRITY_FACTOR, 4), INTEGRITY_LINE
+    return round(score * INTEGRITY_FACTOR, 4), integrity_line(flags) or INTEGRITY_LINE
 
 
 def dispute_error(status: str, owned: bool, already: bool) -> str | None:

@@ -9,27 +9,17 @@ import asyncio
 import os
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.demo_guard import is_protected
 from app.core.security import hash_password
-from app.legal import documents
 from app.models import (
-    CategoryAssignment,
-    Complaint,
-    Consent,
     Employer,
-    GradeConfirmation,
-    Offer,
     Participant,
-    PracticeAttempt,
-    ProfileSearchIndex,
-    Skill,
-    TestSession,
 )
-from app.services.identity import active_consent
+from app.services.demo_reset import clear_jury, restore_consents
 from seed.demo_activity import restore_pending_invites
 from seed.generate_seed import DEMO_PASSWORD, JURY_BIRTH
 
@@ -39,43 +29,6 @@ def refuse_outside_demo() -> None:
         raise SystemExit("Сброс демо-стенда не выполняется, когда ENV=production")
     if not settings.DEMO_MODE:
         raise SystemExit("Сброс демо-стенда выполняется только при DEMO_MODE")
-
-
-async def _clear_jury(db, person: Participant) -> None:
-    pid = person.id
-    offer_ids = list(await db.scalars(select(Offer.id).where(Offer.candidate_id == pid)))
-    if offer_ids:
-        await db.execute(delete(Complaint).where(Complaint.offer_id.in_(offer_ids)))
-        await db.execute(delete(Offer).where(Offer.id.in_(offer_ids)))
-    session_ids = list(await db.scalars(select(TestSession.id).where(TestSession.participant_id == pid)))
-    if session_ids:
-        await db.execute(delete(TestSession).where(TestSession.id.in_(session_ids)))
-    await db.execute(delete(GradeConfirmation).where(GradeConfirmation.participant_id == pid))
-    await db.execute(delete(PracticeAttempt).where(PracticeAttempt.participant_id == pid))
-    await db.execute(delete(Skill).where(Skill.participant_id == pid))
-    await db.execute(delete(CategoryAssignment).where(CategoryAssignment.participant_id == pid))
-    await db.execute(delete(ProfileSearchIndex).where(ProfileSearchIndex.participant_id == pid))
-    person.survey_at = None
-    person.specialization = None
-    person.declared_grade = None
-    person.assessed_grade = None
-    person.assessed_at = None
-    person.grade_locked_until = None
-    person.industry = None
-    person.work_goal = None
-    person.salary_from_gross = None
-    person.salary_to_gross = None
-    person.experience_years = None
-
-
-async def _restore_consents(db, person: Participant, now: datetime) -> None:
-    for doc in documents().values():
-        if not doc.required or "participant" not in doc.roles:
-            continue
-        if await active_consent(db, "participant", person.id, doc.kind) is not None:
-            continue
-        db.add(Consent(subject_type="participant", subject_id=person.id, kind=doc.kind,
-                       version=doc.version, sha256=doc.sha256, given_at=now))
 
 
 async def reset_demo() -> None:
@@ -93,12 +46,12 @@ async def reset_demo() -> None:
             person.password_hash = password_hash
             person.token_epoch = int(person.token_epoch or 0) + 1
             person.refresh_nonce = int(person.refresh_nonce or 0) + 1
-            await _restore_consents(db, person, now)
+            await restore_consents(db, person, now)
             if (person.email or "").startswith("jury") and person.email.endswith("@demo.talent"):
                 if person.birth_date is None:
                     person.birth_date = JURY_BIRTH
                     person.is_minor = False
-                await _clear_jury(db, person)
+                await clear_jury(db, person)
                 jury += 1
         companies = 0
         for company in await db.scalars(select(Employer).where(Employer.email.is_not(None))):
