@@ -10,6 +10,7 @@ export interface CandidateCardData {
   role: string | null
   grade: string | null
   grade_source: string | null
+  grade_borderline?: boolean
   also_primary?: { role: string | null; grade: string | null; grade_source: string | null } | null
   region: string | null
   experience_years: number | null
@@ -233,7 +234,14 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {card.grade_source === 'assessed'
-              ? <span className="badge-ok">Грейд подтверждён тестом</span>
+              ? <>
+                  <span className="badge-ok">Грейд подтверждён тестом</span>
+                  {card.grade_borderline && (
+                    <span className="badge-vc" title="Оценка теста в пределах погрешности от порога уровня. На повторе такие решения совпадают реже: около 59 % против 82 %.">
+                      на границе уровня
+                    </span>
+                  )}
+                </>
               : <span className="badge-vc">Грейд не подтверждён</span>}
             {disc ? <><RankBadge rank={disc.best_rank} assignedAt={disc.rank_assigned_at} orderRef={disc.rank_order_ref} /><span className="text-ink-2">{disc.label}</span></>
               : <span className="text-ink-3">Без истории ФСП</span>}

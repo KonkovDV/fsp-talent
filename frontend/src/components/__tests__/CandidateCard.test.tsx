@@ -86,4 +86,15 @@ describe('карточка кандидата', () => {
     expect(screen.getByText('Грейд не подтверждён')).toBeInTheDocument()
     expect(screen.queryByText('Грейд подтверждён тестом')).not.toBeInTheDocument()
   })
+
+  it('помечает подтверждённый грейд на границе уровня и не прячет его', () => {
+    render(<CandidateCard card={{ ...card, grade_borderline: true, match: undefined }} onOffer={() => undefined} />)
+    expect(screen.getByText('Грейд подтверждён тестом')).toBeInTheDocument()
+    expect(screen.getByText('на границе уровня')).toBeInTheDocument()
+  })
+
+  it('без пометки границы не пишет её', () => {
+    render(<CandidateCard card={{ ...card, match: undefined }} onOffer={() => undefined} />)
+    expect(screen.queryByText('на границе уровня')).not.toBeInTheDocument()
+  })
 })

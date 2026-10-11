@@ -40,6 +40,7 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.ambition import ambition_note
+from app.services.cat import is_borderline
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.code_profile import code_profile_line
 from app.services.fsp.mock import STATUS_LABELS
@@ -832,6 +833,13 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ordered)))}
+    # NEW-2: a test decision within one SE of the cut is shown as "on the border", not hidden.
+    borderline: set = set()
+    for c in await db.scalars(select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ordered))):
+        cat_c = cats.get(c.participant_id)
+        if (cat_c and cat_c.grade_source == "assessed" and c.specialization == cat_c.primary_role
+                and c.grade == cat_c.grade and is_borderline(c.theta, c.se, c.grade)):
+            borderline.add(c.participant_id)
     scores: dict = {}
     for ds in await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id.in_(ordered))
                                .order_by(DisciplineScore.lcb.desc())):
@@ -943,6 +951,7 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             "role": header_role,
             "grade": header_grade,
             "grade_source": header_source,
+            "grade_borderline": pid in borderline,
             "also_primary": also_primary,
             "region": shown_region(p.region, show_city),
             "experience_years": experience,

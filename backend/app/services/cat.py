@@ -31,6 +31,17 @@ from app.models.assessment import GRADE_ORDER
 
 # Lower edge of each grade. A band is 1.0 wide. Intern is the step under junior, for an internship.
 CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1.5}
+
+
+def is_borderline(theta: float | None, se: float | None, grade: str | None) -> bool:
+    """NEW-2: the estimate sits within one standard error of the grade's cut.
+
+    Such a decision repeats on a retest in ~59 % of cases against ~82 % for the rest
+    (docs/VALIDATION_ASSESSMENT.md), so the card says so. The grade itself does not change.
+    """
+    if theta is None or not se or grade not in CUTS:
+        return False
+    return abs(float(theta) - CUTS[grade]) < float(se)
 GRID = [-4.0 + 0.05 * i for i in range(161)]
 MIN_ITEMS = 8
 MAX_ITEMS = 20
