@@ -72,6 +72,8 @@
 /api/v1/employer/integrations
 /api/v1/employer/integrations/deliveries
 /api/v1/employer/integrations/export
+/api/v1/employer/integrations/keys
+/api/v1/employer/integrations/keys/{key_id}
 /api/v1/employer/integrations/test
 /api/v1/employer/integrations/{endpoint_id}
 /api/v1/employer/integrations/{endpoint_id}/rotate

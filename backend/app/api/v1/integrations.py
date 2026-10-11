@@ -11,18 +11,22 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import Response
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_employer
+from app.api.deps import _open_account, _require_role, _subject, get_current_employer
 from app.api.errors import ApiError
 from app.core.config import settings
-from app.core.database import get_db
-from app.core.rls import bypass_rls, reset_rls
-from app.models import Offer, Participant, WebhookDelivery, WebhookEndpoint
+from app.core.database import AsyncSessionLocal, get_db
+from app.core.ratelimit import too_many
+from app.core.rls import bypass_rls, reset_rls, set_rls
+from app.core.security import decode_token
+from app.models import Employer, EmployerApiKey, Offer, Participant, WebhookDelivery, WebhookEndpoint
+from app.services.api_keys import MAX_ACTIVE, key_hash, new_key, well_formed
 from app.services.csv_safe import safe_row
 from app.services.privacy import contacts_allowed
 from app.services.webhooks import (
@@ -49,6 +53,101 @@ class EndpointIn(BaseModel):
 
 def _eid(current: dict) -> uuid.UUID:
     return uuid.UUID(current["sub"])
+
+
+_optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/participant/token", auto_error=False)
+
+
+async def _key_owner(full: str) -> uuid.UUID | None:
+    """Look the key up in its own short session with the bypass, before the request's session starts.
+
+    The request's transaction then begins under the owner's row-level scope, not the bypass.
+    """
+    token = bypass_rls()
+    try:
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(select(EmployerApiKey).where(
+                EmployerApiKey.key_hash == key_hash(full), EmployerApiKey.revoked_at.is_(None)))
+            if row is None:
+                return None
+            owner = await session.get(Employer, row.employer_id)
+            if owner is None or getattr(owner, "deleted_at", None) is not None \
+                    or getattr(owner, "suspended_at", None) is not None:
+                return None
+            row.last_used_at = datetime.now(UTC)
+            await session.commit()
+            return row.employer_id
+    finally:
+        reset_rls(token)
+
+
+async def employer_or_api_key(token: str | None = Depends(_optional_bearer),
+                              x_api_key: str | None = Header(None, alias="X-API-Key")) -> dict:
+    """A signed-in employer, or a company's read-only API key. A bad key is 401, like a bad session."""
+    if token:
+        try:
+            payload = _subject(decode_token(token))
+            async with AsyncSessionLocal() as session:
+                await _open_account(session, payload)
+        except ValueError:
+            raise ApiError(401, "invalid_credentials", "Требуется вход")
+        _require_role(payload, "employer")
+        return payload
+    if x_api_key:
+        if await too_many(f"apikey:{key_hash(x_api_key)[:16]}", 60, 60):
+            raise ApiError(429, "rate_limited", "Слишком много запросов с этим ключом")
+        owner = await _key_owner(x_api_key) if well_formed(x_api_key) else None
+        if owner is None:
+            raise ApiError(401, "invalid_credentials", "Ключ не подошёл или отозван")
+        set_rls(employer_id=str(owner))
+        return {"sub": str(owner), "role": "employer", "via": "api_key"}
+    raise ApiError(401, "invalid_credentials", "Требуется вход или ключ X-API-Key")
+
+
+class KeyIn(BaseModel):
+    label: str | None = Field(None, max_length=80)
+
+
+def _key_out(row: EmployerApiKey) -> dict:
+    return {"id": str(row.id), "prefix": f"fspk_{row.prefix}_…", "label": row.label,
+            "created_at": row.created_at.isoformat(),
+            "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+            "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None}
+
+
+@router.get("/keys")
+async def list_keys(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    rows = list(await db.scalars(select(EmployerApiKey).where(EmployerApiKey.employer_id == _eid(current))
+                                 .order_by(EmployerApiKey.created_at)))
+    return [_key_out(row) for row in rows]
+
+
+@router.post("/keys", status_code=201)
+async def create_key(body: KeyIn, current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """The full key is in this answer only. The database keeps its SHA-256."""
+    employer_id = _eid(current)
+    active = list(await db.scalars(select(EmployerApiKey.id).where(
+        EmployerApiKey.employer_id == employer_id, EmployerApiKey.revoked_at.is_(None))))
+    if len(active) >= MAX_ACTIVE:
+        raise ApiError(409, "conflict", f"Активных ключей уже {MAX_ACTIVE}: отзовите лишний")
+    full, prefix, digest = new_key()
+    row = EmployerApiKey(id=uuid.uuid4(), employer_id=employer_id, prefix=prefix, key_hash=digest,
+                         label=(body.label or "").strip() or None, created_at=datetime.now(UTC))
+    db.add(row)
+    await db.commit()
+    return {**_key_out(row), "key": full}
+
+
+@router.delete("/keys/{key_id}")
+async def revoke_key(key_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                     db: AsyncSession = Depends(get_db)):
+    row = await db.get(EmployerApiKey, key_id)
+    if row is None or row.employer_id != _eid(current):
+        raise ApiError(404, "not_found")
+    if row.revoked_at is None:
+        row.revoked_at = datetime.now(UTC)
+        await db.commit()
+    return {"revoked": True}
 
 
 @router.get("")
@@ -142,8 +241,11 @@ async def send_test(current: dict = Depends(get_current_employer), db: AsyncSess
 
 @router.get("/export")
 async def export(fmt: str = Query("json", pattern="^(json|csv)$"),
-                 current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
-    """People who agreed to contact and have not closed it. Declined invitations stay out."""
+                 current: dict = Depends(employer_or_api_key), db: AsyncSession = Depends(get_db)):
+    """People who agreed to contact and have not closed it. Declined invitations stay out.
+
+    Accepts the employer's session or the company's read-only `X-API-Key`.
+    """
     employer_id = _eid(current)
     offers = list(await db.scalars(select(Offer).where(
         Offer.employer_id == employer_id, Offer.status == "accepted", Offer.contacts_revoked_at.is_(None))))

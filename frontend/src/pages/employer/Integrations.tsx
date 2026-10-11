@@ -2,11 +2,23 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../../api/client'
 import { Empty, PageHeader } from '../../components/ui'
+import ApiKeysPanel from '../../components/ApiKeysPanel'
 
 interface Endpoint { id: string; url: string; active: boolean }
 interface Delivery { id: string; event_type: string; status: string; attempt: number; last_code: number | null; last_error: string | null }
 
 const STATUS: Record<string, string> = { pending: 'ждёт', delivered: 'доставлено', dead: 'сдались' }
+
+/** The export needs the session header, so a plain link would answer 401. */
+async function downloadCsv() {
+  const r = await api.get('/employer/integrations/export', { params: { fmt: 'csv' }, responseType: 'blob' })
+  const href = URL.createObjectURL(r.data as Blob)
+  const a = document.createElement('a')
+  a.href = href
+  a.download = 'candidates.csv'
+  a.click()
+  URL.revokeObjectURL(href)
+}
 
 export default function Integrations() {
   const qc = useQueryClient()
@@ -41,7 +53,7 @@ export default function Integrations() {
           <button className="btn-primary btn-sm" disabled={create.isPending || url.trim().length < 8}>Подключить</button>
           <button type="button" className="btn-secondary btn-sm" onClick={() => create.mutate({ use_sandbox: true })}>Приёмник стенда</button>
           <button type="button" className="btn-secondary btn-sm" onClick={() => test.mutate()} disabled={test.isPending}>Тестовое событие</button>
-          <a className="btn-ghost btn-sm" href="/api/v1/employer/integrations/export?format=csv">Скачать CSV</a>
+          <button type="button" className="btn-ghost btn-sm" onClick={() => { void downloadCsv().catch(e => setError(apiError(e))) }}>Скачать CSV</button>
         </div>
         {secret && <p className="notice-ok" role="status">Секрет показывается один раз: {secret}</p>}
         {error && <p className="notice-error" role="alert">{error}</p>}
@@ -54,6 +66,7 @@ export default function Integrations() {
           </li>
         ))}
       </ul>
+      <ApiKeysPanel />
       <h2 className="mb-3 mt-8 font-display text-xl font-bold text-ink">Доставка</h2>
       {log.data && log.data.length === 0 && <Empty title="Событий ещё нет">Подключите адрес и отправьте тестовое событие.</Empty>}
       <ul className="space-y-2">
