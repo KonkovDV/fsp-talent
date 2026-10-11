@@ -144,8 +144,9 @@ def main() -> None:
         for name, seeds in (("2026–2028", PUBLIC_SEEDS), ("4001–4005", HOLDOUT_SEEDS)):
             s = summary(seeds, proto, args.method, args.clean)
             m = s["metrics"]
-            print(f"| {proto}{" (clean)" if args.clean else ""} | {name} | {args.method} | {_fmt(m['ndcg'])} | {_fmt(m['p10'])} | {_fmt(m['mrr'])} "
-                  f"| {s['needs']} ({s['skipped']}) |", flush=True)
+            label = f"{proto} (clean)" if args.clean else proto
+            print(f"| {label} | {name} | {args.method} | {_fmt(m['ndcg'])} | {_fmt(m['p10'])} "
+                  f"| {_fmt(m['mrr'])} | {s['needs']} ({s['skipped']}) |", flush=True)
 
 
 if __name__ == "__main__":

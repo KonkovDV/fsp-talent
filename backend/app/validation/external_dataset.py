@@ -146,7 +146,8 @@ def main() -> None:
     r = evaluate(data, spec_table, related, args.declared)
     fmt = lambda m: f"{m[0]:.3f} [{m[1]:.3f}; {m[2]:.3f}]"  # noqa: E731
     print(f"source {RAW}{FILES['benchmark']}")
-    print(f"needs {r['needs']}, candidates {len(data['candidates'])}, input {'declared' if args.declared else 'verified'}")
+    kind = "declared" if args.declared else "verified"
+    print(f"needs {r['needs']}, candidates {len(data['candidates'])}, input {kind}")
     print(f"nDCG@10 {fmt(r['ndcg'])}  P@10 {fmt(r['p10'])}  MRR {fmt(r['mrr'])}")
 
 
