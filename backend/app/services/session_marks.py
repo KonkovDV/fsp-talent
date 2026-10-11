@@ -98,6 +98,27 @@ def latest_grade_flags(rows: list[tuple]) -> dict:
     return marks
 
 
+def latest_failed_targets(rows: list[tuple]) -> dict:
+    """Target grade of the newest grade test per (person, specialization) when that test was not passed.
+
+    Rows are (participant_id, specialization, target_grade, flags), newest first. An express trial and
+    a vacancy test are skipped like in latest_grade_flags. A newer passed or accepted-lower attempt
+    hides an older failure: only the newest grade test of the specialization speaks (DoR-N7).
+    """
+    seen: set = set()
+    failed: dict = {}
+    for pid, spec, target, flags in rows:
+        flags = flags or {}
+        if flags.get("vacancy_id") or flags.get("mode") == "express" or not spec:
+            continue
+        if (pid, spec) in seen:
+            continue
+        seen.add((pid, spec))
+        if flags.get("outcome") == "not_passed" and target:
+            failed[(pid, spec)] = target
+    return failed
+
+
 def integrity_flagged(flags: dict | None) -> bool:
     """A grade test at risk level «moderate» or higher. A trial and a vacancy test do not count."""
     return integrity_level(flags)["level"] in PENALISED_LEVELS

@@ -65,7 +65,7 @@ from app.services.profile import age_confirmed_adult
 from app.services.scoring.elo_stretch import elo_stretch
 from app.services.scoring.engine import RANK_ORDER, RESULT_CLASS_LABELS, percentile, result_class
 from app.services.search.cross_rank import RERANK_HEAD, cross_enabled, pair_device, rank_pairs, rerank_text
-from app.services.session_marks import latest_grade_flags, penalised
+from app.services.session_marks import latest_failed_targets, latest_grade_flags, penalised
 from app.services.skills import extract_skills, normalize_skill
 from app.services.survey import SPECIALIZATIONS
 from app.services.tasks import card_signal
@@ -773,13 +773,18 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
     interviews = await _interview_outcomes(db, employer_id, ids) if employer_id else {}
     top = max(text_fused.values(), default=0.0) or 1.0
     marks: dict[uuid.UUID, dict] = {}
+    failed_targets: dict[tuple, str] = {}
     if ids:
         mark_rows = (await db.execute(
-            select(TestSession.participant_id, TestSession.flags)
+            select(TestSession.participant_id, TestSession.flags, TestSession.specialization,
+                   TestSession.target_grade)
             .where(TestSession.participant_id.in_(list(ids)), TestSession.status == "completed",
                    TestSession.completed_at.is_not(None))
             .order_by(TestSession.completed_at.desc()))).all()
-        marks = latest_grade_flags(mark_rows)
+        marks = latest_grade_flags([(pid, flags) for pid, flags, _, _ in mark_rows])
+        # DoR-N7: a failed test at the shown, unconfirmed grade lowers the grade the need-fit reads.
+        failed_targets = latest_failed_targets(
+            [(pid, spec, target, flags) for pid, flags, spec, target in mark_rows])
     out: dict[uuid.UUID, PoolMatch] = {}
     for pid in ids:
         p, cat = people.get(pid), cats.get(pid)
@@ -811,6 +816,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             city=p.region if p and bool(getattr(p, "show_city", True)) else None,
             work_formats=tuple(p.work_formats or ()) if p else (),
             tested_at=conf.confirmed_at if conf else None,
+            failed_grade=failed_targets.get((pid, role_name)) if role_name else None,
         )
         m = match_score(need, facts)
         adjusted, note = penalised(m.score, marks.get(pid))

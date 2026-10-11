@@ -89,6 +89,7 @@ const REASON_RU: Record<string, string> = {
   RELATED_SKILL: 'Близкая технология',
   SKILL_COVERAGE: 'Навыки',
   GRADE_DECLARED: 'Грейд заявлен',
+  GRADE_TEST_FAILED: 'Грейд не подтверждён тестом',
   GRADE_ABOVE: 'Грейд выше',
   GRADE_BELOW: 'Грейд ниже',
   OTHER_ROLE: 'Другая специализация',
