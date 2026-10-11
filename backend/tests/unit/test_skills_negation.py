@@ -39,6 +39,14 @@ def test_negated_mention_is_skipped(text):
     "Нет опыта с Java. Kubernetes — 2 года",
     "Без отпусков: Kubernetes",
     "Не боюсь сложных задач, Kubernetes",
+    "Работаю не первый год с Kubernetes",
+    "Не новичок в Kubernetes",
+    "Не раз настраивал Kubernetes",
+    "Не один проект на Kubernetes",
+    "No-code и Kubernetes",
+    "Low-code, Kubernetes",
+    "Работа без переработок с Kubernetes",
+    "Не боюсь легаси на Kubernetes",
 ])
 def test_plain_mention_after_a_clause_break_or_pseudo_negation_counts(text):
     assert "Kubernetes" in names(text)
@@ -46,6 +54,22 @@ def test_plain_mention_after_a_clause_break_or_pseudo_negation_counts(text):
 
 def test_not_only_keeps_the_skill():
     assert "Python" in names("Не только Python, но и Go")
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Работаю не первый год с Python", ["Python"]),
+    ("Не новичок в Docker", ["Docker"]),
+    ("Не раз настраивал Kubernetes", ["Kubernetes"]),
+    ("No-code и Python", ["Python"]),
+    ("Работа без переработок с Python и Django", ["Python", "Django"]),
+])
+def test_review_examples_keep_every_skill(text, expected):
+    assert names(text) == expected
+
+
+def test_without_negates_only_the_adjacent_word():
+    assert "Docker" not in names("Деплой без Docker")
+    assert "Docker" in names("Без лишней бюрократии деплоим в Docker")
 
 
 def test_a_later_plain_mention_counts_and_offsets_point_at_it():
@@ -59,7 +83,7 @@ def test_trigger_far_before_the_skill_does_not_negate():
 
 
 def test_negation_helper_respects_clause_and_window():
-    text = "Без опыта, Kafka"
+    text = "Нет опыта, Kafka"
     assert not is_negated(text, text.index("Kafka"))
     text = "без Kafka"
     assert is_negated(text, text.index("Kafka"))
