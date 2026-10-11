@@ -77,6 +77,13 @@ describe('страница методики', () => {
     expect(screen.queryByText(/item_key|правильный ответ/)).not.toBeInTheDocument()
   })
 
+  it('пишет дату отчёта и коммит, с которого сняты цифры', async () => {
+    renderPage()
+    const asOf = await screen.findByTestId('figures-as-of')
+    expect(asOf).toHaveTextContent('Отчёт от 11.10.2026, коммит 13f4cc5')
+    expect(screen.getByRole('link', { name: '13f4cc5' })).toHaveAttribute('href', expect.stringContaining('/commit/13f4cc5'))
+  })
+
   it('ставит столбцы по убыванию и подписывает первые три', async () => {
     vi.mocked(itemPsychometrics).mockResolvedValue({ data: shown } as never)
     renderPage()
