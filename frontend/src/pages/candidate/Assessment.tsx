@@ -66,26 +66,22 @@ function previousGrade(grade: string): string | null {
   return i > 0 ? GRADES[i - 1] : null
 }
 
-/** Countdown from when the client received the item, so clock skew does not eat the first seconds. */
+/** Countdown from the server's served_at (+ time_limit_s). Reload keeps the same remaining time. */
+function itemDeadlineMs(item: Item): number {
+  const served = Date.parse(item.served_at)
+  const start = Number.isFinite(served) ? served : Date.now()
+  return start + item.time_limit_s * 1000
+}
+
 function useCountdown(item: Item | null) {
-  const receivedAt = useRef<number | null>(null)
-  const tokenRef = useRef<string | null>(null)
   const [, bump] = useState(0)
-  if (!item) {
-    tokenRef.current = null
-    receivedAt.current = null
-  } else if (tokenRef.current !== item.token) {
-    tokenRef.current = item.token
-    receivedAt.current = Date.now()
-  }
   useEffect(() => {
     if (!item) return
     const id = setInterval(() => bump(n => n + 1), 1000)
     return () => clearInterval(id)
-  }, [item?.token])
-  if (!item || receivedAt.current == null) return 0
-  const end = receivedAt.current + item.time_limit_s * 1000
-  return Math.max(0, Math.round((end - Date.now()) / 1000))
+  }, [item?.token, item?.served_at])
+  if (!item) return 0
+  return Math.max(0, Math.round((itemDeadlineMs(item) - Date.now()) / 1000))
 }
 
 function timerDangerThreshold(timeLimitS: number): number {

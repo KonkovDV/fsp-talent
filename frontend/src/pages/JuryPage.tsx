@@ -105,14 +105,14 @@ export default function JuryPage() {
     <PublicShell>
       <PageHeader
         title="Режим жюри"
-        lead="Отдельного входа для жюри нет. Пароль демо-аккаунтов demo12345. Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой. Публичные страницы открываются без аккаунта."
+        lead="Отдельного входа для жюри нет. Пароль демо-аккаунтов demo12345. Демо-доступ для жюри: данные синтетические. Публичные страницы открываются без аккаунта."
       />
       <div className="grid gap-4 md:grid-cols-3">
         <section className="card flex flex-col">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink"><UserRound size={18} className="text-accent" aria-hidden />Кандидат</h2>
           <p className="mt-2 text-sm text-ink-2">Профиль с историей ФСП, тест и приглашения.</p>
           <p className="mt-3 rounded-md bg-sunken px-3 py-2 font-mono text-sm text-ink">fsp001@demo.talent</p>
-          <p className="mt-2 text-xs text-ink-3">Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой</p>
+          <p className="mt-2 text-xs text-ink-3">Демо-доступ для жюри: данные синтетические</p>
           <p className="mt-2 text-xs text-ink-3">Для теста на грейд: jury1@demo.talent … jury10@demo.talent, у каждого свои попытки.</p>
           <div className="mt-auto pt-4"><Link to="/login" className="btn-primary">Войти как кандидат</Link></div>
         </section>
@@ -120,7 +120,7 @@ export default function JuryPage() {
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink"><Building2 size={18} className="text-invite" aria-hidden />Работодатель</h2>
           <p className="mt-2 text-sm text-ink-2">Компания «Сибирский код»: потребности, подборка, задания.</p>
           <p className="mt-3 rounded-md bg-sunken px-3 py-2 font-mono text-sm text-ink">hr@sibcode.demo</p>
-          <p className="mt-2 text-xs text-ink-3">Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой</p>
+          <p className="mt-2 text-xs text-ink-3">Демо-доступ для жюри: данные синтетические</p>
           <div className="mt-auto pt-4"><Link to="/login?role=employer" className="btn-primary">Войти как работодатель</Link></div>
         </section>
         <section className="card flex flex-col">
@@ -140,7 +140,7 @@ export default function JuryPage() {
         <h2 id="scenario-title" className="font-display text-xl font-bold tracking-[-0.02em] text-ink">Сквозной сценарий ТЗ 3.3</h2>
         <p className="mt-2 max-w-3xl text-sm text-ink-2">
           Восемь шагов без пояснений снаружи. Отметка «готово» хранится только в этом браузере.
-          Пробный экспресс-тест грейд не ставит — для категории нужен полный тест (кнопка экспресса на лендинге не дублируется здесь).
+          Пробный экспресс-тест грейд не ставит — для категории нужен полный тест.
         </p>
         <ol className="mt-5 grid gap-3 sm:grid-cols-2">
           {SCENARIO_33.map(step => {

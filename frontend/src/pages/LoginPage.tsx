@@ -123,7 +123,7 @@ export default function LoginPage() {
           </Link>
         )}
         <p className="text-xs text-ink-3">Демо-аккаунты, пароль demo12345:</p>
-        <p className="text-xs leading-relaxed text-ink-3">Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой</p>
+        <p className="text-xs leading-relaxed text-ink-3">Демо-доступ для жюри: данные синтетические</p>
         {DEMO[role].map(([email, note]) => (
           <button key={email} type="button" className="chip-default w-full justify-start hover:border-accent hover:text-accent"
             onClick={() => { setValue('username', email); setValue('password', 'demo12345') }}>

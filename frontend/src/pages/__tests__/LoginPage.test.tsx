@@ -42,7 +42,8 @@ describe('вход', () => {
 
   it('помечает демо-доступ для жюри без обещания ночного сброса', async () => {
     renderLogin()
-    expect(await screen.findByText(/данные синтетические; свой прогресс можно сбросить кнопкой/)).toBeInTheDocument()
+    expect(await screen.findByText(/данные синтетические/)).toBeInTheDocument()
+    expect(screen.queryByText(/сбросить кнопкой/)).not.toBeInTheDocument()
     expect(screen.queryByText(/сбрасывается каждую ночь/)).not.toBeInTheDocument()
   })
 

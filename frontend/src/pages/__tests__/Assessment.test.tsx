@@ -206,9 +206,11 @@ describe('тест на грейд', () => {
     expect(screen.queryByRole('button', { name: /ступень ниже/ })).not.toBeInTheDocument()
   })
 
-  it('таймер пробного задания стартует с полного лимита при сдвиге served_at', async () => {
+  it('таймер считает от served_at сервера (после «перезагрузки» лимит не продлевается)', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    const past = new Date(Date.now() - 8000).toISOString()
+    const now = Date.now()
+    vi.setSystemTime(now)
+    const past = new Date(now - 8000).toISOString()
     activeAssessment.mockResolvedValue({
       data: session({
         progress: { answered: 0, min_items: 15, max_items: 15 },
@@ -217,10 +219,11 @@ describe('тест на грейд', () => {
     })
     renderPage(<CandidateAssessment />)
     const timer = await screen.findByRole('timer')
-    expect(timer).toHaveTextContent('0:20')
+    // 20 − 8 = 12 с осталось; полный лимит 0:20 был бы неверен после reload
+    expect(timer).toHaveTextContent('0:12')
     expect(timer.className).not.toMatch(/text-danger/)
     expect(screen.getByTestId('trial-banner')).toHaveTextContent(/Пробный тест/)
-    await vi.advanceTimersByTimeAsync(14_000)
+    await vi.advanceTimersByTimeAsync(6_000) // осталось ~6 с → порог min(20, 20/3)≈6.67
     expect(timer.className).toMatch(/text-danger/)
     vi.useRealTimers()
   })
