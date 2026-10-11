@@ -116,3 +116,32 @@ def test_backend_image_installs_a_cyrillic_font():
         return
     assert "fonts-dejavu-core" in dockerfile.read_text(encoding="utf-8")
     assert Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") in pp._FONTS
+
+
+def test_pdf_resume_goes_to_the_model_only_under_the_current_consent(monkeypatch):
+    """PR334-01: /candidates/me/resume skipped the consent check that /ai/parse-resume makes."""
+    import uuid
+
+    from app.api.v1 import candidates
+    from app.services import identity
+
+    seen = []
+
+    async def parse(text, allow_llm=True):
+        seen.append(allow_llm)
+        return {"skills": []}
+
+    async def nothing():
+        return None
+
+    monkeypatch.setattr(candidates, "parse_resume", parse)
+    monkeypatch.setattr(candidates.providers, "refresh", nothing)
+    current = {"sub": str(uuid.uuid4()), "role": "participant"}
+    pdf = _sample_pdf("Python FastAPI PostgreSQL")
+    for consent, expected in ((False, False), (True, True)):
+        async def current_consent(*_a, _c=consent, **_k):
+            return _c
+        monkeypatch.setattr(identity, "consent_is_current", current_consent)
+        out = asyncio.run(upload_resume(_upload(pdf), current, db=None))
+        assert seen[-1] is expected
+        assert out.get("consent_outdated", False) is (not consent)

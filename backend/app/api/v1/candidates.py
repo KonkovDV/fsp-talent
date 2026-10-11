@@ -1020,7 +1020,8 @@ async def fsp_callback(body: FspCallbackIn, current: dict = Depends(get_current_
 
 
 @router.post("/me/resume")
-async def upload_resume(file: UploadFile = File(...), current: dict = Depends(get_current_participant)):
+async def upload_resume(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
+                        db: AsyncSession = Depends(get_db)):
     """Read a PDF resume. The file is not stored; only the extracted text is parsed."""
     _pid(current)
     data = await file.read(MAX_PDF_BYTES + 1)
@@ -1031,7 +1032,13 @@ async def upload_resume(file: UploadFile = File(...), current: dict = Depends(ge
     if not text:
         raise ApiError(422, "validation_error", "В PDF не нашлось текста")
     await providers.refresh()
-    parsed = await parse_resume(text)
+    # PR334-01 (152-ФЗ ст. 6 ч. 3): the same consent check as POST /ai/parse-resume. Without the current
+    # consent text that names the model processor, the PDF text is parsed by the local rules only.
+    from app.services.identity import consent_is_current
+    allowed = await consent_is_current(db, "participant", _pid(current), "pd_candidate")
+    parsed = await parse_resume(text, allow_llm=allowed)
+    if not allowed:
+        parsed["consent_outdated"] = True
     return {"text": text[:4000], **with_resume_token(str(_pid(current)), parsed)}
 
 
