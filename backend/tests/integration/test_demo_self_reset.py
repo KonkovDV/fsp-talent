@@ -22,6 +22,17 @@ async def _person(db, email: str) -> tuple[Participant, bool]:
     return person, True
 
 
+async def _vc_and_resume(db, person) -> None:
+    from app.models import CandidateResume, VerifiableCredential
+    db.add(VerifiableCredential(participant_id=person.id, credential_json={"t": 1}, proof_value="x"))
+    db.add(CandidateResume(participant_id=person.id, specialization="qa", grade="junior"))
+    await db.flush()
+
+
+async def _count(db, model, person) -> int:
+    return await db.scalar(select(func.count()).select_from(model).where(model.participant_id == person.id))
+
+
 async def _dirty(db, person: Participant) -> None:
     person.specialization, person.declared_grade, person.survey_at = "backend", "junior", now()
     person.grade_locked_until = now() + timedelta(days=30)
@@ -39,9 +50,12 @@ async def test_a_juror_resets_only_himself(db, monkeypatch):
     jury3, new3 = await _person(db, "jury3@demo.talent")
     jury4, new4 = await _person(db, "jury4@demo.talent")
     created = [p.id for p, new in ((jury3, new3), (jury4, new4)) if new]
+    both = [jury3.id, jury4.id]
     try:
         await _dirty(db, jury3)
         await _dirty(db, jury4)
+        await _vc_and_resume(db, jury3)
+        await _vc_and_resume(db, jury4)
         hash_before = jury3.password_hash
         jury3.birth_date = None  # a stand seeded before 887401f
         await db.commit()
@@ -55,7 +69,16 @@ async def test_a_juror_resets_only_himself(db, monkeypatch):
         from app.services.demo_reset import JURY_BIRTH
         assert jury3.birth_date == JURY_BIRTH and jury3.is_minor is False
         assert jury4.grade_locked_until is not None and await _skills(db, jury4) >= 1
+        from app.models import CandidateResume, VerifiableCredential
+        assert await _count(db, VerifiableCredential, jury3) == 0 and await _count(db, CandidateResume, jury3) == 0
+        assert await _count(db, VerifiableCredential, jury4) >= 1 and await _count(db, CandidateResume, jury4) >= 1
     finally:
+        from sqlalchemy import delete
+
+        from app.models import VerifiableCredential
+        await db.rollback()
+        await db.execute(delete(VerifiableCredential).where(VerifiableCredential.participant_id.in_(both)))
+        await db.commit()
         await wipe_people(created)
 
 

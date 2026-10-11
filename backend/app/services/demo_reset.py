@@ -7,13 +7,17 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
 from app.legal import documents
 from app.models import (
+    Application,
+    CandidateInterest,
+    CandidateResume,
     CategoryAssignment,
     Complaint,
     Consent,
+    EmployerFavorite,
     GradeConfirmation,
     Offer,
     Participant,
@@ -21,6 +25,7 @@ from app.models import (
     ProfileSearchIndex,
     Skill,
     TestSession,
+    VerifiableCredential,
 )
 from app.services.identity import active_consent
 
@@ -49,6 +54,16 @@ async def clear_jury(db, person: Participant) -> None:
     await db.execute(delete(Skill).where(Skill.participant_id == pid))
     await db.execute(delete(CategoryAssignment).where(CategoryAssignment.participant_id == pid))
     await db.execute(delete(ProfileSearchIndex).where(ProfileSearchIndex.participant_id == pid))
+    # RT-08: everything a juror produced, so the next expert does not inherit it.
+    await db.execute(delete(VerifiableCredential).where(VerifiableCredential.participant_id == pid))
+    await db.execute(delete(Application).where(Application.candidate_id == pid))
+    await db.execute(delete(Complaint).where(Complaint.participant_id == pid))
+    await db.execute(delete(CandidateResume).where(CandidateResume.participant_id == pid))
+    await db.execute(delete(EmployerFavorite).where(EmployerFavorite.participant_id == pid))
+    await db.execute(delete(CandidateInterest).where(CandidateInterest.participant_id == pid))
+    # survey_history arrives with revision 0002 (#297); the reset works with or without it.
+    if await db.scalar(text("SELECT to_regclass('public.survey_history') IS NOT NULL")):
+        await db.execute(text("DELETE FROM public.survey_history WHERE participant_id = :pid"), {"pid": pid})
     person.survey_at = None
     person.specialization = None
     person.declared_grade = None
