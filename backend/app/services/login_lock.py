@@ -1,4 +1,4 @@
-"""Wrong-password throttling without an account lockout anyone can trigger (stand audit I-01).
+"""Wrong-password throttling without an account lockout anyone can trigger.
 
 Five wrong passwords used to lock the account for everyone for fifteen minutes. The jury addresses are
 published, so any visitor could lock jury1. Now (OWASP ASVS 5.0 V6.3, NIST SP 800-63B §5.2.2):

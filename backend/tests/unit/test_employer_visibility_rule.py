@@ -1,4 +1,4 @@
-"""audit-3 P1-1: aggregates use the search's visibility rule, and small rankings are not published."""
+"""Aggregates use the search's visibility rule, and small rankings are not published."""
 import inspect
 
 from app.api.v1 import offers, public

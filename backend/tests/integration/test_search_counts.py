@@ -1,4 +1,4 @@
-"""Audit-5 A2: the search header explains its count; the card path reports the held-back people too."""
+"""The search header explains its count; the card path reports the held-back people too."""
 from __future__ import annotations
 
 from app.services.search.pipeline import BANK_MIN, search_candidates

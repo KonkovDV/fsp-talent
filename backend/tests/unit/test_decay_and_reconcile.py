@@ -1,4 +1,4 @@
-"""Audit 2026-10: decay is recomputed nightly (item 5); registry corrections are applied (M-3)."""
+"""Decay is recomputed nightly; registry corrections are applied."""
 import inspect
 
 from app.core import rescore_stale

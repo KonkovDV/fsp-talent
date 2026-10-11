@@ -1,4 +1,4 @@
-"""Audit 2026-10, M-5: the default stack must start on a host without an NVIDIA GPU.
+"""The default stack must start on a host without an NVIDIA GPU.
 
 `gpus: all` (or a device reservation) in docker-compose.yml makes Docker refuse the backend on such a
 host ("could not select device driver"). The GPU lives in an opt-in override file.

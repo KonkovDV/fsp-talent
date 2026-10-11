@@ -121,7 +121,7 @@ _COMPARED = ("discipline", "place", "total_participants", "is_team", "team_size"
 
 
 async def reconcile_results(db: AsyncSession, participant: Participant, data: FSPParticipant) -> dict[str, int]:
-    """Make the registry rows of a profile match the registry (audit M-3).
+    """Make the registry rows of a profile match the registry.
 
     v1 only appended: an annulled or corrected protocol line stayed in the score for good. Now a
     `verified_fsp` row whose event the registry no longer lists is removed, and a row whose place,

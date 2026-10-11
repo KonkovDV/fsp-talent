@@ -64,7 +64,7 @@ RESULT_CLASS_LABELS = {
 }
 # Winning a field of two is not a win: prize classes need a real field, otherwise the share of the field decides.
 MIN_FIELD_FOR_PRIZE = 6
-# audit-4 F-1: evidence from a field of N people weighs 1 − e^(−N/FIELD_SCALE): a place among 6 is about a fifth
+# Evidence from a field of N people weighs 1 − e^(−N/FIELD_SCALE): a place among 6 is about a fifth
 # of a place among 200. Combined with EVENT_CAP this bounds what any number of small fields can add.
 FIELD_SCALE = 30.0
 # At most this many result events per calendar month and discipline enter the pool (the strongest by q, then w).

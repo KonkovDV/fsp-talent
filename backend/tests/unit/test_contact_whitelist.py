@@ -1,4 +1,4 @@
-"""audit-3 P2-1: the invitation contact is an e-mail, a Telegram @handle or an E.164 phone, nothing else."""
+"""The invitation contact is an e-mail, a Telegram @handle or an E.164 phone, nothing else."""
 import pytest
 from pydantic import ValidationError
 

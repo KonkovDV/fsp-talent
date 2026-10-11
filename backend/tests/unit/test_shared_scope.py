@@ -1,4 +1,4 @@
-"""Audit-5 A8: the shared need ranking is keyed by the company's exclusions, and a company with blocks gets none."""
+"""The shared need ranking is keyed by the company's exclusions, and a company with blocks gets none."""
 import asyncio
 import uuid
 

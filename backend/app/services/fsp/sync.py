@@ -29,7 +29,7 @@ async def pull_registry_changes(db: AsyncSession, redis, adapter: FSPAdapter) ->
             data = await adapter.fetch_participant(person.fsp_id or "")
             if data is None:
                 continue
-            # Annulled and corrected lines are applied too, not only new ones (audit M-3).
+            # Annulled and corrected lines are applied too, not only new ones.
             if any((await reconcile_results(db, person, data)).values()):
                 await rebuild_profile(db, person)
                 updated += 1

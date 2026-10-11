@@ -1,4 +1,4 @@
-"""Allowed contact for an invitation (audit-3 P2-1): an e-mail, a Telegram @handle or an E.164 phone.
+"""Allowed contact for an invitation: an e-mail, a Telegram @handle or an E.164 phone.
 
 A blacklist of «http»/«www» let through t.me/x, evil.ru/login and bit.ly/…; a whitelist does not.
 Several contacts may be listed, separated by a comma or a semicolon.

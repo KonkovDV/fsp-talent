@@ -1,4 +1,4 @@
-"""audit-3 P1-1 / P2-2: one employer-visibility rule, and the Python property agrees with the SQL predicate."""
+"""One employer-visibility rule, and the Python property agrees with the SQL predicate."""
 from __future__ import annotations
 
 from datetime import date

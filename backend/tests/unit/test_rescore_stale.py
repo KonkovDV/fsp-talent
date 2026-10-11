@@ -28,7 +28,7 @@ def test_a_failure_never_blocks_the_start(monkeypatch):
 
 
 def test_startup_rescore_bypasses_rls_and_takes_the_worker_lock():
-    """audit-4 F-3: reproduced on PG17 (tests/integration/test_rescore_rls.py)."""
+    """Reproduced on PG17 (tests/integration/test_rescore_rls.py)."""
     import inspect
 
     from app.core import rescore_stale as module
