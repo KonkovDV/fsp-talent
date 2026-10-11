@@ -619,13 +619,19 @@ async def search_candidates(
             .where(Participant.id.in_(all_ids), _in_pairs([(role, grade)]))) or 0)
     elif role and grade:
         in_category = 0
+    # DoR-10 / V-SOTA-08: the asked pair is one bank cell. A count of 1–4 is the number the bank hides,
+    # so it is not printed here either (k-anonymity, BANK_MIN). Zero says nothing about a person.
+    in_category_hidden = in_category is not None and 0 < in_category < BANK_MIN
+    if in_category_hidden:
+        in_category = None
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
     header = {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
               "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
               "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
-              "platform_held": platform_held, "in_category": in_category}
+              "platform_held": platform_held, "in_category": in_category,
+              "in_category_hidden": in_category_hidden}
     if not build_cards:
         # The cache keeps the order and the scores. Cards for one page are built later.
         items = []
@@ -659,7 +665,8 @@ async def search_candidates(
     return {"total": len(all_ids), "pool_capped": len(rows) >= POOL_LIMIT, "query_skills": wanted_list,
             "recommended_categories": categories, "pay_hint": pay_hint, "skill_hint": skill_hint,
             "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
-            "platform_held": platform_held, "in_category": in_category, "items": cards}
+            "platform_held": platform_held, "in_category": in_category,
+            "in_category_hidden": in_category_hidden, "items": cards}
 
 
 def _match_body(m: PoolMatch, cold_seat: bool) -> dict:
