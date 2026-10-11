@@ -117,3 +117,20 @@ async def test_a_real_exam_drops_the_shortlist_and_a_trial_does_not(monkeypatch)
         forget_assessment_listener(note)
     assert seen == ["kept"]
     assert calls == ["bump", "bump", "bump"]
+
+
+def test_rank_version_6_drops_rankings_stored_without_platform_held_and_in_category():
+    # v5 rows were written before #275 and lack these fields; a v6 key never reads them.
+    assert cache.RANK_VERSION >= 6
+    assert cache.shortlist_key("n", 1, 0).startswith(f"shortlist:v{cache.RANK_VERSION}:")
+    assert cache.shared_key({"role": "backend"}, 0).startswith(f"shortlist-shared:v{cache.RANK_VERSION}:")
+
+
+def test_platform_held_and_in_category_survive_the_cache_round_trip():
+    stored = cache.store_payload({
+        "total": 3, "platform_held": 2, "in_category": 1,
+        "items": [{"candidate_id": "a", "shortlisted": True}],
+    })
+    page = cache.slice_ranked(stored, 0, 1)
+    assert page["platform_held"] == 2
+    assert page["in_category"] == 1
