@@ -13,9 +13,9 @@ export function Brand({ to = '/', compact = false }: { to?: string; compact?: bo
     <Link to={to} className="-m-1 flex items-center gap-2.5 rounded-lg p-1" aria-label="ФСП Талант · команда Дмитрия Конькова — на главную">
       <BrandMark />
       {!compact && (
-        <span className="leading-none">
+        <span className="min-w-0 whitespace-nowrap leading-none">
           <span className="block font-display text-[15px] font-extrabold tracking-[-0.02em] text-ink">ФСП Талант</span>
-          <span className="block pt-1 text-2xs text-ink-3">команда Дмитрия Конькова</span>
+          <span className="hidden pt-1 text-2xs text-ink-3 min-[480px]:block">команда Дмитрия Конькова</span>
         </span>
       )}
     </Link>
