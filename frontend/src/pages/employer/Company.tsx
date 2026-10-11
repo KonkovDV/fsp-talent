@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiError, atsSandbox, getEmployerMe, getReputation, saveHiringPractice, updateEmployerMe } from '../../api/client'
 import AccountSecurity from '../../components/AccountSecurity'
+import ConsentsPanel from '../../components/ConsentsPanel'
 import { PageHeader } from '../../components/ui'
 
 /** Company card the TZ asks the employer to keep: name, tax id, site, what the company does. */
@@ -146,6 +147,9 @@ export default function EmployerCompany() {
       </section>
       <div className="mt-6 max-w-xl">
         <AccountSecurity />
+      </div>
+      <div className="mt-6 max-w-xl" data-testid="employer-consents">
+        <ConsentsPanel />
       </div>
     </div>
   )
