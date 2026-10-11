@@ -87,6 +87,7 @@ export function SiteFooter() {
             <li><Link to="/badge" className="inline-flex min-h-6 items-center underline hover:text-ink">Проверка удостоверения</Link></li>
             <li><Link to="/evaluate" className="inline-flex min-h-6 items-center underline hover:text-ink">Подбор на своей разметке</Link></li>
             <li><Link to="/jury" className="inline-flex min-h-6 items-center underline hover:text-ink">Режим жюри</Link></li>
+            <li><a href="/docs" target="_blank" rel="noopener" className="inline-flex min-h-6 items-center underline hover:text-ink">API (Swagger)</a></li>
           </ul>
         </nav>
       </div>

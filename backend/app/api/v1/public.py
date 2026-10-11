@@ -112,6 +112,29 @@ async def limits():
     return {"min_monthly_gross": int(settings.MIN_MONTHLY_GROSS)}
 
 
+def stand_counts(candidates: int, with_fsp: int, families: int, companies: int) -> dict:
+    """Four totals for the landing page. Whole-stand aggregates only: no names, no ids, no slices."""
+    return {"candidates": int(candidates), "with_fsp": int(min(with_fsp, candidates)),
+            "families": int(families), "companies": int(companies)}
+
+
+@router.get("/stats")
+async def stand_stats(db: AsyncSession = Depends(get_db)):
+    """Live totals from the stand database, read-only. A total over the whole stand names nobody."""
+    from sqlalchemy import func
+
+    from app.items.registry import FAMILIES
+    from app.models import Employer, Result
+
+    candidates = await db.scalar(select(func.count(Participant.id)).where(Participant.deleted_at.is_(None))) or 0
+    with_fsp = await db.scalar(
+        select(func.count(func.distinct(Result.participant_id)))
+        .join(Participant, Participant.id == Result.participant_id)
+        .where(Participant.deleted_at.is_(None))) or 0
+    companies = await db.scalar(select(func.count(Employer.id))) or 0
+    return stand_counts(candidates, with_fsp, len(FAMILIES), companies)
+
+
 @router.get("/demo")
 async def demo_stand():
     """Whether this stand shows the jury trial and the jury accounts. No other settings."""

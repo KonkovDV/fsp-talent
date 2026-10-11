@@ -158,6 +158,7 @@
 /api/v1/public/limits
 /api/v1/public/method/weights
 /api/v1/public/passport/{passport_id}
+/api/v1/public/stats
 /api/v1/public/telegram/achievements
 /api/v1/public/telegram/vacancies
 /api/v1/public/vacancy-preview

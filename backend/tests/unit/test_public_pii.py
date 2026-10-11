@@ -16,6 +16,7 @@ from app.core.ratelimit import RateLimitUnavailable
 NO_PERSON_DATA = {
     "/public/jury-free": "demo stand only; answers a jury account address, not a candidate",
     "/public/categories/{role}/{grade}/ranking": "anonymous places and test numbers, no id or name",
+    "/public/stats": "whole-stand totals (count of rows), no id, name or slice",
     "/public/guardian-consent": "the guardian's signed one-time token is the authorization",
 }
 
