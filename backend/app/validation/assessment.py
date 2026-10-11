@@ -392,6 +392,8 @@ class Retest:
     agreement_confident: float = 1.0
     agreement_confident_ci: tuple[float, float] = (1.0, 1.0)
     agreement_borderline: float = 1.0
+    kappa_ci: tuple[float, float] = (1.0, 1.0)
+    weighted_kappa_ci: tuple[float, float] = (1.0, 1.0)
 
 
 BAND_Z = 1.0   # |θ̂ − cut| / SE below this is "on the border": the decision is shown with a mark
@@ -410,6 +412,28 @@ def _bootstrap_ci(flags: list[bool], seed: int = 2026, draws: int = 2000) -> tup
     n = len(flags)
     means = sorted(sum(flags[rng.randrange(n)] for _ in range(n)) / n for _ in range(draws))
     return (means[int(0.025 * draws)], means[int(0.975 * draws) - 1])
+
+
+def _cohen_pass(a: list[bool], b: list[bool]) -> float:
+    """Cohen's kappa of two pass/fail lists."""
+    p1, p2 = statistics.mean(a), statistics.mean(b)
+    po = statistics.mean(x == y for x, y in zip(a, b, strict=True))
+    pe = p1 * p2 + (1 - p1) * (1 - p2)
+    return (po - pe) / (1 - pe) if pe < 1 else 1.0
+
+
+def kappa_bootstrap(xs: list, ys: list, statistic, seed: int = 2026, draws: int = 1000) -> tuple[float, float]:
+    """Percentile bootstrap 95 % interval of an agreement statistic, resampling whole pairs."""
+    if not xs:
+        return (1.0, 1.0)
+    rng = random.Random(seed)
+    n = len(xs)
+    values = []
+    for _ in range(draws):
+        idx = [rng.randrange(n) for _ in range(n)]
+        values.append(statistic([xs[i] for i in idx], [ys[i] for i in idx]))
+    values.sort()
+    return (values[int(0.025 * draws)], values[int(0.975 * draws) - 1])
 
 
 def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict[str, float],
@@ -440,6 +464,9 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
                                         [b.earned for _, _, _, b in pairs]),
         own_overlap=statistics.mean(len(set(a.keys) & set(b.keys)) / max(1, len(set(b.keys)))
                                     for _, _, a, b in pairs),
+        kappa_ci=kappa_bootstrap([a.passed for _, _, a, _ in pairs], [b.passed for _, _, _, b in pairs], _cohen_pass),
+        weighted_kappa_ci=kappa_bootstrap([a.earned for _, _, a, _ in pairs], [b.earned for _, _, _, b in pairs],
+                                          _quadratic_kappa),
     )
 
 
@@ -1365,7 +1392,11 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"RMSE = {r.theta_fit[1]:.3f}"
         + (f"; экспресс-режим: r = {r.theta_fit_express[0]:.3f}, RMSE = {r.theta_fit_express[1]:.3f}."
            if r.theta_fit_express else "."),
-        f"- Взвешенная каппа повторного теста (квадратичные веса по грейду): {r.retest.weighted_kappa:.2f}.",
+        f"- Каппа Коэна повторного теста (сдал / не сдал): {r.retest.kappa:.2f} "
+        f"(95 % ДИ {r.retest.kappa_ci[0]:.2f}–{r.retest.kappa_ci[1]:.2f}). "
+        f"Взвешенная каппа (квадратичные веса по подтверждённому грейду): {r.retest.weighted_kappa:.2f} "
+        f"(95 % ДИ {r.retest.weighted_kappa_ci[0]:.2f}–{r.retest.weighted_kappa_ci[1]:.2f}); "
+        "бутстрап по парам, 1000 повторов.",
         f"- Зона неопределённости (NEW-2): решение «на границе», если |θ̂ − порог| < SE по первому тесту. "
         f"Таких {r.retest.borderline_share:.1%}. У уверенных решений повтор даёт тот же итог в "
         f"{r.retest.agreement_confident:.1%} (95 % ДИ бутстрепа {r.retest.agreement_confident_ci[0]:.1%}–"
