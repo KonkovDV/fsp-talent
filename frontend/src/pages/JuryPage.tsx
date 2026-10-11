@@ -58,6 +58,7 @@ export default function JuryPage() {
   const [rankRole, setRankRole] = useState('backend')
   const [rankGrade, setRankGrade] = useState('middle')
   const [ranks, setRanks] = useState<{ place: number; test: number }[] | null>(null)
+  const [rankHidden, setRankHidden] = useState(0)
   const [rankError, setRankError] = useState('')
   const [busy, setBusy] = useState(false)
   const [question, setQuestion] = useState('')
@@ -173,14 +174,16 @@ export default function JuryPage() {
             setBusy(true)
             setRankError('')
             void categoryRanking(rankRole, rankGrade)
-              .then(r => setRanks(r.data.items))
+              .then(r => { setRanks(r.data.items); setRankHidden(r.data.hidden ? r.data.min_cell ?? 5 : 0) })
               .catch(error => setRankError(apiError(error, 'Порядок не открылся')))
               .finally(() => setBusy(false))
           }}>Показать порядок</button>
         </div>
         {rankError && <p className="notice-error" role="alert">{rankError}</p>}
         {ranks && (ranks.length === 0
-          ? <p className="text-sm text-ink-2" data-testid="rank-hidden">Меньше 5 публичных профилей — скрыто (k-анонимность: по малой группе можно узнать человека).</p>
+          ? <p className="text-sm text-ink-2" data-testid="rank-hidden">{rankHidden
+            ? `Скрыто: в категории меньше ${rankHidden} участников с публичным профилем — защита персональных данных.`
+            : 'В этой категории пока нет участников с подтверждённым тестом грейдом.'}</p>
           : <ol className="text-sm text-ink">{ranks.map(row => <li key={row.place}>{row.place}. тест {Math.round(row.test * 100)} %</li>)}</ol>)}
       </section>
 
