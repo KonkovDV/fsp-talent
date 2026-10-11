@@ -125,7 +125,7 @@ export default function SurveyCard({ profile, compact, hint }: Props) {
             <option value="gross">до вычета НДФЛ</option>
             <option value="net">на руки</option>
           </select>
-          <input type="number" min={0} step={5000} value={payFrom} onChange={e => setPayFrom(e.target.value)} className="input mt-1 num" />
+          <input type="number" min={0} step={5000} value={payFrom} onChange={e => setPayFrom(e.target.value)} className="input mt-1 num" aria-label="Ожидания по зарплате, от" />
           {basis === 'gross' && netLine(Number(payFrom) || null, null) && <span className="field-hint">{netLine(Number(payFrom) || null, null)}</span>}
         </label>
         <label>Город

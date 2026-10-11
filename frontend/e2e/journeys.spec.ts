@@ -86,7 +86,7 @@ test('кандидат проходит регистрацию и пробный
   await page.getByRole('button', { name: 'Подтвердить' }).click()
   await expect(page).toHaveURL(/\/candidate/)
 
-  await page.getByLabel('Специализация').selectOption('backend')
+  await page.getByLabel('Специализация', { exact: true }).selectOption('backend')
   await page.getByLabel('Предметная область').selectOption({ index: 1 })
   await page.getByLabel('Грейд', { exact: true }).selectOption('middle')
   await page.getByLabel('Ожидания по зарплате, от').fill('200000')
@@ -209,10 +209,10 @@ async function passTrial(page: Page) {
   await page.goto('/candidate/assessment')
   const verdict = page.getByTestId('trial-verdict')
   const again = page.getByRole('button', { name: 'К тестам' })
-  const survey = page.getByLabel('Специализация')
+  const survey = page.getByLabel('Специализация', { exact: true })
   const trial = page.getByRole('button', { name: /Пробный тест/ })
   const item = page.getByText(/Задание \d+\./)
-  await expect(trial.or(survey).or(again).or(item)).toBeVisible()
+  await expect(trial.or(survey).or(again).or(item).first()).toBeVisible()
   if (await again.isVisible()) {
     await again.click()
     await expect(verdict).toBeHidden()
@@ -253,7 +253,7 @@ async function registerCandidate(page: Page, email: string, name: string) {
   await page.getByLabel('Код из письма').fill(await confirmationCode(email))
   await page.getByRole('button', { name: 'Подтвердить' }).click()
   await expect(page).toHaveURL(/\/candidate/)
-  await page.getByLabel('Специализация').selectOption('backend')
+  await page.getByLabel('Специализация', { exact: true }).selectOption('backend')
   await page.getByLabel('Грейд', { exact: true }).selectOption('junior')
   await page.getByRole('button', { name: 'Сохранить опрос' }).click()
   await expect(page.getByRole('region', { name: 'Категория' })).toContainText('Backend')
@@ -313,11 +313,11 @@ test('вход через ФСП ID показывает результаты, �
 
   await page.goto('/candidate/results')
   await expect(page.getByRole('heading', { name: 'Результаты ФСП' })).toBeVisible()
-  await expect(page.getByText(/робототехника/)).toBeVisible()
+  await expect(page.getByText(/робототехника/).first()).toBeVisible()
 
   await page.goto('/candidate')
   await expect(page.getByText('работодатели увидят карточку только после согласия представителя')).toBeVisible()
-  const survey = page.getByLabel('Специализация')
+  const survey = page.getByLabel('Специализация', { exact: true })
   if (await survey.isVisible()) {
     await survey.selectOption('embedded')
     await page.getByLabel('Грейд', { exact: true }).selectOption('junior')
