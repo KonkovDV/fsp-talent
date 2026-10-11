@@ -12,6 +12,9 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const lighthouseMod = require('lighthouse')
 const lighthouse = lighthouseMod.default || lighthouseMod
+// Desktop must use the official desktop config (its throttling), not only formFactor:
+// formFactor alone keeps mobile throttling (150 ms RTT, 1.6 Mbps, CPU x4) with desktop scoring curves.
+const desktopConfig = lighthouseMod.desktopConfig
 const chromeLauncher = require('chrome-launcher')
 
 const BASE = process.env.BASE || 'http://127.0.0.1:4173'
@@ -163,16 +166,16 @@ async function runLighthouse() {
       // Fresh chrome tab via LH; for auth pages use only public for LH reliability
       if (!screen.public) continue
       try {
-        const result = await lighthouse(`${BASE}${screen.path}`, {
+        const flags = {
           port: chrome.port,
           output: 'json',
           logLevel: 'error',
-          formFactor,
-          screenEmulation: formFactor === 'mobile'
-            ? { mobile: true, width: 390, height: 844, deviceScaleFactor: 2, disabled: false }
-            : { mobile: false, width: 1350, height: 940, deviceScaleFactor: 1, disabled: false },
           onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
-        })
+          ...(formFactor === 'mobile'
+            ? { formFactor, screenEmulation: { mobile: true, width: 390, height: 844, deviceScaleFactor: 2, disabled: false } }
+            : {}),
+        }
+        const result = await lighthouse(`${BASE}${screen.path}`, flags, formFactor === 'desktop' ? desktopConfig : undefined)
         const cats = result.lhr.categories
         const scores = {
           performance: Math.round((cats.performance?.score || 0) * 100),
