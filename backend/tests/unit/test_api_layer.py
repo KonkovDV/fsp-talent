@@ -870,8 +870,14 @@ async def test_public_profile_credential_and_pdf(quiet):
     assert card["display_name"] == "Аня" and card["skills"]
 
     db.scalar_q = [person]
-    pdf = await public.public_profile_pdf(person.id, db)
-    assert pdf.media_type == "application/pdf"
+    from app.services.pdf_profile import _font
+    if _font() is not None:
+        pdf = await public.public_profile_pdf(person.id, db)
+        assert pdf.media_type == "application/pdf"
+    else:  # no Cyrillic font on this machine: a clean 503, not a bare 500 (SD-07)
+        with pytest.raises(ApiError) as no_font:
+            await public.public_profile_pdf(person.id, db)
+        assert no_font.value.status_code == 503
 
     credential = SimpleNamespace(id=_uid(), participant_id=person.id, credential_json={"id": "urn:uuid:" + str(_uid())},
                                  revoked_at=None, issued_at=NOW)

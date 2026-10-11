@@ -1,0 +1,509 @@
+[
+ {
+  "text": "Golang-разработчик (Middle)\nРазрабатываем платёжный шлюз. Пишем на Go, храним данные в PostgreSQL, общаемся через Kafka.\nОпыт коммерческой разработки от 2 лет.\nДоход: от 220 до 300 тыс. руб. на руки. Офис в Москве, возможен гибрид.",
+  "gold": {
+   "role": "backend",
+   "grade": "middle",
+   "skills": [
+    "Go",
+    "PostgreSQL",
+    "Kafka"
+   ],
+   "nice": [],
+   "salary_from": 220000,
+   "salary_to": 300000,
+   "work_format": "hybrid",
+   "city": "Москва"
+  }
+ },
+ {
+  "text": "Senior Go developer\nСтек: Go, gRPC, Redis, Kubernetes.\nУдалённо, можно из любого города РФ.\nВилка 350–450k gross.",
+  "gold": {
+   "role": "backend",
+   "grade": "senior",
+   "skills": [
+    "Go",
+    "gRPC",
+    "Redis",
+    "Kubernetes"
+   ],
+   "nice": [],
+   "salary_from": 350000,
+   "salary_to": 450000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Junior Java-разработчик\nКоманда внутреннего банкинга в Санкт-Петербурге. Java, Spring, PostgreSQL.\nЗП 90 000 - 130 000 рублей до вычета НДФЛ. Офис у метро Чёрная речка.",
+  "gold": {
+   "role": "backend",
+   "grade": "junior",
+   "skills": [
+    "Java",
+    "Spring",
+    "PostgreSQL"
+   ],
+   "nice": [],
+   "salary_from": 90000,
+   "salary_to": 130000,
+   "work_format": "office",
+   "city": "Санкт-Петербург"
+  }
+ },
+ {
+  "text": "Фронтенд-разработчик (React), middle\nReact, TypeScript. Будет плюсом: Node.js.\nРаботаем из офиса в Екатеринбурге.\nОплата от 150 000 до 210 000 ₽.",
+  "gold": {
+   "role": "frontend",
+   "grade": "middle",
+   "skills": [
+    "React",
+    "TypeScript"
+   ],
+   "nice": [
+    "Node.js"
+   ],
+   "salary_from": 150000,
+   "salary_to": 210000,
+   "work_format": "office",
+   "city": "Екатеринбург"
+  }
+ },
+ {
+  "text": "QA-инженер (автотесты), Junior+\nPython, pytest, Selenium. Тестирование веб-сервиса доставки.\nГибридный формат, офис в Новосибирске.\nДо 120 000 ₽ на руки.",
+  "gold": {
+   "role": "qa",
+   "grade": "junior",
+   "skills": [
+    "Python",
+    "pytest",
+    "Selenium"
+   ],
+   "nice": [],
+   "salary_from": 120000,
+   "salary_to": 120000,
+   "work_format": "hybrid",
+   "city": "Новосибирск"
+  }
+ },
+ {
+  "text": "DevOps-инженер, senior\nTerraform, Ansible, Kubernetes, Linux, Prometheus.\nПолностью удалённая работа.\nЗарплата: 300-380 тыс. руб.",
+  "gold": {
+   "role": "devops",
+   "grade": "senior",
+   "skills": [
+    "Terraform",
+    "Ansible",
+    "Kubernetes",
+    "Linux",
+    "Prometheus/Grafana"
+   ],
+   "nice": [],
+   "salary_from": 300000,
+   "salary_to": 380000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Data Scientist (middle)\nPython, PyTorch, Pandas, SQL. Модели оттока для телеком-оператора.\nГибрид, офис в Питере.\n250 000 – 330 000 руб. gross.",
+  "gold": {
+   "role": "ml",
+   "grade": "middle",
+   "skills": [
+    "Python",
+    "PyTorch",
+    "Pandas",
+    "SQL"
+   ],
+   "nice": [],
+   "salary_from": 250000,
+   "salary_to": 330000,
+   "work_format": "hybrid",
+   "city": "Санкт-Петербург"
+  }
+ },
+ {
+  "text": "Инженер данных (Middle+)\nAirflow, Spark, ClickHouse, Python.\nРаботаем в офисе в Казани, опыт от 3 лет.\nЗарплата от 200 тыс. до 260 тыс. рублей.",
+  "gold": {
+   "role": "data",
+   "grade": "middle",
+   "skills": [
+    "Airflow",
+    "Spark",
+    "ClickHouse",
+    "Python"
+   ],
+   "nice": [],
+   "salary_from": 200000,
+   "salary_to": 260000,
+   "work_format": "office",
+   "city": "Казань"
+  }
+ },
+ {
+  "text": "Стажёр-тестировщик\nИщем студента старших курсов. Научим тестированию мобильных приложений, нужен базовый SQL.\nСтажировка в офисе в Нижнем Новгороде, 3 месяца, стипендия 40 000 рублей.",
+  "gold": {
+   "role": "qa",
+   "grade": "intern",
+   "skills": [
+    "SQL"
+   ],
+   "nice": [],
+   "salary_from": 40000,
+   "salary_to": 40000,
+   "work_format": "office",
+   "city": "Нижний Новгород"
+  }
+ },
+ {
+  "text": "Android-разработчик, Senior\nKotlin, Coroutines. Большое приложение для ритейла.\nОфис в Самаре или удалёнка внутри РФ — гибрид.\nот 280 000 руб.",
+  "gold": {
+   "role": "mobile",
+   "grade": "senior",
+   "skills": [
+    "Kotlin"
+   ],
+   "nice": [],
+   "salary_from": 280000,
+   "salary_to": 280000,
+   "work_format": "hybrid",
+   "city": "Самара"
+  }
+ },
+ {
+  "text": "iOS-разработчик (middle)\nSwift, UIKit. Будет плюсом: Flutter.\nРаботаем из Ростова-на-Дону, в офисе.\nДоход 180k–240k.",
+  "gold": {
+   "role": "mobile",
+   "grade": "middle",
+   "skills": [
+    "Swift"
+   ],
+   "nice": [
+    "Flutter"
+   ],
+   "salary_from": 180000,
+   "salary_to": 240000,
+   "work_format": "office",
+   "city": "Ростов-на-Дону"
+  }
+ },
+ {
+  "text": "Fullstack-разработчик\nNode.js и React, база MongoDB.\nУдалённо.\nЗарплата обсуждается по итогам собеседования.",
+  "gold": {
+   "role": "fullstack",
+   "grade": null,
+   "skills": [
+    "Node.js",
+    "React",
+    "MongoDB"
+   ],
+   "nice": [],
+   "salary_from": null,
+   "salary_to": null,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Специалист по информационной безопасности (pentest), middle\nLinux, Python. Проводим пентесты инфраструктуры заказчиков.\nОфис в Уфе.\nЗП 160 – 200 тыс.",
+  "gold": {
+   "role": "security",
+   "grade": "middle",
+   "skills": [
+    "Linux",
+    "Python"
+   ],
+   "nice": [],
+   "salary_from": 160000,
+   "salary_to": 200000,
+   "work_format": "office",
+   "city": "Уфа"
+  }
+ },
+ {
+  "text": "Embedded-разработчик (junior)\nC, STM32, RTOS. Приборы учёта.\nГибридный график, офис в Челябинске.\nОклад 80 000 руб., премии до 20%.",
+  "gold": {
+   "role": "embedded",
+   "grade": "junior",
+   "skills": [
+    "STM32",
+    "RTOS"
+   ],
+   "nice": [],
+   "salary_from": 80000,
+   "salary_to": 80000,
+   "work_format": "hybrid",
+   "city": "Челябинск"
+  }
+ },
+ {
+  "text": "Python-разработчик, Senior\nDjango, PostgreSQL, Celery, Redis.\nПереезд в Краснодар не нужен: работаем удалённо.\nВилка: 320 000—420 000 ₽ net.",
+  "gold": {
+   "role": "backend",
+   "grade": "senior",
+   "skills": [
+    "Python",
+    "Django",
+    "PostgreSQL",
+    "Redis"
+   ],
+   "nice": [],
+   "salary_from": 320000,
+   "salary_to": 420000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Системный аналитик (middle)\nSQL, BPMN, REST. Проекты для госсектора.\nОфис в Воронеже.\n140–180 тысяч рублей.",
+  "gold": {
+   "role": "analyst",
+   "grade": "middle",
+   "skills": [
+    "SQL"
+   ],
+   "nice": [],
+   "salary_from": 140000,
+   "salary_to": 180000,
+   "work_format": "office",
+   "city": "Воронеж"
+  }
+ },
+ {
+  "text": "Тимлид backend-команды (Go)\nGo, PostgreSQL, Kafka, Kubernetes. В команде 6 человек.\nГибрид, офис в Санкт-Петербурге.\nот 450 до 550 тыс. ₽",
+  "gold": {
+   "role": "backend",
+   "grade": "lead",
+   "skills": [
+    "Go",
+    "PostgreSQL",
+    "Kafka",
+    "Kubernetes"
+   ],
+   "nice": [],
+   "salary_from": 450000,
+   "salary_to": 550000,
+   "work_format": "hybrid",
+   "city": "Санкт-Петербург"
+  }
+ },
+ {
+  "text": "ML-инженер (junior)\nPython, scikit-learn, Pandas. Рекомендательная система маркетплейса.\nУдалённо.\nЗарплата до 150 тыс. руб.",
+  "gold": {
+   "role": "ml",
+   "grade": "junior",
+   "skills": [
+    "Python",
+    "Pandas"
+   ],
+   "nice": [],
+   "salary_from": 150000,
+   "salary_to": 150000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "C#-разработчик (Middle)\n.NET, PostgreSQL, RabbitMQ.\nРаботаем в Омске, офис в центре.\nДоход: 170 000–230 000 руб.",
+  "gold": {
+   "role": "backend",
+   "grade": "middle",
+   "skills": [
+    "C#",
+    "PostgreSQL",
+    "RabbitMQ"
+   ],
+   "nice": [],
+   "salary_from": 170000,
+   "salary_to": 230000,
+   "work_format": "office",
+   "city": "Омск"
+  }
+ },
+ {
+  "text": "Frontend developer (Vue), senior\nVue, TypeScript.\nМожно работать из Красноярска или удалённо.\nЗП 260 – 340k руб.",
+  "gold": {
+   "role": "frontend",
+   "grade": "senior",
+   "skills": [
+    "Vue.js",
+    "TypeScript"
+   ],
+   "nice": [],
+   "salary_from": 260000,
+   "salary_to": 340000,
+   "work_format": "remote",
+   "city": "Красноярск"
+  }
+ },
+ {
+  "text": "Rust-разработчик\nRust, Linux, высоконагруженные сетевые сервисы, опыт от 4 лет.\nОфис в Москве.\n400 000 – 520 000 руб. до налогов.",
+  "gold": {
+   "role": "backend",
+   "grade": null,
+   "skills": [
+    "Rust",
+    "Linux"
+   ],
+   "nice": [],
+   "salary_from": 400000,
+   "salary_to": 520000,
+   "work_format": "office",
+   "city": "Москва"
+  }
+ },
+ {
+  "text": "Разработчик C++ (компьютерное зрение), middle\nC++, OpenCV, Linux.\nОфис в Перми.\nот 190 тыс. руб.",
+  "gold": {
+   "role": "ml",
+   "grade": "middle",
+   "skills": [
+    "C++",
+    "Computer Vision",
+    "Linux"
+   ],
+   "nice": [],
+   "salary_from": 190000,
+   "salary_to": 190000,
+   "work_format": "office",
+   "city": "Пермь"
+  }
+ },
+ {
+  "text": "Go-разработчик (junior)\nGo, Docker, PostgreSQL. Ищем начинающего разработчика в Екб.\nГибрид.\nЗарплата 100–140 тыс. рублей.",
+  "gold": {
+   "role": "backend",
+   "grade": "junior",
+   "skills": [
+    "Go",
+    "Docker",
+    "PostgreSQL"
+   ],
+   "nice": [],
+   "salary_from": 100000,
+   "salary_to": 140000,
+   "work_format": "hybrid",
+   "city": "Екатеринбург"
+  }
+ },
+ {
+  "text": "SRE-инженер (senior)\nKubernetes, Prometheus, Linux, Go.\nУдалёнка.\nот 380 000 до 470 000 рублей в месяц.",
+  "gold": {
+   "role": "devops",
+   "grade": "senior",
+   "skills": [
+    "Kubernetes",
+    "Prometheus/Grafana",
+    "Linux",
+    "Go"
+   ],
+   "nice": [],
+   "salary_from": 380000,
+   "salary_to": 470000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Разработчик ROS (робототехника), junior\nROS, C++, Python. Лаборатория мобильных роботов в Волгограде.\nОфис.\n90 000 ₽ на руки.",
+  "gold": {
+   "role": "embedded",
+   "grade": "junior",
+   "skills": [
+    "ROS",
+    "C++",
+    "Python"
+   ],
+   "nice": [],
+   "salary_from": 90000,
+   "salary_to": 90000,
+   "work_format": "office",
+   "city": "Волгоград"
+  }
+ },
+ {
+  "text": "Backend-разработчик (Node.js), middle\nNode.js, TypeScript, PostgreSQL.\nИз дома, команда в разных городах.\nОклад 200–260 тыс. ₽ gross.",
+  "gold": {
+   "role": "backend",
+   "grade": "middle",
+   "skills": [
+    "Node.js",
+    "TypeScript",
+    "PostgreSQL"
+   ],
+   "nice": [],
+   "salary_from": 200000,
+   "salary_to": 260000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Аналитик данных (junior)\nSQL, Python, Pandas.\nГибрид, офис в Казани.\nЗарплата от 90 000 руб.",
+  "gold": {
+   "role": "analyst",
+   "grade": "junior",
+   "skills": [
+    "SQL",
+    "Python",
+    "Pandas"
+   ],
+   "nice": [],
+   "salary_from": 90000,
+   "salary_to": 90000,
+   "work_format": "hybrid",
+   "city": "Казань"
+  }
+ },
+ {
+  "text": "Java-разработчик (senior)\nJava, Spring, Kafka, Kubernetes. Ищем коллег в Новосибирске и в Москве.\nОфис.\n330–420 тыс. руб.",
+  "gold": {
+   "role": "backend",
+   "grade": "senior",
+   "skills": [
+    "Java",
+    "Spring",
+    "Kafka",
+    "Kubernetes"
+   ],
+   "nice": [],
+   "salary_from": 330000,
+   "salary_to": 420000,
+   "work_format": "office",
+   "city": "Новосибирск"
+  }
+ },
+ {
+  "text": "Flutter-разработчик (middle)\nFlutter, Dart.\nУдалённо.\nДоход 160 000 - 220 000.",
+  "gold": {
+   "role": "mobile",
+   "grade": "middle",
+   "skills": [
+    "Flutter"
+   ],
+   "nice": [],
+   "salary_from": 160000,
+   "salary_to": 220000,
+   "work_format": "remote",
+   "city": null
+  }
+ },
+ {
+  "text": "Python-разработчик (стажировка)\nPython, FastAPI, Docker. Оплачиваемая стажировка для студентов.\nОфис в Москве, 20 часов в неделю.\n50 тыс. руб. в месяц.",
+  "gold": {
+   "role": "backend",
+   "grade": "intern",
+   "skills": [
+    "Python",
+    "FastAPI",
+    "Docker"
+   ],
+   "nice": [],
+   "salary_from": 50000,
+   "salary_to": 50000,
+   "work_format": "office",
+   "city": "Москва"
+  }
+ }
+]
