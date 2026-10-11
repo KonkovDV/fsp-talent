@@ -75,6 +75,34 @@ async def clear_jury(db, person: Participant) -> None:
     person.salary_from_gross = None
     person.salary_to_gross = None
     person.experience_years = None
+    clear_personal(person)
+
+
+def juror_name(email: str | None) -> str:
+    """The seed name of jury{n}@demo.talent, «Член жюри n»."""
+    local = (email or "").split("@", 1)[0]
+    number = local[len("jury"):] if local.startswith("jury") else ""
+    return f"Член жюри {number}" if number.isdigit() else "Член жюри"
+
+
+def clear_personal(person: Participant) -> None:
+    """PR295-01: what the previous expert typed about themselves goes too — name, contacts, region,
+    preferences and the public page. The next expert on the same login starts from the seed state."""
+    person.display_name = juror_name(person.email)
+    person.phone = None
+    person.telegram = None
+    person.github = None
+    person.region = None
+    person.soft_skills = []
+    person.work_formats = []
+    person.excluded_industries = []
+    person.certificate_grade = None
+    person.category_opened_at = None
+    person.practice_topic = person.practice_ok = person.practice_at = None
+    person.employer_task_title = person.employer_task_passed = person.employer_task_at = None
+    person.public_profile = False
+    person.show_city = person.show_stack = person.show_fsp = person.show_experience = True
+    person.job_search = "open"
 
 
 async def restore_consents(db, person: Participant, now: datetime) -> None:
