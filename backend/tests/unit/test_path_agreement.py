@@ -9,3 +9,12 @@ def test_same_and_adjacent_shares():
 
 def test_empty_is_full_agreement():
     assert path_agreement([], []) == (1.0, 1.0)
+
+
+def test_kappa_order_of_no_grade():
+    from app.validation.assessment import _quadratic_kappa
+    xs = [None, "intern", "junior", "middle", "senior", "lead"] * 5
+    ys = ["intern", None, "junior", "middle", "senior", "lead"] * 5
+    # One step apart when "no grade" sits below intern; the far end of the scale when it sits after lead.
+    assert _quadratic_kappa(xs, ys, none_first=True) > _quadratic_kappa(xs, ys)
+    assert _quadratic_kappa(xs, xs, none_first=True) == 1.0
