@@ -14,8 +14,13 @@
 |---|---|
 | [REQUIREMENTS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/REQUIREMENTS.md) | Каждое требование ТЗ и ответы постановщика на Q&A: где увидеть и где в коде |
 | [BEYOND_TZ.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/BEYOND_TZ.md) | Что сделано сверх ТЗ: психометрика, удостоверения W3C VC, безопасность, доступность, валидация |
-| [VALIDATION_ASSESSMENT.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_ASSESSMENT.md) | Проверка теста на грейд |
-| [VALIDATION_MATCHING.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_MATCHING.md) | Проверка подбора кандидатов |
+| [ORGANIZER_DECISIONS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/ORGANIZER_DECISIONS.md) | Решения организаторов из вопросов и ответов, у каждого — тест или файл, который это подтверждает |
+| [JURY_CRITERIA.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/JURY_CRITERIA.md) | Критерии оценки жюри и где каждый виден в решении |
+| [MODEL_CARDS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/MODEL_CARDS.md) | Карточки моделей теста и подбора: назначение, данные, ограничения |
+| [DATASETS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/DATASETS.md) | Синтетические данные: как построены и чем не являются |
+| [ACCESSIBILITY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/ACCESSIBILITY.md) | Доступность: WCAG 2.2 AA, замеры axe и Lighthouse |
+| [VALIDATION_ASSESSMENT.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_ASSESSMENT.md) | Проверка теста на грейд: ключи заданий запуском (1875/1875), повтор процедуры, сопоставимые строки, кривые сигналов честности, EAP против WLE |
+| [VALIDATION_MATCHING.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_MATCHING.md) | Проверка подбора кандидатов: лестница баз, градуированные протоколы с P@10 и MRR |
 | [VALIDATION_INTEGRITY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_INTEGRITY.md) | Уровень риска честности теста |
 | [VALIDATION_NLP.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_NLP.md) | Разбор резюме и вакансий по полям |
 | [PREREG_MATCHING_2026-10.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/PREREG_MATCHING_2026-10.md) | Предрегистрация гипотез по ранжированию до запуска на отложенных данных |
@@ -24,7 +29,7 @@
 | [TRUST_AND_ATS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/TRUST_AND_ATS.md) | Защита от фиктивных вакансий и интеграция с ATS |
 | [COMPLIANCE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/COMPLIANCE.md) | Персональные данные (152-ФЗ), честность решений, права |
 | [API_ERRORS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/API_ERRORS.md) | Коды ошибок API |
-| [BUSINESS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/BUSINESS.md) | Бизнес-модель: кто платит и за что, сравнение с hh.ru, Хабр Карьерой, GeekJob и командами хакатона |
+| [BUSINESS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/BUSINESS.md) | Бизнес-модель: кто платит и за что, каналы найма и их ограничения |
 | [DESIGN.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/DESIGN.md) | Дизайн-система «Протокол» по брендбуку ФСП |
 | [THIRD_PARTY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/THIRD_PARTY.md) | Сторонние компоненты и лицензии |
 | [requirements_trace.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/requirements_trace.md) | Прослеживаемость: требование → проверка, `make accept` |
