@@ -13,7 +13,8 @@ GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "м�
 def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
     """Return a card when hard filters pass, otherwise None.
 
-    candidate keys: role, grade, skills, disciplines [{discipline, best_rank}], is_minor
+    candidate keys: role, grade (confirmed by a test only; a declared grade is passed as None), skills,
+    disciplines [{discipline, best_rank}], is_minor
     vacancy keys: role, grade, discipline, min_rank, skills, allows_minors, is_open, plus display fields
     """
     if not vacancy.get("is_open", True):
