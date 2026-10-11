@@ -266,11 +266,11 @@ export default function EmployerNeeds() {
                 <div>
                   <h2 className="font-display text-xl font-bold text-ink">{current.title}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
-                    <span>{current.params.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params.grade ? gradeRu(current.params.grade) : 'любой грейд'}</span>
-                    {current.params.skills.map(s => <span key={s} className="chip-active">{s}</span>)}
-                    {current.params.nice_to_have.map(s => <span key={s} className="chip-default">+ {s}</span>)}
-                    {current.params.work_goal === 'internship' && <span className="badge-warn">стажировка</span>}
-                    {(current.params.salary_from != null || current.params.salary_to != null) && (
+                    <span>{current.params?.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params?.grade ? gradeRu(current.params.grade) : 'любой грейд'}</span>
+                    {(current.params?.skills ?? []).map(s => <span key={s} className="chip-active">{s}</span>)}
+                    {(current.params?.nice_to_have ?? []).map(s => <span key={s} className="chip-default">+ {s}</span>)}
+                    {current.params?.work_goal === 'internship' && <span className="badge-warn">стажировка</span>}
+                    {(current.params?.salary_from != null || current.params?.salary_to != null) && (
                       <span className="num">{rub(current.params.salary_from)} – {rub(current.params.salary_to)}</span>
                     )}
                   </div>
