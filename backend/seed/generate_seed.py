@@ -114,6 +114,11 @@ DEMO_VACANCIES = [
 ]
 
 
+# Entry-level demo vacancies open to any grade (grade_match="any"): a juror who has only filled in the survey can
+# apply right away. Graded vacancies wait for a test-confirmed grade (ТЗ 2.1, #289, SDK-03).
+OPEN_GRADE_TITLES = frozenset({"Стажёр backend", "Аналитик SOC", "Frontend-разработчик"})
+
+
 def job_search_of(rng: random.Random) -> str:
     """40 % actively looking, 45 % open to offers, 15 % not looking."""
     return rng.choices(("active", "open", "not_looking"), weights=(40, 45, 15), k=1)[0]
@@ -624,6 +629,7 @@ async def main(extra_candidates: int | None = None) -> None:
                 existing.description = existing.description or text
                 continue
             db.add(Vacancy(employer_id=employer.id, title=title, description=text, role=role, grade=grade,
+                           grade_match="any" if title in OPEN_GRADE_TITLES else "plus_minus",
                            discipline=disc, min_rank=rank, skills=skills, salary_from_gross=lo,
                            salary_to_gross=hi, work_format=fmt))
             jobs += 1
@@ -638,6 +644,8 @@ async def main(extra_candidates: int | None = None) -> None:
     await ensure_category_market()
     from seed.topup_public import topup
     await topup()
+    from seed.demo_ready import main_async as demo_ready
+    await demo_ready()
     if extra_candidates is not None:
         await sync_extra(extra_candidates)
 

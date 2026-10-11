@@ -205,7 +205,8 @@ REASON_SOURCE = {
     "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "TEST_FRESH": "тест", "UNTESTED": "тест",
     "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП", "FSP_NO_LIFT": "ФСП",
     "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП",
-    "GRADE_DECLARED": "заявлено", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
+    "GRADE_DECLARED": "заявлено", "GRADE_TEST_FAILED": "тест", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
+    "SKILL_UNTESTED": "заявлено",
     "RELATED_SKILL": "заявлено",
     "PAY_FIT": "вилка", "PAY_LOW": "вилка", "PAY_GAP": "вилка", "SALARY_HISTORY": "вилка",
     "CONGESTION": "очередь",
@@ -258,6 +259,9 @@ class CandidateFacts:
     p_up: float | None = None             # P(θ ≥ cut of the next grade); used only by GRADE_MODEL=expected
     fail_rate: float | None = None        # π for a declared grade; None keeps the legacy 0.85 factor
     tested_at: datetime | None = None     # confirmation date; None leaves the test factor unchanged
+    # Target of the latest grade test in this specialization that was not passed (outcome "not_passed").
+    # Only read while the shown grade is not confirmed; see grade_for_matching.
+    failed_grade: str | None = None
 
 
 @dataclass(frozen=True)
@@ -474,6 +478,24 @@ def conditions_value(need: NeedSpec, c: CandidateFacts) -> float | None:
     return sum(parts) / len(parts)
 
 
+def grade_for_matching(grade: str | None, source: str | None, failed_grade: str | None) -> tuple[str | None, bool]:
+    """The grade the need-fit reads, and whether a failed test lowered it (DoR-N7).
+
+    A test at grade G that was not passed is evidence that the ability is below the cut of G
+    (P(θ ≥ cut_G) < PASS_P, app/services/cat.py). While the candidate keeps an unconfirmed grade
+    G' ≥ G, matching reads the grade one step below the failed target. The card still shows the
+    grade the candidate chose, marked as not confirmed (Q&A FTT.4): the person is lowered, not hidden.
+    A confirmed grade is never touched, and neither is a failed test above the shown grade
+    (a declined attempt at the next step says nothing against the current one).
+    """
+    if source == "assessed" or grade not in GRADES or failed_grade not in GRADES:
+        return grade, False
+    target = GRADES.index(failed_grade)
+    if target > GRADES.index(grade):
+        return grade, False
+    return GRADES[max(target - 1, 0)], True
+
+
 def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: bool = True,
           use_fsp: bool = True, use_related: bool = True) -> MatchResult:
     """Factor score with plus / minus / info lines (TZ 2.1). The use_* switches exist for the ablation study."""
@@ -486,7 +508,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
     wanted = [(s, 1.0) for s in need.skills] + [(s, 0.5) for s in need.nice if s not in need.skills]
     if wanted:
         total = got = 0.0
-        confirmed, related, missing = [], [], []
+        confirmed, related, missing, untested = [], [], [], []
         for skill, w in wanted:
             credit, how = _skill_credit(skill, c.skills)
             if not use_trust and credit > 0 and not how.startswith("related"):
@@ -497,6 +519,9 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             got += w * credit
             if how == "test_confirmed":
                 confirmed.append(skill)
+            elif how != "missing" and not how.startswith("related"):
+                # In the profile, but no test confirmed it. Not the same as a missing skill (SKILL_GAP).
+                untested.append(skill)
             elif how.startswith("related") and credit > 0:
                 related.append(f"{skill} ≈ {how.split(':', 1)[1]}")
             elif how == "missing" and w == 1.0:
@@ -508,6 +533,10 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                   f"Навыки: {have_n} из {len(need.skills)} обязательных")
         if confirmed:
             _note(plus, reasons, "plus", "VERIFIED_SKILL", "Подтверждены тестом: " + ", ".join(confirmed))
+        if untested:
+            # F24: only the explanation changes; the credit above already weighs these by TRUST.
+            _note(info, reasons, "info", "SKILL_UNTESTED",
+                  "Заявлены, тестом не подтверждены: " + ", ".join(untested))
         if related:
             _note(info, reasons, "info", "RELATED_SKILL",
                   "Близкие технологии (частичный зачёт): " + ", ".join(related))
@@ -515,38 +544,50 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             _note(minus, reasons, "minus", "SKILL_GAP", "Нет навыков: " + ", ".join(missing))
 
     closeness = 1.0   # 1 inside the requested category; evidence weighs less the further the candidate is from it
-    if need.grade in GRADES and c.grade in GRADES:
-        gap = GRADES.index(c.grade) - GRADES.index(need.grade)
+    # The failed-test step is test evidence, so the ablation without the test does not see it either.
+    grade, failed = (grade_for_matching(c.grade, c.grade_source, c.failed_grade) if use_test
+                     else (c.grade, False))
+    if need.grade in GRADES and grade in GRADES:
+        gap = GRADES.index(grade) - GRADES.index(need.grade)
         base = {0: 1.0, 1: 0.6, -1: 0.35}.get(gap, 0.0)
         assessed = c.grade_source == "assessed"
         expected = settings.GRADE_MODEL == "expected" and use_test and (assessed or c.fail_rate is not None)
         if expected and assessed:
-            belief = mass_assessed(c.grade, c.test_p if c.test_p is not None else 1.0, c.p_up or 0.0)
+            belief = mass_assessed(grade, c.test_p if c.test_p is not None else 1.0, c.p_up or 0.0)
             grade_value = expected_rel(need.grade, belief)
         elif expected and c.fail_rate is not None:
-            belief = mass_declared(c.grade, c.fail_rate)
+            belief = mass_declared(grade, c.fail_rate)
             grade_value = expected_rel(need.grade, belief)
         else:
             grade_value = base * (1.0 if assessed or not use_test else DECLARED_GRADE)
         closeness *= grade_value if expected else base
         values["grade"] = grade_value
+        if failed:
+            _note(minus, reasons, "minus", "GRADE_TEST_FAILED",
+                  f"Грейд «{GRADE_RU[c.grade]}» тестом не подтверждён: тест на «{GRADE_RU[c.failed_grade]}» "
+                  f"не пройден, в подборе учтён «{GRADE_RU[grade]}»")
         if gap == 0:
-            if expected and not assessed and c.fail_rate is not None:
+            if failed:
+                pass   # the line above already names the grade that entered the score
+            elif expected and not assessed and c.fail_rate is not None:
                 passed = round((1.0 - c.fail_rate) * 100)
                 text = (f"Грейд заявлен; тест на этот грейд с первого раза сдают {passed} % "
                         f"— вклад грейда ×{1.0 - c.fail_rate:.2f}")
                 _note(info, reasons, "info", "GRADE_DECLARED", text)
             else:
                 tail = " подтверждён тестом" if assessed else " указан кандидатом, тестом не подтверждён"
-                text = f"Грейд «{GRADE_RU[c.grade]}»{tail}"
+                text = f"Грейд «{GRADE_RU[grade]}»{tail}"
                 if assessed:
                     _note(plus, reasons, "plus", "CATEGORY_MATCH", text)
                 else:
                     _note(info, reasons, "info", "GRADE_DECLARED", text)
         elif gap > 0:
-            _note(info, reasons, "info", "GRADE_ABOVE", f"Грейд выше запрошенного: {GRADE_RU[c.grade]}")
+            _note(info, reasons, "info", "GRADE_ABOVE", f"Грейд выше запрошенного: {GRADE_RU[grade]}")
         else:
-            _note(minus, reasons, "minus", "GRADE_BELOW", f"Грейд ниже запрошенного: {GRADE_RU[c.grade]}")
+            _note(minus, reasons, "minus", "GRADE_BELOW", f"Грейд ниже запрошенного: {GRADE_RU[grade]}")
+    elif failed:
+        _note(minus, reasons, "minus", "GRADE_TEST_FAILED",
+              f"Грейд «{GRADE_RU[c.grade]}» тестом не подтверждён: тест на «{GRADE_RU[c.failed_grade]}» не пройден")
 
     if use_test:
         if c.test_p is not None and (need.role is None or c.test_spec in (None, need.role)):
@@ -578,7 +619,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                 _note(info, reasons, "info", "TEST_FRESH", fresh)
         else:
             values["test"] = UNTESTED
-            if not any("тестом не подтверждён" in line for line in info):
+            if not failed and not any("тестом не подтверждён" in line for line in info):
                 _note(info, reasons, "info", "UNTESTED", "Грейд не проверен тестом")
 
     if need.role:

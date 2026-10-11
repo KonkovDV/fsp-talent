@@ -73,7 +73,7 @@ from app.services.practice import (
     weekly_task,
 )
 from app.services.profile import rebuild_profile
-from app.services.session_marks import DISPUTE_TEXT, dispute_error, note_copy, note_tab_leave
+from app.services.session_marks import DISPUTE_TEXT, dispute_error, integrity_line, note_copy, note_tab_leave
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
@@ -84,7 +84,7 @@ TOPIC_LABELS = {"python": "Python", "sql": "SQL", "algorithms": "Алгорит�
                 "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",
                 "embedded": "Встраиваемые системы", "concept": "Понимание",
                 "testing": "Тестирование", "metrics": "Метрики", "pipelines": "Конвейеры данных",
-                "requirements": "Требования"}
+                "requirements": "Требования", "infra": "Инфраструктура"}
 
 
 class StartIn(BaseModel):
@@ -225,6 +225,9 @@ def _item_out(session_id: uuid.UUID, it: TestSessionItem) -> ItemOut:
 def _review_notes(flags: dict) -> list[str]:
     """Marks for a human look. None of them changes the assigned grade."""
     notes = []
+    level = integrity_line(flags)
+    if level:
+        notes.append(level)
     if flags.get("pace_review"):
         notes.append("Быстрые верные ответы по одному семейству. Грейд не изменён.")
     if flags.get("variant_review"):

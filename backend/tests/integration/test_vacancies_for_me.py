@@ -1,12 +1,18 @@
-"""V-N1: a candidate without a test sees open vacancies, newest first; a minor without consent cannot apply."""
+"""V-N1: a candidate without a test sees open vacancies, newest first; a minor without consent cannot apply.
+
+The apply route agrees with the card: what the list marks needs_test answers 403, what it allows is accepted.
+"""
 from __future__ import annotations
 
+import uuid
 from datetime import date, timedelta
 
-from sqlalchemy import delete
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import delete, select
 
-from app.api.v1.vacancies import vacancies_for_me
-from app.models import Employer, Participant, Vacancy
+from app.api.v1.vacancies import apply, vacancies_for_me
+from app.models import Application, Employer, Participant, Vacancy
 from tests.integration.conftest import PASSWORD_HASH, now, stamp, wipe_people
 
 
@@ -34,9 +40,12 @@ async def _setup(db, tag: str, **person):
 
 
 async def _cleanup(db, company, p):
-    await db.execute(delete(Vacancy).where(Vacancy.employer_id == company.id))
+    company_id, person_id = company.id, p.id
+    await db.rollback()
+    await db.execute(delete(Application).where(Application.candidate_id == person_id))
+    await db.execute(delete(Vacancy).where(Vacancy.employer_id == company_id))
     await db.commit()
-    await wipe_people([p.id], [company.id])
+    await wipe_people([person_id], [company_id])
 
 
 async def test_without_a_test_the_open_vacancies_are_listed_newest_first(db):
@@ -63,5 +72,23 @@ async def test_a_minor_without_consent_sees_but_cannot_apply(db):
         cards = await vacancies_for_me({"sub": str(p.id), "role": "participant"}, db)
         mine = [c for c in cards if c["title"].startswith(tag)]
         assert mine and all(c["can_apply"] is False for c in mine)
+    finally:
+        await _cleanup(db, company, p)
+
+
+async def test_apply_follows_the_card_without_a_test(db):
+    tag = stamp()
+    company, p = await _setup(db, tag)
+    current = {"sub": str(p.id), "role": "participant"}
+    try:
+        cards = {c["title"]: c for c in await vacancies_for_me(current, db) if c["title"].startswith(tag)}
+        graded, any_grade = cards[f"{tag} старая"], cards[f"{tag} новая"]
+        with pytest.raises(HTTPException) as refused:
+            await apply(uuid.UUID(str(graded["id"])), current, db)
+        assert refused.value.status_code == 403 and "тестом" in refused.value.detail
+        await apply(uuid.UUID(str(any_grade["id"])), current, db)
+        await db.commit()
+        rows = list(await db.scalars(select(Application).where(Application.candidate_id == uuid.UUID(current["sub"]))))
+        assert [r.status for r in rows] == ["applied"]
     finally:
         await _cleanup(db, company, p)
