@@ -68,3 +68,12 @@ def test_a_candidate_without_a_test_still_sees_published_vacancies():
     assert match_vacancy(fresh, _vacancy()) is None   # needs an FSP discipline
     assert match_vacancy({**fresh, "is_minor": True}, _vacancy(discipline=None)) is None
     assert match_vacancy(fresh, _vacancy(discipline=None, is_open=False)) is None
+
+
+def test_an_ungraded_card_is_marked_and_a_foreign_role_is_still_cut():
+    fresh = _candidate(role="backend", grade=None, disciplines=[])
+    open_any = _vacancy(discipline=None, min_rank=None)
+    assert match_vacancy(fresh, open_any)["match"] == "not_assessed"
+    assert "мидл" in " ".join(match_vacancy(fresh, open_any)["why"])
+    assert match_vacancy(fresh, {**open_any, "role": "frontend"}) is None
+    assert match_vacancy(_candidate(), _vacancy())["match"] == "matched"

@@ -244,7 +244,9 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         if hit is None:
             continue
         cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied, "can_apply": not needs_guardian}))
-    cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+    if candidate["grade"]:
+        cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+    # Without a grade the rows keep the query order: newest vacancy first.
     return cards
 
 

@@ -8,7 +8,7 @@ import { netLine } from '../../money'
 interface Card {
   id: string; title: string; company: string | null; role: string | null; grade: string | null; work_format: string
   salary_from: number | null; salary_to: number | null; why: string[]; matched_skills: string[]; missing_skills: string[]
-  applied: boolean; can_apply: boolean; flags?: { code: string; label: string }[]
+  applied: boolean; can_apply: boolean; match?: 'matched' | 'not_assessed'; flags?: { code: string; label: string }[]
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
@@ -66,6 +66,7 @@ export default function CandidateVacancies() {
       {isLoading && <Skeleton className="h-48" />}
       {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить вакансии')}</p>}
       {!isLoading && !isError && cards.length === 0 && <Empty title="Подходящих открытых вакансий нет">Они появятся, когда работодатели опубликуют вакансии вашей специализации.</Empty>}
+      {cards.some(c => c.match === 'not_assessed') && <p className="notice-info mb-4" role="status">Грейд ещё не подтверждён. Пока это все открытые вакансии, новые сверху. Пройдите тест — вакансии отсортируются по совпадению.</p>}
       {apply.isError && <p className="notice-error mb-4" role="alert">{apiError(apply.error, 'Не удалось откликнуться')}</p>}
       {taskError && <p className="notice-error mb-4" role="alert">{taskError}</p>}
       {task && (

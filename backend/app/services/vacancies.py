@@ -7,6 +7,8 @@ from app.services.scoring.engine import RANK_ORDER, rank_at_least
 from app.services.skills import normalize_skill
 from app.services.survey import SPECIALIZATIONS
 
+GRADE_RU = {"intern": "стажёр", "junior": "джуниор", "middle": "мидл", "senior": "сеньор", "lead": "лид"}
+
 
 def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
     """Return a card when hard filters pass, otherwise None.
@@ -44,7 +46,8 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
     if role and candidate.get("role") == role:
         why.append(f"Специализация совпадает: {SPECIALIZATIONS.get(role, role)}")
     if ungraded and vacancy.get("grade") and mode != "any":
-        why.append(f"Грейд ещё не подтверждён тестом, вакансия ждёт {vacancy['grade']}")
+        why.append("Грейд ещё не подтверждён тестом, вакансия ждёт "
+                   f"{GRADE_RU.get(vacancy['grade'], vacancy['grade'])}")
     elif vacancy.get("grade") and mode != "any":
         why.append("Грейд совпадает" if mode == "exact" else f"Грейд не дальше одного шага от {vacancy['grade']}")
     if disc:
@@ -55,6 +58,8 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
         "matched_skills": sorted(have),
         "missing_skills": sorted(wanted - have),
         "why": why,
+        # Without a test there is no grade to match: the list is the published one, newest first.
+        "match": "not_assessed" if ungraded else "matched",
     }
 
 
