@@ -246,6 +246,15 @@ function FactorBars({ match, active, idle }: {
   )
 }
 
+/** «лучше N %» from the category standing line the server already writes. Null when there is none. */
+export function categoryBeats(why: string[]): number | null {
+  for (const line of why) {
+    const hit = /по категории .*: лучше (\d{1,3}) %$/.exec(line)
+    if (hit) return Number(hit[1])
+  }
+  return null
+}
+
 export default function CandidateCard({ card, place, onOffer, onTask, onShortlist, favorite, compare, aiNote, onHide }: Props) {
   const [open, setOpen] = useState(false)
   const fresh = card.why.filter(l => FRESH.some(p => l.startsWith(p)))
@@ -264,6 +273,16 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <CategoryPlate role={card.role} grade={card.grade} source={card.grade_source} />
+            {categoryBeats(card.why) != null && (
+              <span className="chip-default" data-testid="category-percentile" title="Доля людей той же категории с меньшей вероятностью сдачи теста">
+                лучше {categoryBeats(card.why)} % в категории
+              </span>
+            )}
+            {card.match?.accept === 1 && (
+              <span className="chip-active" data-testid="salary-fit" title="Верх вашей вилки покрывает нижнюю границу ожиданий кандидата">
+                в вашей вилке
+              </span>
+            )}
             {card.also_primary?.role && (
               <span className="text-xs text-ink-3">
                 Основная категория: {ROLE_RU[card.also_primary.role] ?? card.also_primary.role}
