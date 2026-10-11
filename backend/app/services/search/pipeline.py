@@ -231,6 +231,11 @@ def bank_cells(rows: list[tuple[str | None, str | None, int, int]], min_n: int =
     return cells
 
 
+def assessed_card(facts) -> bool:
+    """The card's category is confirmed by a test («Только грейд, подтверждённый тестом»)."""
+    return facts is not None and facts.grade_source == "assessed"
+
+
 def created_after(now: datetime, fresh_days: int | None) -> datetime | None:
     """Lower bound for «новые за N дней». None means the filter is off."""
     if not fresh_days:
@@ -592,6 +597,10 @@ async def search_candidates(
                 else:
                     kept.append(pid)
             all_ids = kept
+    if assessed_only:
+        # ST-09: the SQL filter keeps anyone with a test on any specialization (Participant.assessed_grade),
+        # and dense hits skip it. The card shows the source of the scored category, so the filter does too.
+        all_ids = [i for i in all_ids if assessed_card(matches[i].facts)]
     facts = [matches[i].facts for i in all_ids if matches[i].facts]
     pay_hint = pay_counterfactual(need, facts)
     skill_hint = skill_counterfactual(need, facts)
