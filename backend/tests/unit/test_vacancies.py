@@ -56,3 +56,33 @@ def test_birthday_overrides_a_stale_minor_flag():
     child = Participant(is_visible=True, is_minor=False, minor_consent_given=False, birth_date=date(2012, 5, 1))
     assert child.minor_now(date(2026, 10, 4)) is True
     assert not child.discoverable
+
+
+def test_a_candidate_without_a_test_still_sees_published_vacancies():
+    # ТЗ 2.1: the general list of published vacancies is open before any test.
+    fresh = _candidate(role=None, grade=None, disciplines=[])
+    hit = match_vacancy(fresh, _vacancy(discipline=None, min_rank=None, grade="senior", grade_match="exact"))
+    assert hit is not None
+    assert any("не подтверждён" in w for w in hit["why"])
+    # Hard filters other than the grade still hold.
+    assert match_vacancy(fresh, _vacancy()) is None   # needs an FSP discipline
+    assert match_vacancy({**fresh, "is_minor": True}, _vacancy(discipline=None)) is None
+    assert match_vacancy(fresh, _vacancy(discipline=None, is_open=False)) is None
+
+
+def test_an_ungraded_card_is_marked_and_a_foreign_role_is_still_cut():
+    fresh = _candidate(role="backend", grade=None, disciplines=[])
+    open_any = _vacancy(discipline=None, min_rank=None)
+    assert match_vacancy(fresh, open_any)["match"] == "not_assessed"
+    assert "мидл" in " ".join(match_vacancy(fresh, open_any)["why"])
+    assert match_vacancy(fresh, {**open_any, "role": "frontend"}) is None
+    assert match_vacancy(_candidate(), _vacancy())["match"] == "matched"
+
+
+def test_an_ungraded_candidate_sees_a_graded_vacancy_but_must_take_the_test_to_apply():
+    fresh = _candidate(grade=None, disciplines=[])
+    graded = match_vacancy(fresh, _vacancy(discipline=None, min_rank=None, grade="senior"))
+    assert graded["needs_test"] is True
+    any_grade = match_vacancy(fresh, _vacancy(discipline=None, min_rank=None, grade="senior", grade_match="any"))
+    assert any_grade["needs_test"] is False
+    assert match_vacancy(_candidate(), _vacancy())["needs_test"] is False
