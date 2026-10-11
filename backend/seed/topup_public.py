@@ -5,7 +5,8 @@ Public rankings and the bank hide a cell with fewer than BANK_MIN (5) people. On
 public category was empty. This command only ADDS fictional adults «public-<role>-<grade>-NN@demo.talent»
 until each key cell has TARGET public people who passed the test. It never deletes or rewrites an
 existing row, so it is safe on a running stand; a second run adds nothing. The k-anonymity threshold
-and the public filter stay as they are.
+and the public filter stay as they are. One exception keeps the demo apply path open after SDK-03: the
+entry-level demo vacancies are set to any grade and nofsp@demo.talent gets a test-confirmed grade once.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from app.api.v1.public import _public_filter
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password, verify_password
 from app.legal import documents
-from app.models import CategoryAssignment, Consent, GradeConfirmation, Participant, Skill
+from app.models import CategoryAssignment, Consent, Employer, GradeConfirmation, Participant, Skill, Vacancy
 from app.services.identity import active_consent
 from app.services.profile import rebuild_profile
 from app.services.search.pipeline import BANK_MIN, visible_in_search
@@ -94,6 +95,46 @@ async def backfill_jury(db) -> int:
     return fixed
 
 
+NO_FSP_LOGIN = "nofsp@demo.talent"
+
+
+async def open_demo_apply_path(db) -> dict:
+    """After SDK-03 only a test-confirmed grade opens a graded vacancy. Keep the demo walkable:
+    entry-level demo vacancies take any grade, and the no-FSP demo candidate has passed the test once.
+    The other demo logins stay untested on a fresh seed: the smoke test takes their first test."""
+    from seed.generate_seed import DEMO_VACANCIES, OPEN_GRADE_TITLES
+    demo_employers = {row[0] for row in DEMO_VACANCIES}
+    employer_ids = [e.id for e in await db.scalars(select(Employer).where(Employer.email.is_not(None)))
+                    if (e.email or "").strip().lower() in demo_employers]
+    opened = 0
+    if employer_ids:
+        for vacancy in await db.scalars(select(Vacancy).where(Vacancy.employer_id.in_(employer_ids),
+                                                              Vacancy.title.in_(OPEN_GRADE_TITLES))):
+            if vacancy.grade_match != "any":
+                vacancy.grade_match = "any"
+                opened += 1
+    await db.commit()
+    assessed = False
+    person = next((p for p in await db.scalars(select(Participant).where(Participant.email.is_not(None)))
+                   if (p.email or "").strip().lower() == NO_FSP_LOGIN), None)
+    if person is not None:
+        if person.birth_date is None:
+            person.birth_date, person.is_minor = date(2000, 1, 1), False
+            await db.commit()
+        if person.assessed_grade is None and person.specialization and person.declared_grade:
+            try:
+                assessed = await sit_like_a_person(db, person, person.declared_grade, NO_FSP_LOGIN, strong=True)
+                await rebuild_profile(db, person)  # the API rebuilds after a test; so does the seed
+                await db.commit()
+            except Exception as exc:  # the demo must not stop the top-up
+                await db.rollback()
+                print(f"topup nofsp test skipped: {type(exc).__name__}")
+        elif person.assessed_grade:
+            await rebuild_profile(db, person)  # a stand seeded before this fix: the category catches up
+            await db.commit()
+    return {"opened": opened, "nofsp_assessed": assessed}
+
+
 async def sit_like_a_person(db, person: Participant, grade: str, email: str, strong: bool = False) -> bool:
     """A real session through the service, but not a perfect one: each answer is right with a share drawn
     per profile (seeded by the address), so places inside a category differ instead of six ties at 100 %."""
@@ -137,6 +178,7 @@ async def topup(target: int = TARGET) -> dict:
     bypass_rls()
     async with AsyncSessionLocal() as db:
         jury_fixed = await backfill_jury(db)
+        demo_path = await open_demo_apply_path(db)
         before = await public_counts(db)
         # Emails are ciphertext in the database: find our own rows in Python.
         ours = [p.email.lower() for p in await db.scalars(select(Participant).where(Participant.email.is_not(None)))
@@ -192,9 +234,10 @@ async def topup(target: int = TARGET) -> dict:
                     await db.commit()
         after = await public_counts(db)
     short = [f"{s}/{g}={after.get((s, g), 0)}" for s, g in CELLS if after.get((s, g), 0) < BANK_MIN]
-    print(f"topup_public jury_fixed={jury_fixed} relocked={relocked} added={added} passed={passed} "
+    print(f"topup_public jury_fixed={jury_fixed} demo_opened={demo_path['opened']} "
+          f"nofsp_assessed={demo_path['nofsp_assessed']} relocked={relocked} added={added} passed={passed} "
           f"cells_below_{BANK_MIN}={len(short)} {' '.join(short)}")
-    return {"jury_fixed": jury_fixed, "relocked": relocked, "added": added, "passed": passed,
+    return {"jury_fixed": jury_fixed, "demo_path": demo_path, "relocked": relocked, "added": added, "passed": passed,
             "before": before, "after": after}
 
 

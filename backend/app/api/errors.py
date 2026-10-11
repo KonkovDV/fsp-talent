@@ -63,6 +63,7 @@ ERROR_CODES: dict[str, str] = {
     "survey_required": "Сначала пройдите опрос: выберите специализацию",
     "grade_locked": "Подтверждённый грейд пока нельзя менять",
     "too_young": "Регистрация открыта с 15 лет",
+    "birth_date_locked": "Дата рождения уже сохранена. Исправить её можно только через поддержку.",
     "decline_pause": "Кандидат отклонил приглашение этой компании: повторно — через 30 дней",
     "retake_cooldown": "Пересдача доступна позже",
     "question_bank_empty": "Не хватает заданий для теста",
@@ -83,11 +84,14 @@ ERROR_CODES: dict[str, str] = {
     "invites_paused": "Приглашения приостановлены до проверки",
     "complaint_duplicate": "Жалоба на это приглашение или вакансию уже отправлена",
     "demo_protected": "Демо-аккаунт: пароль и удаление закрыты, чтобы жюри могло войти",
+    "demo_reset_forbidden": "Сброс доступен только демо-аккаунтам жюри на демо-стенде",
     "totp_required": "Нужен код из приложения-аутентификатора",
     "totp_invalid": "Код не подошёл или уже использован",
     "refresh_superseded": "Сессия уже обновлена в другом окне",
     "account_suspended": "Вход закрыт модерацией",
     "csrf_invalid": "Запрос с cookie сессии без совпадающего токена",
+    "nul_byte": "Нулевой байт в адресе, параметрах или теле запроса",
+    "age_mismatch": "Дата рождения не совпадает с возрастом 15–17 из регистрации: исправить можно через поддержку",
 }
 
 
@@ -114,10 +118,19 @@ def error_body(code: str, message: str, details: Any = None, detail: Any = None,
     return body
 
 
+ECHO_LIMIT = 200
+
+
+def _clip(text: str, limit: int = ECHO_LIMIT) -> str:
+    """RT-02: an error never echoes more than 200 characters of what the client sent."""
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
 def _jsonable_errors(errors: list[dict]) -> list[dict]:
     out = []
     for e in errors:
-        item = {"loc": list(e.get("loc", ())), "msg": e.get("msg", ""), "type": e.get("type", "")}
+        loc = [_clip(x) if isinstance(x, str) else x for x in e.get("loc", ())]
+        item = {"loc": loc, "msg": _clip(str(e.get("msg", ""))), "type": e.get("type", "")}
         out.append(item)
     return out
 
@@ -135,7 +148,7 @@ def install_error_handlers(app: FastAPI) -> None:
             headers.setdefault("Retry-After", "60")
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_body(code, message, details, status=exc.status_code, instance=request.url.path),
+            content=error_body(code, message, details, status=exc.status_code, instance=_clip(request.url.path)),
             media_type="application/problem+json",
             headers=headers or None,
         )
@@ -147,7 +160,7 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=error_body("validation_error", first, errors, detail=errors,
-                               status=status.HTTP_422_UNPROCESSABLE_ENTITY, instance=request.url.path),
+                               status=status.HTTP_422_UNPROCESSABLE_ENTITY, instance=_clip(request.url.path)),
             media_type="application/problem+json",
         )
 
@@ -157,6 +170,6 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=500,
             content=error_body("internal_error", "Внутренняя ошибка сервера", status=500,
-                               instance=request.url.path),
+                               instance=_clip(request.url.path)),
             media_type="application/problem+json",
         )

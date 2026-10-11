@@ -11,7 +11,7 @@ export function PageHeader({ title, lead, actions }: { title: string; lead?: Rea
   return (
     <div className="page-head">
       <div className="min-w-0 max-w-full">
-        <h1 className="page-title" title={title}>{title}</h1>
+        <h1 className="page-title" title={typeof title === 'string' ? title : undefined}>{title}</h1>
         {lead && <p className="page-lead">{lead}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

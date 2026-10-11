@@ -5,6 +5,7 @@ import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, my
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
+import DemoResetCard from '../../components/DemoResetCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
 import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -51,12 +52,18 @@ export default function CandidateDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name.split(' ')[0]}` : 'Кабинет'}
+      <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name}` : 'Кабинет'}
         lead="Так вас видит работодатель в поиске: без имени и контактов, по категории и подтверждениям." />
 
       {p.is_minor && !p.minor_consent_given && (
         <GuardianCard sentTo={p.guardian_email ?? null} demoLink={p.guardian_demo_link ?? null} />
       )}
+      {p.search_blocker === 'birth_date_missing' && (
+        <p className="notice-info" role="status" data-testid="birth-date-missing">
+          Работодатели пока не видят вас в поиске: укажите дату рождения в <Link to="/candidate/profile" className="underline">профиле</Link>. Отметка «18 лет» возраст не подтверждает.
+        </p>
+      )}
+      {p.demo_reset_available && <DemoResetCard />}
       {!p.survey_done && <SurveyCard profile={p} />}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">
@@ -68,7 +75,9 @@ export default function CandidateDashboard() {
             </span>
           </div>
           <p className="mt-6 font-display text-xl font-bold sm:text-2xl">{ROLE_RU[p.primary_role] ?? p.primary_role ?? 'Специализация не выбрана'}</p>
-          <p className="font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3.25rem,8vw,5.5rem)]">{p.grade ? gradeRu(p.grade) : '—'}</p>
+          {p.grade && p.grade_source !== 'default'
+            ? <p className="font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3.25rem,8vw,5.5rem)]">{gradeRu(p.grade)}</p>
+            : <p className="mt-2 text-sm on-hero-muted">Грейд не выбран. До опроса карточка стоит в выдаче как {gradeRu('junior')}.</p>}
           {(p.skills ?? []).length > 0 && (
             <ul className="mt-6 flex flex-wrap gap-1.5" aria-label="Навыки">
               {(p.skills ?? []).slice(0, 12).map((sk: { name: string; trust_level: string }) => (
@@ -114,7 +123,7 @@ export default function CandidateDashboard() {
             ))}
           </ul>
           {(career.data?.gained ?? 0) > 0 && (
-            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, закроется ещё {career.data?.gained} открытых вакансий. Грейд от этого сам не вырастет.</p>
+            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, {plural(career.data?.gained ?? 0, ['подойдёт', 'подойдут', 'подойдут'])} ещё {career.data?.gained} {plural(career.data?.gained ?? 0, ['открытая вакансия', 'открытые вакансии', 'открытых вакансий'])}. Грейд от этого сам не вырастет.</p>
           )}
           <p className="mt-4 text-xs text-ink-3">
             {p.has_fsp ? 'ФСП ID привязан.' : 'ФСП ID не привязан: на заполненность это не влияет.'}
@@ -163,9 +172,9 @@ export default function CandidateDashboard() {
             : <ul className="mt-4 space-y-4">
                 {disciplines.map(d => (
                   <li key={d.discipline}>
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-ink">{d.label}</span>
-                      <span className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 text-ink">{d.label}</span>
+                      <span className="flex flex-wrap items-center gap-2">
                         <RankBadge rank={d.best_rank} assignedAt={d.rank_assigned_at} orderRef={d.rank_order_ref} />
                         {d.best_rank && <span className="text-ink-3">Присвоенный разряд</span>}
                         <span className="num text-ink-2">{d.events_count} соревн.</span></span>

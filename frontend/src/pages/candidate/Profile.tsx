@@ -279,7 +279,7 @@ export default function CandidateProfile() {
             </div>
             <div>
               <label className="field-label" htmlFor="kit-file">Свидетельство о навыках</label>
-              <input id="kit-file" type="file" accept=".pdf,.txt,application/pdf,text/plain" className="text-sm"
+              <input id="kit-file" type="file" accept=".pdf,application/pdf" className="w-full max-w-full text-sm"
                 onChange={e => {
                   const picked = e.target.files?.[0]
                   e.target.value = ''
@@ -292,7 +292,7 @@ export default function CandidateProfile() {
                     qc.invalidateQueries({ queryKey: ['myProfile'] })
                   }).catch(err => setCertificateNote(apiError(err, 'Файл не разобран')))
                 }} />
-              <p className="field-hint">Только если в файле есть КИТ, i.moscow или слово «компетенции». Навык берётся по цитате. Грейд не ставится.</p>
+              <p className="field-hint">Только PDF, в котором есть КИТ, i.moscow или слово «компетенции». Навык добавляется как заявленный, с цитатой. Подтверждает его только тест. Грейд не ставится.</p>
               {certificateNote && <p className="text-sm text-ink-2" role="status">{certificateNote}</p>}
             </div>
             <label className="flex items-start gap-2.5 text-sm text-ink">

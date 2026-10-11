@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiError, getLeaderboard } from '../api/client'
-import { DISC_RU, ROLE_RU } from '../labels'
+import { DISC_RU, ROLE_RU, gradeRu } from '../labels'
 import PublicShell from '../components/PublicShell'
 import { Empty, PageHeader, RankBadge, Skeleton } from '../components/ui'
 
@@ -52,7 +52,7 @@ export default function LeaderboardPage() {
                   <span className="place text-ink">{r.rank}</span>
                   <span className="ml-2 font-medium text-ink">{r.display_name}</span>
                   <span className="mt-1 block text-sm text-ink-2">{r.label ?? DISC_RU[r.discipline] ?? r.discipline}</span>
-                  <span className="mt-1 block text-xs text-ink-3">{r.primary_role ? `${ROLE_RU[r.primary_role] ?? r.primary_role}, ` : ''}{r.grade ?? ''}</span>
+                  <span className="mt-1 block text-xs text-ink-3">{r.primary_role ? `${ROLE_RU[r.primary_role] ?? r.primary_role}, ` : ''}{gradeRu(r.grade)}</span>
                 </span>
                 <span className="text-right">
                   <RankBadge rank={r.best_rank} />
@@ -73,7 +73,7 @@ export default function LeaderboardPage() {
                     <span className="block text-xs text-ink-3">{r.region}</span></td>
                   <td className="text-ink-2">{r.label ?? DISC_RU[r.discipline] ?? r.discipline}</td>
                   <td><RankBadge rank={r.best_rank} /></td>
-                  <td className="text-ink-2">{r.primary_role ? `${ROLE_RU[r.primary_role] ?? r.primary_role}, ` : ''}{r.grade ?? ''}</td>
+                  <td className="text-ink-2">{r.primary_role ? `${ROLE_RU[r.primary_role] ?? r.primary_role}, ` : ''}{gradeRu(r.grade)}</td>
                   <td className="text-right">
                     <span className="inline-flex items-center gap-3">
                       <span className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-sunken sm:block" aria-hidden>

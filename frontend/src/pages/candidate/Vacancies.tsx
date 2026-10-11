@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiError, answerPractice, applyToVacancy, myApplications, startPractice, vacanciesForMe } from '../../api/client'
+import { apiError, answerPractice, applyToVacancy, getMyProfile, myApplications, startPractice, vacanciesForMe } from '../../api/client'
 import { CategoryPlate, Empty, PageHeader, Skeleton, rub } from '../../components/ui'
 import { netLine } from '../../money'
+import Responsiveness, { type ResponsivenessFact } from '../../components/Responsiveness'
 
 interface Card {
   id: string; title: string; company: string | null; role: string | null; grade: string | null; work_format: string
   salary_from: number | null; salary_to: number | null; why: string[]; matched_skills: string[]; missing_skills: string[]
   applied: boolean; can_apply: boolean; match?: 'matched' | 'not_assessed'; needs_test?: boolean; flags?: { code: string; label: string }[]
+  company_responsiveness?: ResponsivenessFact | null
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
@@ -32,6 +34,9 @@ export default function CandidateVacancies() {
   const topic = params.get('topic')
   const fromVacancy = params.get('vacancy')
   const { data: cards = [], isLoading, isError, error } = useQuery({ queryKey: ['vacanciesForMe'], queryFn: () => vacanciesForMe().then(r => r.data as Card[]) })
+  const { data: profile } = useQuery({ queryKey: ['myProfile'], queryFn: () => getMyProfile().then(r => r.data as { birth_date?: string | null }) })
+  // SDK-02: without a birth date the 18+ vacancies stay hidden and the card is not in search. Say why.
+  const noBirthDate = profile !== undefined && !profile.birth_date
   const { data: mine = [], isError: mineError, error: mineLoadError } = useQuery({ queryKey: ['myApplications'], queryFn: () => myApplications().then(r => r.data as Mine[]) })
   const practice = useMutation({
     mutationFn: (opts: { vacancy_id?: string; topic?: string }) => startPractice(opts).then(r => r.data as PracticeItem),
@@ -65,6 +70,7 @@ export default function CandidateVacancies() {
         lead="Второй путь, кроме приглашений: откликнуться самому. Отклик — согласие показать контакты работодателю этой вакансии." />
       {isLoading && <Skeleton className="h-48" />}
       {isError && <p className="notice-error mb-4" role="alert">{apiError(error, 'Не удалось загрузить вакансии')}</p>}
+      {noBirthDate && <p className="notice-info mb-4" role="status" data-testid="vacancies-birth-date">Укажите дату рождения в <Link to="/candidate/profile" className="underline">профиле</Link>: без неё видны только вакансии для 16–17 лет, а работодатели не находят вас в поиске.</p>}
       {!isLoading && !isError && cards.length === 0 && <Empty title="Подходящих открытых вакансий нет">Они появятся, когда работодатели опубликуют вакансии вашей специализации.</Empty>}
       {cards.some(c => c.match === 'not_assessed') && <p className="notice-info mb-4" role="status">Грейд ещё не подтверждён. Пока это все открытые вакансии, новые сверху. Пройдите тест — вакансии отсортируются по совпадению.</p>}
       {apply.isError && <p className="notice-error mb-4" role="alert">{apiError(apply.error, 'Не удалось откликнуться')}</p>}
@@ -126,6 +132,7 @@ export default function CandidateVacancies() {
               <div className="min-w-0 flex-1">
                 <h2 className="text-lg font-semibold text-ink">{card.title}</h2>
                 <p className="text-sm text-ink-2">{card.company}</p>
+                <Responsiveness fact={card.company_responsiveness} />
                 {(card.flags ?? []).length > 0 && <p className="mt-1 text-sm text-warn">Проверьте текст: {card.flags!.map(flag => flag.label.toLowerCase()).join('; ')}. Грейд от этого не меняется.</p>}
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
                   <CategoryPlate role={card.role} grade={card.grade} /> <span>{FORMAT[card.work_format] ?? card.work_format}</span>

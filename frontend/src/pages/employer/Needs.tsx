@@ -5,6 +5,7 @@ import { Pencil, Plus } from 'lucide-react'
 import {
   apiError, compareNeed, needExam, createNeed, draftNeed, draftNeedFromUrl, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
 } from '../../api/client'
+import { NEED_EXAMPLES } from '../../needExamples'
 import CandidateCard, { type CandidateCardData } from '../../components/CandidateCard'
 import { useFavorites } from '../../hooks/useFavorites'
 import InviteDialog from '../../components/InviteDialog'
@@ -13,6 +14,9 @@ import ExamPreview, { type Exam } from '../../components/ExamPreview'
 import { CategoryPlate, Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
 import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
+import {
+  diffSelection, formatSelectionSummary, loadSnapshot, ranksFromIds, saveSnapshot,
+} from '../../lib/selectionDiff'
 
 interface NeedParams {
   role: string | null; grade: string | null; grade_match?: 'exact' | 'plus_minus' | 'any'; skills: string[]; nice_to_have: string[]
@@ -56,6 +60,18 @@ export default function EmployerNeeds() {
   const current = needs.find(n => n.id === selected) ?? null
   const matches = useQuery({ queryKey: ['needMatches', selected, current?.version, showHidden], enabled: !!selected,
     queryFn: () => needMatches(selected!, showHidden).then(r => r.data) })
+
+  const [selectionView, setSelectionView] = useState<{ summary: string | null; markers: Record<string, 'new' | 'up' | 'down'> } | null>(null)
+  useEffect(() => {
+    if (!selected || !matches.isSuccess || !matches.data) {
+      setSelectionView(null)
+      return
+    }
+    const next = ranksFromIds((matches.data.items ?? []).map((c: CandidateCardData) => c.candidate_id))
+    const diff = diffSelection(loadSnapshot(selected), next)
+    setSelectionView({ summary: formatSelectionSummary(diff), markers: diff.markers })
+    saveSnapshot(selected, next)
+  }, [selected, matches.isSuccess, matches.dataUpdatedAt, showHidden])
   const compared = useQuery({
     queryKey: ['needCompare', selected, picked.join(',')],
     enabled: !!selected && picked.length >= 2,
@@ -150,7 +166,7 @@ export default function EmployerNeeds() {
   return (
     <div>
       <PageHeader title="Потребности"
-        lead="Опишите, кого ищете. Каждое изменение сохраняется новой версией, а шорт-лист помнит, по какой версии выбран кандидат."
+        lead="Кого ищете — подборка с объяснением. Новая версия при каждом сохранении; шорт-лист помнит версию выбора."
         actions={<button onClick={() => { setEditing('new'); setForm(EMPTY); setDraftNotes([]) }} className="btn-primary"><Plus size={16} aria-hidden />Новая потребность</button>} />
 
       {editing && (
@@ -160,6 +176,12 @@ export default function EmployerNeeds() {
             <label className={field} htmlFor="n-paste">Текст вакансии</label>
             <textarea id="n-paste" value={form.paste} onChange={e => setForm({ ...form, paste: e.target.value })} rows={4}
               placeholder="Вставьте текст. Сайт вакансий не открывается: разбираются только эти строки." className="input" aria-label="Текст вакансии" />
+            <div className="mt-2 flex flex-wrap items-center gap-2" aria-label="Примеры потребности">
+              <span className="text-xs text-ink-3">Пример:</span>
+              {NEED_EXAMPLES.map(ex => (
+                <button key={ex.label} type="button" className="chip-default hover:border-accent" onClick={() => setForm({ ...form, paste: ex.text })}>{ex.label}</button>
+              ))}
+            </div>
             <button type="button" className="btn-secondary btn-sm mt-2" disabled={form.paste.trim().length < 10 || parsed.isPending} onClick={() => parsed.mutate(undefined)}>Разобрать текст</button>
             <label className={field} htmlFor="n-url">Или одна открытая ссылка</label>
             <input id="n-url" value={form.pageUrl} onChange={e => setForm({ ...form, pageUrl: e.target.value })} placeholder="https://…" className="input" aria-label="Ссылка на страницу вакансии" />
@@ -251,7 +273,7 @@ export default function EmployerNeeds() {
                 <li key={n.id}>
                   <button type="button" aria-current={n.id === selected ? 'true' : undefined} onClick={() => { setSelected(n.id); setTab('matches') }}
                     className={`relative w-full rounded-lg px-3.5 py-2.5 text-left transition-colors ${n.id === selected ? 'bg-panel shadow-xs ring-1 ring-line-strong before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-accent' : 'hover:bg-panel/70'}`}>
-                    <span className="block text-sm font-medium text-ink">{n.title}</span>
+                    <span className="block break-words text-sm font-medium text-ink [overflow-wrap:anywhere]" title={n.title}>{n.title}</span>
                     <span className="mt-0.5 block text-xs text-ink-3">версия {n.version}, в шорт-листе {n.shortlist_count}</span>
                     {(n.flags ?? []).length > 0 && <span className="mt-1 block text-xs text-warn">{n.flags!.map(flag => flag.label).join('; ')}</span>}
                   </button>
@@ -264,7 +286,7 @@ export default function EmployerNeeds() {
             <section aria-label={current.title} className="min-w-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-xl font-bold text-ink">{current.title}</h2>
+                  <h2 className="break-words font-display text-xl font-bold text-ink [overflow-wrap:anywhere]" title={current.title}>{current.title}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
                     <span>{current.params?.role ? ROLE_RU[current.params.role] : 'любая специализация'}, {current.params?.grade ? gradeRu(current.params.grade) : 'любой грейд'}</span>
                     {(current.params?.skills ?? []).map(s => <span key={s} className="chip-active">{s}</span>)}
@@ -380,17 +402,36 @@ export default function EmployerNeeds() {
                   {matches.data && (matches.data.total ?? 0) > (matches.data.items ?? []).length && (
                     <p className="text-sm text-ink-2">На экране первые {(matches.data.items ?? []).length} из {matches.data.total}.</p>
                   )}
-                  {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => (
-                    <CandidateCard key={card.candidate_id} card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
-                      aiNote={matches.data?.ai_note ? { needId: selected! } : undefined}
-                      onShortlist={(id, on) => toggle.mutate({ id, on })}
-                      onHide={() => hide.mutate(card)}
-                      favorite={{ on: fav.has(card.candidate_id), toggle: fav.toggle }}
-                      compare={{
-                        on: picked.includes(card.candidate_id), full: picked.length >= 4,
-                        toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 4 ? prev : [...prev, card.candidate_id]),
-                      }} />
-                  ))}
+                  {selectionView?.summary && (
+                    <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent" role="status">
+                      С прошлого просмотра: {selectionView.summary}
+                    </p>
+                  )}
+                  {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => {
+                    const marker = selectionView?.markers[card.candidate_id]
+                    const markerLabel = marker === 'new' ? 'новый' : marker === 'up' ? 'выше' : marker === 'down' ? 'ниже' : null
+                    return (
+                      <div key={card.candidate_id} className="relative">
+                        {markerLabel && (
+                          <span
+                            className={`absolute right-3 top-3 z-10 ${marker === 'new' ? 'badge-ok' : marker === 'up' ? 'badge-brand' : 'badge-warn'}`}
+                            title={marker === 'new' ? 'Не было в прошлой подборке' : marker === 'up' ? 'Место выше, чем в прошлый раз' : 'Место ниже, чем в прошлый раз'}
+                          >
+                            {marker === 'up' ? '↑ ' : marker === 'down' ? '↓ ' : ''}{markerLabel}
+                          </span>
+                        )}
+                        <CandidateCard card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
+                          aiNote={matches.data?.ai_note ? { needId: selected! } : undefined}
+                          onShortlist={(id, on) => toggle.mutate({ id, on })}
+                          onHide={() => hide.mutate(card)}
+                          favorite={{ on: fav.has(card.candidate_id), toggle: fav.toggle }}
+                          compare={{
+                            on: picked.includes(card.candidate_id), full: picked.length >= 4,
+                            toggle: () => setPicked(prev => prev.includes(card.candidate_id) ? prev.filter(x => x !== card.candidate_id) : prev.length >= 4 ? prev : [...prev, card.candidate_id]),
+                          }} />
+                      </div>
+                    )
+                  })}
                 </div>
               )}
               {tab === 'exam' && (

@@ -42,6 +42,7 @@
 /api/v1/candidates/me/certificate
 /api/v1/candidates/me/complaints
 /api/v1/candidates/me/credentials/{credential_id}/revoke
+/api/v1/candidates/me/demo/reset
 /api/v1/candidates/me/exclusions
 /api/v1/candidates/me/fsp/authorize
 /api/v1/candidates/me/fsp/callback
@@ -83,6 +84,7 @@
 /api/v1/integrations/sandbox/{endpoint_id}
 /api/v1/legal/documents
 /api/v1/legal/documents/{kind}
+/api/v1/legal/processor
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
 /api/v1/methodist

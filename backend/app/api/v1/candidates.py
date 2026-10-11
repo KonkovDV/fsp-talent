@@ -43,6 +43,7 @@ from app.services.ai.assistant import parse_resume
 from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
+from app.services.demo_reset import JURY_BIRTH, clear_jury, is_jury, restore_consents
 from app.services.employer_score import company_score
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
@@ -54,6 +55,7 @@ from app.services.inn import published_inn
 from app.services.mail import send_mail
 from app.services.market import market_flag, quartiles, role_median, salary_band
 from app.services.notify import Outbox, category_label, notify
+from app.services.offer_why import why_invited
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
 from app.services.privacy import erase_participant
@@ -125,7 +127,10 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
         "display_name": p.display_name, "region": p.region,
         "birth_date": p.birth_date.isoformat() if p.birth_date else None,
+        # LEG-06: an adult without a birth date is not shown in search; the cabinet says so.
+        "search_blocker": "birth_date_missing" if p.birth_date is None and not getattr(p, "is_minor", False) else None,
         "email": p.email, "email_verified": p.email_verified_at is not None,
+        "demo_reset_available": bool(settings.DEMO_MODE and is_jury(p.email)),
         "telegram": p.telegram, "phone": p.phone, "github": p.github,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
         "specialization": p.specialization, "industry": p.industry, "work_goal": p.work_goal,
@@ -163,6 +168,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "results_count": len(p.results),
         "completeness": profile_completeness(
             email_verified=p.email_verified_at is not None,
+            birth_date_known=p.birth_date is not None,
             survey_done=p.survey_at is not None,
             declared_grade=p.declared_grade,
             assessed_grade=p.assessed_grade,
@@ -332,6 +338,16 @@ class ProfileUpdate(BaseModel):
     expected_version: int | None = Field(None, ge=0)
 
 
+def _first_date_fits_minor_signup(p: Participant, born: date) -> bool:
+    """A person who signed up as 15–17 was under 18 on the signup day by the first birth date they enter.
+
+    Someone who has turned 18 since then fits; a date that was already 18+ at signup does not (SD-08).
+    """
+    from app.services.profile import age_on
+    signed_up = p.created_at.date() if p.created_at else date.today()
+    return age_on(born, signed_up) < 18
+
+
 @router.put("/me/profile")
 async def update_profile(body: ProfileUpdate, current: dict = Depends(get_current_participant),
                          db: AsyncSession = Depends(get_db)):
@@ -387,11 +403,20 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         p.job_search = data["job_search"]
     if "birth_date" in data and data["birth_date"] is not None and p.fsp_id is None:
         born = data["birth_date"]
+        if p.birth_date is None and p.is_minor and not _first_date_fits_minor_signup(p, born):
+            # SD-08 (152-ФЗ ст. 9): the signup said 15–17. A first date that was 18+ already at signup would
+            # open the profile without the guardian's consent, so it goes through support like a date change.
+            raise ApiError(422, "age_mismatch")
         if born > date.today():
             raise ApiError(422, "validation_error", "Дата рождения ещё не наступила")
         from app.services.profile import age_on
         if age_on(born, date.today()) < 15:
             raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
+        if p.birth_date is not None and p.birth_date != born:
+            # Stand audit S4: a minor could move the date and skip the guardian's consent. Once saved,
+            # the date changes only through support, with the guardian when the person is a minor.
+            raise ApiError(409, "birth_date_locked",
+                           "Дата рождения уже сохранена. Исправить её можно только через поддержку.")
         p.birth_date = born
         p.is_minor = age_on(born, date.today()) < 18
     for field in ("salary_from_gross", "salary_to_gross"):
@@ -478,6 +503,25 @@ async def delete_my_account(body: DeleteAccountIn, current: dict = Depends(get_c
     return {"deleted": True}
 
 
+@router.post("/me/demo/reset", responses={403: {"description": "Не демо-аккаунт жюри или не демо-стенд"}})
+async def reset_my_demo(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """Demo stand only, jury1..jury10 only: start over. Survey, test sessions, grade confirmations,
+    category, skills, invitations and the grade cooldown are cleared. The password stays.
+    Repeating the call is harmless. Q&A §6: the jury takes the test itself."""
+    p = await db.get(Participant, _pid(current))
+    if not p or p.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    if not settings.DEMO_MODE or not is_jury(p.email):
+        raise ApiError(403, "demo_reset_forbidden", "Сброс доступен только демо-аккаунтам жюри на демо-стенде")
+    await clear_jury(db, p)
+    # Like the seed and seed.topup_public: an older stand may lack the juror's birth date (887401f).
+    if p.birth_date is None:
+        p.birth_date, p.is_minor = JURY_BIRTH, False
+    await restore_consents(db, p, datetime.now(UTC))
+    await db.commit()
+    return {"reset": True}
+
+
 @router.get("/me/results")
 async def get_my_results(
     limit: int = Query(50, ge=1, le=_PAGE_SIZE_MAX),
@@ -508,7 +552,7 @@ async def get_my_results(
 async def import_certificate(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
                              db: AsyncSession = Depends(get_db)):
     """Skills quoted in a certificate. A confirmed test skill is left as it is. The grade does not move."""
-    from app.services.certificate_evidence import certificate_skills
+    from app.services.certificate_evidence import certificate_skills, is_pdf
     from app.services.protocol_file import text_of_pdf
 
     if await too_many(f"certificate:{_pid(current)}", limit=10, window_seconds=3600):
@@ -520,11 +564,10 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
     raw = await file.read()
     if len(raw) > 2_000_000:
         raise ApiError(413, "payload_too_large", "Файл больше 2 МБ")
+    if not (file.filename or "").lower().endswith(".pdf") or not is_pdf(raw):
+        raise ApiError(422, "validation_error", "Нужен PDF сертификата")
     try:
-        if (file.filename or "").lower().endswith(".pdf"):
-            text = text_of_pdf(raw)
-        else:
-            text = raw.decode("utf-8", errors="replace")
+        text = text_of_pdf(raw)
     except Exception as exc:
         raise ApiError(422, "validation_error", "Файл не читается") from exc
     found = certificate_skills(text)
@@ -542,10 +585,13 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
             row = Skill(participant_id=person.id, name=name, raw_name=name, created_at=now)
             db.add(row)
             existing[name] = row
-        row.source_quote = quote
-        row.trust_level = "resume_confirmed"
-        row.confirmed = True
-        row.confirmed_at = now
+        # AUD-02: the candidate's own file is a quote, not a confirmation. A stronger level stays.
+        # `confirmed` is the "skill is active" flag (a self-declared profile skill has it too, see
+        # services/skills.py); search, vacancies and the public profile read it, so it stays on.
+        if row.trust_level in (None, "", "self_reported"):
+            row.trust_level = "self_reported"
+            row.confirmed = True
+        row.source_quote = row.source_quote or quote
         kept.append(name)
     await db.commit()
     return {"skills": kept, "grade_unchanged": person.assessed_grade == grade_before}
@@ -680,6 +726,20 @@ async def get_my_offers(
             reputations[offer.employer_id] = await company_reputation(db, offer.employer)
     marked = set(await db.scalars(select(CandidateInterest.employer_id).where(
         CandidateInterest.participant_id == _pid(current))))
+    # «Почему вас пригласили»: only the candidate's own signals, the same ones the search reads.
+    me = await db.get(Participant, _pid(current))
+    fsp_scores = {disc: float(lcb) for disc, lcb in (await db.execute(
+        select(DisciplineScore.discipline, DisciplineScore.lcb).where(
+            DisciplineScore.participant_id == _pid(current)))).all()}
+
+    def why(o: Offer) -> list[dict[str, str]]:
+        return why_invited(
+            offer_title=o.role, offer_format=o.work_format,
+            role=cat.primary_role if cat else None, grade=cat.grade if cat else None,
+            grade_source=cat.grade_source if cat else None,
+            assessed_at=getattr(me, "assessed_at", None), fsp_scores=fsp_scores,
+            work_formats=list(getattr(me, "work_formats", None) or []))
+
     return [{
         "id": str(o.id), "company": o.employer.company_name, "company_id": str(o.employer_id), "role": o.role,
         # The company card the employer keeps (TZ: the candidate sees who invites). No personal data here.
@@ -700,6 +760,7 @@ async def get_my_offers(
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "unread_messages": unread.get(o.id, 0),
+        "why_you": why(o),
     } for o in rows]
 
 

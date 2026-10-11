@@ -24,7 +24,7 @@ export default function BankGrid() {
           меньше<span className="flex gap-0.5">{[0.1, 0.25, 0.45, 0.85].map(a => <span key={a} className="h-3 w-4 rounded-sm" style={{ background: `rgb(var(--accent) / ${a})` }} />)}</span>больше
         </p>
       </div>
-      <p className="mt-1 max-w-[72ch] text-sm text-ink-2">Сколько людей в поиске по специализации и грейду, в скобках — из них грейд подтверждён тестом. Ячейка открывает поиск с этими фильтрами. Меньше {data.min_cell} человек не показываем.</p>
+      <p className="mt-1 max-w-[72ch] text-sm text-ink-2">Сколько людей в поиске по специализации и грейду, в скобках — из них грейд подтверждён тестом. Число — по основной категории; в поиске добавятся те, кто подтвердил эту пару второй специализацией. Ячейка открывает поиск с этими фильтрами. Меньше {data.min_cell} человек не показываем.</p>
       <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Банк кандидатов по специализациям и грейдам">
         <table className="w-full min-w-[36rem] table-fixed border-separate border-spacing-1 text-sm">
           <thead>

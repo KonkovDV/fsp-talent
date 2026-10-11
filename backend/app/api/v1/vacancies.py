@@ -29,6 +29,7 @@ from app.models.participant import adult_confirmed
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
 from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
+from app.services.reputation import applications_by_employer
 from app.services.scoring.engine import RANK_ORDER
 from app.services.skills import normalize_skill
 from app.services.trust_level import next_step, trust_level, vacancy_limit
@@ -208,6 +209,22 @@ async def close_vacancy(vacancy_id: uuid.UUID, current: dict = Depends(get_curre
     return {"is_open": False}
 
 
+def _candidate_facts(participant: Participant, category: CategoryAssignment | None,
+                     skills: list[str], scores: list[DisciplineScore]) -> dict:
+    """What a vacancy is matched against. Only a test-confirmed grade counts (ТЗ 2.1, #289, SDK-03):
+    a grade declared in the survey would otherwise open graded vacancies without the test."""
+    assessed = category is not None and category.grade_source == "assessed"
+    # «не выбрана» is a label for the card, not a specialization: it must not cut every vacancy away.
+    role = category.primary_role if category and category.primary_role in ROLES else None
+    return {
+        "role": role,
+        "grade": category.grade if assessed else None,
+        "skills": skills,
+        "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
+        "is_minor": not adult_confirmed(participant),
+    }
+
+
 @router.get("/for-me")
 async def vacancies_for_me(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
     participant = await db.get(Participant, _uuid(current))
@@ -217,13 +234,7 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
     skills = list(await db.scalars(select(Skill.name).where(
         Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
     scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
-    candidate = {
-        "role": category.primary_role if category else None,
-        "grade": category.grade if category else None,
-        "skills": skills,
-        "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
-        "is_minor": not adult_confirmed(participant),
-    }
+    candidate = _candidate_facts(participant, category, skills, scores)
     needs_guardian = participant.minor_now() and not participant.minor_consent_given
     applied = set(await db.scalars(
         select(Application.vacancy_id).where(Application.candidate_id == participant.id)))
@@ -234,6 +245,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         .limit(_VACANCY_SCAN_LIMIT)
     ))
     cards = []
+    # Anti-fake-vacancy signal on every card: does this company open applications at all.
+    responsive = await applications_by_employer(db, sorted({v.employer_id for v in rows}, key=str))
     for vacancy in rows:
         hit = match_vacancy(candidate, {
             "role": vacancy.role, "grade": vacancy.grade, "grade_match": vacancy.grade_match,
@@ -244,9 +257,11 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         if hit is None:
             continue
         cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied,
-                                    "can_apply": not needs_guardian and not hit["needs_test"]}))
+                                    "can_apply": not needs_guardian and not hit["needs_test"],
+                                    "company_responsiveness": responsive.get(vacancy.employer_id)}))
     if candidate["grade"]:
-        cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+        # Skill coverage first; FSP results in the vacancy's discipline lift a card among equals (boost, not gate).
+        cards.sort(key=lambda c: (-c["coverage"], not c.get("fsp_match"), c["title"]))
     # Without a grade the rows keep the query order: newest vacancy first.
     return cards
 
@@ -281,18 +296,16 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
     skills = list(await db.scalars(select(Skill.name).where(
         Skill.participant_id == participant.id, Skill.confirmed.is_(True))))
     scores = list(await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id == participant.id)))
-    hit = match_vacancy({
-        "role": category.primary_role if category else None,
-        "grade": category.grade if category else None,
-        "skills": skills,
-        "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
-        "is_minor": not adult_confirmed(participant),
-    }, {
+    hit = match_vacancy(_candidate_facts(participant, category, skills, scores), {
         "role": vacancy.role, "grade": vacancy.grade, "grade_match": vacancy.grade_match,
         "discipline": vacancy.discipline,
         "min_rank": vacancy.min_rank, "skills": vacancy.skills or [],
         "allows_minors": vacancy.allows_minors, "is_open": True,
     })
+    if hit is None and participant.birth_date is None and not vacancy.allows_minors:
+        # SDK-02: the 18+ tick is not an age; without a birth date an adult-only vacancy stays closed. Say so.
+        raise HTTPException(403, "Укажите дату рождения в профиле: без неё отклик открыт только на вакансии "
+                                 "для 16–17 лет")
     if hit is None:
         raise HTTPException(403, "Профиль не подходит под условия вакансии")
     if hit["needs_test"]:

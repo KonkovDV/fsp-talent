@@ -45,8 +45,10 @@ def test_match_respects_role_grade_and_rank():
     assert match_vacancy(_candidate(grade="middle"), _vacancy(grade="senior")) is not None
     assert match_vacancy(_candidate(grade="intern"), _vacancy(grade="senior", grade_match="exact")) is None
     assert match_vacancy(_candidate(grade="intern"), _vacancy(grade="senior", grade_match="any")) is not None
-    assert match_vacancy(_candidate(disciplines=[{"discipline": "algorithmic", "best_rank": "III"}]),
-                         _vacancy(min_rank="I")) is None
+    # SDK-01: a rank below the vacancy minimum is not a filter, only a missing boost.
+    low_rank = match_vacancy(_candidate(disciplines=[{"discipline": "algorithmic", "best_rank": "III"}]),
+                             _vacancy(min_rank="I"))
+    assert low_rank is not None and low_rank["fsp_match"] is False
 
 
 def test_birthday_overrides_a_stale_minor_flag():
@@ -65,7 +67,7 @@ def test_a_candidate_without_a_test_still_sees_published_vacancies():
     assert hit is not None
     assert any("не подтверждён" in w for w in hit["why"])
     # Hard filters other than the grade still hold.
-    assert match_vacancy(fresh, _vacancy()) is None   # needs an FSP discipline
+    assert match_vacancy(fresh, _vacancy(role=None, grade=None)) is not None   # FSP discipline is not a gate
     assert match_vacancy({**fresh, "is_minor": True}, _vacancy(discipline=None)) is None
     assert match_vacancy(fresh, _vacancy(discipline=None, is_open=False)) is None
 
@@ -86,3 +88,18 @@ def test_an_ungraded_candidate_sees_a_graded_vacancy_but_must_take_the_test_to_a
     any_grade = match_vacancy(fresh, _vacancy(discipline=None, min_rank=None, grade="senior", grade_match="any"))
     assert any_grade["needs_test"] is False
     assert match_vacancy(_candidate(), _vacancy())["needs_test"] is False
+
+
+def test_fsp_history_boosts_but_never_gates_a_vacancy():
+    # ТЗ 2: FSP achievements raise a candidate, a candidate without FSP history keeps the whole list (SDK-01).
+    no_fsp = _candidate(disciplines=[])
+    hit = match_vacancy(no_fsp, _vacancy())
+    assert hit is not None and hit["fsp_match"] is False
+    assert hit["needs_test"] is False
+    assert any("не обязательны" in w for w in hit["why"])
+    with_fsp = match_vacancy(_candidate(), _vacancy())
+    assert with_fsp["fsp_match"] is True
+    assert any(w.startswith("Есть результаты ФСП") for w in with_fsp["why"])
+    other = match_vacancy(_candidate(disciplines=[{"discipline": "security", "best_rank": "I"}]), _vacancy())
+    assert other is not None and other["fsp_match"] is False
+    assert match_vacancy(no_fsp, _vacancy(discipline=None, min_rank=None))["fsp_match"] is False
