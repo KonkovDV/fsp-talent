@@ -23,7 +23,7 @@ export default function StandCounts() {
   return (
     <dl data-testid="stand-counts" className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
       {ITEMS.map(([key, label]) => (
-        <div key={key} className="flex flex-col-reverse">
+        <div key={key} className="flex min-w-0 flex-col-reverse justify-end">
           <dt className="text-xs text-white/85">{label}</dt>
           <dd className="font-display text-3xl font-bold">{Number(data[key]).toLocaleString('ru-RU')}</dd>
         </div>
