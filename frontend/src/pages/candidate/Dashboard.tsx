@@ -4,6 +4,7 @@ import { CalendarClock, Check, Circle, ClipboardList } from 'lucide-react'
 import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, myCareer, tasksForMe, weeklyTask } from '../../api/client'
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
+import OtherCategories from '../../components/OtherCategories'
 import GuardianCard from '../../components/GuardianCard'
 import DemoResetCard from '../../components/DemoResetCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
@@ -65,6 +66,7 @@ export default function CandidateDashboard() {
       )}
       {p.demo_reset_available && <DemoResetCard />}
       {!p.survey_done && <SurveyCard profile={p} />}
+      {p.survey_done && <OtherCategories primary={p.specialization ?? null} confirmations={p.confirmations ?? []} />}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">
         <div className="hero-ink p-6 sm:p-8">
