@@ -174,7 +174,7 @@ export default function JuryPage() {
             setBusy(true)
             setRankError('')
             void categoryRanking(rankRole, rankGrade)
-              .then(r => { setRanks(r.data.items); setRankHidden(r.data.total === 0 && (r.data.min_cell ?? 0) > 0 ? r.data.min_cell ?? 5 : 0) })
+              .then(r => { setRanks(r.data.items); setRankHidden(r.data.hidden ? r.data.min_cell ?? 5 : 0) })
               .catch(error => setRankError(apiError(error, 'Порядок не открылся')))
               .finally(() => setBusy(false))
           }}>Показать порядок</button>
@@ -183,7 +183,7 @@ export default function JuryPage() {
         {ranks && (ranks.length === 0
           ? <p className="text-sm text-ink-2">{rankHidden
             ? `Скрыто: в категории меньше ${rankHidden} участников с публичным профилем — защита персональных данных.`
-            : 'В этой категории подтверждённых тестом нет.'}</p>
+            : 'В этой категории пока нет участников с подтверждённым тестом грейдом.'}</p>
           : <ol className="text-sm text-ink">{ranks.map(row => <li key={row.place}>{row.place}. тест {Math.round(row.test * 100)} %</li>)}</ol>)}
       </section>
 

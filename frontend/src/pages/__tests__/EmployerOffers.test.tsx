@@ -52,6 +52,6 @@ describe('приглашения работодателя', () => {
 
   it('объясняет, почему рынок пуст', async () => {
     show()
-    expect(await screen.findByText(/меньше пяти человек — защита персональных данных/)).toBeInTheDocument()
+    expect(await screen.findByText(/не меньше пяти человек, — защита персональных данных/)).toBeInTheDocument()
   })
 })

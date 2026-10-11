@@ -35,7 +35,7 @@ describe('канал без кабинета', () => {
   })
 
   it('объясняет пустой порядок порогом k-анонимности', async () => {
-    categoryRanking.mockResolvedValue({ data: { total: 0, items: [], min_cell: 5 } })
+    categoryRanking.mockResolvedValue({ data: { total: 0, items: [], min_cell: 5, hidden: true } })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
@@ -45,5 +45,18 @@ describe('канал без кабинета', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Показать порядок' }))
     expect(categoryRanking).toHaveBeenCalledWith('backend', 'middle')
     expect(await screen.findByText(/меньше 5 участников с публичным профилем — защита персональных данных/)).toBeInTheDocument()
+  })
+
+  it('пустую категорию не выдаёт за скрытую', async () => {
+    categoryRanking.mockResolvedValue({ data: { total: 0, items: [], min_cell: 5, hidden: false } })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><JuryPage /></MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Показать порядок' }))
+    expect(await screen.findByText(/пока нет участников с подтверждённым тестом грейдом/)).toBeInTheDocument()
+    expect(screen.queryByText(/Скрыто/)).not.toBeInTheDocument()
   })
 })

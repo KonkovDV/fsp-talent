@@ -92,7 +92,7 @@ export default function EmployerOffers() {
           )}
         </section>
       ) : market.data ? (
-        <p className="panel-quiet mb-6 text-sm text-ink-2" aria-label="Рынок">Обратная связь рынка скрыта: в каждой ячейке пока меньше пяти человек — защита персональных данных.</p>
+        <p className="panel-quiet mb-6 text-sm text-ink-2" aria-label="Рынок">Обратной связи рынка пока нет: ячейка открывается, когда в ней не меньше пяти человек, — защита персональных данных.</p>
       ) : null}
       {offers.length > 0 && (
         <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

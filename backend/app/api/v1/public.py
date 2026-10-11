@@ -432,9 +432,11 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
     values = [float(score) for score in scores if score is not None]
     if len(values) < BANK_MIN:
         # k-anonymity: a ranking of fewer than five people can point at one person (audit-3 P1-1).
-        return {"total": 0, "items": [], "min_cell": BANK_MIN, "role": role, "grade": grade}
+        # "hidden" tells an empty cell from a hidden one; it does not reveal how many people are there.
+        return {"total": 0, "items": [], "min_cell": BANK_MIN, "hidden": bool(values), "role": role, "grade": grade}
     page = rank_scores(values)
     page["min_cell"] = BANK_MIN
+    page["hidden"] = False
     page["role"] = role
     page["grade"] = grade
     return page
