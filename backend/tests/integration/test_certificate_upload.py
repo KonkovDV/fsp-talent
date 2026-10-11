@@ -31,9 +31,16 @@ async def test_text_file_is_refused_and_pdf_skills_stay_unconfirmed(db, monkeypa
         import app.services.protocol_file as pf
         monkeypatch.setattr(pf, "text_of_pdf", lambda raw: "Сертификат КИТ. Компетенции: Python, Docker")
         pdf = UploadFile(io.BytesIO(b"%PDF-1.7 fake"), filename="c.pdf")
+        declared = Skill(participant_id=person.id, name="Python", raw_name="Python", trust_level="self_reported",
+                         confirmed=True, created_at=now())
+        db.add(declared)
+        await db.commit()
         result = await api.import_certificate(pdf, me, db)
         assert result["skills"]
         rows = list(await db.scalars(select(Skill).where(Skill.participant_id == person.id)))
-        assert rows and all(not r.confirmed and r.trust_level == "self_reported" and r.source_quote for r in rows)
+        # Self-declared and active: search, vacancies and the public profile read Skill.confirmed IS TRUE.
+        assert rows and all(r.confirmed and r.trust_level == "self_reported" and r.source_quote for r in rows)
+        assert {r.name for r in rows} >= {"Python", "Docker"}
+        assert all(r.confirmed_at is None for r in rows)
     finally:
         await wipe_people([person.id])

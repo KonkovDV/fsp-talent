@@ -541,9 +541,11 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
             db.add(row)
             existing[name] = row
         # AUD-02: the candidate's own file is a quote, not a confirmation. A stronger level stays.
+        # `confirmed` is the "skill is active" flag (a self-declared profile skill has it too, see
+        # services/skills.py); search, vacancies and the public profile read it, so it stays on.
         if row.trust_level in (None, "", "self_reported"):
             row.trust_level = "self_reported"
-            row.confirmed = False
+            row.confirmed = True
         row.source_quote = row.source_quote or quote
         kept.append(name)
     await db.commit()

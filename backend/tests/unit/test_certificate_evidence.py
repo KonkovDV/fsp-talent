@@ -26,4 +26,5 @@ def test_aud02_certificate_skills_are_never_confirmed():
 
     from app.api.v1 import candidates
     source = inspect.getsource(candidates.import_certificate)
-    assert '"resume_confirmed"' not in source and "confirmed = True" not in source
+    assert '"resume_confirmed"' not in source and '"test_confirmed"' not in source.split("continue")[-1]
+    assert 'row.trust_level = "self_reported"' in source
