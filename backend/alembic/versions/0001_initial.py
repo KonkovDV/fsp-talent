@@ -300,6 +300,27 @@ ALTER TABLE ONLY public.employer_favorites FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE public.employer_favorites ENABLE ROW LEVEL SECURITY;
 
+CREATE TABLE public.survey_history (
+    id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    specialization character varying(30) NOT NULL,
+    industry character varying(40),
+    work_goal character varying(40),
+    declared_grade character varying(20) NOT NULL,
+    experience_years integer,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT survey_history_pkey PRIMARY KEY (id),
+    CONSTRAINT survey_history_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_survey_history_participant ON public.survey_history USING btree (participant_id, created_at DESC);
+
+ALTER TABLE ONLY public.survey_history FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.survey_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY survey_history_owner ON public.survey_history USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
 CREATE TABLE public.candidate_resumes (
     id uuid NOT NULL,
     participant_id uuid NOT NULL,
