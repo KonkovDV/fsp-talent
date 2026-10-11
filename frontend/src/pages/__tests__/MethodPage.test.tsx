@@ -62,7 +62,7 @@ describe('страница методики', () => {
     expect(screen.getByText('0,24')).toBeInTheDocument()
     expect(screen.getByText('0 %')).toBeInTheDocument()
     expect(screen.getByText('64,5 %')).toBeInTheDocument()
-    expect(screen.getByText('0,636')).toBeInTheDocument()
+    expect(screen.getByText('0,632')).toBeInTheDocument()
     expect(screen.getByText('+0,084')).toBeInTheDocument()
     expect(screen.getByText('+0,032')).toBeInTheDocument()
     expect(screen.getByText(/против поиска по ключевым словам/)).toBeInTheDocument()
