@@ -445,6 +445,7 @@ Caddy сам получает сертификат Let's Encrypt, контейн
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Каждое требование ТЗ и ответы постановщика на Q&A: где увидеть и где в коде |
 | [docs/VALIDATION_ASSESSMENT.md](docs/VALIDATION_ASSESSMENT.md) | Проверка теста на грейд |
 | [docs/VALIDATION_MATCHING.md](docs/VALIDATION_MATCHING.md) | Проверка подбора |
+| [docs/MODEL_CARDS.md](docs/MODEL_CARDS.md) | Карточки моделей и правил: назначение, вход и выход, метрики, выключатель, что уходит провайдеру |
 | [docs/LOAD_TEST.md](docs/LOAD_TEST.md) | Нагрузочная проверка |
 | [docs/FSP_INTEGRATION.md](docs/FSP_INTEGRATION.md) | ФСП ID (OIDC, Keycloak) и контракт реестра ФСП |
 | [docs/TRUST_AND_ATS.md](docs/TRUST_AND_ATS.md) | Защита от фиктивных вакансий, интеграция с ATS |
