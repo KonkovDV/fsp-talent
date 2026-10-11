@@ -17,7 +17,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("""CREATE TABLE public.survey_history (
+    op.execute("""CREATE TABLE IF NOT EXISTS public.survey_history (
     id uuid NOT NULL,
     participant_id uuid NOT NULL,
     specialization character varying(30) NOT NULL,
@@ -29,9 +29,10 @@ def upgrade() -> None:
     CONSTRAINT survey_history_pkey PRIMARY KEY (id),
     CONSTRAINT survey_history_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE
 )""")
-    op.execute("""CREATE INDEX ix_survey_history_participant ON public.survey_history USING btree (participant_id, created_at DESC)""")
+    op.execute("""CREATE INDEX IF NOT EXISTS ix_survey_history_participant ON public.survey_history USING btree (participant_id, created_at DESC)""")
     op.execute("""ALTER TABLE ONLY public.survey_history FORCE ROW LEVEL SECURITY""")
     op.execute("""ALTER TABLE public.survey_history ENABLE ROW LEVEL SECURITY""")
+    op.execute("""DROP POLICY IF EXISTS survey_history_owner ON public.survey_history""")
     op.execute("""CREATE POLICY survey_history_owner ON public.survey_history USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))))""")
     # The app role gets table rights from the default privileges of 0001; grant explicitly in case
     # the table owner differs from the role that set those defaults.

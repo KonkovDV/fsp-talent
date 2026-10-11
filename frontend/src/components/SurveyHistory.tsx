@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { surveyHistory } from '../api/client'
+import { ROLE_RU, gradeRu } from '../labels'
 
 type Row = { specialization: string; declared_grade: string; experience_years: number | null; created_at: string }
 
@@ -14,7 +15,7 @@ export default function SurveyHistory() {
         {q.data.map(r => (
           <li key={r.created_at}>
             <span className="num">{new Date(r.created_at).toLocaleDateString('ru-RU')}</span>
-            {' — '}{r.specialization}, {r.declared_grade}
+            {' — '}{ROLE_RU[r.specialization] ?? r.specialization}, {gradeRu(r.declared_grade)}
             {r.experience_years != null && `, опыт ${r.experience_years} г.`}
           </li>
         ))}
