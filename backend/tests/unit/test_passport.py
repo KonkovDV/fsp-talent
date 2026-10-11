@@ -90,7 +90,7 @@ class Db:
 
 
 def person(**kw):
-    return SimpleNamespace(**{"id": PID, "deleted_at": None, "is_minor": False, **kw})
+    return SimpleNamespace(**{"id": PID, "deleted_at": None, "is_minor": False, "birth_date": date(1990, 1, 1), **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -119,7 +119,8 @@ async def test_nothing_to_sign_minors_and_erased_profiles_get_no_passport():
         await api.issue_my_passport({"sub": str(PID)}, Db(person(), skills=[skill("Go", "self_reported")]))
     assert empty.value.status_code == 409
     with pytest.raises(ApiError) as minor:
-        await api.issue_my_passport({"sub": str(PID)}, Db(person(is_minor=True), confirmations=[grade()]))
+        await api.issue_my_passport({"sub": str(PID)}, Db(
+            person(is_minor=True, birth_date=date(2015, 1, 1)), confirmations=[grade()]))
     assert minor.value.status_code == 403
     db = Db(person(), confirmations=[grade()])
     issued = await api.issue_my_passport({"sub": str(PID)}, db)

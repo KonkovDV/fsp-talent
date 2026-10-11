@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.models import ConsentLog, Participant, VerifiableCredential
 from app.models.assessment import GradeConfirmation
-from app.models.participant import Result, Skill
+from app.models.participant import Result, Skill, adult_confirmed
 from app.services.passport import PASSPORT_TYPE, issue_passport, passport_claims
 from app.services.vc.issuer import verify_credential
 
@@ -63,8 +63,8 @@ async def issue_my_passport(current: dict = Depends(get_current_participant), db
     person = await db.get(Participant, pid)
     if person is None or person.deleted_at is not None:
         raise ApiError(404, "not_found", "Профиль не найден")
-    if person.is_minor:
-        raise ApiError(403, "forbidden", "Паспорт навыков доступен с 18 лет")
+    if not adult_confirmed(person):
+        raise ApiError(403, "forbidden", "Паспорт навыков доступен с 18 лет, после указания даты рождения")
     if await too_many(f"passport:{pid}", limit=ISSUES_PER_HOUR, window_seconds=3600):
         raise ApiError(429, "rate_limited", "Слишком часто: паспорт можно выпускать до 10 раз в час")
     confirmations = await db.scalars(select(GradeConfirmation).where(GradeConfirmation.participant_id == pid))
@@ -94,7 +94,7 @@ async def public_passport(passport_id: uuid.UUID, db: AsyncSession = Depends(get
     if vc is None or not vc.credential_json or vc.result_id is not None:
         raise ApiError(404, "not_found", "Паспорт не найден")
     person = await db.get(Participant, vc.participant_id)
-    if person is None or person.deleted_at is not None or person.is_minor:
+    if person is None or person.deleted_at is not None or not adult_confirmed(person):
         raise ApiError(404, "not_found", "Паспорт не найден")
     achievement = vc.credential_json.get("credentialSubject", {}).get("achievement", {})
     if PASSPORT_TYPE not in (achievement.get("type") or []):

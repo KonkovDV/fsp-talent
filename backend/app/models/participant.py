@@ -109,6 +109,9 @@ class Participant(Base):
     applications = relationship("Application", back_populates="candidate")
     consent_logs = relationship("ConsentLog", back_populates="participant")
 
+    def adult_confirmed(self, today: date | None = None) -> bool:
+        return adult_confirmed(self, today)
+
     def minor_now(self, today: date | None = None) -> bool:
         """Age from birth_date. The stored is_minor flag is only a fallback before the date is known."""
         if self.birth_date is None:
@@ -179,3 +182,12 @@ class Skill(Base):
     confirmed_at = Column(DateTime(timezone=True))
     participant = relationship("Participant", back_populates="skills")
     __table_args__ = (UniqueConstraint("participant_id", "name", name="uq_participant_skill"),)
+
+
+def adult_confirmed(person, today: date | None = None) -> bool:
+    """18+ by a birth date on file. The signup checkbox alone never opens an adult-only action (audit-3 P3-2)."""
+    born = getattr(person, "birth_date", None)
+    if born is None:
+        return False
+    today = today or date.today()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day)) >= 18

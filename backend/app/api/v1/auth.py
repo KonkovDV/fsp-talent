@@ -265,9 +265,11 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     p.is_minor = not body.is_adult
     try:
         await db.flush()
-    except IntegrityError as e:   # a parallel registration of the same email won the race
+    except IntegrityError:
+        # A parallel registration of the same address won the race. Answer as for any address (202), so the
+        # response does not tell whether the e-mail exists (audit-3 P3-1); the winner gets the letter.
         await db.rollback()
-        raise ApiError(409, "email_taken") from e
+        return VerificationSent(email=email, role="participant", expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
     for kind in body.consents:
         await give_consent(db, "participant", p.id, kind, request)
     return await _send_verification(db, "participant", p, email)
@@ -305,9 +307,11 @@ async def register_employer(body: EmployerRegister, request: Request, db: AsyncS
     db.add(employer)
     try:
         await db.flush()
-    except IntegrityError as e:   # a parallel registration of the same email won the race
+    except IntegrityError:
+        # A parallel registration of the same address won the race. Answer as for any address (202), so the
+        # response does not tell whether the e-mail exists (audit-3 P3-1); the winner gets the letter.
         await db.rollback()
-        raise ApiError(409, "email_taken") from e
+        return VerificationSent(email=email, role="employer", expires_in_minutes=settings.EMAIL_CODE_TTL_MINUTES)
     for kind in body.consents:
         await give_consent(db, "employer", employer.id, kind, request)
     return await _send_verification(db, "employer", employer, email)
