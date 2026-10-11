@@ -78,3 +78,33 @@ def test_company_inn_checksum():
     assert inn_is_valid("7707083893")
     assert not inn_is_valid("7707083894")
     assert not inn_is_valid("123")
+
+
+def test_profile_pdf_keeps_cyrillic_text():
+    from app.services.pdf_profile import _font
+
+    if _font() is None:
+        pytest.skip("нет системного шрифта с кириллицей")
+    blob = render_profile_pdf(profile_lines("Иванов Иван", "Backend-разработка", "middle", ["Python"],
+                                            [{"label": "Алгоритмы", "lcb": 0.62, "rank": "I"}]))
+    text = extract_pdf_text(blob)
+    assert "Иванов" in text and "Алгоритмы" in text
+    assert "Ivanov" not in text
+
+
+def test_profile_pdf_without_cyrillic_font_is_refused(monkeypatch):
+    import app.services.pdf_profile as pp
+
+    monkeypatch.setattr(pp, "_font", lambda: None)
+    with pytest.raises(RuntimeError):
+        pp.render_profile_pdf(["Иванов"])
+
+
+def test_backend_image_installs_a_cyrillic_font():
+    from pathlib import Path
+
+    import app.services.pdf_profile as pp
+
+    dockerfile = (Path(__file__).resolve().parents[2] / "Dockerfile").read_text(encoding="utf-8")
+    assert "fonts-dejavu-core" in dockerfile
+    assert Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") in pp._FONTS
