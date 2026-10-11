@@ -508,7 +508,7 @@ async def get_my_results(
 async def import_certificate(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
                              db: AsyncSession = Depends(get_db)):
     """Skills quoted in a certificate. A confirmed test skill is left as it is. The grade does not move."""
-    from app.services.certificate_evidence import certificate_skills
+    from app.services.certificate_evidence import certificate_skills, is_pdf
     from app.services.protocol_file import text_of_pdf
 
     if await too_many(f"certificate:{_pid(current)}", limit=10, window_seconds=3600):
@@ -520,11 +520,10 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
     raw = await file.read()
     if len(raw) > 2_000_000:
         raise ApiError(413, "payload_too_large", "Файл больше 2 МБ")
+    if not (file.filename or "").lower().endswith(".pdf") or not is_pdf(raw):
+        raise ApiError(422, "validation_error", "Нужен PDF сертификата")
     try:
-        if (file.filename or "").lower().endswith(".pdf"):
-            text = text_of_pdf(raw)
-        else:
-            text = raw.decode("utf-8", errors="replace")
+        text = text_of_pdf(raw)
     except Exception as exc:
         raise ApiError(422, "validation_error", "Файл не читается") from exc
     found = certificate_skills(text)
@@ -542,10 +541,13 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
             row = Skill(participant_id=person.id, name=name, raw_name=name, created_at=now)
             db.add(row)
             existing[name] = row
-        row.source_quote = quote
-        row.trust_level = "resume_confirmed"
-        row.confirmed = True
-        row.confirmed_at = now
+        # AUD-02: the candidate's own file is a quote, not a confirmation. A stronger level stays.
+        # `confirmed` is the "skill is active" flag (a self-declared profile skill has it too, see
+        # services/skills.py); search, vacancies and the public profile read it, so it stays on.
+        if row.trust_level in (None, "", "self_reported"):
+            row.trust_level = "self_reported"
+            row.confirmed = True
+        row.source_quote = row.source_quote or quote
         kept.append(name)
     await db.commit()
     return {"skills": kept, "grade_unchanged": person.assessed_grade == grade_before}
