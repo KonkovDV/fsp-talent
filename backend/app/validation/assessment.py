@@ -1821,12 +1821,115 @@ def _print_extend(n: int, seed: int) -> None:
     print("принять:", "да" if bars else "нет")
 
 
+
+# Same-scale rows for comparison with other teams' reports. Report only: no product rule reads them.
+@dataclass
+class Parity:
+    n: int
+    declared_exact: float        # questionnaire grade equals the true grade
+    trust_accuracy: float        # base «trust the questionnaire»: everybody passes the declared grade
+    accuracy: float              # the product decision (pass/fail) matches truth
+    overclaim_rejected: float    # truly below the declared grade and not passed
+    honest_confirmed: float      # truly at or above the declared grade and passed
+    kappa_product: float         # quadratic κ: grade the session assigned vs true grade
+    kappa_ability: float         # quadratic κ: grade cut from θ̂ alone (no declared-grade cap) vs true grade
+    kappa_ability_ci: tuple[float, float]
+    kappa_declared: float        # quadratic κ: declared grade vs true grade
+
+
+def ability_grade(theta_hat: float) -> str:
+    """Grade read off the ability estimate by the same cuts; «ниже» below intern. Validation only."""
+    return true_grade(theta_hat) or "ниже"
+
+
+def _label(grade: str | None) -> str:
+    return grade or "ниже"
+
+
+def _matrix_kappa(xs: list[str], ys: list[str]) -> float:
+    """Quadratic weighted κ over MATRIX_LABELS (ниже, intern … lead)."""
+    k = len(MATRIX_LABELS)
+    index = {name: i for i, name in enumerate(MATRIX_LABELS)}
+    grid = [[0] * k for _ in range(k)]
+    for x, y in zip(xs, ys, strict=True):
+        grid[index[x]][index[y]] += 1
+    n = len(xs)
+    rows = [sum(r) for r in grid]
+    cols = [sum(grid[i][j] for i in range(k)) for j in range(k)]
+    observed = expected = 0.0
+    for i in range(k):
+        for j in range(k):
+            w = (i - j) ** 2
+            observed += w * grid[i][j]
+            expected += w * rows[i] * cols[j] / n
+    return 1.0 - observed / expected if expected else 1.0
+
+
+def parity_sessions(n: int, seed: int) -> list[Session]:
+    """The clean cohort of `run` with the same random draws, so the rows match the main report."""
+    rng = random.Random(seed)
+    truth = Truth.draw(rng)
+    people = population(n, random.Random(seed + 1))
+    population(max(300, n // 2), random.Random(seed + 2))
+    _, pretest = cohort(population(n, rng), truth, rng)
+    offsets = calibrate(pretest)
+    _, sessions = cohort(people, truth, rng, offsets=offsets)
+    return sessions
+
+
+def parity(sessions: list[Session]) -> Parity:
+    n = len(sessions)
+    truths = [_label(true_grade(s.theta)) for s in sessions]
+    above = [s for s in sessions if s.theta >= CUTS[s.target]]
+    below = [s for s in sessions if s.theta < CUTS[s.target]]
+    ability = [ability_grade(s.theta_hat) for s in sessions]
+    return Parity(
+        n=n,
+        declared_exact=sum(s.target == t for s, t in zip(sessions, truths, strict=True)) / n,
+        trust_accuracy=len(above) / n,
+        accuracy=sum(s.passed == (s.theta >= CUTS[s.target]) for s in sessions) / n,
+        overclaim_rejected=sum(not s.passed for s in below) / max(1, len(below)),
+        honest_confirmed=sum(s.passed for s in above) / max(1, len(above)),
+        kappa_product=_matrix_kappa(truths, [_label(s.earned) for s in sessions]),
+        kappa_ability=_matrix_kappa(truths, ability),
+        kappa_ability_ci=kappa_bootstrap(truths, ability, _matrix_kappa),
+        kappa_declared=_matrix_kappa(truths, [s.target for s in sessions]),
+    )
+
+
+def parity_markdown(p: Parity, seed: int) -> str:
+    def pct(x: float) -> str:
+        return f"{x * 100:.1f} %".replace(".", ",")
+
+    def dec(x: float) -> str:
+        return f"{x:.3f}".replace(".", ",")
+    low, high = p.kappa_ability_ci
+    return "\n".join([
+        f"Сопоставимые строки, зерно {seed}, {p.n} кандидатов, сценарий «без утечки».",
+        "",
+        "| Что | Значение |",
+        "|---|---|",
+        f"| Анкета: заявленный грейд равен истинному | {pct(p.declared_exact)} |",
+        f"| База «верить анкете» (все сдают заявленный): верное решение | {pct(p.trust_accuracy)} |",
+        f"| Тест: верное решение «сдал / не сдал» | {pct(p.accuracy)} |",
+        f"| Завышенный в анкете грейд не подтверждён | {pct(p.overclaim_rejected)} |",
+        f"| Честно заявленный грейд подтверждён | {pct(p.honest_confirmed)} |",
+        f"| κw: грейд анкеты против истинного | {dec(p.kappa_declared)} |",
+        f"| κw: грейд, назначенный сессией, против истинного (строгая) | {dec(p.kappa_product)} |",
+        f"| κw: грейд только по θ̂ против истинного (отчётная, не продукт) | {dec(p.kappa_ability)} "
+        f"({dec(low)}–{dec(high)}) |",
+        "",
+    ])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--md", type=str, default=None, help="write the markdown table to this file")
     parser.add_argument("--check", action="store_true", help="fail when the clean scenario breaks CHECKS")
+    parser.add_argument("--parity", action="store_true",
+                        help="print only the same-scale rows (questionnaire base, κw vs truth) and exit")
     parser.add_argument("--grid", action="store_true",
                         help="stopping-rule grid; does not change product constants")
     parser.add_argument("--sh-holdout", action="store_true",
@@ -1836,6 +1939,9 @@ def main() -> None:
     parser.add_argument("--extend", action="store_true",
                         help="measure one optional extension of 6 items; does not change the product")
     args = parser.parse_args()
+    if args.parity:
+        print(parity_markdown(parity(parity_sessions(args.n, args.seed)), args.seed))
+        return
     if args.sh_holdout:
         passed = sh_holdout(args.n if args.n != 3000 else 800)
         sys.exit(0 if passed else 1)
