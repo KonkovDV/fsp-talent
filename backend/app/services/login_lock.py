@@ -27,8 +27,15 @@ def still_locked(until: datetime | None, now: datetime) -> bool:
     return moment > now
 
 
-def next_failure(count: int, now: datetime, *, lockable: bool = True) -> tuple[int, datetime | None]:
-    """The account-wide counter. Locks only after ACCOUNT_LOCK_AFTER, and never a published demo account."""
+def next_failure(count: int, now: datetime, *, lockable: bool = True,
+                 locked_until: datetime | None = None) -> tuple[int, datetime | None]:
+    """The account-wide counter. Locks only after ACCOUNT_LOCK_AFTER, and never a published demo account.
+
+    A lock that has run out starts the count again: otherwise one wrong password after the fifteen
+    minutes would close the account at once (review of #283).
+    """
+    if locked_until is not None and not still_locked(locked_until, now):
+        count = 0
     nxt = int(count or 0) + 1
     if lockable and nxt >= ACCOUNT_LOCK_AFTER:
         return nxt, now + LOCK_FOR

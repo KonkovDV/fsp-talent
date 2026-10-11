@@ -68,3 +68,11 @@ def test_the_lock_is_per_address():
         await login_lock.pair_cleared(redis, attacker)
         assert not await login_lock.pair_locked(redis, attacker)
     asyncio.run(run())
+
+
+def test_an_expired_account_lock_starts_the_count_again():
+    expired = NOW - timedelta(minutes=1)
+    count, until = next_failure(ACCOUNT_LOCK_AFTER, NOW, locked_until=expired)
+    assert count == 1 and until is None
+    active = NOW + timedelta(minutes=5)
+    assert next_failure(ACCOUNT_LOCK_AFTER, NOW, locked_until=active)[1] is not None

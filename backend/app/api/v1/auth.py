@@ -402,7 +402,7 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm,
         await login_lock.pair_failed(redis, pair)
         if account is not None:
             account.failed_logins, account.locked_until = next_failure(
-                account.failed_logins or 0, now, lockable=not protected)
+                account.failed_logins or 0, now, lockable=not protected, locked_until=account.locked_until)
             await db.commit()
         raise ApiError(401, "invalid_credentials")
     await login_lock.pair_cleared(redis, pair)
