@@ -13,7 +13,7 @@
 | Единый тест под категорию, но не одинаковые задания у всех | Параметрические семейства: у каждого свой вариант; ключи проверены исполнением | `test_items_are_practically_unique`, `test_same_seed_gives_the_same_session_and_a_new_seed_fresh_items`, `backend/app/validation/key_check.py` |
 | Проверка на списывание не обязательна, но плюс | Сигналы честности и person-fit, кривые «поймано / ложно» | `test_person_fit_flags_answers_the_estimate_cannot_explain`, `test_leak_is_caught_more_often_than_honest_at_product_point`, `docs/VALIDATION_INTEGRITY.md` |
 | Экспресс-тест на 3–5 минут допустим | Экспресс-режим, грейд не подтверждает | `test_express_stops_on_its_count_and_does_not_confirm_a_grade` |
-| Несколько категорий у кандидата — плюс, не обязательно | **Не сделано:** у кандидата одна специализация | — |
+| Несколько категорий у кандидата — плюс, не обязательно | Категория из опроса — основная. Другую специализацию кандидат подтверждает отдельным тестом (своя запись подтверждения, своя пауза). Работодатель находит его по этой роли и грейду, на карточке показана подходящая категория, основная рядом. На главной кандидата — блок «Дополнительные категории». Ограничение: без теста вторая категория не появляется, опрос хранит одну специализацию | `test_the_need_role_uses_its_own_confirmation`, `backend/tests/unit/test_second_category.py`, `frontend/src/components/__tests__/OtherCategories.test.tsx` |
 | Задания работодателя: адресно, способ оценки — на команде | Адресные задания видит только адресат и автор | `test_addressed_task_is_only_for_its_candidate`, `test_another_employer_does_not_read_the_task` |
 
 ## ФСП и ФСП ID
