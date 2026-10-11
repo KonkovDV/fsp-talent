@@ -47,7 +47,10 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def password_matches(plain: str, hashed: str | None) -> bool:
-    """True when this hash is the password. A missing hash still runs bcrypt, so the two cases take the same time."""
+    """True when this hash is the password.
+
+    A missing hash still runs Argon2id on a dummy hash, so the two cases take the same time.
+    """
     ok = verify_password(plain, hashed or _UNKNOWN_PASSWORD_HASH)
     return bool(hashed) and ok
 
