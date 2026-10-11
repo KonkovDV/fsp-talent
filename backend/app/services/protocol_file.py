@@ -118,17 +118,50 @@ def text_of_pdf(raw: bytes) -> str:
     return "\n".join((page.extract_text() or "") for page in reader.pages[:20])
 
 
+# AUD-01: a 2 MB upload must not unpack into gigabytes. Members are checked before any read.
+XLSX_MEMBER_MAX = 5_000_000
+XLSX_TOTAL_MAX = 20_000_000
+XLSX_RATIO_MAX = 100
+
+
+class UnsafeArchive(ValueError):
+    """The xlsx looks like a zip bomb: too large unpacked or compressed too well."""
+
+
+def _check_book(book: zipfile.ZipFile) -> None:
+    infos = book.infolist()
+    if len(infos) > 1000:
+        raise UnsafeArchive("too many members")
+    total = 0
+    for info in infos:
+        total += info.file_size
+        if info.file_size > XLSX_MEMBER_MAX or total > XLSX_TOTAL_MAX:
+            raise UnsafeArchive("too large unpacked")
+        if info.file_size > 1_000_000 and info.file_size > XLSX_RATIO_MAX * max(info.compress_size, 1):
+            raise UnsafeArchive("compression ratio")
+
+
+def _read(book: zipfile.ZipFile, name: str) -> bytes:
+    # The header can lie about file_size: never read more than the limit allows.
+    with book.open(name) as member:
+        data = member.read(XLSX_MEMBER_MAX + 1)
+    if len(data) > XLSX_MEMBER_MAX:
+        raise UnsafeArchive("member larger than declared")
+    return data
+
+
 def text_of_xlsx(raw: bytes) -> str:
     with zipfile.ZipFile(io.BytesIO(raw)) as book:
+        _check_book(book)
         shared: list[str] = []
         if "xl/sharedStrings.xml" in book.namelist():
-            root = ET.fromstring(book.read("xl/sharedStrings.xml"))
+            root = ET.fromstring(_read(book, "xl/sharedStrings.xml"))
             for item in root.findall("m:si", _NS):
                 shared.append("".join(node.text or "" for node in item.iter(f"{{{_NS['m']}}}t")))
         sheets = [name for name in book.namelist() if name.startswith("xl/worksheets/sheet")]
         if not sheets:
             return ""
-        root = ET.fromstring(book.read(sheets[0]))
+        root = ET.fromstring(_read(book, sheets[0]))
         lines = []
         for row in root.findall("m:sheetData/m:row", _NS):
             cells = []

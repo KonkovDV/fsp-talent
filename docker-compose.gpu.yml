@@ -5,6 +5,9 @@
 # Spec: https://docs.docker.com/compose/how-tos/gpu-support/
 services:
   backend:
+    build:
+      args:
+        INSTALL_RERANKER: "1"
     deploy:
       resources:
         reservations:
