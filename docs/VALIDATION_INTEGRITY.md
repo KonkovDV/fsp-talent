@@ -52,7 +52,8 @@ flowchart TD
   classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
   classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
   classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
-  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a
+```
 
 ## Проверка на модели
 Команда: `cd backend && python -m app.validation.integrity [--seed 2026] [--leak-share 0.5]`, 4000 сессий на группу, 20 заданий 3PL, время ответа — логнормальная модель (параметры в описании модуля). «Знающий утёкшие ключи» — θ ∈ [−1,5; 0], знает ключи части заданий и отвечает за ~8 % лимита. Решение принимают те же функции, что работают в продукте. В квадратных скобках — 95 % доверительный интервал (ДИ) Уилсона.

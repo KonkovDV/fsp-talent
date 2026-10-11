@@ -58,7 +58,8 @@ flowchart TD
   classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
   classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
   classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
-  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a
+```
 
 ### Что умеет каждый кабинет
 
@@ -114,7 +115,8 @@ flowchart LR
   classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
   classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
   classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
-  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a
+```
 
 Монолит с явными слоями (ТЗ 3.5): роутеры принимают запрос и проверяют права, бизнес-логика живёт в сервисах, которые не знают про HTTP, модели отвечают только за хранение. Внешние системы (реестр ФСП, ФСП ID, GigaChat или YandexGPT, почта) подключены через адаптеры с флагом режима: в демо всё работает без внешних сервисов. На публичном стенде вместо nginx стоит Caddy 2.10: он принимает 80 и 443 и сам получает сертификат. Локальная схема на рисунке от этого не меняется.
 
