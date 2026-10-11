@@ -31,3 +31,16 @@ class WebhookDelivery(Base):
     last_code = Column(Integer)
     last_error = Column(String(300))
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
+class EmployerApiKey(Base):
+    """Read-only key for a company's ATS. Only the SHA-256 of the key is stored; the key is shown once."""
+    __tablename__ = "employer_api_keys"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employer_id = Column(UUID(as_uuid=True), ForeignKey("employers.id", ondelete="CASCADE"), nullable=False)
+    prefix = Column(String(16), nullable=False)
+    key_hash = Column(String(64), nullable=False, unique=True)
+    label = Column(String(80))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    last_used_at = Column(DateTime(timezone=True))
+    revoked_at = Column(DateTime(timezone=True))

@@ -1081,6 +1081,24 @@
         "title": "ItemOut",
         "type": "object"
       },
+      "KeyIn": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "title": "KeyIn",
+        "type": "object"
+      },
       "LowerOfferOut": {
         "properties": {
           "grade": {
@@ -11840,7 +11858,7 @@
     },
     "/api/v1/employer/integrations/export": {
       "get": {
-        "description": "People who agreed to contact and have not closed it. Declined invitations stay out.",
+        "description": "People who agreed to contact and have not closed it. Declined invitations stay out.\n\nAccepts the employer's session or the company's read-only `X-API-Key`.",
         "operationId": "export_api_v1_employer_integrations_export_get",
         "parameters": [
           {
@@ -11852,6 +11870,22 @@
               "pattern": "^(json|csv)$",
               "title": "Fmt",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -11939,6 +11973,303 @@
           }
         ],
         "summary": "Export",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/api/v1/employer/integrations/keys": {
+      "get": {
+        "operationId": "list_keys_api_v1_employer_integrations_keys_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Keys",
+        "tags": [
+          "integrations"
+        ]
+      },
+      "post": {
+        "description": "The full key is in this answer only. The database keeps its SHA-256.",
+        "operationId": "create_key_api_v1_employer_integrations_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Key",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/api/v1/employer/integrations/keys/{key_id}": {
+      "delete": {
+        "operationId": "revoke_key_api_v1_employer_integrations_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke Key",
         "tags": [
           "integrations"
         ]

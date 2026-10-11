@@ -393,6 +393,26 @@ ALTER TABLE public.webhook_endpoints ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY webhook_endpoints_actor ON public.webhook_endpoints USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
 
+CREATE TABLE public.employer_api_keys (
+    id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    prefix character varying(16) NOT NULL,
+    key_hash character varying(64) NOT NULL,
+    label character varying(80),
+    created_at timestamp with time zone NOT NULL,
+    last_used_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    CONSTRAINT employer_api_keys_pkey PRIMARY KEY (id),
+    CONSTRAINT employer_api_keys_key_hash_key UNIQUE (key_hash),
+    CONSTRAINT employer_api_keys_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.employer_api_keys FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.employer_api_keys ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY employer_api_keys_actor ON public.employer_api_keys USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
+
 CREATE TABLE public.webhook_deliveries (
     id uuid NOT NULL,
     endpoint_id uuid NOT NULL,

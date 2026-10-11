@@ -25,7 +25,7 @@ from app.models.resume import CandidateResume, SurveyHistory
 from app.models.task import EmployerTask, TaskSubmission
 from app.models.vacancy import Application, Vacancy
 from app.models.vc import VerifiableCredential
-from app.models.webhook import WebhookDelivery, WebhookEndpoint
+from app.models.webhook import EmployerApiKey, WebhookDelivery, WebhookEndpoint
 
 __all__ = [
     "AccessLog",
@@ -72,6 +72,7 @@ __all__ = [
     "Vacancy",
     "WebhookDelivery",
     "WebhookEndpoint",
+    "EmployerApiKey",
     "VerifiableCredential",
 ]
 
