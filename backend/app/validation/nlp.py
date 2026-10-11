@@ -130,12 +130,20 @@ def _years_ru(n: int) -> str:
                                                        else "лет")
 
 
+# Header lines of an hh.ru resume export: sex and age, then the phone with the "preferred contact" note.
+SEX_WORDS = ("Мужчина", "Женщина")
+AGE_MIN, AGE_MAX = 21, 40
+PHONE_NOTE = " — предпочитаемый способ связи"
+
+
 def lines_hh(p: dict, rng: random.Random) -> list[tuple[str, str]]:
     """Two columns: (label, value). The label is drawn on the left, the value on the right, like an hh.ru export."""
     title = p["headline"] + (f", {GRADE_WORDS[p['grade']]}" if p["grade"] else "")
     years = p["experience_years"]
-    rows = [("", p["full_name"]), ("", f"{rng.choice(['Мужчина', 'Женщина'])}, {rng.randint(21, 40)} лет"),
-            ("Телефон", f"{p['phone_shown']} — предпочитаемый способ связи"), ("Почта", p["email"])]
+    sex = rng.choice(SEX_WORDS)
+    age = rng.randint(AGE_MIN, AGE_MAX)
+    rows = [("", p["full_name"]), ("", " ".join((sex + ",", str(age), "лет"))),
+            ("Телефон", p["phone_shown"] + PHONE_NOTE), ("Почта", p["email"])]
     if p["telegram"]:
         rows.append(("Telegram", p["telegram"]))
     rows += [("", "Желаемая должность и зарплата"), ("", title),
@@ -236,13 +244,15 @@ def field_prf(pairs: list[tuple]) -> dict:
     tp = sum(1 for got, gold in pairs if got is not None and got == gold)
     found = sum(1 for got, _ in pairs if got is not None)
     present = sum(1 for _, gold in pairs if gold is not None)
-    p, r = _share(tp, found), _share(tp, present)
-    f1 = 2 * p * r / (p + r) if p + r else 0.0
-    return {"p": round(p, 3), "r": round(r, 3), "f1": round(f1, 3)}
+    precision, recall = _share(tp, found), _share(tp, present)
+    total = precision + recall
+    f1 = 0.0 if total == 0 else 2 * precision * recall / total
+    return dict(zip(("p", "r", "f1"), (round(x, 3) for x in (precision, recall, f1))))
 
 
 def vacancy_eval(name: str = "nlp_vacancies_gold.json") -> dict:
-    items = json.loads((RESOURCES / name).read_text(encoding="utf-8"))
+    with open(RESOURCES / name, encoding="utf-8") as fh:
+        items = json.load(fh)
     hits = {k: 0 for k in VACANCY_FIELDS}
     pairs: dict[str, list[tuple]] = {k: [] for k in VACANCY_FIELDS}
     req, nice, all_sk, errors = [], [], [], []
