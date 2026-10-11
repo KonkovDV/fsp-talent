@@ -629,6 +629,20 @@ async def test_messages_open_after_accept(quiet):
     assert counts == {}
 
 
+async def test_no_code_task_yet_is_null_not_404(quiet):
+    company = _company()
+    person = _person()
+    offer = _offer(company.id, person.id, status="accepted")
+    db = Bag()
+    db.gets = [offer]
+    db.scalar_q = [None]
+    assert await interviews.get_code(offer.id, _current("participant", person.id), db) is None
+    db.gets = [None]
+    with pytest.raises(ApiError) as missing:
+        await interviews.get_code(offer.id, _current("participant", person.id), db)
+    assert missing.value.status_code == 404
+
+
 async def test_interview_slots_choice_and_outcome(quiet):
     company = _company()
     person = _person()
@@ -682,10 +696,11 @@ async def test_need_versions(quiet):
     need = db.added[0]
     ver = db.added[1]
     db.scalars_q = [[need]]
-    db.execute_q = [Exec([(need.id, 2)])]
+    shown, gone = SimpleNamespace(discoverable=True), SimpleNamespace(discoverable=False)
+    db.execute_q = [Exec([(need.id, shown), (need.id, shown), (need.id, gone)])]
     db.scalars_q.append([ver])
     listed = await needs.list_needs(current, db)
-    assert listed[0]["shortlist_count"] == 2
+    assert listed[0]["shortlist_count"] == 2   # the hidden card is not counted, as in the shortlist tab
 
     db.gets = [need]
     db.scalar_q = [ver]
