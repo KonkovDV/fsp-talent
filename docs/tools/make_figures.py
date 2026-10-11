@@ -13,13 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-import matplotlib  # noqa: E402
+import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-
-from app.validation import assessment as va  # noqa: E402
-from app.validation import matching as vm  # noqa: E402
+import matplotlib.pyplot as plt
+from app.validation import assessment as va
+from app.validation import matching as vm
 
 OUT = ROOT / "docs" / "assets" / "figures"
 N, SEED = 2000, 7
