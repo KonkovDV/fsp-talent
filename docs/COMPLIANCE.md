@@ -21,6 +21,36 @@
 | Cookie и отслеживание | Сторонней аналитики и cookie для отслеживания нет, поэтому баннер cookie не требуется | `frontend/package.json` |
 | ИИ-помощник | Модель получает резюме без имени и контактов, предлагает навыки, но ничего не решает: каждый навык подтверждает кандидат | `services/ai/assistant.py` |
 
+```mermaid
+flowchart TD
+  subgraph IN["Согласия"]
+    R[Регистрация]:::ui --> C1[pd_candidate — обработка]:::core
+    R --> C2[pd_distribution — распространение,<br/>отдельно]:::core
+    R --> C3[terms — правила]:::core
+    C1 --> J[(Consent: вид, версия,<br/>SHA-256 точного текста)]:::data
+    C2 --> J
+    C3 --> J
+  end
+  subgraph USE["Доступ работодателя"]
+    OF[Кандидат принял приглашение<br/>или откликнулся]:::ui --> CV[Контакты открыты]:::warn
+    CV --> AL[(AccessLog: contacts_view,<br/>application_contacts)]:::data
+    CV --> EX["ATS: GET /employer/integrations/export<br/>ключ X-API-Key, только принятые,<br/>contacts_allowed"]:::ext
+  end
+  J --> OF
+  subgraph OUT["Отзыв"]
+    RV1[Закрыть контакты для компании]:::ui --> AL2[(AccessLog: contacts_revoked)]:::data
+    RV2[Отзыв pd_candidate]:::ui --> E1[Карточка скрыта, контакты закрыты,<br/>стирание в течение 30 дней]:::warn
+    RV3[Отзыв pd_distribution]:::ui --> E2[Публичная страница и поиск<br/>по ФСП ID выключены]:::warn
+  end
+  CV --> RV1
+  RV1 -.->|исключён из выгрузки| EX
+  RV2 -.->|исключён из выгрузки| EX
+  classDef ui fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
+  classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
+  classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
+
 ## Недискриминация (ТК РФ ст. 3, 64)
 
 Пол, возраст и национальность в подборе не используются. Грейд ставит только тест и не зависит от статуса соревнования: все соревнования ФСП равны.
