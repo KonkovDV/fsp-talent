@@ -29,25 +29,36 @@
 
 ```mermaid
 flowchart TD
-  R[Кандидат: email или ФСП ID, согласия] --> S[Опрос: направление и специализация, цель]
-  S --> T[Адаптивный тест на заявленный грейд]
-  T --> C[(Категория: специализация × грейд)]
-  W[Задача недели из вакансии] -.-> C
-  ET[Задание работодателя: проверка системой или работодателем] -.-> C
-  F[ФСП ID: вход или привязка] --> X[(Ось «подтверждено ФСП»)]
-  N[Работодатель: потребность — стек, грейд, команда] --> K[Рекомендуемые категории]
+  subgraph CAND["Кандидат"]
+    R[Регистрация: email или ФСП ID, согласия]:::ui --> S[Опрос: направление, специализация, цель]:::ui
+    S --> T[Адаптивный тест на заявленный грейд]:::core
+    F[ФСП ID: вход или привязка]:::ext --> X[(Ось «подтверждено ФСП»)]:::data
+    W[Задача недели из вакансии]:::core
+    ET[Задание работодателя]:::core
+  end
+  T --> C[(Категория: специализация × грейд)]:::data
+  W -.-> C
+  ET -.-> C
+  subgraph EMP["Работодатель"]
+    N[Потребность: стек, грейд, команда]:::ui --> K[Рекомендуемые категории]:::core
+    B[Поиск по банку с фильтрами]:::ui
+    V[Вакансия]:::ui
+  end
   C --> K
-  K --> L[Подборка с объяснением каждого места]
+  K --> L[Подборка с объяснением каждого места]:::core
   X --> L
-  B[Поиск по банку с фильтрами] --> L
-  L --> I[Приглашение с вилкой до вычета НДФЛ]
+  B --> L
+  L --> I[Приглашение с вилкой до вычета НДФЛ]:::ui
   I --> A{Кандидат принял?}
-  A -- да --> O[Контакты открыты, запись в журнале доступа]
-  O --> M[Переписка по приглашению]
-  O --> RV[Кандидат может закрыть контакты для этой компании]
-  V[Вакансия работодателя] --> Ap[Отклик кандидата: согласие на контакт]
-  Ap --> O
-```
+  A -- да --> O[Контакты открыты, запись в журнале доступа]:::warn
+  V --> Ap[Отклик кандидата: согласие на контакт]:::ui --> O
+  O --> M[Переписка по приглашению]:::ui
+  O --> RV[Кандидат может закрыть контакты для этой компании]:::warn
+  classDef ui fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
+  classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
+  classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
 
 ### Что умеет каждый кабинет
 
@@ -65,22 +76,45 @@ flowchart TD
 ## 2. Компонентная архитектура
 
 ```mermaid
-flowchart TB
-  U[Браузер] -->|HTTP :80| NG[nginx<br/>CSP, маршрутизация]
-  NG -->|/| FE[frontend<br/>React 18 + Vite]
-  NG -->|/api, /docs| BE[backend<br/>FastAPI, 2 процесса uvicorn]
-  BE --> PG[(PostgreSQL 16<br/>pgvector, pg_trgm)]
-  BE --> RD[(Redis 7)]
-  WK[worker<br/>Celery] --> PG
+flowchart LR
+  U([Браузер]):::ui -->|":80"| NG[nginx<br/>CSP, маршрутизация]:::ui
+  subgraph APP["Приложение"]
+    FE[frontend<br/>React 18, Vite, TypeScript]:::ui
+    BE[backend<br/>FastAPI, Alembic]:::core
+    WK[worker<br/>Celery]:::core
+    BT[beat<br/>расписание Celery]:::core
+    SB[sandbox<br/>код без сети]:::warn
+    DS[demo-seed<br/>демо-данные, разово]:::core
+  end
+  subgraph DATA["Хранилища"]
+    PG[(postgres<br/>PostgreSQL 16 + pgvector)]:::data
+    RD[(redis<br/>Redis 7.2)]:::data
+  end
+  subgraph EXT["Внешнее и по флагам"]
+    MP[mailpit<br/>или внешний SMTP]:::ext
+    KC[keycloak<br/>ФСП ID, профиль fsp-id]:::ext
+    REG[Реестр ФСП]:::ext
+    AI[GigaChat / YandexGPT]:::ext
+  end
+  NG -->|"/"| FE
+  NG -->|"/api, /docs, /health"| BE
+  BE --> PG
+  BE --> RD
+  WK --> PG
   WK --> RD
-  BT[beat<br/>расписание] --> RD
-  BE -->|SMTP| MP[Mailpit / SMTP]
+  BT --> RD
+  DS --> PG
+  BE -->|"Unix-сокет, токен"| SB
+  BE -->|SMTP| MP
   WK -->|SMTP| MP
-  BE -.->|FSP_MODE=real| REG[Реестр ФСП]
-  BE -.->|FSP_ID_MODE=oidc| KC[ФСП ID / Keycloak]
-  BE -.->|GIGACHAT_CREDENTIALS| GC[GigaChat]
-  BE -->|Unix-сокет| SB[sandbox<br/>Python, Node, SQL, без сети]
-```
+  BE -.->|"FSP_ID_MODE=oidc"| KC
+  BE -.->|"FSP_MODE=real"| REG
+  BE -.->|"AI_ENABLED=true"| AI
+  classDef ui fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
+  classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
+  classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
 
 Монолит с явными слоями (ТЗ 3.5): роутеры принимают запрос и проверяют права, бизнес-логика живёт в сервисах, которые не знают про HTTP, модели отвечают только за хранение. Внешние системы (реестр ФСП, ФСП ID, GigaChat или YandexGPT, почта) подключены через адаптеры с флагом режима: в демо всё работает без внешних сервисов. На публичном стенде вместо nginx стоит Caddy 2.10: он принимает 80 и 443 и сам получает сертификат. Локальная схема на рисунке от этого не меняется.
 

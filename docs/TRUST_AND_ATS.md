@@ -101,13 +101,39 @@
 
 ```mermaid
 flowchart LR
-  subgraph Платформа
-    E[События найма] --> Q[(Очередь Celery / Redis)]
-    Q --> D[Доставщик вебхуков: подпись, повтор, журнал]
-    S[POST /ats/stages, план] --> F[Воронка и метки для калибровки]
+  subgraph P["Платформа"]
+    E[События найма]:::core --> Q[(Очередь Celery / Redis)]:::data
+    Q --> D[Доставщик вебхуков<br/>подпись, повтор, журнал]:::core
+    S[POST /ats/stages, план]:::core --> F[Воронка и метки для калибровки]:::data
   end
-  D -->|HTTPS + HMAC| ATS[ATS работодателя]
+  ATS[ATS работодателя]:::ext
+  D -->|"HTTPS + HMAC"| ATS
   ATS -->|этапы найма| S
+  classDef ui fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
+  classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
+  classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
+
+Подпись и защита от повтора (`app/services/webhooks.py`, `api_keys.py`):
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant P as ФСП Талант (worker)
+  participant A as ATS работодателя
+  Note over P: enqueue: событие найма → доставка в очереди
+  P->>A: POST, заголовки webhook-id, webhook-timestamp,<br/>webhook-signature v1 = HMAC-SHA256 «id.timestamp.body»
+  A->>A: сверка подписи, |сейчас − timestamp| ≤ 300 с
+  A->>A: webhook-id уже был? — повтор отклоняется<br/>(так делает встроенная песочница ATS)
+  alt 2xx
+    A-->>P: принято, доставка закрыта
+  else 410
+    A-->>P: подписка снята, без повторов
+  else ошибка
+    A-->>P: повтор через 1 мин, 5 мин, 30 мин, 2 ч, 12 ч, затем dead
+  end
+  A->>P: чтение выгрузки компании по ключу fspk_‹prefix›_‹secret›<br/>(хранится только SHA-256, только чтение)
 ```
 
 Доставщик — отдельная задача Celery: очередь и повторы уже есть в стенде. Журнал доставок виден работодателю в кабинете.

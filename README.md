@@ -261,21 +261,44 @@
 
 ```mermaid
 flowchart LR
-  U[Браузер] -->|":80"| NG[nginx<br/>CSP, маршрутизация]
-  NG -->|"/"| FE[frontend<br/>React 18, Vite, TypeScript]
-  NG -->|"/api, /docs, /health"| BE[backend<br/>FastAPI, Alembic]
-  BE --> PG[(postgres<br/>PostgreSQL 16 + pgvector)]
-  BE --> RD[(redis<br/>Redis 7.2)]
-  WK[worker<br/>Celery] --> PG
+  U([Браузер]):::ui -->|":80"| NG[nginx<br/>CSP, маршрутизация]:::ui
+  subgraph APP["Приложение"]
+    FE[frontend<br/>React 18, Vite, TypeScript]:::ui
+    BE[backend<br/>FastAPI, Alembic]:::core
+    WK[worker<br/>Celery]:::core
+    BT[beat<br/>расписание Celery]:::core
+    SB[sandbox<br/>код без сети]:::warn
+    DS[demo-seed<br/>демо-данные, разово]:::core
+  end
+  subgraph DATA["Хранилища"]
+    PG[(postgres<br/>PostgreSQL 16 + pgvector)]:::data
+    RD[(redis<br/>Redis 7.2)]:::data
+  end
+  subgraph EXT["Внешнее и по флагам"]
+    MP[mailpit<br/>или внешний SMTP]:::ext
+    KC[keycloak<br/>ФСП ID, профиль fsp-id]:::ext
+    REG[Реестр ФСП]:::ext
+    AI[GigaChat / YandexGPT]:::ext
+  end
+  NG -->|"/"| FE
+  NG -->|"/api, /docs, /health"| BE
+  BE --> PG
+  BE --> RD
+  WK --> PG
   WK --> RD
-  BT[beat<br/>расписание Celery] --> RD
-  BE -->|"Unix-сокет, токен"| SB[sandbox<br/>код без сети]
-  BE -->|SMTP| MP[mailpit<br/>или внешний SMTP]
+  BT --> RD
+  DS --> PG
+  BE -->|"Unix-сокет, токен"| SB
+  BE -->|SMTP| MP
   WK -->|SMTP| MP
-  BE -.->|"FSP_ID_MODE=oidc"| KC[keycloak<br/>ФСП ID, профиль fsp-id]
-  BE -.->|"FSP_MODE=real"| REG[Реестр ФСП]
-  BE -.->|"AI_ENABLED=true"| AI[GigaChat / YandexGPT]
-```
+  BE -.->|"FSP_ID_MODE=oidc"| KC
+  BE -.->|"FSP_MODE=real"| REG
+  BE -.->|"AI_ENABLED=true"| AI
+  classDef ui fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
+  classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
+  classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
 
 Одно приложение с явными слоями: обработчики API (`app/api/v1/`) проверяют права и формат, предметная логика живёт в сервисах (`app/services/`), модели и миграции отвечают за хранение. Внешние системы (реестр ФСП, ФСП ID, языковая модель, почта) подключены через адаптеры с флагом режима, поэтому стенд работает без них. Пунктир на схеме — внешние системы, которые включаются настройкой. Подробно: [docs/SOLUTION.md](docs/SOLUTION.md#2-компонентная-архитектура), коротко о главных решениях — [ARCHITECTURE.md](ARCHITECTURE.md).
 
