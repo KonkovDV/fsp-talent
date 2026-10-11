@@ -28,7 +28,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (form.role.trim().length < 2) return setError('Укажите должность')
-    if (form.salary_from_gross < 22440 || form.salary_to_gross < form.salary_from_gross) return setError('Вилка не ниже 22 440 ₽ в месяц до вычета НДФЛ, «до» не меньше «от»')
+    if (form.salary_from_gross < 27093 || form.salary_to_gross < form.salary_from_gross) return setError('Вилка не ниже МРОТ 27 093 ₽ в месяц до вычета НДФЛ, «до» не меньше «от»')
     if (form.contact_method.trim().length < 3) return setError('Укажите, как кандидату связаться с вами')
     if (/https?:\/\/|www\./i.test(form.contact_method)) return setError('Ссылку в способ связи писать нельзя: укажите почту, телефон или Telegram')
     setError('')

@@ -199,6 +199,8 @@ flowchart TB
 | YandexGPT, Cloud.ru Foundation Models, MWS GPT | облака Яндекса, Cloud.ru и МТС, Россия | то же, что GigaChat, вместо него | демо-пульт «Модерация» → «ИИ-провайдер», только под вторым фактором |
 | YandexGPT Pro 5.1 | облако Яндекса | основная модель, когда выбран YandexGPT | `YANDEX_MODEL=yandexgpt-5.1/latest` |
 | YandexGPT Lite 5 | облако Яндекса | вторая модель: сверяет черновик задания и видит только условие | `YANDEX_CHECK_MODEL=yandexgpt-5-lite/latest` |
+
+> **URI моделей YandexGPT не сверены с первоисточником** (аудит 2026-10, M-6). Официальная страница моделей Yandex AI Studio из нашей сети отдаёт капчу. Вторичные источники 2026 года расходятся: `gpt://<folder>/yandexgpt-5.1` и `yandexgpt-5-lite` ([toolarium, май 2026](https://toolarium.ru/yandexgpt-obzor-vozmozhnosti/)) против `yandexgpt/rc` для Pro 5.1 и `yandexgpt/latest` для Pro 5 ([aisrc.ru](https://aisrc.ru/models/yandexgpt)). Ключа для проверки вызовом у нас нет. Перед включением YandexGPT сверьте `YANDEX_MODEL` со [страницей моделей](https://yandex.cloud/ru/docs/ai-studio/concepts/generation/models). По умолчанию модель не используется (`AI_ENABLED=false`).
 | deepvk/USER-bge-m3 | на своём сервере, библиотека sentence-transformers | векторы профилей для поиска по смыслу запроса | `EMBEDDINGS_MODE=model` |
 | локальная модель пары, например BAAI/bge-reranker-v2-m3 | свой сервер, sentence-transformers | переставляет верхние 50 фактора «Запрос». Навыки, грейд и нижняя граница ФСП не меняются | `CROSS_ENCODER_MODE=off`, пока не задано имя модели |
 
@@ -410,4 +412,3 @@ make demo          # Windows: см. docs/INSTALL.md, три команды Power
 | RLS | Политики строк в PostgreSQL: работодатель и кандидат видят только свои строки |
 | IDOR | Доступ к чужому объекту по его идентификатору; проверка стенда обходит все такие маршруты |
 | SBOM | Перечень зависимостей сборки, подписывается в CI |
-
