@@ -195,5 +195,5 @@
 |---|---|
 | Репозиторий с кодом | публичный репозиторий https://github.com/KonkovDV/fsp-talent |
 | Сопроводительная документация в doc или pdf | [docs/FSP_Talent_documentation.pdf](FSP_Talent_documentation.pdf) — сборка всех документов, `make docs-pdf` |
-| Презентация | [docs/pitch.pdf](pitch.pdf), [docs/pitch.pptx](pitch.pptx) — 16 слайдов |
+| Презентация | [PDF](../submission/03-presentation/FSP_Talent_presentation.pdf), [PPTX](../submission/03-presentation/FSP_Talent_presentation.pptx) — 31 слайд |
 | Инструкция локального запуска | [INSTALL.md](INSTALL.md) |
