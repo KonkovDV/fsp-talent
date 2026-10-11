@@ -126,7 +126,7 @@ export default function MethodPage() {
     <PublicShell>
       <PageHeader
         title="Как устроен тест"
-        lead={<>Задание выбирается там, где оно лучше всего отделяет заявленный уровень от соседнего. Среди пяти лучших включается <Term term="метод Симпсона–Хеттера">ограничение частоты показа одного задания</Term>: пока частота показов не измерена, выбор равномерный, а задание, которое показывают чаще целевой доли, берётся реже. Здесь параметры и счётчики показов, без текстов и правильных ответов.</>}
+        lead={<>Задание выбирается там, где оно лучше всего отделяет заявленный уровень от соседнего. Среди пяти лучших включается <Term term="метод Симпсона–Хеттера">ограничение частоты показа одного задания</Term>: пока частота показов не измерена, выбор равномерный, а задание, которое показывают чаще целевой доли, берётся реже. Ниже мы показываем параметры и счётчики показов, а тексты и правильные ответы оставляем закрытыми.</>}
         actions={
           <select value={spec} onChange={e => setSpec(e.target.value)} className="select w-auto" aria-label="Специализация">
             {Object.entries(ROLE_RU).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -149,7 +149,7 @@ export default function MethodPage() {
         <div className="space-y-6">
           <section className="card p-5">
             <h2 className="font-display text-lg font-bold text-ink">Цифры проверки</h2>
-            <p className="mt-1 text-sm text-ink-2">Каждая цифра печатается своей командой из каталога репозитория. Это тот же прогон, что в README.</p>
+            <p className="mt-1 text-sm text-ink-2">Каждую цифру печатает своя команда из репозитория. Прогон тот же, что в README.</p>
             <p data-testid="figures-as-of" className="mt-1 text-xs text-ink-3">
               Отчёт от {FIGURES_AS_OF.date}, коммит{' '}
               <a className="font-mono underline" href={`https://github.com/KonkovDV/fsp-talent/commit/${FIGURES_AS_OF.commit}`} target="_blank" rel="noopener">{FIGURES_AS_OF.commit}</a>.
@@ -186,7 +186,7 @@ export default function MethodPage() {
               и кодом, и ответ от чужого экземпляра проходит в 0 % случаев. Доля высокая, потому что банк по этим специализациям узкий:
               JavaScript занимает 50 % плана frontend, 35 % mobile и 25 % fullstack, а семейство JavaScript в банке одно. В симуляции
               <Term term="контроль экспозиции">ограничение частоты показа</Term> считает долю по всем сессиям, поэтому узкая специализация проходит под целью 0,40. Живой банк считает
-              долю внутри своей специализации. Банк расширяется: следующие семейства — для frontend, mobile и devops.
+              долю внутри своей специализации. Банк расширяется, следующими добавим семейства для frontend, mobile и devops.
             </p>
           </section>
           <section className="card p-5">

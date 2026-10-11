@@ -142,7 +142,7 @@ function Lane({ title, steps, tone }: { title: string; steps: string[][]; tone: 
 const TRUST = [
   { Icon: BadgeCheck, title: 'Задания проверяет код', text: 'Каждое задание собирается из шаблона, ответ получается запуском фрагмента: Python, JavaScript, Go, Java, Kotlin, C# или SQL. Утёкшие задания уходят в карантин автоматически.' },
   { Icon: FileSignature, title: 'Результаты ФСП защищены от подмены', text: 'Место в протоколе выдаётся как удостоверение W3C VC 2.0 с криптографической подписью: подмена хотя бы одной цифры ломает проверку. Это защита целостности, а не электронная подпись по 63-ФЗ.' },
-  { Icon: ShieldCheck, title: 'Согласие — отдельный документ', text: 'Как требует 152-ФЗ с сентября 2025 года. Работодатель видит анонимную карточку, имя и контакты — только после согласия.' },
+  { Icon: ShieldCheck, title: 'Согласие — отдельный документ', text: 'Так требует 152-ФЗ с сентября 2025 года. Работодатель видит анонимную карточку, а имя и контакты получает только после согласия.' },
 ]
 
 export default function LandingPage() {
@@ -159,8 +159,8 @@ export default function LandingPage() {
                 Приглашайте разработчиков по&nbsp;результату, а&nbsp;не по&nbsp;резюме
               </h1>
               <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-white/90">
-                Кандидат проходит адаптивный тест и подтверждает достижения на соревнованиях ФСП. Протокол соревнования — не цифровой след и не грейд: грейд ставит только тест. Работодатель видит
-                категорию и объяснение подборки, а потом сам приглашает — сразу с зарплатной вилкой.
+                Кандидат проходит адаптивный тест и подтверждает достижения на соревнованиях ФСП. Грейд ставит только тест, а протокол соревнования мы показываем рядом, отдельной строкой. Работодатель видит
+                категорию и объяснение подборки, а потом сам приглашает и сразу называет зарплатную вилку.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link to="/register?role=employer" className="btn min-h-12 bg-white px-6 text-base text-[#2A1DD6] hover:bg-white/90">Найти кандидата</Link>
@@ -183,7 +183,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-page px-4 py-14 sm:px-6 lg:py-20">
             <h2 id="flow-title" className="max-w-[24ch] font-display text-[1.75rem] font-bold leading-tight tracking-[-0.03em] text-ink sm:text-[2.125rem]">Работодатель ищет категорию, а не резюме</h2>
             <p className="mt-3 max-w-[60ch] text-ink-2">
-              Обратный найм: кандидат один раз подтверждает уровень, дальше компании находят его сами и пишут первыми.
+              Это обратный найм. Кандидат один раз подтверждает уровень, а дальше компании сами находят его и пишут первыми.
             </p>
             <div className="mt-10 grid items-start gap-10 lg:grid-cols-[1fr_1.1fr_1fr] lg:gap-8">
               <Lane title="Кандидату" steps={CANDIDATE_STEPS} tone="accent" />
@@ -198,8 +198,8 @@ export default function LandingPage() {
             <div className="lg:pt-4">
               <h2 className="font-display text-[1.75rem] font-bold leading-tight tracking-[-0.03em] text-ink">Подборка читается как протокол</h2>
               <p className="mt-3 max-w-[48ch] text-ink-2">
-                Место, категория «специализация × грейд», подтверждения и один скор. У каждого фактора своя полоса,
-                а под карточкой — почему человек в выдаче и чего ему не хватает.
+                В карточке видны место, категория «специализация × грейд», подтверждения и итоговый скор. У каждого фактора своя полоса,
+                а под карточкой написано, почему человек попал в выдачу и чего ему не хватает.
               </p>
               <dl className="mt-7 grid gap-4 text-sm">
                 {[
@@ -236,7 +236,7 @@ export default function LandingPage() {
           <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-6 px-4 py-12 sm:px-6 lg:py-14">
             <div>
               <h2 className="font-display text-2xl font-bold tracking-[-0.02em]">Опишите, кого ищете</h2>
-              <p className="mt-2 text-sm text-[#C8C9CA]">Подборка с объяснением появится сразу после сохранения потребности.</p>
+              <p className="mt-2 text-sm text-[#C8C9CA]">Сохраните потребность, и подборка с объяснением появится сразу.</p>
             </div>
             <Link to="/register?role=employer" className="btn min-h-12 bg-[#402FFF] px-6 text-white hover:bg-[#5444FF]">Создать аккаунт работодателя</Link>
           </div>
