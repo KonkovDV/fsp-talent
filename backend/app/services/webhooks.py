@@ -141,7 +141,9 @@ async def deliver_due(db, employer_id: uuid.UUID | None = None, limit: int = 20)
     now = datetime.now(UTC)
     query = (select(WebhookDelivery)
              .where(WebhookDelivery.status == "pending", WebhookDelivery.next_at <= now)
-             .order_by(WebhookDelivery.next_at).limit(limit))
+             .order_by(WebhookDelivery.next_at).limit(limit)
+             # RT-07: two workers (or beat + the employer's "send now") must not POST the same row twice.
+             .with_for_update(skip_locked=True, of=WebhookDelivery))
     if employer_id is not None:
         query = query.join(WebhookEndpoint, WebhookEndpoint.id == WebhookDelivery.endpoint_id).where(
             WebhookEndpoint.employer_id == employer_id)

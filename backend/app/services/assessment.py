@@ -56,7 +56,11 @@ from app.services.variant_mark import foreign_variant
 RETAKE_INTERVAL_DAYS = 7
 TIME_LIMIT_S = {"code": 180, "concept": 75}
 GRACE_S = 5
-FAST_CORRECT_S = 4          # a right answer to a code item faster than this is flagged for review
+FAST_CORRECT_S = 4          # fallback without a θ estimate: a right code answer faster than this is flagged
+# G2: a right answer is "fast correct" when it was unlikely at the θ from before the item and took less than
+# 15 % of the item's time (van der Linden & Guo 2008, doi:10.1007/s11336-007-9046-8). Mark only, no grade.
+FAST_P_MAX = 0.35
+FAST_SHARE = 0.15
 PACE_REVIEW_FAST = 3        # this many fast right answers in one family mark the session for a look
 # Session CUSUM by family. It does not quarantine a key and does not move the grade.
 SHARE_REF = 0.55
@@ -81,13 +85,30 @@ def exposure_map(counts: dict[str, int], total: int) -> dict[str, float]:
     return {key: count / total for key, count in counts.items() if count > 0}
 
 
-def note_pace(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str) -> dict:
-    """Count fast right answers per family. Three in one family ask for a look; the grade does not move."""
+def fast_correct_suspicious(p_correct_ref: float | None, elapsed_s: float, expected_s: float | None) -> bool | None:
+    """A right answer that the candidate's own level made unlikely, given in under 15 % of the item's time.
+
+    None when there is no θ estimate yet (the caller falls back to the fixed threshold).
+    """
+    if p_correct_ref is None or not expected_s:
+        return None
+    return p_correct_ref < FAST_P_MAX and elapsed_s < FAST_SHARE * expected_s
+
+
+def note_pace(flags: dict, family_id: str, *, correct: bool, elapsed: float, kind: str,
+              expected_p: float | None = None, time_limit: float | None = None) -> dict:
+    """Count fast right answers per family. Three in one family ask for a look; the grade does not move.
+
+    With a θ estimate the rule is personal (`fast_correct_suspicious`): an easy item answered fast is not
+    flagged. Without one the old fixed rule applies (code item under FAST_CORRECT_S).
+    """
     flags = dict(flags)
     pace = {key: dict(value) for key, value in (flags.get("family_pace") or {}).items()}
     cell = dict(pace.get(family_id) or {"n": 0, "fast": 0})
     cell["n"] += 1
-    if correct and kind == "code" and elapsed < FAST_CORRECT_S:
+    personal = fast_correct_suspicious(expected_p, elapsed, time_limit)
+    fast = personal if personal is not None else (kind == "code" and elapsed < FAST_CORRECT_S)
+    if correct and fast:
         cell["fast"] += 1
         flags["fast_correct"] = int(flags.get("fast_correct") or 0) + 1
     pace[family_id] = cell
@@ -572,14 +593,15 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
         flags["integrity_review"] = True
     if current.timed_out:
         flags["timeouts"] = flags.get("timeouts", 0) + 1
-    flags = note_pace(flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind)
+    expected_p = None
+    if session.irt_theta is not None:
+        expected_p = cat.p3(float(session.irt_theta), current.a, current.b, current.c)
+    flags = note_pace(flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind,
+                      expected_p=expected_p, time_limit=float(current.time_limit_s))
     if current.typed and current.answer_text and foreign_variant(
             current.family_id, session.specialization, current.level,
             str(current.options[current.correct_index]), current.answer_text):
         flags["variant_review"] = current.family_id
-    expected_p = None
-    if session.irt_theta is not None:
-        expected_p = cat.p3(float(session.irt_theta), current.a, current.b, current.c)
     flags = note_family_cusum(
         flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind,
         expected_p=expected_p)

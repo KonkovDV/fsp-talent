@@ -5,6 +5,8 @@ A group smaller than five people is not compared. The floor is four fifths.
 """
 from __future__ import annotations
 
+import math
+
 FLOOR = 0.8
 MIN_GROUP = 5
 
@@ -46,3 +48,20 @@ def impact_report(rows: list[tuple[str, bool]]) -> dict:
         "floor": FLOOR,
         "note": "Отношение доли попадания в верхний срез к самой высокой доле. Регион в балл не входит.",
     }
+
+
+def skew_at_k(ranked_labels: list[str], pool_labels: list[str], label: str, k: int) -> float | None:
+    """Skew@k of Geyik et al. (KDD 2019, doi:10.1145/3292500.3330691).
+
+    ln(share of the label in the top k / share of the label in the pool). Zero means the top k mirrors the
+    pool; −0.22 is about a fifth fewer than the pool share. None when the label is absent from the pool or
+    from the top k (the logarithm is undefined there).
+    """
+    top = ranked_labels[: max(0, k)]
+    if not top or not pool_labels:
+        return None
+    in_pool = sum(1 for value in pool_labels if value == label) / len(pool_labels)
+    in_top = sum(1 for value in top if value == label) / len(top)
+    if in_pool <= 0 or in_top <= 0:
+        return None
+    return math.log(in_top / in_pool)

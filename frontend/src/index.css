@@ -139,7 +139,7 @@ details:not([open]) > :not(summary) {
   .link { @apply font-medium text-accent underline-offset-4 hover:underline; }
 
   .page-head { @apply flex flex-wrap items-end justify-between gap-4 pb-6 sm:pb-7; }
-  .page-title { @apply font-display text-[1.75rem] font-bold leading-tight tracking-[-0.03em] text-ink sm:text-[2.125rem]; }
+  .page-title { @apply break-words font-display text-[1.75rem] font-bold leading-tight tracking-[-0.03em] text-ink [overflow-wrap:anywhere] sm:text-[2.125rem]; }
   .page-lead { @apply mt-2 max-w-[64ch] text-[0.9375rem] leading-relaxed text-ink-2; }
   .section-title { @apply font-display text-base font-bold tracking-[-0.01em] text-ink; }
 

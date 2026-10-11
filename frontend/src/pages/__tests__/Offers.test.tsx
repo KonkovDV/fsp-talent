@@ -86,6 +86,26 @@ describe('приглашения кандидата', () => {
     expect(await screen.findByRole('button', { name: /Переписка/ })).toHaveAttribute('aria-expanded', 'true')
   })
 
+  it('показывает, почему пригласили, по данным самого кандидата', async () => {
+    getMyOffers.mockResolvedValue({ data: [{ ...pending, why_you: [
+      { code: 'CATEGORY_MATCH', text: 'Ваша категория «Backend-разработка · мидл» совпадает с ролью приглашения' },
+      { code: 'GRADE_ASSESSED', text: 'Грейд «мидл» подтверждён тестом 03.10.2026' },
+      { code: 'FSP_NEUTRAL', text: 'Без истории ФСП — эта ось не учитывается и не снижает вашу позицию' },
+    ] }] })
+    renderPage(<CandidateOffers />)
+    const block = await screen.findByRole('region', { name: 'Почему вас пригласили' })
+    expect(block).toHaveTextContent('подтверждён тестом 03.10.2026')
+    expect(block).toHaveTextContent('не снижает вашу позицию')
+    expect(block.querySelectorAll('li')).toHaveLength(3)
+  })
+
+  it('без объяснения блок не рисуется', async () => {
+    getMyOffers.mockResolvedValue({ data: [pending] })
+    renderPage(<CandidateOffers />)
+    await screen.findByText('до вычета НДФЛ')
+    expect(screen.queryByText('Почему вас пригласили')).not.toBeInTheDocument()
+  })
+
   it('пустое состояние не показывает чужие приглашения', async () => {
     getMyOffers.mockResolvedValue({ data: [] })
     renderPage(<CandidateOffers />)

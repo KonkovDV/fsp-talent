@@ -42,6 +42,8 @@ function statusId(credential: Credential): string | null {
 export default function BadgePage() {
   const [text, setText] = useState('')
   const [note, setNote] = useState('')
+  // A broken signature or a non-credential is an error: nothing from such a document is shown as a fact.
+  const [failed, setFailed] = useState(false)
   const [claims, setClaims] = useState<Achievement | null>(null)
   const did = useQuery({ queryKey: ['issuerDid'], queryFn: () => issuerDid().then(r => r.data), retry: false })
   const check = useMutation({
@@ -53,14 +55,15 @@ export default function BadgePage() {
       return { credential, signed: signed.valid, status }
     },
     onSuccess: ({ credential, signed, status }) => {
-      setClaims(credential.credentialSubject?.achievement ?? null)
+      setFailed(!signed)
+      setClaims(signed ? credential.credentialSubject?.achievement ?? null : null)
       const kind = credential.type?.includes('OpenBadgeCredential') ? 'OpenBadgeCredential, ' : ''
-      if (!signed) setNote(`${kind}подпись не сходится`.replace(/^, /, ''))
+      if (!signed) setNote(`${kind}подпись не сходится: документ изменён или выдан не этой платформой. Данные из него не показываем.`.replace(/^, /, ''))
       else if (status?.revoked) setNote(`${kind}подпись сходится, удостоверение отозвано`)
       else if (status) setNote(`${kind}подпись сходится, удостоверение не отозвано`)
       else setNote(`${kind}подпись сходится. Это краткая карточка: названия события в ней нет, отдельной записи отзыва тоже.`)
     },
-    onError: () => { setClaims(null); setNote('Это не удостоверение: нужен JSON, который выдала платформа.') },
+    onError: () => { setClaims(null); setFailed(true); setNote('Это не удостоверение: нужен JSON, который выдала платформа.') },
   })
 
   useEffect(() => {
@@ -89,11 +92,13 @@ export default function BadgePage() {
       </div>
       <form className="card space-y-3 p-5" onSubmit={e => { e.preventDefault(); check.mutate(text) }}>
         <label className="block text-sm text-ink-2" htmlFor="badge-json">JSON удостоверения</label>
-        <textarea id="badge-json" value={text} onChange={e => setText(e.target.value)} rows={8}
+        <textarea id="badge-json" value={text} onChange={e => { setText(e.target.value); setNote(''); setClaims(null); setFailed(false) }} rows={8}
           className="input min-h-40 w-full font-mono text-xs" placeholder="{ … }" />
         <button className="btn-primary" type="submit" disabled={check.isPending || !text.trim()}>Проверить</button>
       </form>
-      {note && <p className="mt-4 text-sm text-ink" role="status">{note}</p>}
+      {note && (failed
+        ? <p className="notice-error mt-4" role="alert">{note}</p>
+        : <p className="mt-4 text-sm text-ink" role="status">{note}</p>)}
       {achievement && (
         <dl className="card mt-4 grid gap-2 p-5 text-sm sm:grid-cols-2">
           <div><dt className="text-ink-3">Название</dt><dd className="text-ink">{achievement.eventName || achievement.name || '—'}</dd></div>

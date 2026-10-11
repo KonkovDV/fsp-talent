@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { apiError, evaluatePairs } from '../api/client'
+import { apiError, evaluatePairs, type EvaluateNeedRow, type EvaluatePairedDelta } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import { PageHeader } from '../components/ui'
 
@@ -12,6 +12,58 @@ const EXAMPLE = [
 ].join('\n')
 
 const share = (v: number) => v.toFixed(3).replace('.', ',')
+const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${share(Math.abs(v))}`
+
+function DeltaLine({ delta }: { delta: EvaluatePairedDelta }) {
+  if (delta.mean === null || !delta.ci) return <p className="mt-3 text-sm text-ink-2">Парной разницы нет: ни у одной потребности нет кандидата с оценкой 2 или 3.</p>
+  return (
+    <p className="mt-3 text-sm text-ink-2" data-testid="paired-delta">
+      Модель минус «по резюме», nDCG@10 по потребностям: <span className="num text-ink">{signed(delta.mean)}</span>
+      {' '}(95 % ДИ {signed(delta.ci[0])}…{signed(delta.ci[1])}, потребностей {delta.needs};
+      модель лучше в {delta.model_better}, хуже в {delta.resume_better}).
+    </p>
+  )
+}
+
+function NeedTable({ rows }: { rows: EvaluateNeedRow[] }) {
+  const worse = rows.filter(r => r.relevant > 0 && r.p_at_k_model < r.p_at_k_resume).length
+  return (
+    <details className="mt-3">
+      <summary className="cursor-pointer text-sm font-medium text-ink">По потребностям ({rows.length}{worse ? `, модель хуже по P@k: ${worse}` : ''})</summary>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full text-sm" data-testid="per-need-table">
+          <thead>
+            <tr className="text-left text-ink-3">
+              <th className="py-1">Потребность</th><th>Пар / релев.</th><th>P@k модель</th><th>P@k по резюме</th>
+              <th>nDCG@10 модель</th><th>nDCG@10 по резюме</th><th>Топ модели (оценка)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const lower = r.relevant > 0 && r.p_at_k_model < r.p_at_k_resume
+              return (
+                <tr key={r.need_id} className={`border-t border-line ${lower ? 'bg-warn-soft' : ''}`} data-lower={lower || undefined}>
+                  <td className="py-1 text-ink">{r.need_id}{r.role ? <span className="text-ink-3"> · {r.role}{r.grade ? ` ${r.grade}` : ''}</span> : null}</td>
+                  <td className="num">{r.judged} / {r.relevant}</td>
+                  {r.relevant > 0 ? (
+                    <>
+                      <td className="num">{share(r.p_at_k_model)}</td>
+                      <td className="num">{share(r.p_at_k_resume)}</td>
+                      <td className="num">{share(r.ndcg10_model)}</td>
+                      <td className="num">{share(r.ndcg10_resume)}</td>
+                    </>
+                  ) : <td colSpan={4} className="text-ink-3">нет кандидата с оценкой 2 или 3 — в средние не входит</td>}
+                  <td className="font-mono text-xs text-ink-2">{r.top.map(t => `${t.candidate_id} (${t.label})`).join(', ')}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-ink-3">k = min(10, пар у потребности). Подсвечены строки, где доля релевантных в топе у модели ниже, чем у сортировки по резюме.</p>
+    </details>
+  )
+}
 
 /** The jury's own labelled pairs, scored by the model and by the resume baseline. Nothing is stored. */
 export default function EvaluatePage() {
@@ -68,6 +120,8 @@ export default function EvaluatePage() {
               ))}
             </tbody>
           </table>
+          {run.data.paired_delta && <DeltaLine delta={run.data.paired_delta} />}
+          {run.data.per_need && run.data.per_need.length > 0 && <NeedTable rows={run.data.per_need} />}
           <p className="mt-3 break-all font-mono text-xs text-ink-3">sha256 {run.data.sha256}</p>
         </section>
       )}

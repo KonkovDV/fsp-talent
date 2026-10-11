@@ -25,7 +25,7 @@ SKILL_TOPIC = {
     "Rust": "algorithms", "C#": "algorithms",
     "Pentesting": "security", "CTF": "security", "Web Security": "security", "Cryptography": "security",
     "Reverse Engineering": "security", "Forensics": "security", "OSINT": "security",
-    "Networking": "network", "Docker": "network", "Kubernetes": "network", "Nginx": "network", "Linux": "network",
+    "Networking": "network", "Docker": "infra", "Kubernetes": "infra", "Nginx": "network", "Linux": "infra",
     "PyTorch": "ml", "TensorFlow": "ml", "scikit-learn": "ml", "Pandas": "ml", "NumPy": "ml",
     "Machine Learning": "ml", "NLP": "ml", "LLM": "ml", "Computer Vision": "ml",
     "C": "embedded", "C++": "embedded", "STM32": "embedded", "Arduino": "embedded",
@@ -38,7 +38,7 @@ TOPIC_LABELS = {
     "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",
     "embedded": "Встраиваемые системы", "concept": "Понимание",
     "testing": "Тестирование", "metrics": "Метрики", "pipelines": "Конвейеры данных",
-    "requirements": "Требования",
+    "requirements": "Требования", "infra": "Инфраструктура",
 }
 # How much the vacancy's own skills move the mix. The rest stays the specialization plan,
 # so a vacancy that names one library does not drop algorithms and SQL entirely.

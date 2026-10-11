@@ -689,10 +689,7 @@ CREATE TABLE public.skills (
     trust_level character varying(20) DEFAULT 'self_reported'::character varying NOT NULL,
     confirmed boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    confirmed_at timestamp with time zone,
-    test_share double precision,
-    test_items integer,
-    tested_at timestamp with time zone
+    confirmed_at timestamp with time zone
 );
 
 

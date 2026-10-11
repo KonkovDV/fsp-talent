@@ -40,9 +40,11 @@ describe('вход', () => {
     expect(screen.getByLabelText('Пароль')).toHaveValue('demo12345')
   })
 
-  it('напоминает, что стенд сбрасывается каждую ночь', async () => {
+  it('помечает демо-доступ для жюри без обещания ночного сброса', async () => {
     renderLogin()
-    expect(await screen.findByText('Стенд сбрасывается каждую ночь')).toBeInTheDocument()
+    expect(await screen.findByText(/данные синтетические/)).toBeInTheDocument()
+    expect(screen.queryByText(/сбросить кнопкой/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/сбрасывается каждую ночь/)).not.toBeInTheDocument()
   })
 
   it('без демо-режима не предлагает аккаунт жюри', async () => {
@@ -51,5 +53,15 @@ describe('вход', () => {
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Взять свободный аккаунт жюри' })).not.toBeInTheDocument()
     expect(screen.queryByText('Стенд сбрасывается каждую ночь')).not.toBeInTheDocument()
+  })
+})
+
+describe('safeNextPath', () => {
+  it('принимает относительный путь и отвергает open redirect', async () => {
+    const { safeNextPath } = await import('../LoginPage')
+    expect(safeNextPath('/employer/search')).toBe('/employer/search')
+    expect(safeNextPath('//evil.com')).toBeNull()
+    expect(safeNextPath('https://evil.com')).toBeNull()
+    expect(safeNextPath('/login?role=employer')).toBe('/login?role=employer')
   })
 })

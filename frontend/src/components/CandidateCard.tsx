@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown, ClipboardList, Columns3, Heart, Star } from 'lucide-react'
-import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu } from '../labels'
+import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu, skillRu } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 import AiNote from './AiNote'
 
@@ -91,6 +91,7 @@ const REASON_RU: Record<string, string> = {
   RELATED_SKILL: 'Близкая технология',
   SKILL_COVERAGE: 'Навыки',
   GRADE_DECLARED: 'Грейд заявлен',
+  GRADE_TEST_FAILED: 'Грейд не подтверждён тестом',
   GRADE_ABOVE: 'Грейд выше',
   GRADE_BELOW: 'Грейд ниже',
   OTHER_ROLE: 'Другая специализация',
@@ -143,11 +144,12 @@ export function skillProvenance(name: string, card: Pick<CandidateCardData, 'ski
 }
 
 function skillChip(name: string, evidence?: Record<string, string>): string {
+  const label = skillRu(name)
   const trust = evidence?.[name]
-  if (trust === 'test_confirmed') return `${name}, подтверждён`
-  if (trust === 'resume_confirmed') return `${name}, по цитате`
-  if (trust === 'self_reported') return `${name}, заявлен`
-  return name
+  if (trust === 'test_confirmed') return `${label}, подтверждён`
+  if (trust === 'resume_confirmed') return `${label}, по цитате`
+  if (trust === 'self_reported') return `${label}, заявлен`
+  return label
 }
 
 /**

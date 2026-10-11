@@ -147,7 +147,7 @@ describe('тест на грейд', () => {
     activeAssessment.mockResolvedValue({ data: session() })
     renderPage(<CandidateAssessment />)
     const timer = await screen.findByRole('timer')
-    expect(timer.getAttribute('aria-label')).toMatch(/Осталось (9|10) мин/)
+    expect(timer.getAttribute('aria-label')).toMatch(/Осталось 10 мин/)
   })
 
   it('пробный итог не подтверждает грейд', async () => {
@@ -205,4 +205,33 @@ describe('тест на грейд', () => {
     expect(await screen.findByText(/Уровень «стажёр» не подтверждён/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ступень ниже/ })).not.toBeInTheDocument()
   })
+
+  it('таймер считает от served_at сервера (после «перезагрузки» лимит не продлевается)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const now = Date.now()
+    vi.setSystemTime(now)
+    const past = new Date(now - 8000).toISOString()
+    activeAssessment.mockResolvedValue({
+      data: session({
+        progress: { answered: 0, min_items: 15, max_items: 15 },
+        item: { ...item(), time_limit_s: 20, served_at: past },
+      }),
+    })
+    renderPage(<CandidateAssessment />)
+    const timer = await screen.findByRole('timer')
+    // 20 − 8 = 12 с осталось; полный лимит 0:20 был бы неверен после reload
+    expect(timer).toHaveTextContent('0:12')
+    expect(timer.className).not.toMatch(/text-danger/)
+    expect(screen.getByTestId('trial-banner')).toHaveTextContent(/Пробный тест/)
+    await vi.advanceTimersByTimeAsync(6_000) // осталось ~6 с → порог min(20, 20/3)≈6.67
+    expect(timer.className).toMatch(/text-danger/)
+    vi.useRealTimers()
+  })
+
+  it('подсказывает Enter по-русски', async () => {
+    activeAssessment.mockResolvedValue({ data: session() })
+    renderPage(<CandidateAssessment />)
+    expect(await screen.findByText(/Ответ отправляется клавишей Enter \(Ввод\)/)).toBeInTheDocument()
+  })
+
 })

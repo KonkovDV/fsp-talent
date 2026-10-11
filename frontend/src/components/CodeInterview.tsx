@@ -15,15 +15,17 @@ interface CodeTask {
 /** A coding step after the candidate has accepted. Drafts are saved. A dispute does not change the grade. */
 export default function CodeInterview({ offerId, side }: { offerId: string; side: 'employer' | 'participant' }) {
   const qc = useQueryClient()
-  const task = useQuery<CodeTask>({
+  const task = useQuery<CodeTask | null>({
     queryKey: ['interviewCode', offerId],
-    queryFn: () => getInterviewCode(offerId).then(r => r.data),
+    queryFn: () => getInterviewCode(offerId).then(r => r.data ?? null),
     retry: false,
   })
+  // The API answers null while the company has not given a task yet.
+  const noTask = task.isSuccess && task.data == null
   const library = useQuery({
     queryKey: ['labProblems'],
     queryFn: () => labProblems().then(r => r.data),
-    enabled: side === 'employer' && task.isError,
+    enabled: side === 'employer' && noTask,
   })
   const [problemId, setProblemId] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -75,7 +77,7 @@ export default function CodeInterview({ offerId, side }: { offerId: string; side
       <h3 className="text-sm font-medium text-ink">Задание на код</h3>
       <p className="text-xs text-ink-3">Черновик сохраняется сам. Пометка о споре не меняет грейд и не считается моделью.</p>
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      {task.isError && side === 'employer' && (
+      {noTask && side === 'employer' && (
         <div className="space-y-2">
           <select className="field" value={problemId} onChange={e => setProblemId(e.target.value)} aria-label="Задание из библиотеки">
             <option value="">Своё условие</option>
@@ -85,7 +87,8 @@ export default function CodeInterview({ offerId, side }: { offerId: string; side
           <button type="button" className="btn-secondary btn-sm" disabled={open.isPending} onClick={() => open.mutate()}>Дать задание</button>
         </div>
       )}
-      {task.isError && side === 'participant' && <p className="text-sm text-ink-2">Компания ещё не дала задание.</p>}
+      {noTask && side === 'participant' && <p className="text-sm text-ink-2">Компания ещё не дала задание.</p>}
+      {task.isError && <p className="text-sm text-danger" role="alert">{apiError(task.error, 'Задание не загрузилось')}</p>}
       {data && (
         <div className="space-y-2">
           {data.problem && <p className="text-sm text-ink"><b>{data.problem.title}.</b> {data.problem.statement}</p>}

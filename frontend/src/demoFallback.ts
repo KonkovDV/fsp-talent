@@ -35,7 +35,19 @@ const FIXTURES: Record<string, unknown> = {
       { ...CARD, candidate_id: '00000000-0000-4000-8000-0000000000a2', role: 'frontend', grade: 'junior', grade_source: 'declared', stack: ['TypeScript'], why: ['Грейд заявлен'], match: { ...CARD.match, score: 0.41, reply: { p: 0.38, label: 'средняя' } } },
     ],
   },
-  '/needs': [{ id: '00000000-0000-4000-8000-0000000000b1', title: 'Backend, мидл', version: 1, shortlist_count: 1 }],
+  '/needs': [{
+    id: '00000000-0000-4000-8000-0000000000b1', title: 'Backend, мидл', version: 1, shortlist_count: 1,
+    params: { role: 'backend', grade: 'middle', grade_match: 'plus_minus', skills: ['Python'], nice_to_have: ['PostgreSQL'],
+      industry: null, work_goal: null, has_fsp: null, salary_from: 180000, salary_to: 260000, city: 'Новосибирск', work_format: 'remote' },
+    flags: [],
+  }],
+  '/candidates/survey-options': {
+    roles: { backend: 'Backend', frontend: 'Frontend', ml: 'ML', embedded: 'Embedded' },
+    grades: { junior: 'Джуниор', middle: 'Мидл', senior: 'Сеньор', lead: 'Лид' },
+    industries: { any: 'Любая', fintech: 'Финтех' },
+    cities: ['Новосибирск', 'Москва'],
+    work_formats: { remote: 'Удалённо', hybrid: 'Гибрид', office: 'Офис' },
+  },
   '/offers/': [],
   '/vacancies/applications': [],
   '/employer/favorites': { items: [], ids: [], hidden: 0, max: 200 },
@@ -63,9 +75,29 @@ export function examplePath(url: string | undefined): string {
   return path.startsWith('/') ? path : `/${path}`
 }
 
+const NEED_ID = '00000000-0000-4000-8000-0000000000b1'
+
+const NEED_MATCHES = {
+  items: [
+    { ...CARD, candidate_id: '00000000-0000-4000-8000-0000000000a1', role: 'backend', grade: 'middle', grade_source: 'assessed',
+      stack: ['Python', 'PostgreSQL'], why: ['Грейд middle подтверждён тестом'] },
+  ],
+  total: 1, base_total: 12, hidden_count: 0,
+}
+
 export function exampleFixture(url: string | undefined): unknown | undefined {
   const path = examplePath(url)
-  return Object.prototype.hasOwnProperty.call(FIXTURES, path) ? FIXTURES[path] : undefined
+  if (Object.prototype.hasOwnProperty.call(FIXTURES, path)) return FIXTURES[path]
+  if (path === `/needs/${NEED_ID}`) {
+    const list = FIXTURES['/needs']
+    const row = Array.isArray(list) ? list[0] : null
+    if (row && typeof row === 'object') return { ...(row as Record<string, unknown>), versions: [] }
+  }
+  if (path.startsWith(`/needs/${NEED_ID}/matches`)) return NEED_MATCHES
+  if (path.startsWith(`/needs/${NEED_ID}/shortlist`)) {
+    return { items: [], funnel: { shortlisted: 0, invited: 0, rejected: 0 } }
+  }
+  return undefined
 }
 
 /** The request never reached the application: no HTTP status, or a gateway in front of it. */

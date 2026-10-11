@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import Dashboard from '../candidate/Dashboard'
 
+const override = vi.hoisted(() => ({ profile: {} as Record<string, unknown> }))
+
 vi.mock('../../api/client', () => ({
   apiError: () => 'ошибка',
   getMyOffers: () => Promise.resolve({ data: [] }),
@@ -21,10 +23,11 @@ vi.mock('../../api/client', () => ({
         percent: 63, done: 5, total: 8,
         items: [
           { code: 'email', label: 'Email подтверждён', done: true, href: null },
-          { code: 'salary', label: 'Названо ожидание по зарплате', done: false, href: '/candidate/profile' },
+          { code: 'salary', label: 'Указаны ожидания по зарплате', done: false, href: '/candidate/profile' },
           { code: 'test', label: 'Грейд подтверждён тестом', done: false, href: '/candidate/assessment' },
         ],
       },
+      ...override.profile,
     },
   }),
 }))
@@ -40,8 +43,29 @@ describe('готовность профиля', () => {
       </QueryClientProvider>,
     )
     expect(await screen.findByTestId('profile-completeness')).toHaveTextContent('63 %, 5 из 8')
-    expect(screen.getByRole('link', { name: 'Названо ожидание по зарплате' })).toHaveAttribute('href', '/candidate/profile')
+    expect(screen.getByRole('link', { name: 'Указаны ожидания по зарплате' })).toHaveAttribute('href', '/candidate/profile')
     expect(screen.getByRole('link', { name: 'Грейд подтверждён тестом' })).toHaveAttribute('href', '/candidate/assessment')
     expect(screen.getByText(/ФСП ID не привязан/)).toBeInTheDocument()
+    expect(await screen.findByText(/подойдут ещё 2 открытые вакансии\./)).toBeInTheDocument()
+  })
+})
+
+describe('первый экран кабинета', () => {
+  function show() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><MemoryRouter><Dashboard /></MemoryRouter></QueryClientProvider>)
+  }
+
+  it('здоровается полным именем, а не первым словом', async () => {
+    override.profile = { display_name: 'Член жюри 1' }
+    show()
+    expect(await screen.findByRole('heading', { name: 'Здравствуйте, Член жюри 1' })).toBeInTheDocument()
+  })
+
+  it('без выбранного грейда не пишет крупно «джуниор»', async () => {
+    override.profile = { grade: 'junior', grade_source: 'default', survey_done: false }
+    show()
+    expect(await screen.findByText(/Грейд не выбран\. До опроса карточка стоит в выдаче как/)).toBeInTheDocument()
+    expect(screen.queryByText('джуниор', { exact: true })).not.toBeInTheDocument()
   })
 })
