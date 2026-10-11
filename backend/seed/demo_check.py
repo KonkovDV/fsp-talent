@@ -73,7 +73,24 @@ async def check(db) -> list[Row]:
         rows.append(Row("hr@sibcode.demo", "три потребности", f"{needs}", needs >= 3))
         rows.append(Row("hr@sibcode.demo", "приглашения в статусах pending/accepted/rejected",
                         ", ".join(sorted(statuses)) or "нет", {"pending", "accepted", "rejected"} <= statuses))
+        # The employer market and the jury ranking hide a cell under five people; the demo keeps them filled.
+        from app.api.v1.offers import offer_market
+        market = await offer_market({"sub": str(hr.id)}, db)
+        cells = len(market.get("salaries") or [])
+        rows.append(Row("hr@sibcode.demo", "рынок: квартили хотя бы в одной ячейке", f"{cells}", cells > 0))
+    rows.append(await _jury_ranking(db))
     return rows
+
+
+async def _jury_ranking(db) -> Row:
+    from types import SimpleNamespace
+
+    from app.api.v1 import public
+    request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
+    page = await public.category_ranking("backend", "middle", request, db)
+    total = int(page.get("total") or 0)
+    return Row("страница жюри", f"порядок backend · middle не скрыт (≥ {page.get('min_cell')})", f"{total}",
+               total >= int(page.get("min_cell") or 5))
 
 
 def render(rows: list[Row]) -> str:
