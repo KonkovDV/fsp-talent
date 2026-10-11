@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import argparse
 import random
+import sys
 from collections import Counter
 from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # `python tests/stop_reasons.py` from backend/
 

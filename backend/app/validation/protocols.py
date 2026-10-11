@@ -20,7 +20,6 @@ MRR (reciprocal rank of the first rel ≥ 2). The strict table of `app.validatio
 from __future__ import annotations
 
 import argparse
-import math
 import random
 import statistics
 
