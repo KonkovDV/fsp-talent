@@ -24,9 +24,10 @@ function renderPage() {
 
 describe('вакансии кандидата', () => {
   it('без теста показывает все открытые вакансии и зовёт пройти тест', async () => {
-    vacanciesForMe.mockResolvedValue({ data: [{ ...card, match: 'not_assessed' }] })
+    vacanciesForMe.mockResolvedValue({ data: [{ ...card, match: 'not_assessed', needs_test: true, can_apply: false }] })
     renderPage()
     expect(await screen.findByText(/Пройдите тест — вакансии отсортируются по совпадению/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Сначала тест на грейд' })).toBeDisabled()
     expect(screen.getByText('Backend-разработчик')).toBeInTheDocument()
   })
   it('с грейдом подсказки нет', async () => {

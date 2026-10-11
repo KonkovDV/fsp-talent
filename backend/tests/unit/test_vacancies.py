@@ -77,3 +77,12 @@ def test_an_ungraded_card_is_marked_and_a_foreign_role_is_still_cut():
     assert "мидл" in " ".join(match_vacancy(fresh, open_any)["why"])
     assert match_vacancy(fresh, {**open_any, "role": "frontend"}) is None
     assert match_vacancy(_candidate(), _vacancy())["match"] == "matched"
+
+
+def test_an_ungraded_candidate_sees_a_graded_vacancy_but_must_take_the_test_to_apply():
+    fresh = _candidate(grade=None, disciplines=[])
+    graded = match_vacancy(fresh, _vacancy(discipline=None, min_rank=None, grade="senior"))
+    assert graded["needs_test"] is True
+    any_grade = match_vacancy(fresh, _vacancy(discipline=None, min_rank=None, grade="senior", grade_match="any"))
+    assert any_grade["needs_test"] is False
+    assert match_vacancy(_candidate(), _vacancy())["needs_test"] is False

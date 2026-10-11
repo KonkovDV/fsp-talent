@@ -8,7 +8,7 @@ import { netLine } from '../../money'
 interface Card {
   id: string; title: string; company: string | null; role: string | null; grade: string | null; work_format: string
   salary_from: number | null; salary_to: number | null; why: string[]; matched_skills: string[]; missing_skills: string[]
-  applied: boolean; can_apply: boolean; match?: 'matched' | 'not_assessed'; flags?: { code: string; label: string }[]
+  applied: boolean; can_apply: boolean; match?: 'matched' | 'not_assessed'; needs_test?: boolean; flags?: { code: string; label: string }[]
 }
 const FORMAT: Record<string, string> = { remote: 'удалённо', hybrid: 'гибрид', office: 'в офисе' }
 
@@ -155,7 +155,7 @@ export default function CandidateVacancies() {
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3 sm:px-6">
               <button disabled={card.applied || !card.can_apply || apply.isPending} onClick={() => apply.mutate(card.id)}
                 className={card.applied ? 'btn-secondary btn-sm' : 'btn-primary btn-sm'}>
-                {card.applied ? 'Отклик отправлен' : card.can_apply ? 'Откликнуться' : 'Нужно согласие представителя'}
+                {card.applied ? 'Отклик отправлен' : card.can_apply ? 'Откликнуться' : card.needs_test ? 'Сначала тест на грейд' : 'Нужно согласие представителя'}
               </button>
               <button type="button" className="btn-secondary btn-sm" onClick={() => practice.mutate({ vacancy_id: card.id })}>Проверочное задание</button>
             </div>

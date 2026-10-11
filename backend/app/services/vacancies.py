@@ -60,6 +60,8 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
         "why": why,
         # Without a test there is no grade to match: the list is the published one, newest first.
         "match": "not_assessed" if ungraded else "matched",
+        # Seeing is open, applying to a graded vacancy is not: otherwise skipping the test would beat taking it.
+        "needs_test": bool(ungraded and vacancy.get("grade") and mode != "any"),
     }
 
 
