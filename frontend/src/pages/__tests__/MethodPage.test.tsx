@@ -63,8 +63,8 @@ describe('страница методики', () => {
     expect(screen.getByText('0 %')).toBeInTheDocument()
     expect(screen.getByText('64,5 %')).toBeInTheDocument()
     expect(screen.getByText('0,632')).toBeInTheDocument()
-    expect(screen.getByText('+0,084')).toBeInTheDocument()
-    expect(screen.getByText('+0,032')).toBeInTheDocument()
+    expect(screen.getByText('+0,089')).toBeInTheDocument()
+    expect(screen.getByText('+0,038')).toBeInTheDocument()
     expect(screen.getByText(/против поиска по ключевым словам/)).toBeInTheDocument()
     expect(screen.getAllByText('cd backend && python -m app.validation.matching')).toHaveLength(3)
     const read = screen.getByRole('region', { name: 'Как читать каппу 0,49 и долю показов 72 %' })
@@ -80,8 +80,8 @@ describe('страница методики', () => {
   it('пишет дату отчёта и коммит, с которого сняты цифры', async () => {
     renderPage()
     const asOf = await screen.findByTestId('figures-as-of')
-    expect(asOf).toHaveTextContent('Отчёт от 11.10.2026, коммит 13f4cc5')
-    expect(screen.getByRole('link', { name: '13f4cc5' })).toHaveAttribute('href', expect.stringContaining('/commit/13f4cc5'))
+    expect(asOf).toHaveTextContent('Отчёт от 11.10.2026, коммит a63e4ca')
+    expect(screen.getByRole('link', { name: 'a63e4ca' })).toHaveAttribute('href', expect.stringContaining('/commit/a63e4ca'))
   })
 
   it('ставит столбцы по убыванию и подписывает первые три', async () => {
