@@ -113,3 +113,12 @@ describe('приглашения кандидата', () => {
     expect(screen.queryByRole('button', { name: 'Принять и открыть контакты' })).not.toBeInTheDocument()
   })
 })
+
+describe('ссылка в тексте (axe link-in-text-block)', () => {
+  it('«Страница компании» подчёркнута не только при наведении', async () => {
+    getMyOffers.mockResolvedValue({ data: [{ ...pending, company_id: 'c-1' }] })
+    renderPage(<CandidateOffers />)
+    const link = await screen.findByRole('link', { name: 'Страница компании' })
+    expect(link.className.split(' ')).toContain('underline')
+  })
+})
