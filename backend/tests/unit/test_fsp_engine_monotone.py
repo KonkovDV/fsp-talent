@@ -66,4 +66,4 @@ def test_participations_are_counted_but_never_scored():
     result = compute_discipline_score(plain, REF)
     assert result["events_count"] == 40 and result["top_event_ids"] == []
     assert result["lcb"] == round(LCB0, 4)
-    assert VERSION == "v4.0.0"
+    assert VERSION == "v4.1.0"

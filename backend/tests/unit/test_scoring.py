@@ -194,10 +194,10 @@ def test_top_event_ids_returns_at_most_three_by_descending_quality_weight():
     """Поле top_event_ids: не более 3, отсортированы по q*w по убыванию."""
     ref = date(2026, 10, 1)
     events = [
-        {**ev(1, 100, "russia_championship", when=ref), "id": "A"},
-        {**ev(2, 100, "russia_championship", when=ref), "id": "B"},
-        {**ev(3, 100, "russia_championship", when=ref), "id": "C"},
-        {**ev(4, 100, "russia_championship", when=ref), "id": "D"},
+        {**ev(1, 100, "russia_championship", when=ref - timedelta(days=0)), "id": "A"},
+        {**ev(2, 100, "russia_championship", when=ref - timedelta(days=31)), "id": "B"},
+        {**ev(3, 100, "russia_championship", when=ref - timedelta(days=62)), "id": "C"},
+        {**ev(4, 100, "russia_championship", when=ref - timedelta(days=93)), "id": "D"},
     ]
     result = compute_discipline_score(events, reference_date=ref)
     assert result["top_event_ids"] == ["A", "B", "C"]

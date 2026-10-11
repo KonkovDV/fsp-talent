@@ -16,7 +16,7 @@ def test_the_stale_query_compares_with_the_current_version():
     import inspect
 
     assert "!= VERSION" in inspect.getsource(rescore_stale.stale_participant_ids)
-    assert engine.VERSION == "v4.0.0"
+    assert engine.VERSION == "v4.1.0"
 
 
 def test_a_failure_never_blocks_the_start(monkeypatch):

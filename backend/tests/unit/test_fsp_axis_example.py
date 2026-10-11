@@ -15,4 +15,4 @@ def test_twenty_entries_in_the_lower_half_stay_below_two_wins():
     entries = compute_discipline_score(_events(20, 60), REF)
     wins = compute_discipline_score(_events(2, 1), REF)
     assert round(entries["lcb"], 2) == 0.16   # v4: lower-half entries are not results; empty-history bound
-    assert round(wins["lcb"], 2) == 0.52
+    assert round(wins["lcb"], 2) == 0.51  # v4.1: field of 100 weighs 1 − e^(−100/30) ≈ 0.96
