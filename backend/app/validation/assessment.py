@@ -892,6 +892,9 @@ class PathStudy:
     kappa: float
     weighted_kappa: float
     matrix: list[list[int]]
+    # Two paths of the same person: same final grade, and same or adjacent ("not confirmed" sits below intern).
+    same_grade: float = 0.0
+    adjacent_grade: float = 0.0
     # Same people as the first path. Shares are among that group; a missing grade is not "under".
     lower_n: int = 0
     lower_under: float = 0.0
@@ -1082,6 +1085,17 @@ def path_detail(rows: list[tuple[float, str, str | None, bool]]) -> dict:
     }
 
 
+def path_agreement(xs: list[str | None], ys: list[str | None]) -> tuple[float, float]:
+    """Share of people whose two paths end on the same grade, and within one step of each other."""
+    order = {g: i + 1 for i, g in enumerate(GRADE_ORDER)}
+    pairs = list(zip(xs, ys, strict=True))
+    if not pairs:
+        return 1.0, 1.0
+    same = sum(a == b for a, b in pairs) / len(pairs)
+    near = sum(abs(order.get(a, 0) - order.get(b, 0)) <= 1 for a, b in pairs) / len(pairs)
+    return same, near
+
+
 def study_paths(people: list[Person], truth: Truth, rng: random.Random,
                 offsets: dict[str, float] | None) -> PathStudy:
     first = [simulate_path(theta, spec, declared, truth, rng, offsets) for theta, spec, declared in people]
@@ -1109,6 +1123,8 @@ def study_paths(people: list[Person], truth: Truth, rng: random.Random,
         kappa=_cohen([g for g, _, _, _ in first], [g for g, _, _, _ in second]),
         weighted_kappa=_quadratic_kappa([g for g, _, _, _ in first], [g for g, _, _, _ in second]),
         matrix=grade_matrix(matrix_sessions),
+        same_grade=path_agreement([g for g, _, _, _ in first], [g for g, _, _, _ in second])[0],
+        adjacent_grade=path_agreement([g for g, _, _, _ in first], [g for g, _, _, _ in second])[1],
         **detail,
     )
 
@@ -1476,7 +1492,8 @@ def _path_lines(r: Report) -> list[str]:
         "",
         *_path_detail_lines(path),
         f"Согласованность двух путей: каппа Коэна итогового грейда {path.kappa:.2f}, "
-        f"взвешенная каппа {path.weighted_kappa:.2f}.",
+        f"взвешенная каппа {path.weighted_kappa:.2f}. Тот же итоговый грейд в обоих путях: {path.same_grade:.1%}, "
+        f"тот же или соседний: {path.adjacent_grade:.1%} («не подтверждён» считается ступенью ниже стажёра).",
         "",
         "Матрица «истинный грейд по θ × итоговый грейд после пути».",
         "",
