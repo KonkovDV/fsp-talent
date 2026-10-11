@@ -20328,6 +20328,190 @@
         ]
       }
     },
+    "/api/v1/public/assessment/simulate": {
+      "get": {
+        "description": "Expert mode: the live adaptive test on a simulated candidate of the chosen level (JS-02).\n\nSame selector, 3PL posterior, stop rule and grade decision as the real test. Steps carry the family,\ndifficulty level and right/wrong only: no item text, options or keys. Nothing is read or stored.",
+        "operationId": "simulate_assessment_api_v1_public_assessment_simulate_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "spec",
+            "required": false,
+            "schema": {
+              "default": "backend",
+              "maxLength": 20,
+              "title": "Spec",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "grade",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "middle",
+              "title": "Grade"
+            }
+          },
+          {
+            "in": "query",
+            "name": "theta",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3.5,
+                  "minimum": -3.5,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Theta"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seed"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batch",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Batch",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Simulate Assessment",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/api/v1/public/candidates/{participant_id}": {
       "get": {
         "operationId": "get_public_profile_api_v1_public_candidates__participant_id__get",

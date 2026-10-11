@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Building2, FileCheck2, UserRound } from 'lucide-react'
 import { apiError, askPublicGuide, categoryRanking, telegramAchievements, telegramVacancies } from '../api/client'
 import { GRADES, ROLE_RU, gradeRu } from '../labels'
+import ExpertModePanel from '../components/ExpertModePanel'
 import PublicShell from '../components/PublicShell'
 import { PageHeader } from '../components/ui'
 
@@ -174,6 +175,8 @@ export default function JuryPage() {
           })}
         </ol>
       </section>
+
+      <ExpertModePanel />
 
       <section className="mt-10" aria-labelledby="route-title">
         <h2 id="route-title" className="font-display text-xl font-bold tracking-[-0.02em] text-ink">Три пути</h2>

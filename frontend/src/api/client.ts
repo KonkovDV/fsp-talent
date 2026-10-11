@@ -603,3 +603,16 @@ export const postMessage = (offerId: string, body: string) => api.post<ThreadMes
 
 /** Form limits served by the backend (audit-3 P1-2), so the salary floor lives in one place. */
 export const getLimits = () => api.get<{ min_monthly_gross: number }>('/public/limits').then(r => r.data)
+export interface SimulatedStep {
+  n: number; family: string; topic: string; level: number; difficulty: number; correct: boolean
+  theta: number; se: number; p_pass: number
+}
+export interface SimulatedRun {
+  spec: string; theta: number; true_grade: string | null; target: string; cut: number; seed: number
+  steps: SimulatedStep[]; items: number; max_items: number; stop_reason: string | null
+  theta_hat: number; se: number; p_pass: number; passed: boolean; earned: string | null
+  batch?: { n: number; same_as_first: number; same_as_truth: number; passed: number; median_items: number; grades: Record<string, number> }
+}
+/** Expert mode: the live adaptive test on a simulated candidate. No item text and no keys. */
+export const simulateAssessment = (params: { spec: string; grade: string; batch?: number; seed?: number }) =>
+  api.get<SimulatedRun>('/public/assessment/simulate', { params })
