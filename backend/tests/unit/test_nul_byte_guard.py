@@ -34,3 +34,18 @@ def test_nul_in_path_is_422():
 
 def test_clean_request_passes():
     assert _run("/api/v1/public/leaderboard", b"discipline=icpc&q=%D0%B0")[0]["status"] == 200
+
+
+def test_nul_byte_code_is_registered_and_documented():
+    import json
+    from pathlib import Path
+
+    from app.api.errors import ERROR_CODES
+    from app.api.problems import CODE_CLASS
+
+    sent = _run("/x", b"a=%00")
+    body = json.loads(next(m["body"] for m in sent if m["type"] == "http.response.body"))
+    code = body["error"]["code"]
+    assert code == "nul_byte" and code in ERROR_CODES and CODE_CLASS[code] == "E05"
+    docs = (Path(__file__).resolve().parents[3] / "docs/API_ERRORS.md").read_text(encoding="utf-8")
+    assert "| `nul_byte` |" in docs
