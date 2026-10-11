@@ -3,9 +3,10 @@
 export GIT_SHA ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 COMPOSE := docker compose$(if $(GPU), -f docker-compose.yml -f docker-compose.gpu.yml,)
 
-.PHONY: help demo up down reset seed seed-topup demo-check demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
+.PHONY: help doctor demo up down reset seed seed-topup demo-check demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
 
 help:
+	@echo "make doctor    — проверить Docker, память, диск, порты, .env и образы до первого запуска; без Docker: make doctor LOCAL=1"
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск); с видеокартой: make demo GPU=1"
 	@echo "make up        — запустить уже собранные контейнеры"
 	@echo "make down      — остановить, данные сохраняются"
@@ -22,6 +23,9 @@ help:
 	@echo "make load      — 40 пользователей одновременно в течение минуты"
 	@echo "make docs-pdf  — собрать docs/FSP_Talent_documentation.pdf (нужны Python, Node.js и Chromium)"
 	@echo "make docs-pitch — собрать docs/pitch.html и docs/pitch.pptx (PDF сохраняется из PowerPoint)"
+
+doctor:
+	@LOCAL=$(LOCAL) bash scripts/doctor.sh
 
 demo:
 	@test -f .env || cp .env.example .env
