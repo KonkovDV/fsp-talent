@@ -16,15 +16,20 @@ from app.services.matching import (
 )
 from app.services.search.pipeline import order_pool
 from app.validation.matching import (
+    baseline_deltas,
+    baseline_markdown,
     blind_candidate_ids,
     blind_kappa,
     blind_label,
+    bm25_rank,
     cohen_kappa,
     evaluate,
     load_pairs,
     make_dataset,
     merge_rater_labels,
+    need_text,
     paired_report,
+    profile_text,
     quadratic_weighted_kappa,
     rank,
     relevance,
@@ -185,6 +190,19 @@ def test_benchmark_is_deterministic_and_beats_the_baselines():
     assert sha256(data) == sha256(make_dataset(400, 40, seed=2026))
     rows = {r.method: r for r in evaluate(data)}
     assert rows["full"].ndcg10 > rows["keyword"].ndcg10 > rows["random"].ndcg10
+    assert rows["full"].ndcg10 > rows["bm25"].ndcg10 > rows["random"].ndcg10
+    # Keyword search reads only the texts: the profile that names every word of the need comes first.
+    need = {"id": "n", "role": "backend", "grade": "middle", "skills": ["Kafka", "PostgreSQL"], "nice": []}
+    pool = [{"id": "a", "observed": {"role": "qa", "grade": "junior", "skills": {"Selenium": "self_reported"}}},
+            {"id": "b", "observed": {"role": "backend", "grade": "middle",
+                                     "skills": {"Kafka": "self_reported", "PostgreSQL": "self_reported"}}},
+            {"id": "c", "observed": {"role": "backend", "grade": "senior", "skills": {"Kafka": "test_confirmed"}}}]
+    assert bm25_rank(pool, need) == ["b", "c", "a"]
+    assert "Kafka" in need_text(need) and "Selenium" in profile_text(pool[0]["observed"])
+    deltas = baseline_deltas([2026], 200, 20, rounds=200)
+    for key in ("bm25", "keyword"):
+        assert deltas[key]["ndcg"]["low"] <= deltas[key]["ndcg"]["mean"] <= deltas[key]["ndcg"]["high"]
+    assert "против поиска по ключевым словам" in baseline_markdown(deltas)
 
 
 def test_explanation_carries_stable_codes():
