@@ -222,12 +222,12 @@ async def _llm_skills(text: str) -> list[dict]:
     return json.loads(match.group(0)) if match else []
 
 
-async def parse_resume(text: str) -> dict:
+async def parse_resume(text: str, allow_llm: bool = True) -> dict:
     from app.services.ai import providers
 
     found = {e.skill: {"name": e.skill, "source_quote": e.evidence, "source": "rules"} for e in extract_skills(text)}
     llm_used, rejected = False, 0
-    if providers.active() is not None:
+    if allow_llm and providers.active() is not None:
         try:
             for item in await _llm_skills(for_model(text)):
                 name, quote = normalize_skill(str(item.get("skill", ""))), str(item.get("quote", ""))

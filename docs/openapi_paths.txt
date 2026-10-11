@@ -84,6 +84,7 @@
 /api/v1/integrations/sandbox/{endpoint_id}
 /api/v1/legal/documents
 /api/v1/legal/documents/{kind}
+/api/v1/legal/processor
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
 /api/v1/methodist

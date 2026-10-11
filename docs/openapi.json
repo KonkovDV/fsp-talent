@@ -13228,6 +13228,94 @@
         ]
       }
     },
+    "/api/v1/legal/processor": {
+      "get": {
+        "description": "Which model processor (if any) gets the anonymised resume now; the consent text points here.",
+        "operationId": "model_processor_api_v1_legal_processor_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Model Processor",
+        "tags": [
+          "legal"
+        ]
+      }
+    },
     "/api/v1/me/consents": {
       "get": {
         "operationId": "my_consents_api_v1_me_consents_get",

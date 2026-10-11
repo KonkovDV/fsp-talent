@@ -5,14 +5,15 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ConsentsPanel from '../ConsentsPanel'
 
-const { myConsents, withdrawConsent } = vi.hoisted(() => ({
+const { myConsents, withdrawConsent, giveConsent } = vi.hoisted(() => ({
   myConsents: vi.fn(),
+  giveConsent: vi.fn(),
   withdrawConsent: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
-  return { ...actual, myConsents, withdrawConsent }
+  return { ...actual, myConsents, withdrawConsent, giveConsent }
 })
 
 function renderPage(ui: ReactNode) {
@@ -40,5 +41,19 @@ describe('отзыв согласия', () => {
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Карточка сразу пропадёт из поиска.'))
     expect(withdrawConsent).not.toHaveBeenCalled()
     confirm.mockRestore()
+  })
+})
+
+describe('новая редакция согласия', () => {
+  it('просит подтвердить обновлённый текст и отправляет согласие', async () => {
+    myConsents.mockResolvedValue({ data: [{
+      kind: 'pd_candidate', title: 'Обработка данных', version: '1.3', required: true, active: true,
+      given_at: '2026-01-02T00:00:00Z', accepted_version: '1.2', outdated: true, if_withdrawn: [],
+    }] })
+    giveConsent.mockResolvedValue({ data: { kind: 'pd_candidate', version: '1.3' } })
+    renderPage(<ConsentsPanel />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Текст согласия обновлён')
+    await userEvent.click(screen.getByRole('button', { name: 'Подтвердить версию 1.3' }))
+    expect(giveConsent).toHaveBeenCalledWith('pd_candidate')
   })
 })
