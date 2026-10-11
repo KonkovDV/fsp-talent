@@ -72,6 +72,14 @@ class HiringPracticeIn(BaseModel):
     salary_written: bool = False
 
 
+@router.get("/me/staff")
+async def staff_status(current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
+    """Only whether to draw the staff links. Nothing from the staff desks is returned here."""
+    from app.api.v1.moderation import is_staff
+    employer = await db.get(Employer, uuid.UUID(current["sub"]))
+    return {"is_staff": is_staff(employer)}
+
+
 @router.post("/me/hiring-practice")
 async def save_hiring_practice(body: HiringPracticeIn, current: dict = Depends(get_current_employer),
                                db: AsyncSession = Depends(get_db)):
