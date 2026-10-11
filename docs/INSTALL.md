@@ -324,14 +324,14 @@ SMOKE_BASE=https://$SITE_ADDRESS/api/v1 SMOKE_MAIL=demo python backend/tests/smo
 |---|---|---|
 | `ACME_EMAIL` | пусто | Почта для напоминаний Let's Encrypt об окончании сертификата |
 | `FIELD_ENCRYPTION_KEY` | не задан | Отдельный ключ шифрования контактов. Без него шифр берёт `SECRET_KEY` |
-| `DEMO_MODE` | см. примечание ниже | `true` — аккаунты `jury1@demo.talent`…`jury10@demo.talent`, пробный доступ жюри, демо-провайдер ФСП ID. Для настоящих пользователей `false` |
+| `DEMO_MODE` | true | `true` — аккаунты `jury1@demo.talent`…`jury10@demo.talent`, пробный доступ жюри, демо-провайдер ФСП ID. Для настоящих пользователей `false` |
 | `DEMO_SHOW_CODE` | false | Только при `DEMO_MODE=true`: код подтверждения показывается на экране тому, кто регистрируется. Для стенда жюри без почтовой учётки |
 | `DEMO_RESET_CRON` | `10 4 * * *` | Ночной возврат стенда жюри к исходному виду, время московское. Пустая строка отключает сброс на время показа |
 | `FSP_MODE` | mock | `mock` — демо-реестр протоколов ФСП, `real` — HTTP-клиент по контракту [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |
 | `FSP_ID_MODE` | mock | `mock` работает только при `DEMO_MODE=true`. Для настоящих пользователей — `oidc` с `FSP_ID_ISSUER`, `FSP_ID_CLIENT_ID`, `FSP_ID_CLIENT_SECRET` от Keycloak Федерации |
 | `AI_ENABLED` и ключи модели | false | Включает языковую модель. Решение принимает оператор: меняется обработка ПДн. Ключи остаются только в `deploy/.env` |
 
-> В `deploy/.env.example` ключ `DEMO_MODE` записан дважды: `true` в начале и `false` ниже. Compose берёт последнее значение. Оставьте в своём файле одну строку с нужным значением.
+> В `deploy/.env.example` `DEMO_MODE=true` задан один раз, рядом с `DEMO_SHOW_CODE`: пример описывает стенд жюри с демо-провайдером ФСП ID (`FSP_ID_MODE=mock`), а мок без демо-режима backend не запускает. Для настоящих пользователей ставят `DEMO_MODE=false` и `FSP_ID_MODE=oidc`. Если ключ в файле повторяется, compose берёт последнее значение.
 
 `deploy/.env` правит только оператор. Шаг выкладки в CI его не меняет.
 
@@ -365,7 +365,15 @@ CONFIRM=restore ENV_FILE=deploy/.env COMPOSE_FILE=deploy/docker-compose.prod.yml
   sh deploy/restore_db.sh deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump
 ```
 
-Копию `deploy/backups/` и `deploy/.env` стоит регулярно уносить с сервера. В дампе контакты зашифрованы, и без `SECRET_KEY` или `FIELD_ENCRYPTION_KEY` из того же `.env` их не прочитать.
+В дампе есть персональные данные кандидатов: профили, резюме, согласия. Ключ приложения шифрует только часть полей, например контакты. Поэтому копию, которая уходит с сервера, шифруют, а ключ хранят отдельно от неё и от `deploy/.env`. Пример с [age](https://age-encryption.org) (открытый ключ получателя, закрытый на сервере не лежит):
+
+```bash
+age -r age1… -o fsp_talent-YYYYMMDD-HHMM.dump.age deploy/backups/fsp_talent-YYYYMMDD-HHMM.dump
+# расшифровка на машине с закрытым ключом перед проверкой и восстановлением:
+age -d -i key.txt -o fsp_talent-YYYYMMDD-HHMM.dump fsp_talent-YYYYMMDD-HHMM.dump.age
+```
+
+То же через GnuPG: `gpg --encrypt --recipient <ключ> файл.dump` (или `gpg --symmetric --cipher-algo AES256 файл.dump` с паролем). `verify_backup.py` и `restore_db.sh` работают с расшифрованным `.dump`. Сам контейнер `backup` пишет файлы без шифрования, с правами `600`, в `deploy/backups/` на сервере. `deploy/.env` с `SECRET_KEY` и `FIELD_ENCRYPTION_KEY` хранят отдельно от копий: без этих ключей контакты из дампа не прочитать.
 
 ### 11.7. Обновление
 
