@@ -77,7 +77,7 @@ function Showcase() {
         <thead>
           <tr>
             <th scope="col" className="w-[28%] text-left font-normal text-ink-3 sm:w-[34%]"><span className="sr-only">Специализация</span></th>
-            {SHOWCASE_GRADES.map(g => <th key={g} scope="col" className="pb-1 text-center text-[10px] font-medium text-ink-3 sm:text-xs">{gradeRu(g)}</th>)}
+            {SHOWCASE_GRADES.map(g => <th key={g} scope="col" className="truncate pb-1 text-center text-[10px] font-medium tracking-tight text-ink-3">{gradeRu(g)}</th>)}
           </tr>
         </thead>
         <tbody>

@@ -72,15 +72,15 @@ export function MobileMenu({ links, footer, label = 'Разделы' }: { links:
 export function SiteFooter() {
   return (
     <footer className="border-t border-line">
-      <div className="mx-auto grid max-w-page gap-4 px-4 py-8 text-xs text-ink-3 sm:px-6 md:grid-cols-[1fr_auto] md:items-start">
-        <div className="max-w-[60ch] space-y-1.5">
+      <div className="mx-auto grid max-w-page gap-4 px-4 py-8 text-xs text-ink-3 sm:px-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start" data-testid="site-footer-grid">
+        <div className="min-w-0 max-w-[60ch] space-y-1.5 [overflow-wrap:anywhere]">
           <p>ФСП Талант · команда Дмитрия Конькова — прототип для Федерации спортивного программирования, ЛЦТ 2026. Демо-данные вымышлены.</p>
           <p>Контакты кандидата открываются только после его согласия.</p>
           <p>Проект создан для конкурса «Лидеры цифровой трансформации — 2026» по задаче Федерации спортивного программирования. Наименование ФСП приводится для указания постановщика задачи; сервис не является официальным ресурсом ФСП.</p>
           <p>Подпись W3C Verifiable Credentials подтверждает, что данные не изменены после выдачи. Это не электронная подпись в смысле Федерального закона № 63-ФЗ.</p>
         </div>
-        <nav aria-label="Справка">
-          <ul className="flex flex-wrap gap-x-5 gap-y-2">
+        <nav aria-label="Справка" className="min-w-0">
+          <ul className="flex flex-wrap gap-x-5 gap-y-2 md:justify-end">
             <li><Link to="/legal" className="inline-flex min-h-6 items-center underline hover:text-ink">Документы и согласия</Link></li>
             <li><Link to="/privacy" className="inline-flex min-h-6 items-center underline hover:text-ink">Политика обработки данных</Link></li>
             <li><Link to="/method" className="inline-flex min-h-6 items-center underline hover:text-ink">Как устроен тест</Link></li>

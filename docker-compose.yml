@@ -207,7 +207,7 @@ services:
 
   nginx:
     image: nginx:1.28-alpine
-    # Port 80 busy? Set HTTP_PORT=8080 and PUBLIC_BASE_URL=http://localhost:8080 in .env.
+    # Port 80 busy? Set HTTP_PORT=8081 and PUBLIC_BASE_URL=http://localhost:8081 in .env.
     ports: ['${HTTP_PORT:-80}:80']
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
