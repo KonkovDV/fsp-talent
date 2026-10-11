@@ -211,7 +211,7 @@ docker compose exec -T backend python -m app.validation.matching --seed 7
 | Переменная | По умолчанию | Зачем |
 |---|---|---|
 | `SECRET_KEY` | заглушка | Ключ подписи токенов. Заглушку контейнер заменит случайным ключом. На публичном стенде задайте свой: `openssl rand -hex 32` |
-| `HTTP_PORT` | 80 | Порт сайта на хосте. Если 80 занят: `HTTP_PORT=8080` и `PUBLIC_BASE_URL=http://localhost:8080` |
+| `HTTP_PORT` | 80 | Порт сайта на хосте. Если 80 занят: `HTTP_PORT=8081` и `PUBLIC_BASE_URL=http://localhost:8081` |
 | `PUBLIC_BASE_URL` | http://localhost | Адрес, из которого строятся ссылки в письмах |
 | `FSP_MODE` | mock | `mock` — тестовый реестр ФСП, `real` — HTTP-клиент по контракту из [FSP_INTEGRATION.md](FSP_INTEGRATION.md) |
 | `FSP_ID_MODE` | mock в демо-сборке | В Compose и `.env` демо стоит `mock`: страница провайдера на этом сайте. Без переменной код берёт `oidc`. Мок при выключенном `DEMO_MODE` процесс не запускает. `oidc` — Keycloak Федерации (`FSP_ID_ISSUER`, `FSP_ID_CLIENT_ID`, `FSP_ID_CLIENT_SECRET`) |
@@ -428,7 +428,7 @@ curl -s https://$SITE_ADDRESS/health    # "build" — коммит отката
 
 | Симптом | Причина и решение |
 |---|---|
-| `port is already allocated` | Порт занят. Задайте в `.env` (или в окружении) `HTTP_PORT=8080` и `PUBLIC_BASE_URL=http://localhost:8080`; для почты, API и фронтенда — `MAIL_PORT`, `API_PORT`, `FRONTEND_PORT`. Затем повторите запуск |
+| `port is already allocated` | Порт занят. Задайте в `.env` (или в окружении) `HTTP_PORT=8081` и `PUBLIC_BASE_URL=http://localhost:8081`; для почты, API и фронтенда — `MAIL_PORT`, `API_PORT`, `FRONTEND_PORT`. Затем повторите запуск |
 | `unknown flag: --wait` или ошибка разбора `env_file` | Compose старше 2.24. Обновите Docker Desktop (4.27+) или плагин compose |
 | Сборка падает на `apt-get` с `500 Internal Server Error` | Временный сбой зеркала Debian. Сборка повторяет попытку сама; если не помогло, запустите команду ещё раз |
 | `demo-seed` завершился с ошибкой | `docker compose logs demo-seed`; повторный `docker compose up -d --wait` безопасен |
