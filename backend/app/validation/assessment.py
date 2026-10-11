@@ -470,6 +470,17 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
     )
 
 
+def kappa_both_confirmed(xs: list[str | None], ys: list[str | None]) -> tuple[float, float]:
+    """κw on the pairs where both paths confirmed a grade, and the share of such pairs.
+
+    It does not depend on where "not confirmed" sits on the scale, so it bounds the effect of that choice.
+    """
+    pairs = [(x, y) for x, y in zip(xs, ys, strict=True) if x is not None and y is not None]
+    if not pairs:
+        return 1.0, 0.0
+    return _quadratic_kappa([x for x, _ in pairs], [y for _, y in pairs]), len(pairs) / max(1, len(xs))
+
+
 def _quadratic_kappa(xs: list[str | None], ys: list[str | None], none_first: bool = False) -> float:
     """Quadratic weighted kappa. A miss by two grades costs more than a miss by one.
 
@@ -900,6 +911,9 @@ class PathStudy:
     same_grade: float = 0.0
     adjacent_grade: float = 0.0
     weighted_kappa_ordered: float = 0.0
+    # Sensitivity of κw to where "not confirmed" sits: pairs where both paths confirmed a grade, and their share.
+    weighted_kappa_confirmed: float = 0.0
+    confirmed_share: float = 0.0
     # Same people as the first path. Shares are among that group; a missing grade is not "under".
     lower_n: int = 0
     lower_under: float = 0.0
@@ -1130,6 +1144,8 @@ def study_paths(people: list[Person], truth: Truth, rng: random.Random,
         matrix=grade_matrix(matrix_sessions),
         weighted_kappa_ordered=_quadratic_kappa([g for g, _, _, _ in first], [g for g, _, _, _ in second],
                                                 none_first=True),
+        weighted_kappa_confirmed=kappa_both_confirmed([g for g, _, _, _ in first], [g for g, _, _, _ in second])[0],
+        confirmed_share=kappa_both_confirmed([g for g, _, _, _ in first], [g for g, _, _, _ in second])[1],
         same_grade=path_agreement([g for g, _, _, _ in first], [g for g, _, _, _ in second])[0],
         adjacent_grade=path_agreement([g for g, _, _, _ in first], [g for g, _, _, _ in second])[1],
         **detail,
@@ -1502,7 +1518,8 @@ def _path_lines(r: Report) -> list[str]:
         f"взвешенная каппа {path.weighted_kappa:.2f}. Тот же итоговый грейд в обоих путях: {path.same_grade:.1%}, "
         f"тот же или соседний: {path.adjacent_grade:.1%} («не подтверждён» считается ступенью ниже стажёра). "
         f"Взвешенная каппа при том же порядке («не подтверждён» ниже стажёра, а не выше lead): "
-        f"{path.weighted_kappa_ordered:.2f}.",
+        f"{path.weighted_kappa_ordered:.2f}. Только пары, где оба пути подтвердили грейд "
+        f"({path.confirmed_share:.1%} пар): {path.weighted_kappa_confirmed:.2f}.",
         "",
         "Матрица «истинный грейд по θ × итоговый грейд после пути».",
         "",
