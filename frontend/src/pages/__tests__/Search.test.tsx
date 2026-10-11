@@ -80,6 +80,18 @@ describe('поиск работодателя', () => {
     expect(screen.getByText(/Площадка не показала 2/)).toBeInTheDocument()
   })
 
+  it('без точных совпадений так и пишет, а одного соседа — в единственном числе', async () => {
+    searchCandidates.mockResolvedValue({ data: { total: 1, in_category: 0, items: [declared], recommended_categories: [] } })
+    renderPage(<EmployerSearch />)
+    expect(await screen.findByText(/В выбранной категории точных совпадений нет, ещё 1 похожий:/)).toBeInTheDocument()
+  })
+
+  it('малую ячейку не называет числом (k-анонимность)', async () => {
+    searchCandidates.mockResolvedValue({ data: { total: 9, in_category: null, in_category_hidden: true, items: [declared], recommended_categories: [] } })
+    renderPage(<EmployerSearch />)
+    expect(await screen.findByText(/меньше 5 — точное число скрыто/)).toBeInTheDocument()
+  })
+
   it('в выдаче помечает неподтверждённый грейд', async () => {
     renderPage(<EmployerSearch />)
     expect(await screen.findByText('Грейд не подтверждён')).toBeInTheDocument()

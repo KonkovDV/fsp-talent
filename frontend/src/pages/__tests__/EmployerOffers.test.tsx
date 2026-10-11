@@ -49,4 +49,9 @@ describe('приглашения работодателя', () => {
     await userEvent.click(meetings[0])
     expect(screen.getAllByTestId('code-interview')).toHaveLength(2)
   })
+
+  it('объясняет, почему рынок пуст', async () => {
+    show()
+    expect(await screen.findByText(/не меньше пяти человек, — защита персональных данных/)).toBeInTheDocument()
+  })
 })

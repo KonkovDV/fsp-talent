@@ -35,7 +35,7 @@ _ROLE_WORDS = {
     "ml": ("ml-инженер", "ml engineer", "data scientist", "машинн"),
     "devops": ("devops", "девопс", "sre"),
     "security": ("безопасност", "пентест", "security", "иб"),
-    "embedded": ("embedded", "встраиваем", "микроконтроллер"),
+    "embedded": ("embedded", "встраиваем", "микроконтроллер", "робототех"),
     "mobile": ("mobile", "мобильн", "ios", "android"),
     "qa": ("тестиров", "qa", "quality assurance"),
     "analyst": ("аналитик", "analyst"),

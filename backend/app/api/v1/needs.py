@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.services.ai import providers, second_opinion
 from app.services.cities import CITIES
+from app.services.exclusions import shared_scope
 from app.services.hiring_practice import sees_senior
 from app.services.matching import NeedSpec, anonymous_compare
 from app.services.need_draft import draft_need
@@ -267,13 +268,16 @@ async def _matches_cached(db: AsyncSession, need: Need, params: NeedParams, limi
         except Exception:
             redis = None
     key = shortlist_cache.shortlist_key(need.id, need.version, epoch)
-    shared = shortlist_cache.shared_key(params.model_dump(), epoch)
     company = await db.get(Employer, need.employer_id)
     open_bank = sees_senior(company.hiring_practice if company is not None else None)
     page = await _cached_page(redis, key, offset, limit)
     if page is not None:
         return page
-    own = await _employer_met_someone(db, need.employer_id)
+    # The shared ranking is keyed by what the exclusions depend on; a company with its own blocks
+    # never reads or writes it, so one company's exclusions do not reach another (audit-5 A8).
+    scope = await shared_scope(db, need.employer_id, params.industry)
+    shared = shortlist_cache.shared_key({**params.model_dump(), "_exclusions": scope}, epoch)
+    own = scope is None or await _employer_met_someone(db, need.employer_id)
     if not own and open_bank:
         page = await _cached_page(redis, shared, offset, limit)
         if page is not None:
