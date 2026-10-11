@@ -470,9 +470,13 @@ def retest(people: list[Person], truth: Truth, rng: random.Random, offsets: dict
     )
 
 
-def _quadratic_kappa(xs: list[str | None], ys: list[str | None]) -> float:
-    """Quadratic weighted kappa. A miss by two grades costs more than a miss by one."""
-    labels: list[str | None] = [*GRADE_ORDER, None]
+def _quadratic_kappa(xs: list[str | None], ys: list[str | None], none_first: bool = False) -> float:
+    """Quadratic weighted kappa. A miss by two grades costs more than a miss by one.
+
+    By default "no grade" (None) is the last label, after lead. With none_first=True it sits below intern,
+    which is its place on the ability scale; both are reported for the two paths.
+    """
+    labels: list[str | None] = [None, *GRADE_ORDER] if none_first else [*GRADE_ORDER, None]
     index = {g: i for i, g in enumerate(labels)}
     k = len(labels)
     n = len(xs)
@@ -895,6 +899,7 @@ class PathStudy:
     # Two paths of the same person: same final grade, and same or adjacent ("not confirmed" sits below intern).
     same_grade: float = 0.0
     adjacent_grade: float = 0.0
+    weighted_kappa_ordered: float = 0.0
     # Same people as the first path. Shares are among that group; a missing grade is not "under".
     lower_n: int = 0
     lower_under: float = 0.0
@@ -1123,6 +1128,8 @@ def study_paths(people: list[Person], truth: Truth, rng: random.Random,
         kappa=_cohen([g for g, _, _, _ in first], [g for g, _, _, _ in second]),
         weighted_kappa=_quadratic_kappa([g for g, _, _, _ in first], [g for g, _, _, _ in second]),
         matrix=grade_matrix(matrix_sessions),
+        weighted_kappa_ordered=_quadratic_kappa([g for g, _, _, _ in first], [g for g, _, _, _ in second],
+                                                none_first=True),
         same_grade=path_agreement([g for g, _, _, _ in first], [g for g, _, _, _ in second])[0],
         adjacent_grade=path_agreement([g for g, _, _, _ in first], [g for g, _, _, _ in second])[1],
         **detail,
@@ -1493,7 +1500,9 @@ def _path_lines(r: Report) -> list[str]:
         *_path_detail_lines(path),
         f"Согласованность двух путей: каппа Коэна итогового грейда {path.kappa:.2f}, "
         f"взвешенная каппа {path.weighted_kappa:.2f}. Тот же итоговый грейд в обоих путях: {path.same_grade:.1%}, "
-        f"тот же или соседний: {path.adjacent_grade:.1%} («не подтверждён» считается ступенью ниже стажёра).",
+        f"тот же или соседний: {path.adjacent_grade:.1%} («не подтверждён» считается ступенью ниже стажёра). "
+        f"Взвешенная каппа при том же порядке («не подтверждён» ниже стажёра, а не выше lead): "
+        f"{path.weighted_kappa_ordered:.2f}.",
         "",
         "Матрица «истинный грейд по θ × итоговый грейд после пути».",
         "",
