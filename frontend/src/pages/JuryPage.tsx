@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, FileCheck2, UserRound } from 'lucide-react'
 import { apiError, askPublicGuide, categoryRanking, telegramAchievements, telegramVacancies } from '../api/client'
@@ -10,29 +10,30 @@ const PATHS: {
   title: string
   who: string
   to: string
-  steps: { go: string; see: string }[]
+  steps: { go: string; see: string; to: string }[]
 }[] = [
   {
     title: 'Работодатель',
     who: 'hr@sibcode.demo',
-    to: '/login?role=employer',
+    to: '/login?role=employer&next=/employer/needs',
     steps: [
-      { go: 'Потребности', see: 'Текст или одна открытая ссылка заполняют черновик. Сохранение — только кнопкой «Создать». Опасные формулировки подписываются, потребность остаётся.' },
-      { go: 'Подборка', see: 'Имени нет. На карточке разложен балл и отдельно ось ФСП: нижняя граница в порядке, разброс — среднее ± неопределённость.' },
-      { go: 'Сравнить и «Как проверим»', see: 'До четырёх карточек рядом. Доли тем из текста и примеры заданий без ответа. Грейд этот тест не ставит.' },
-      { go: 'Пригласить', see: 'Без вилки до НДФЛ отправить нельзя. Рядом сумма на руки. Балл компании виден до согласия кандидата.' },
-      { go: 'Приглашения', see: 'Практика и черновик кода на собеседовании. Ни то ни другое грейд не меняет.' },
+      { go: 'Потребности', to: '/login?role=employer&next=/employer/needs', see: 'Текст или одна открытая ссылка заполняют черновик. Сохранение — только кнопкой «Создать». Опасные формулировки подписываются, потребность остаётся.' },
+      { go: 'Подборка', to: '/login?role=employer&next=/employer/needs', see: 'Имени нет. На карточке разложен балл и отдельно ось ФСП: нижняя граница в порядке, разброс — среднее ± неопределённость.' },
+      { go: 'Поиск по банку', to: '/login?role=employer&next=/employer/search', see: 'Фильтры по специализации, грейду, навыкам и ФСП. Ячейка банка открывает тот же поиск.' },
+      { go: 'Пригласить', to: '/login?role=employer&next=/employer/offers', see: 'Без вилки до НДФЛ отправить нельзя. Рядом сумма на руки. Балл компании виден до согласия кандидата.' },
+      { go: 'Приглашения', to: '/login?role=employer&next=/employer/offers', see: 'Практика и черновик кода на собеседовании. Ни то ни другое грейд не меняет.' },
     ],
   },
   {
     title: 'Кандидат',
     who: 'fsp001@demo.talent',
-    to: '/login',
+    to: '/login?next=/candidate/assessment',
     steps: [
-      { go: 'Тест на грейд', see: 'Подтверждается только выбранный уровень. Для отдельных попыток: jury1@demo.talent … jury10@demo.talent.' },
-      { go: 'Результаты ФСП', see: 'Протокол и файл. Это не грейд и не цифровой след. Разряд — справка.' },
-      { go: 'Профиль', see: 'Свидетельство добавляет цитату к навыку. Логин кода до согласия скрыт.' },
-      { go: 'Приглашения', see: 'Компания и вилка видны сразу. Имя и контакты — после «Принять». Жалоба вакансию не закрывает.' },
+      { go: 'Опрос', to: '/login?next=/candidate', see: 'Специализация и заявленный грейд. Без опроса тест не стартует.' },
+      { go: 'Тест на грейд', to: '/login?next=/candidate/assessment', see: 'Полный тест подтверждает выбранный уровень. Пробный (экспресс) — 15 заданий за 5 минут: грейд не ставит и в поиске не учитывается. Отдельные попытки: jury1@demo.talent … jury10@demo.talent.' },
+      { go: 'Категория и результаты', to: '/login?next=/candidate/results', see: 'Подтверждённый грейд и протоколы ФСП. Это не грейд и не цифровой след.' },
+      { go: 'Приглашения', to: '/login?next=/candidate/offers', see: 'Компания и вилка видны сразу. Имя и контакты — после «Принять». После жалобы вакансия остаётся в поиске до проверки.' },
+      { go: 'Отклик на вакансию', to: '/login?next=/candidate/vacancies', see: 'Открытые вакансии с вилкой. Отклик раскрывает контакты так же, как принятие приглашения.' },
     ],
   },
   {
@@ -40,13 +41,26 @@ const PATHS: {
     who: 'третья сторона',
     to: '/method',
     steps: [
-      { go: 'Как устроен тест', see: 'Порог, информация у порога, Симпсон–Хеттер, карантин. Страница грейд не ставит.' },
-      { go: 'Проверка удостоверения', see: 'Подпись W3C и QR документа did:web. Имени в краткой карточке нет.' },
-      { go: 'Подбор на своей разметке', see: 'nDCG, P@10 и MAP. Пары не сохраняются, банк не читается.' },
-      { go: 'Рейтинг', see: 'Публичный список без имени.' },
+      { go: 'Как устроен тест', to: '/method', see: 'Порог, информация у порога, Симпсон–Хеттер (ограничение частоты показа задания), карантин. Страница грейд не ставит.' },
+      { go: 'Проверка удостоверения', to: '/badge', see: 'Подпись W3C и QR документа did:web. Имени в краткой карточке нет.' },
+      { go: 'Подбор на своей разметке', to: '/evaluate', see: 'nDCG (качество порядка выдачи), P@10 (доля релевантных в первой десятке) и MAP (средняя точность). Пары не сохраняются, банк не читается.' },
+      { go: 'Рейтинг', to: '/leaderboard', see: 'Публичный список без имени.' },
     ],
   },
 ]
+
+const SCENARIO_33: { n: number; title: string; to: string; see: string }[] = [
+  { n: 1, title: 'Вход кандидата', to: '/login?next=/candidate', see: 'Демо fsp001@demo.talent или свободный jury1…10, пароль demo12345.' },
+  { n: 2, title: 'Опрос', to: '/login?next=/candidate', see: 'Специализация и заявленный грейд в кабинете кандидата.' },
+  { n: 3, title: 'Тест', to: '/login?next=/candidate/assessment', see: 'Полный тест ставит грейд. Пробный экспресс — только знакомство с заданиями, грейд не подтверждает.' },
+  { n: 4, title: 'Категория', to: '/login?next=/candidate/results', see: 'Подтверждённый грейд и категория, видимые работодателю.' },
+  { n: 5, title: 'Поиск работодателем', to: '/login?role=employer&next=/employer/search', see: 'Банк и фильтры; подборка из потребности с объяснением «почему в выдаче».' },
+  { n: 6, title: 'Приглашение', to: '/login?role=employer&next=/employer/offers', see: 'Вилка до НДФЛ и способ связи обязательны.' },
+  { n: 7, title: 'Принятие и контакты', to: '/login?next=/candidate/offers', see: 'Кандидат принимает — работодатель видит контакты.' },
+  { n: 8, title: 'Отклик на вакансию', to: '/login?next=/candidate/vacancies', see: 'Дополнительный путь: кандидат откликается сам, контакты открываются так же.' },
+]
+
+const SCENARIO_KEY = 'fsp-jury-scenario-33'
 
 const PUBLIC_GUIDE = new Set(['/method', '/badge', '/jury', '/evaluate', '/leaderboard'])
 
@@ -64,6 +78,16 @@ export default function JuryPage() {
   const [question, setQuestion] = useState('')
   const [guideError, setGuideError] = useState('')
   const [hint, setHint] = useState<{ answer: string; links: { label: string; to: string }[] } | null>(null)
+  const [scenarioTick, setScenarioTick] = useState(0)
+  useEffect(() => {
+    const bump = () => setScenarioTick(n => n + 1)
+    window.addEventListener('storage', bump)
+    window.addEventListener('fsp-jury-scenario', bump)
+    return () => {
+      window.removeEventListener('storage', bump)
+      window.removeEventListener('fsp-jury-scenario', bump)
+    }
+  }, [])
   const show = async (kind: 'achievements' | 'vacancies') => {
     setBusy(true)
     setChannel('')
@@ -81,13 +105,14 @@ export default function JuryPage() {
     <PublicShell>
       <PageHeader
         title="Режим жюри"
-        lead="Отдельного входа для жюри нет. Пароль демо-аккаунтов demo12345. Публичные страницы открываются без аккаунта."
+        lead="Отдельного входа для жюри нет. Пароль демо-аккаунтов demo12345. Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой. Публичные страницы открываются без аккаунта."
       />
       <div className="grid gap-4 md:grid-cols-3">
         <section className="card flex flex-col">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink"><UserRound size={18} className="text-accent" aria-hidden />Кандидат</h2>
           <p className="mt-2 text-sm text-ink-2">Профиль с историей ФСП, тест и приглашения.</p>
           <p className="mt-3 rounded-md bg-sunken px-3 py-2 font-mono text-sm text-ink">fsp001@demo.talent</p>
+          <p className="mt-2 text-xs text-ink-3">Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой</p>
           <p className="mt-2 text-xs text-ink-3">Для теста на грейд: jury1@demo.talent … jury10@demo.talent, у каждого свои попытки.</p>
           <div className="mt-auto pt-4"><Link to="/login" className="btn-primary">Войти как кандидат</Link></div>
         </section>
@@ -95,6 +120,7 @@ export default function JuryPage() {
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink"><Building2 size={18} className="text-invite" aria-hidden />Работодатель</h2>
           <p className="mt-2 text-sm text-ink-2">Компания «Сибирский код»: потребности, подборка, задания.</p>
           <p className="mt-3 rounded-md bg-sunken px-3 py-2 font-mono text-sm text-ink">hr@sibcode.demo</p>
+          <p className="mt-2 text-xs text-ink-3">Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой</p>
           <div className="mt-auto pt-4"><Link to="/login?role=employer" className="btn-primary">Войти как работодатель</Link></div>
         </section>
         <section className="card flex flex-col">
@@ -109,6 +135,46 @@ export default function JuryPage() {
         </section>
       </div>
 
+
+      <section className="mt-10" aria-labelledby="scenario-title" data-testid="jury-scenario-33">
+        <h2 id="scenario-title" className="font-display text-xl font-bold tracking-[-0.02em] text-ink">Сквозной сценарий ТЗ 3.3</h2>
+        <p className="mt-2 max-w-3xl text-sm text-ink-2">
+          Восемь шагов без пояснений снаружи. Отметка «готово» хранится только в этом браузере.
+          Пробный экспресс-тест грейд не ставит — для категории нужен полный тест (кнопка экспресса на лендинге не дублируется здесь).
+        </p>
+        <ol className="mt-5 grid gap-3 sm:grid-cols-2">
+          {SCENARIO_33.map(step => {
+            void scenarioTick
+            const done = typeof window !== 'undefined' && window.localStorage.getItem(`${SCENARIO_KEY}:${step.n}`) === '1'
+            return (
+              <li key={step.n} className="card flex flex-col p-4">
+                <p className="font-display text-sm font-bold text-ink">
+                  <span className="text-ink-3">{step.n}. </span>{step.title}
+                  {done && <span className="ml-2 text-xs font-medium text-ok">готово</span>}
+                </p>
+                <p className="mt-1 flex-1 text-sm text-ink-2">{step.see}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Link to={step.to} className="btn-secondary btn-sm">Открыть</Link>
+                  <button
+                    type="button"
+                    className="btn-ghost btn-sm"
+                    data-testid={`scenario-done-${step.n}`}
+                    onClick={() => {
+                      const key = `${SCENARIO_KEY}:${step.n}`
+                      if (window.localStorage.getItem(key) === '1') window.localStorage.removeItem(key)
+                      else window.localStorage.setItem(key, '1')
+                      window.dispatchEvent(new Event('fsp-jury-scenario'))
+                    }}
+                  >
+                    {done ? 'Снять отметку' : 'Готово'}
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </section>
+
       <section className="mt-10" aria-labelledby="route-title">
         <h2 id="route-title" className="font-display text-xl font-bold tracking-[-0.02em] text-ink">Три пути</h2>
         <p className="mt-2 max-w-3xl text-sm text-ink-2">Один и тот же человек может пройти их по очереди. Пароль на экране входа подставляется кнопкой демо-аккаунта.</p>
@@ -118,13 +184,13 @@ export default function JuryPage() {
               <h3 className="font-display text-lg font-bold text-ink">{path.title}</h3>
               <p className="mt-1 font-mono text-xs text-ink-3">{path.who}</p>
               <ol className="mt-4 space-y-3">
-                {path.steps.map((step, index) => (
-                  <li key={step.go} className="grid grid-cols-[1.5rem_1fr] gap-2 text-sm">
-                    <span className="place text-accent">{index + 1}</span>
-                    <span>
-                      <span className="font-medium text-ink">{step.go}.</span>{' '}
-                      <span className="text-ink-2">{step.see}</span>
-                    </span>
+                {path.steps.map((step, i) => (
+                  <li key={step.go} className="text-sm">
+                    <p className="font-medium text-ink"><span className="text-ink-3">{i + 1}. </span>{step.go}
+                      {' '}
+                      <Link to={step.to} className="text-accent hover:underline">Открыть</Link>
+                    </p>
+                    <p className="mt-0.5 text-ink-2">{step.see}</p>
                   </li>
                 ))}
               </ol>

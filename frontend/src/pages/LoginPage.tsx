@@ -15,6 +15,14 @@ const schema = z.object({
 })
 type Form = z.infer<typeof schema>
 
+/** Same-site relative path only: starts with «/», not «//», no «:». */
+export function safeNextPath(raw: string | null): string | null {
+  if (!raw) return null
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes(':')) return null
+  return raw
+}
+
+
 const DEMO = {
   participant: [['fsp001@demo.talent', 'с историей ФСП'], ['nofsp@demo.talent', 'без ФСП']],
   employer: [['hr@sibcode.demo', '«Сибирский код»']],
@@ -59,7 +67,8 @@ export default function LoginPage() {
     try {
       const res = role === 'participant' ? await loginParticipant(username, password) : await loginEmployer(username, password)
       setAuth(res.data.access_token, role)
-      navigate(role === 'participant' ? '/candidate' : '/employer')
+      const next = safeNextPath(params.get('next'))
+      navigate(next ?? (role === 'participant' ? '/candidate' : '/employer'))
     } catch (e: unknown) {
       if (apiErrorCode(e) === 'email_not_verified') {
         navigate(`/verify?email=${encodeURIComponent(username.trim().toLowerCase())}&role=${role}`)
@@ -108,13 +117,13 @@ export default function LoginPage() {
         </div>
       )}
       <div className="mt-6 flex flex-col gap-2 border-t border-line pt-4">
-        {demo && <p className="text-xs text-ink-3">Стенд сбрасывается каждую ночь</p>}
         {demo && (
           <Link to={`/register?role=${role}`} className="text-xs font-medium text-accent hover:underline">
             Без почты: гостевой аккаунт на 48 часов
           </Link>
         )}
         <p className="text-xs text-ink-3">Демо-аккаунты, пароль demo12345:</p>
+        <p className="text-xs leading-relaxed text-ink-3">Демо-доступ для жюри: данные синтетические; свой прогресс можно сбросить кнопкой</p>
         {DEMO[role].map(([email, note]) => (
           <button key={email} type="button" className="chip-default w-full justify-start hover:border-accent hover:text-accent"
             onClick={() => { setValue('username', email); setValue('password', 'demo12345') }}>

@@ -66,20 +66,30 @@ function previousGrade(grade: string): string | null {
   return i > 0 ? GRADES[i - 1] : null
 }
 
-function secondsLeft(item: Item | null): number {
-  if (!item) return 0
-  const end = new Date(item.served_at).getTime() + item.time_limit_s * 1000
+/** Countdown from when the client received the item, so clock skew does not eat the first seconds. */
+function useCountdown(item: Item | null) {
+  const receivedAt = useRef<number | null>(null)
+  const tokenRef = useRef<string | null>(null)
+  const [, bump] = useState(0)
+  if (!item) {
+    tokenRef.current = null
+    receivedAt.current = null
+  } else if (tokenRef.current !== item.token) {
+    tokenRef.current = item.token
+    receivedAt.current = Date.now()
+  }
+  useEffect(() => {
+    if (!item) return
+    const id = setInterval(() => bump(n => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [item?.token])
+  if (!item || receivedAt.current == null) return 0
+  const end = receivedAt.current + item.time_limit_s * 1000
   return Math.max(0, Math.round((end - Date.now()) / 1000))
 }
 
-function useCountdown(item: Item | null) {
-  const [, bump] = useState(0)
-  useEffect(() => {
-    if (!item) return
-    const t = setInterval(() => bump(n => n + 1), 1000)
-    return () => clearInterval(t)
-  }, [item])
-  return secondsLeft(item)
+function timerDangerThreshold(timeLimitS: number): number {
+  return Math.min(20, timeLimitS / 3)
 }
 
 export default function CandidateAssessment() {
@@ -322,10 +332,13 @@ export default function CandidateAssessment() {
 
       {item && state && (
         <div className="card mx-auto max-w-3xl space-y-5" data-testid="assessment-item">
+          {state.progress.min_items === state.progress.max_items && (
+            <p className="notice-info text-sm" role="status" data-testid="trial-banner">Пробный тест: грейд не подтверждается и в поиске не учитывается.</p>
+          )}
           <div className="flex items-center justify-between text-xs text-ink-3">
             <span>Задание {item.seq}. {item.family_title.toLowerCase().startsWith(item.topic_label.toLowerCase()) ? item.family_title : `${item.topic_label}: ${item.family_title}`}</span>
             <span role="timer" aria-label={`Осталось ${Math.floor(left / 60)} мин ${left % 60} с`}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 font-mono text-sm tabular-nums ${left < 20 ? 'bg-danger-soft font-semibold text-danger' : 'bg-sunken text-ink-2'}`}>
+              className={`flex items-center gap-1 rounded-md px-2 py-1 font-mono text-sm tabular-nums ${left < timerDangerThreshold(item.time_limit_s) ? 'bg-danger-soft font-semibold text-danger' : 'bg-sunken text-ink-2'}`}>
               <Clock size={13} aria-hidden />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
             </span>
           </div>
@@ -345,7 +358,7 @@ export default function CandidateAssessment() {
               <input id="typed-answer" key={item.token} value={typed} onChange={e => setTyped(e.target.value)} autoFocus
                 inputMode="numeric" autoComplete="off" spellCheck={false} maxLength={32} placeholder="например, 42"
                 className="input max-w-xs font-mono text-base" aria-describedby="typed-hint" />
-              <p id="typed-hint" className="field-hint">Вариантов в этом задании нет. Enter отправляет ответ.</p>
+              <p id="typed-hint" className="field-hint">Вариантов в этом задании нет. Ответ отправляется клавишей Enter (Ввод).</p>
             </form>
           ) : (
             <div className="grid gap-2" role="radiogroup" aria-label="Варианты ответа">

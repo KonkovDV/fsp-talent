@@ -21,7 +21,7 @@ vi.mock('../../api/client', () => ({
         percent: 63, done: 5, total: 8,
         items: [
           { code: 'email', label: 'Email подтверждён', done: true, href: null },
-          { code: 'salary', label: 'Названо ожидание по зарплате', done: false, href: '/candidate/profile' },
+          { code: 'salary', label: 'Указаны ожидания по зарплате', done: false, href: '/candidate/profile' },
           { code: 'test', label: 'Грейд подтверждён тестом', done: false, href: '/candidate/assessment' },
         ],
       },
@@ -40,7 +40,7 @@ describe('готовность профиля', () => {
       </QueryClientProvider>,
     )
     expect(await screen.findByTestId('profile-completeness')).toHaveTextContent('63 %, 5 из 8')
-    expect(screen.getByRole('link', { name: 'Названо ожидание по зарплате' })).toHaveAttribute('href', '/candidate/profile')
+    expect(screen.getByRole('link', { name: 'Указаны ожидания по зарплате' })).toHaveAttribute('href', '/candidate/profile')
     expect(screen.getByRole('link', { name: 'Грейд подтверждён тестом' })).toHaveAttribute('href', '/candidate/assessment')
     expect(screen.getByText(/ФСП ID не привязан/)).toBeInTheDocument()
   })

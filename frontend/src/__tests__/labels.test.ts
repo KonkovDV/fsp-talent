@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GRADE_RU, JOB_SEARCH_BADGE, JOB_SEARCH_RU, SESSION_STATUS_RU, gradeRu, roleRu } from '../labels'
+import { GRADE_RU, JOB_SEARCH_BADGE, JOB_SEARCH_RU, SESSION_STATUS_RU, gradeRu, roleRu, skillRu, industryRu } from '../labels'
 
 describe('подписи грейда и статусов', () => {
   it('переводит грейд на русский', () => {
@@ -27,5 +27,12 @@ describe('подписи грейда и статусов', () => {
     expect(roleRu('qa')).toBe('Тестирование')
     expect(roleRu(null)).toBe('роль не определена')
     expect(JOB_SEARCH_BADGE.JOB_SEARCH_OPEN).toBe('Открыт к предложениям')
+  })
+
+  it('skillRu и industryRu', () => {
+    expect(skillRu('Algorithms')).toBe('Алгоритмы')
+    expect(skillRu('Python')).toBe('Python')
+    expect(industryRu('fintech')).toBe('Финансы и финтех')
+    expect(industryRu('Свой текст')).toBe('Свой текст')
   })
 })

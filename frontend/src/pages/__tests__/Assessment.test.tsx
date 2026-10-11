@@ -147,7 +147,7 @@ describe('тест на грейд', () => {
     activeAssessment.mockResolvedValue({ data: session() })
     renderPage(<CandidateAssessment />)
     const timer = await screen.findByRole('timer')
-    expect(timer.getAttribute('aria-label')).toMatch(/Осталось (9|10) мин/)
+    expect(timer.getAttribute('aria-label')).toMatch(/Осталось 10 мин/)
   })
 
   it('пробный итог не подтверждает грейд', async () => {
@@ -205,4 +205,30 @@ describe('тест на грейд', () => {
     expect(await screen.findByText(/Уровень «стажёр» не подтверждён/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ступень ниже/ })).not.toBeInTheDocument()
   })
+
+  it('таймер пробного задания стартует с полного лимита при сдвиге served_at', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const past = new Date(Date.now() - 8000).toISOString()
+    activeAssessment.mockResolvedValue({
+      data: session({
+        progress: { answered: 0, min_items: 15, max_items: 15 },
+        item: { ...item(), time_limit_s: 20, served_at: past },
+      }),
+    })
+    renderPage(<CandidateAssessment />)
+    const timer = await screen.findByRole('timer')
+    expect(timer).toHaveTextContent('0:20')
+    expect(timer.className).not.toMatch(/text-danger/)
+    expect(screen.getByTestId('trial-banner')).toHaveTextContent(/Пробный тест/)
+    await vi.advanceTimersByTimeAsync(14_000)
+    expect(timer.className).toMatch(/text-danger/)
+    vi.useRealTimers()
+  })
+
+  it('подсказывает Enter по-русски', async () => {
+    activeAssessment.mockResolvedValue({ data: session() })
+    renderPage(<CandidateAssessment />)
+    expect(await screen.findByText(/Ответ отправляется клавишей Enter \(Ввод\)/)).toBeInTheDocument()
+  })
+
 })

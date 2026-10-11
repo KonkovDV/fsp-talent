@@ -131,7 +131,7 @@ export default function EmployerSearch() {
             {role && grade && <>
               <label className={label} htmlFor="f-span">Кого оставить в списке</label>
               <select id="f-span" value={gradeSpan} onChange={e => setGradeSpan(e.target.value)} className="select" aria-label="Ширина грейда">
-                <option value="near">Соседний грейд и смежные специализации</option>
+                <option value="near">Соседний грейд и роли</option>
                 <option value="exact">Только эта пара</option>
                 <option value="wide">Любой грейд этой специализации</option>
               </select>
