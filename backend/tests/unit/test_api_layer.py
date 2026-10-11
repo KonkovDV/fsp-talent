@@ -723,7 +723,7 @@ async def test_vacancy_write_exam_and_apply(quiet):
     assert (await vacancies.close_vacancy(vacancy.id, current, db))["is_open"] is False
 
     person = _person()
-    category = SimpleNamespace(primary_role="backend", grade="middle")
+    category = SimpleNamespace(primary_role="backend", grade="middle", grade_source="assessed")
     score = SimpleNamespace(discipline="algorithmic", best_rank=None)
     open_vacancy = SimpleNamespace(
         id=_uid(), employer_id=company.id, employer=company, title="Бэкенд", role="backend", grade="junior",
@@ -797,7 +797,7 @@ async def test_candidate_profile_market_and_growth(quiet):
     assert "skills" in profile["completeness"]["missing"]
     assert "city" not in profile["completeness"]["missing"]
 
-    category = SimpleNamespace(primary_role="backend", grade="middle")
+    category = SimpleNamespace(primary_role="backend", grade="middle", grade_source="assessed")
     db.gets = [person]
     db.scalar_q = [category]
     db.scalars_q = [[180_000, 200_000, 220_000, 240_000, 260_000]]

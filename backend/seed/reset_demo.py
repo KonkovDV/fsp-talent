@@ -111,7 +111,10 @@ async def reset_demo() -> None:
             companies += 1
         invites = await restore_pending_invites(db)
         await db.commit()
-        print(f"demo reset jury={jury} companies={companies} invites={invites}")
+        # jury6…jury10 come back ready (survey and a confirmed grade); jury1…jury5 stay empty for the show.
+        from seed.demo_ready import make_ready
+        ready = await make_ready(db)
+        print(f"demo reset jury={jury} companies={companies} invites={invites} ready={ready['ready']}")
 
 
 def main() -> None:

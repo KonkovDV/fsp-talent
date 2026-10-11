@@ -213,8 +213,10 @@ def _candidate_facts(participant: Participant, category: CategoryAssignment | No
     """What a vacancy is matched against. Only a test-confirmed grade counts (ТЗ 2.1, #289, SDK-03):
     a grade declared in the survey would otherwise open graded vacancies without the test."""
     assessed = category is not None and category.grade_source == "assessed"
+    # «не выбрана» is a label for the card, not a specialization: it must not cut every vacancy away.
+    role = category.primary_role if category and category.primary_role in ROLES else None
     return {
-        "role": category.primary_role if category else None,
+        "role": role,
         "grade": category.grade if assessed else None,
         "skills": skills,
         "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
