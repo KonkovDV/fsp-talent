@@ -14,3 +14,11 @@ def test_the_page_stops_at_twenty():
     assert page["total"] == 30
     assert len(page["items"]) == 20
     assert page["items"][0]["test"] == 0.29
+
+
+def test_theta_breaks_a_tie_on_p_pass():
+    from app.services.category_rank import rank_pairs
+    page = rank_pairs([(1.0, 0.9), (1.0, 1.7), (0.92, 2.5), (1.0, None), (0.8, 0.1)])
+    assert [(i["test"], i["theta"]) for i in page["items"]] == [
+        (1.0, 1.7), (1.0, 0.9), (1.0, None), (0.92, 2.5), (0.8, 0.1)]
+    assert page["total"] == 5 and [i["place"] for i in page["items"]] == [1, 2, 3, 4, 5]
