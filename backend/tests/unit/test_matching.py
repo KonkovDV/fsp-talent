@@ -721,3 +721,14 @@ def test_fsp_history_never_lowers_a_tested_candidate_regression_h2():
             with_fsp = score(NEED, _cand(grade_source="assessed", test_p=test_p, fsp_lcb=lcb))
             assert with_fsp.score + 1e-9 >= plain.score, (test_p, lcb)
             assert with_fsp.employer + 1e-12 >= plain.employer, (test_p, lcb)
+
+
+def test_ladder_has_every_base_and_wins_are_shares():
+    from app.validation.matching import LADDER, ladder, ladder_markdown
+    result = ladder([2026], 200, 20)
+    assert set(result["wins"]) == {k for k, _ in LADDER}
+    for win, loss in result["wins"].values():
+        assert 0.0 <= win <= 1.0 and 0.0 <= loss <= 1.0 and win + loss <= 1.0
+    assert result["level"]["random"]["ndcg"] < result["level"]["full"]["ndcg"]
+    text = ladder_markdown(result)
+    assert "самоописание" in text and "P@5" in text

@@ -303,6 +303,12 @@ def rank(dataset: dict, need: dict, method: str, rng: random.Random) -> list[str
         return ids
     if method == "bm25":
         return bm25_rank(cands, need)
+    if method == "self":
+        # Self-description only: declared specialization, then declared grade; no skills, no test, no FSP.
+        def self_key(c):
+            o = c["observed"]
+            return (-(o["role"] == need["role"]), -(o["grade"] == need["grade"]), c["id"])
+        return [c["id"] for c in sorted(cands, key=self_key)]
     if method == "keyword":
         def key(c):
             o = c["observed"]
@@ -603,6 +609,53 @@ def baseline_deltas(seeds: list[int], n_candidates: int, n_needs: int, rounds: i
                                 "wins": sum(1 for d in deltas if d > 0) / len(deltas),
                                 "losses": sum(1 for d in deltas if d < 0) / len(deltas)}
     return out
+
+
+LADDER = (("random", "случайный порядок"), ("self", "самоописание: заявленные специализация и грейд"),
+          ("bm25", "поиск по ключевым словам (BM25)"), ("keyword", "сортировка по резюме"))
+
+
+def ladder(seeds: list[int], n_candidates: int, n_needs: int) -> dict:
+    """Base ladder for comparison with other teams: nDCG@10, P@5, P@10 per ranker and the share of needs where
+    the full model's nDCG@10 is strictly above / below each base. Needs with at least one label ≥ 2, pooled."""
+    keys = ("full", *(k for k, _ in LADDER))
+    per = {k: {"ndcg": [], "p5": [], "p10": []} for k in keys}
+    for seed in seeds:
+        dataset = make_dataset(n_candidates, n_needs, seed)
+        rng = random.Random(0)
+        for need in dataset["needs"]:
+            labels = dataset["labels"][need["id"]]
+            if _relevant(labels) == 0:
+                continue
+            for k in keys:
+                ranked = rank(dataset, need, k, rng)
+                per[k]["ndcg"].append(ndcg(ranked, labels))
+                per[k]["p5"].append(_at_k(ranked, labels, 5))
+                per[k]["p10"].append(_at_k(ranked, labels, 10))
+    out = {"seeds": list(seeds), "needs": len(per["full"]["ndcg"]),
+           "level": {k: {m: statistics.mean(v) for m, v in per[k].items()} for k in keys}, "wins": {}}
+    for k, _ in LADDER:
+        d = [a - b for a, b in zip(per["full"]["ndcg"], per[k]["ndcg"], strict=True)]
+        out["wins"][k] = (sum(x > 0 for x in d) / len(d), sum(x < 0 for x in d) / len(d))
+    return out
+
+
+def ladder_markdown(result: dict) -> str:
+    def dec(x: float) -> str:
+        return f"{x:.3f}".replace(".", ",")
+    seeds = ", ".join(map(str, result["seeds"]))
+    lines = [f"Лестница баз, зёрна {seeds}, {result['needs']} потребностей с релевантными кандидатами. "
+             "P@5 и P@10 — доля кандидатов с меткой ≥ 2 среди первых 5 и 10.", "",
+             "| Ранжирование | nDCG@10 | P@5 | P@10 | Модель лучше / хуже по nDCG@10, доля потребностей |",
+             "|---|---|---|---|---|"]
+    for k, title in LADDER:
+        lv, (w, lo) = result["level"][k], result["wins"][k]
+        lines.append(f"| {title} | {dec(lv['ndcg'])} | {dec(lv['p5'])} | {dec(lv['p10'])} "
+                     f"| {w * 100:.0f} % / {lo * 100:.0f} % |")
+    lv = result["level"]["full"]
+    lines.append(f"| ФСП Талант (полная модель) | {dec(lv['ndcg'])} | {dec(lv['p5'])} | {dec(lv['p10'])} | — |")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _signed(value: float) -> str:
@@ -1441,6 +1494,8 @@ def main() -> None:
     parser.add_argument("--import", dest="imported", help="evaluate a labelled dataset in the same JSON format")
     parser.add_argument("--pairs", help="JSONL of jury pairs: need, candidate, label 0..3")
     parser.add_argument("--check", action="store_true", help="fail unless the thresholds in checks_ok hold")
+    parser.add_argument("--ladder", action="store_true",
+                        help="print only the base ladder (random, self-description, BM25, resume) and exit")
     parser.add_argument("--tier-delta", default="",
                         help="comma-separated tier widths; print the three-seed sweep and exit")
     parser.add_argument("--blind-export", help="CSV for two people: observed profile only, empty label column")
@@ -1459,6 +1514,9 @@ def main() -> None:
     args = parser.parse_args()
     global ORDER_MODEL
     ORDER_MODEL = args.order
+    if args.ladder:
+        print(ladder_markdown(ladder(seed_list(args.seeds, args.seed) or [args.seed], args.candidates, args.needs)))
+        return
     if args.kappa:
         value = _kappa_from_sheets(args.kappa[0], args.kappa[1])
         print(f"взвешенная каппа {value:.2f} на парах из двух файлов")
