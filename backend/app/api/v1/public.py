@@ -29,7 +29,7 @@ from app.models import (
 from app.models.profile import DisciplineScore
 from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
-from app.services.category_rank import rank_scores
+from app.services.category_rank import rank_pairs
 from app.services.field_cipher import blind_index
 from app.services.formula_sheet import formula_sheet
 from app.services.fsp.mock import STATUS_LABELS
@@ -415,8 +415,8 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
         raise ApiError(429, "rate_limited")
     if role not in SPECIALIZATIONS or grade not in GRADES:
         raise ApiError(404, "not_found", "Такой категории нет")
-    scores = list(await db.scalars(
-        select(GradeConfirmation.p_pass)
+    scores = list(await db.execute(
+        select(GradeConfirmation.p_pass, GradeConfirmation.theta)
         .join(Participant, Participant.id == GradeConfirmation.participant_id)
         .join(CategoryAssignment, and_(
             CategoryAssignment.participant_id == Participant.id,
@@ -433,11 +433,11 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
             # to employers inside the product, never on a public page (audit-5 A1b, 152-FZ art. 10.1).
             *_public_filter(),
         )))
-    values = [float(score) for score in scores if score is not None]
+    values = [(float(score), None if theta is None else float(theta)) for score, theta in scores if score is not None]
     if len(values) < BANK_MIN:
         # k-anonymity over the public set: fewer than five people can point at one person (audit-3 P1-1).
         return {"total": 0, "items": [], "min_cell": BANK_MIN, "role": role, "grade": grade}
-    page = rank_scores(values)
+    page = rank_pairs(values)
     page["min_cell"] = BANK_MIN
     page["role"] = role
     page["grade"] = grade
