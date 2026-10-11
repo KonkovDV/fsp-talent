@@ -43,6 +43,7 @@ async def test_a_juror_resets_only_himself(db, monkeypatch):
         await _dirty(db, jury3)
         await _dirty(db, jury4)
         hash_before = jury3.password_hash
+        jury3.birth_date = None  # a stand seeded before 887401f
         await db.commit()
         for _ in range(2):  # idempotent
             assert await api.reset_my_demo({"sub": str(jury3.id)}, db) == {"reset": True}
@@ -51,6 +52,8 @@ async def test_a_juror_resets_only_himself(db, monkeypatch):
         assert jury3.survey_at is None and jury3.grade_locked_until is None and jury3.specialization is None
         assert await _skills(db, jury3) == 0
         assert jury3.password_hash == hash_before
+        from app.services.demo_reset import JURY_BIRTH
+        assert jury3.birth_date == JURY_BIRTH and jury3.is_minor is False
         assert jury4.grade_locked_until is not None and await _skills(db, jury4) >= 1
     finally:
         await wipe_people(created)

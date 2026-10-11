@@ -42,7 +42,7 @@ from app.services.ai.assistant import parse_resume
 from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
-from app.services.demo_reset import clear_jury, is_jury, restore_consents
+from app.services.demo_reset import JURY_BIRTH, clear_jury, is_jury, restore_consents
 from app.services.employer_score import company_score
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
@@ -126,6 +126,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "display_name": p.display_name, "region": p.region,
         "birth_date": p.birth_date.isoformat() if p.birth_date else None,
         "email": p.email, "email_verified": p.email_verified_at is not None,
+        "demo_reset_available": bool(settings.DEMO_MODE and is_jury(p.email)),
         "telegram": p.telegram, "phone": p.phone, "github": p.github,
         "experience_years": p.experience_years, "declared_grade": p.declared_grade,
         "specialization": p.specialization, "industry": p.industry, "work_goal": p.work_goal,
@@ -489,6 +490,9 @@ async def reset_my_demo(current: dict = Depends(get_current_participant), db: As
     if not settings.DEMO_MODE or not is_jury(p.email):
         raise ApiError(403, "demo_reset_forbidden", "Сброс доступен только демо-аккаунтам жюри на демо-стенде")
     await clear_jury(db, p)
+    # Like the seed and seed.topup_public: an older stand may lack the juror's birth date (887401f).
+    if p.birth_date is None:
+        p.birth_date, p.is_minor = JURY_BIRTH, False
     await restore_consents(db, p, datetime.now(UTC))
     await db.commit()
     return {"reset": True}

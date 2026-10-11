@@ -5,6 +5,7 @@ import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, my
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
+import DemoResetCard from '../../components/DemoResetCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
 import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -57,6 +58,7 @@ export default function CandidateDashboard() {
       {p.is_minor && !p.minor_consent_given && (
         <GuardianCard sentTo={p.guardian_email ?? null} demoLink={p.guardian_demo_link ?? null} />
       )}
+      {p.demo_reset_available && <DemoResetCard />}
       {!p.survey_done && <SurveyCard profile={p} />}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">

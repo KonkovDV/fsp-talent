@@ -5,7 +5,7 @@ expert on jury1 does not see the previous expert's survey, test or grade cooldow
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import delete, select
 
@@ -23,6 +23,9 @@ from app.models import (
     TestSession,
 )
 from app.services.identity import active_consent
+
+# Same date as seed.generate_seed.JURY_BIRTH; the app does not import the seed package.
+JURY_BIRTH = date(1990, 6, 15)
 
 
 def is_jury(email: str | None) -> bool:
