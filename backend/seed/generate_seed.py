@@ -20,6 +20,7 @@ from app.models import Consent, Employer, Participant, Skill, Vacancy
 from app.services.categorization import DISCIPLINE_ROLE_MAP, grade_from_experience
 from app.services.field_cipher import email_is
 from app.services.fsp.mock import MockFSPAdapter
+from app.services.market import MIN_CELL
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.survey import INDUSTRIES
 
@@ -402,11 +403,39 @@ async def ensure_pay_wishes() -> None:
         print(f"pay wishes set={len(people)}")
 
 
-async def ensure_category_market() -> None:
-    """Name wishes in Backend · middle outside the demo search pool.
+MARKET_K = MIN_CELL  # offers.offer_market hides a cell with fewer named sums; the threshold stays
+MARKET_FLOORS = (190_000, 230_000, 260_000, 300_000, 340_000, 380_000)
+MARKET_PREFERRED = ("backend", "middle")
 
-    The candidate cabinet shows quartiles only when five people named a sum. These profiles
-    do not match the demo need's Python and PostgreSQL query, so that need's pay hint stays put.
+
+def pick_market_cell(named: dict[tuple[str, str], int], free: dict[tuple[str, str], int],
+                     target: int = len(MARKET_FLOORS)) -> tuple[str, str] | None:
+    """The cell to fill for the employer market, or None when one already shows quartiles.
+
+    ``named`` counts visible people with a named sum per (role, grade); ``free`` counts visible people
+    outside the demo need's pool without a sum. Backend · middle comes first; otherwise the cell that
+    can reach ``target`` with the fewest new wishes, then the one with the most free people.
+    """
+    if any(n >= MARKET_K for n in named.values()):
+        return None
+    def need(cell):
+        return max(0, target - named.get(cell, 0))
+    reachable = [c for c, f in free.items() if f >= need(c) and need(c) > 0]
+    if MARKET_PREFERRED in reachable:
+        return MARKET_PREFERRED
+    if reachable:
+        return min(reachable, key=lambda c: (need(c), c))
+    if not free:
+        return None
+    return max(free, key=lambda c: (free[c] + named.get(c, 0), c))
+
+
+async def ensure_category_market() -> None:
+    """Name wishes in one category outside the demo search pool so the employer market shows quartiles.
+
+    The market and the candidate cabinet show quartiles only when five people named a sum (k-anonymity,
+    the threshold stays). Backend · middle is preferred; when its visible people mostly sit in the demo
+    need's Python and PostgreSQL pool, another cell is used, so that need's pay hint stays put.
     Show accounts and the load-test profiles are left as they are.
     """
     from app.core.rls import bypass_rls
@@ -414,28 +443,36 @@ async def ensure_category_market() -> None:
     from app.models.profile import ProfileSearchIndex
     from app.services.search.pipeline import visible_in_search
     bypass_rls()
-    floors = (190_000, 230_000, 260_000, 300_000, 340_000, 380_000)
     in_demo_need = ProfileSearchIndex.skills_tsv.op("@@")(func.to_tsquery("simple", "Python & PostgreSQL"))
+    outside_need = or_(ProfileSearchIndex.participant_id.is_(None), ~in_demo_need)
     async with AsyncSessionLocal() as db:
-        people = list(await db.scalars(
-            select(Participant)
-            .join(CategoryAssignment, CategoryAssignment.participant_id == Participant.id)
+        # The market counts only people an employer may see (offers.offer_market).
+        rows = (await db.execute(
+            select(CategoryAssignment.primary_role, CategoryAssignment.grade, Participant, outside_need)
+            .join(Participant, CategoryAssignment.participant_id == Participant.id)
             .outerjoin(ProfileSearchIndex, ProfileSearchIndex.participant_id == Participant.id)
-            .where(
-                CategoryAssignment.primary_role == "backend",
-                CategoryAssignment.grade == "middle",
-                # The market counts only people an employer may see (offers.offer_market).
-                visible_in_search(),
-                Participant.salary_from_gross.is_(None),
-                or_(ProfileSearchIndex.participant_id.is_(None), ~in_demo_need),
-            )
-            .order_by(Participant.id)))
-        people = [person for person in people if not _reserved(person)][:len(floors)]
-        for person, floor in zip(people, floors):
+            .where(visible_in_search())
+            .order_by(Participant.id))).all()
+        named: dict[tuple[str, str], int] = {}
+        free: dict[tuple[str, str], list[Participant]] = {}
+        for role, grade, person, outside in rows:
+            if not role or not grade:
+                continue
+            if person.salary_from_gross:
+                named[(role, grade)] = named.get((role, grade), 0) + 1
+            elif outside and not _reserved(person):
+                free.setdefault((role, grade), []).append(person)
+        cell = pick_market_cell(named, {c: len(p) for c, p in free.items()})
+        if cell is None:
+            print("category market set=0 (a cell already shows quartiles)")
+            return
+        missing = max(0, len(MARKET_FLOORS) - named.get(cell, 0))
+        people = free.get(cell, [])[:missing]
+        for person, floor in zip(people, MARKET_FLOORS):
             person.salary_from_gross = floor
             person.salary_to_gross = floor + 40_000
         await db.commit()
-        print(f"category market set={len(people)}")
+        print(f"category market cell={cell[0]}·{cell[1]} set={len(people)}")
 
 
 # The jury page opens the ranking on backend · middle; the employer market shows salary quartiles.
