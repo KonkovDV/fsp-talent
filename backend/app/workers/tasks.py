@@ -11,6 +11,21 @@ _REBUILD_LOCK_TTL = 600  # seconds
 _REBUILD_LOCK_PREFIX = "rebuild_lock:"
 
 
+async def _release_loop_resources() -> None:
+    """Close pooled connections bound to the loop that is about to close.
+
+    Each task runs on its own event loop. asyncpg connections in the SQLAlchemy pool and the Redis
+    pool belong to the loop that opened them, so the next task in the same worker process got
+    "attached to a different loop" or "Event loop is closed" (seen in deliver_webhooks on the stand).
+    """
+    from app.core import redis_client
+    from app.core.database import engine
+    await engine.dispose()
+    pool, redis_client._pool = redis_client._pool, None
+    if pool is not None:
+        await pool.disconnect()
+
+
 def run_async(coro):
     from app.core.rls import bypass_rls, reset_rls
     loop = asyncio.new_event_loop()
@@ -19,6 +34,10 @@ def run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         reset_rls(scope)
+        try:
+            loop.run_until_complete(_release_loop_resources())
+        except Exception:  # noqa: BLE001 - cleanup must not hide the task's own result or error
+            logger.warning("run_async: releasing loop resources failed", exc_info=True)
         loop.close()
 
 
