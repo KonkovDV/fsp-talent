@@ -113,6 +113,10 @@ jobs:
       - name: Seed demo data
         env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: cd backend && python -m seed.generate_seed
+      # Every demo account still shows its INSTALL.md case; before smoke, which changes demo data.
+      - name: Demo stand self-check
+        env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
+        run: cd backend && python -m seed.demo_check
       - name: API smoke test
         env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: |
