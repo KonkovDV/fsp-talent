@@ -3,7 +3,8 @@
 Labelled employer–candidate pairs do not exist for the hackathon, so the benchmark is synthetic and says so.
 Each candidate has a hidden truth (real skills, real level) and noisy observations the platform sees:
 declared skills miss 25 % of the real ones and add 15 % false ones; the declared grade is one level too high
-for 30 % of people; a test (taken by 45 %) confirms real skills and measures the level; 55 % have FSP history
+for 30 % of people; a test (taken by 45 %) confirms real skills and measures the level, and a failed attempt is
+observed as `failed_grade` (the production search reads it the same way, DoR-N7); 55 % have FSP history
 whose LCB correlates with the level. Relevance labels come from the hidden truth only:
 
     3  role matches, all required skills are real, real grade equals the requested one
@@ -25,6 +26,7 @@ printed; `--import` evaluates a labelled file in the same JSON format, `--pairs`
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import hashlib
 import json
@@ -88,13 +90,14 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
             # The sweep names only the share who claim one step up. Everyone else states the true grade.
             declared_grade = GRADES[min(gi + 1, len(GRADES) - 1)] if r < overclaim else true_grade
         tested = rng.random() < 0.45
-        grade, source, test_p = declared_grade, "declared", None
+        grade, source, test_p, failed_grade = declared_grade, "declared", None, None
         if tested:
             test_p = 1.0 / (1.0 + math.exp(-3.0 * (theta - CUTS[declared_grade])))
             if test_p >= 0.75:
                 grade, source = declared_grade, "assessed"
             else:
-                test_p = None
+                # The platform stores the failed attempt (outcome "not_passed"); the grade stays declared.
+                test_p, failed_grade = None, declared_grade
             for s in true_skills:
                 if s in TESTABLE and rng.random() < 0.9:
                     declared[s] = "test_confirmed"
@@ -104,12 +107,15 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
             test_correct = int(round(test_p * test_n))
         has_fsp = rng.random() < 0.55
         lcb = max(0.0, min(0.9, 0.3 + 0.15 * theta + rng.gauss(0, 0.08))) if has_fsp else None
+        observed = {"role": role, "grade": grade, "grade_source": source, "skills": declared,
+                    "test_p": test_p, "test_correct": test_correct, "test_n": test_n,
+                    "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)}
+        if failed_grade is not None:
+            observed["failed_grade"] = failed_grade
         candidates.append({
             "id": f"c{i}",
             "truth": {"role": role, "grade": true_grade, "skills": true_skills, "theta": round(theta, 4)},
-            "observed": {"role": role, "grade": grade, "grade_source": source, "skills": declared,
-                         "test_p": test_p, "test_correct": test_correct, "test_n": test_n,
-                         "fsp_lcb": lcb, "industry": rng.choice(INDUSTRIES)},
+            "observed": observed,
         })
     needs = []
     for j in range(n_needs):
@@ -220,7 +226,8 @@ def _facts(c: dict) -> CandidateFacts:
     return CandidateFacts(role=o["role"], grade=o["grade"], grade_source=o["grade_source"], skills=dict(o["skills"]),
                           test_p=o["test_p"], test_spec=o["role"], fsp_lcb=o["fsp_lcb"], industry=o["industry"],
                           test_correct=o.get("test_correct"), test_n=o.get("test_n"),
-                          city=o.get("city"), work_formats=tuple(o.get("work_formats") or ()))
+                          city=o.get("city"), work_formats=tuple(o.get("work_formats") or ()),
+                          failed_grade=o.get("failed_grade"))
 
 
 def _spec(n: dict) -> NeedSpec:
@@ -423,6 +430,17 @@ def _at_k(ranked: list[str], labels: dict[str, int], k: int) -> float:
     return sum(1 for cid in ranked[:k] if labels.get(cid, 0) >= 2) / k
 
 
+_CURVES: dict[tuple[int, int, int], dict] = {}
+
+
+def seed_curves(seed: int, n_candidates: int, n_needs: int) -> dict:
+    """paired_curves of one public seed, computed once per run: the paired table and the guard share it."""
+    key = (seed, n_candidates, n_needs)
+    if key not in _CURVES:
+        _CURVES[key] = paired_curves(make_dataset(n_candidates, n_needs, seed))
+    return _CURVES[key]
+
+
 def paired_curves(dataset: dict) -> dict:
     """Per-need nDCG and within-category Spearman for the full model and the four comparisons.
 
@@ -466,7 +484,7 @@ def paired_report(seeds: list[int], n_candidates: int, n_needs: int) -> str:
         "|---|---|---|---|---|---|",
     ]
     for seed in seeds:
-        curves = paired_curves(make_dataset(n_candidates, n_needs, seed))
+        curves = seed_curves(seed, n_candidates, n_needs)
         for key, title in PAIRED:
             delta = [a - b for a, b in zip(curves["ndcg"]["full"], curves["ndcg"][key], strict=True)]
             mean, low, high, p_value = sign_permutation(delta, seed=seed)
@@ -496,6 +514,57 @@ def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tup
     n = len(values)
     means = sorted(statistics.mean(rng.choices(values, k=n)) for _ in range(rounds))
     return means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
+
+
+def stuff_skills(dataset: dict, share: float = 0.2, seed: int = 41,
+                 trust: str = "self_reported") -> tuple[dict, set[str]]:
+    """A copy where `share` of candidates declare every skill of their role. Truth and labels stay the same."""
+    rng = random.Random(seed)
+    data = copy.deepcopy(dataset)
+    stuffed: set[str] = set()
+    for c in data["candidates"]:
+        if rng.random() >= share:
+            continue
+        stuffed.add(c["id"])
+        skills = c["observed"]["skills"]
+        for s in _pool(c["observed"]["role"]):
+            if trust == "self_reported":
+                skills.setdefault(s, trust)
+            else:
+                skills[s] = trust
+    return data, stuffed
+
+
+def stuffing_study(dataset: dict, share: float = 0.2, k: int = 10, seed: int = 41) -> list[dict]:
+    """Share of skill stuffers in the top k, against their share among same-role candidates of the need.
+
+    Ratio 1 means stuffing buys nothing. The keyword baseline shows what an unprotected ranking does.
+    Perturbation study in the spirit of arXiv:2501.04316.
+    """
+    rng = random.Random(0)
+    rows = []
+    # Baseline: the platform takes every claimed skill as confirmed. Shows what the trust weights buy.
+    for method, trust in (("full", "self_reported"), ("keyword", "self_reported"), ("full", "test_confirmed")):
+        data, stuffed = stuff_skills(dataset, share, seed, trust)
+        top_share, pool_share, ndcgs, before = [], [], [], []
+        for need in data["needs"]:
+            same = [c["id"] for c in data["candidates"] if c["observed"]["role"] == need["role"]]
+            if not same:
+                continue
+            ranked = rank(data, need, method, rng)
+            top = ranked[:k]
+            top_share.append(sum(1 for cid in top if cid in stuffed) / len(top))
+            # Control: the same people in the same top k before they stuffed their profiles.
+            clean_top = rank(dataset, need, method, rng)[:k]
+            before.append(sum(1 for cid in clean_top if cid in stuffed) / len(clean_top))
+            pool_share.append(sum(1 for cid in same if cid in stuffed) / len(same))
+            ndcgs.append(ndcg(ranked, data["labels"][need["id"]]))
+        top_mean, pool_mean = statistics.mean(top_share), statistics.mean(pool_share)
+        rows.append({"method": method if trust == "self_reported" else f"{method}, всё подтверждено",
+                     "top": top_mean, "pool": pool_mean, "before": statistics.mean(before),
+                     "ratio": top_mean / pool_mean if pool_mean else float("nan"),
+                     "top_ci": bootstrap_ci(top_share), "ndcg": statistics.mean(ndcgs)})
+    return rows
 
 
 UNCONFIRMED_POLICIES = (
@@ -825,11 +894,52 @@ def public_report(text: str) -> dict:
 
 
 # Thresholds of --check. They guard the claims in docs/VALIDATION_MATCHING.md, not a tuned optimum.
-RHO_DROP = 0.04          # removing the test or the FSP axis must cost at least this much Spearman in the category
+# Evidence guard: the test and the FSP axis each must raise the in-category Spearman. The rule is a sign,
+# not a size: full minus the ablation, paired by need and pooled over GUARD_SEEDS, must have a 95 % bootstrap
+# lower bound above zero (the same resampling as the paired nDCG table, 10 000 rounds).
+GUARD_SEEDS = (2026, 2027, 2028)
+GUARD_ABLATIONS = (("no_test", "без теста"), ("no_fsp", "без оси ФСП"))
 NDCG_FLOOR = 0.65        # full model on the default seed; the release before the category order had 0.661
 
 
-def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
+def evidence_guard(n_candidates: int, n_needs: int, seeds: tuple[int, ...] = GUARD_SEEDS) -> dict:
+    """Per ablation: mean Δ Spearman per seed, and the pooled paired mean with its 95 % bootstrap interval."""
+    out = {}
+    for key, _ in GUARD_ABLATIONS:
+        per_seed: dict[int, float] = {}
+        pooled: list[float] = []
+        for seed in seeds:
+            curves = seed_curves(seed, n_candidates, n_needs)
+            full, other = curves["rho"]["full"], curves["rho"][key]
+            deltas = [a - b for a, b in zip(full, other, strict=True)]
+            per_seed[seed] = statistics.mean(deltas) if deltas else float("nan")
+            pooled.extend(deltas)
+        mean, low, high = _paired_bounds(pooled, seed=11)
+        out[key] = {"per_seed": per_seed, "mean": mean, "low": low, "high": high, "n": len(pooled)}
+    return out
+
+
+def guard_markdown(guard: dict) -> str:
+    seeds = list(next(iter(guard.values()))["per_seed"]) if guard else []
+    lines = [
+        "Проверка доказательств: полная модель минус строка, Спирмен внутри категории, парно по потребностям. "
+        "Сводный 95 % ДИ — бутстреп среднего по потребностям всех зёрен, 10 000 повторов. "
+        "Проходит, если нижняя граница выше нуля.",
+        "",
+        "| Сравнение | " + " | ".join(f"Δ Спирмен, {s}" for s in seeds)
+        + " | Сводно | 95 % ДИ | Потребностей | Проходит |",
+        "|---|" + "---|" * len(seeds) + "---|---|---|---|",
+    ]
+    for key, title in GUARD_ABLATIONS:
+        g = guard[key]
+        cells = " | ".join(f"{g['per_seed'][s]:+.4f}" for s in seeds)
+        lines.append(f"| {title} | {cells} | {g['mean']:+.4f} | {g['low']:+.4f}…{g['high']:+.4f} | {g['n']} "
+                     f"| {'да' if g['low'] > 0 else 'нет'} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def checks_ok(rows: list[Row], synthetic: bool = True, guard: dict | None = None) -> list[str]:
     """The production ranker beats the baselines; inside a category the test and the FSP axis both matter."""
     by = {r.method: r for r in rows}
     failed = []
@@ -841,10 +951,9 @@ def checks_ok(rows: list[Row], synthetic: bool = True) -> list[str]:
         return failed
     if by["full"].ndcg10 < NDCG_FLOOR:
         failed.append(f"full nDCG@10 >= {NDCG_FLOOR}")
-    full_rho = by["full"].rho or 0.0
-    for ablation in ("no_test", "no_fsp"):
-        if full_rho - (by[ablation].rho or 0.0) < RHO_DROP:
-            failed.append(f"Spearman full - {ablation} >= {RHO_DROP}")
+    for ablation, _ in GUARD_ABLATIONS:
+        if guard is None or not guard[ablation]["low"] > 0:
+            failed.append(f"Spearman full - {ablation}: 95 % CI lower bound > 0 on seeds {GUARD_SEEDS}")
     if not (by["full"].overrated or 0.0) < (by["keyword"].overrated or 0.0):
         failed.append("overrated in top 10: full < keyword")
     return failed
@@ -1201,6 +1310,8 @@ def main() -> None:
     parser.add_argument("--merge-raters", nargs=2, metavar=("A", "B"),
                         help="floor of the mean of two sheets, written as JSONL for --pairs")
     parser.add_argument("--merged", help="where --merge-raters writes the JSONL")
+    parser.add_argument("--stuffing", type=float, default=0.0,
+                        help="share of candidates who declare every skill of their role; does not change the product")
     parser.add_argument("--unconfirmed", action="store_true",
                         help="show, demote or hide unconfirmed grades; does not change the product")
     parser.add_argument("--overclaim", default="",
@@ -1230,6 +1341,19 @@ def main() -> None:
         return
     if args.overclaim:
         _print_overclaim(args)
+        return
+    if args.stuffing:
+        print(f"Накрутка навыков: {args.stuffing:.0%} кандидатов заявляют все навыки своей специализации. "
+              f"Зерно {args.seed}, {args.candidates} кандидатов, {args.needs} потребностей.")
+        print("| Метод | В топ-10 до накрутки | В топ-10 после (95 % ДИ) | В своей специализации "
+              "| Отношение | nDCG@10 |")
+        print("|---|---|---|---|---|---|")
+        for r in stuffing_study(make_dataset(args.candidates, args.needs, args.seed), args.stuffing):
+            def pct(x: float) -> str:
+                return f"{x * 100:.1f} %".replace(".", ",")
+            ci = f"{pct(r['top_ci'][0])}…{pct(r['top_ci'][1])}"
+            print(f"| {r['method']} | {pct(r['before'])} | {pct(r['top'])} ({ci}) "
+                  f"| {pct(r['pool'])} | {r['ratio']:.2f} | {r['ndcg']:.4f} |".replace(".", ","))
         return
     if args.unconfirmed:
         rows = unconfirmed_study(make_dataset(args.candidates, args.needs, args.seed))
@@ -1284,7 +1408,12 @@ def main() -> None:
             print(paired_report(paired_seeds, args.candidates, args.needs))
     print("sha256", sha256(dataset))
     if args.check:
-        failed = checks_ok(rows, synthetic)
+        guard = None
+        if synthetic and not args.imported:
+            guard = evidence_guard(args.candidates, args.needs)
+            print()
+            print(guard_markdown(guard))
+        failed = checks_ok(rows, synthetic, guard)
         print("checks:", "failed " + ", ".join(failed) if failed else "passed")
         if failed:
             raise SystemExit(1)

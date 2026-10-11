@@ -39,26 +39,30 @@ async def _open_account(db: AsyncSession, payload: dict):
     return account
 
 
+def _require_role(payload: dict, role: str) -> None:
+    """A valid session of the other side is signed in but not allowed: 403, not 401 (RFC 9110 §15.5.4)."""
+    if payload.get("role") != role:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа для этой роли")
+
+
 async def get_current_participant(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     try:
-        payload = decode_token(token)
-        if payload.get("role") != "participant":
-            raise ValueError("Wrong role")
+        payload = _subject(decode_token(token))
         await _open_account(db, payload)
-        return _subject(payload)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Требуется вход")
+    _require_role(payload, "participant")
+    return payload
 
 
 async def get_current_employer(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     try:
-        payload = decode_token(token)
-        if payload.get("role") != "employer":
-            raise ValueError("Wrong role")
+        payload = _subject(decode_token(token))
         await _open_account(db, payload)
-        return _subject(payload)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Требуется вход")
+    _require_role(payload, "employer")
+    return payload
 
 
 async def get_any_auth(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):

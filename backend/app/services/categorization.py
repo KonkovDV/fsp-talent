@@ -33,7 +33,7 @@ DISCIPLINE_LABELS = {
     "security": "Программирование систем ИБ",
     "bas": "Программирование БАС",
     "robotics": "Программирование робототехники",
-    # Sixth discipline in the 2026 calendar (ЕКП): so far training events only, no official protocols yet.
+    # ЕКП 2026 direction, not a ВРВС discipline: the registry lists five (Minsport orders No. 58 and No. 445).
     "ai": "Программирование систем ИИ",
 }
 

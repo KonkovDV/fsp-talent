@@ -535,6 +535,17 @@ class Report:
     overlap_spec: float = 0.0
     adjacent_auc: list[AdjacentAuc] = field(default_factory=list)
     adjacent_auc_express: list[AdjacentAuc] = field(default_factory=list)
+    # Pearson r and RMSE of the ability estimate against the simulated true θ (clean scenario, express mode).
+    theta_fit: tuple[float, float] = (0.0, 0.0)
+    theta_fit_express: tuple[float, float] | None = None
+
+
+def theta_fit(sessions: list[Session]) -> tuple[float, float]:
+    """(Pearson r, RMSE) of θ̂ against the true θ. Both are on the same logit scale of the simulation."""
+    xs = [s.theta_hat for s in sessions]
+    ys = [s.theta for s in sessions]
+    rmse = math.sqrt(statistics.mean((x - y) ** 2 for x, y in zip(xs, ys, strict=True)))
+    return _pearson(xs, ys), rmse
 
 
 @dataclass
@@ -1214,6 +1225,7 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
     rudner_acc, rudner_cons, posterior_acc = rudner(clean_sessions)
     multiclass = multiclass_rudner(clean_sessions)
     ece, reliability = reliability_curve(clean_sessions)
+    express = express_sessions(people, truth, offsets, seed + 41) if extras else []
     matrix = grade_matrix(clean_sessions)
     overlap = item_overlap(clean_sessions)
     region_peaks = region_exposure(clean_sessions, seed + 17)
@@ -1245,7 +1257,9 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
         fixed_form=fixed_form(seed=seed) if extras else None,
         stolen=stolen_sessions(truth, offsets, seed + 31) if extras else None,
         adjacent_auc=adjacent_auc(clean_sessions, draws=1000 if extras else 200),
-        adjacent_auc_express=adjacent_auc(express_sessions(people, truth, offsets, seed + 41)) if extras else [],
+        adjacent_auc_express=adjacent_auc(express) if extras else [],
+        theta_fit=theta_fit(clean_sessions),
+        theta_fit_express=theta_fit(express) if extras else None,
     )
 
 
@@ -1374,6 +1388,10 @@ def markdown(r: Report, n: int, seed: int) -> str:
         f"(все задания с вариантами — {r.guesser_pass_choices:.1%}).",
         f"- Точный грейд в сценарии «без утечки»: {r.clean.exact_grade:.1%}, в пределах одной ступени: "
         f"{r.clean.within_one:.1%}, завышение: {r.clean.overgrade:.1%}.",
+        f"- Оценка способности против истинной θ, без утечки: r(θ̂, θ) = {r.theta_fit[0]:.3f}, "
+        f"RMSE = {r.theta_fit[1]:.3f}"
+        + (f"; экспресс-режим: r = {r.theta_fit_express[0]:.3f}, RMSE = {r.theta_fit_express[1]:.3f}."
+           if r.theta_fit_express else "."),
         f"- Каппа Коэна повторного теста (сдал / не сдал): {r.retest.kappa:.2f} "
         f"(95 % ДИ {r.retest.kappa_ci[0]:.2f}–{r.retest.kappa_ci[1]:.2f}). "
         f"Взвешенная каппа (квадратичные веса по подтверждённому грейду): {r.retest.weighted_kappa:.2f} "

@@ -61,3 +61,12 @@ def test_every_route_checks_staff_before_anything_else(module):
 def test_the_seed_does_not_make_a_printed_login_staff():
     from seed import generate_seed
     assert "is_methodist" not in inspect.getsource(generate_seed)
+
+
+async def test_staff_status_says_only_yes_or_no():
+    from app.api.v1 import employer
+    current = {"sub": str(uuid.uuid4()), "role": "employer"}
+    assert await employer.staff_status(current, _Db(_employer())) == {"is_staff": False}
+    assert await employer.staff_status(current, _Db(_employer(is_methodist=True))) == {"is_staff": True}
+    assert await employer.staff_status(current, _Db(_employer(is_methodist=True, email="hr@sibcode.demo"))) == {
+        "is_staff": False}
