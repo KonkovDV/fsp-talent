@@ -65,6 +65,14 @@ describe('потребность', () => {
     expect(createNeed).not.toHaveBeenCalled()
   })
 
+  it('кнопка-пример вставляет текст вакансии и ничего не сохраняет', async () => {
+    renderPage(<EmployerNeeds />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Новая потребность' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Frontend, senior' }))
+    expect(screen.getByLabelText('Текст вакансии')).toHaveValue('Frontend-разработчик Senior: React, TypeScript, JavaScript, CSS. Удалённо.')
+    expect(createNeed).not.toHaveBeenCalled()
+  })
+
   it('короткое название не создаёт потребность', async () => {
     renderPage(<EmployerNeeds />)
     await userEvent.click(await screen.findByRole('button', { name: 'Новая потребность' }))
