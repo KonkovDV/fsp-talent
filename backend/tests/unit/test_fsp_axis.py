@@ -8,6 +8,9 @@ def test_forty_online_appearances_stay_under_two_wins():
     assert ok
     # v4: a farm of participations is the empty history (0.16), never below it; two wins stay at 0.54.
     assert round(padded, 2) == 0.16
+    # Attendance adds exactly nothing: the farm IS the empty history (prior μ0 − σ0), not a reward.
+    from app.services.scoring.engine import LCB0
+    assert padded == compute_discipline_score([], REF)["lcb"] == round(LCB0, 4)
     assert round(wins, 2) == 0.54
 
 
