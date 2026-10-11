@@ -163,9 +163,9 @@ export default function CandidateDashboard() {
             : <ul className="mt-4 space-y-4">
                 {disciplines.map(d => (
                   <li key={d.discipline}>
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-ink">{d.label}</span>
-                      <span className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 text-ink">{d.label}</span>
+                      <span className="flex flex-wrap items-center gap-2">
                         <RankBadge rank={d.best_rank} assignedAt={d.rank_assigned_at} orderRef={d.rank_order_ref} />
                         {d.best_rank && <span className="text-ink-3">Присвоенный разряд</span>}
                         <span className="num text-ink-2">{d.events_count} соревн.</span></span>
