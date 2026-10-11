@@ -30,7 +30,8 @@ def test_showcase_prefix():
 
 
 def test_no_sql_pattern_on_the_encrypted_email_column():
-    pattern = re.compile(r"(Participant|Employer)\.email\.(like|notlike|ilike|in_|notin_|startswith|endswith|contains)\(")
+    ops = "like|notlike|ilike|in_|notin_|startswith|endswith|contains"
+    pattern = re.compile(rf"(Participant|Employer)\.email\.({ops})\(")
     hits = [f"{p.relative_to(ROOT)}:{n}" for base in ("app", "seed") for p in (ROOT / base).rglob("*.py")
             for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1) if pattern.search(line)]
     assert hits == []
