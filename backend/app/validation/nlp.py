@@ -11,9 +11,6 @@ Two parts, both rule-based and deterministic (no LLM: the model needs a key and 
 
 Scalar fields: exact match (a missing value counts as an error; a gold `null` is right only if nothing is found).
 Skill sets: precision, recall and F1 averaged over documents (CoNLL-2003 style, arXiv:cs/0306050).
-The structure of the evaluation (`prf`, two resume layouts, hand-written vacancy set) follows
-andercat2/fsp-career `backend/validation/nlp_validation.py` (MIT, see docs/THIRD_PARTY.md); the code, the
-templates and the gold set are our own because the parsers differ.
 """
 from __future__ import annotations
 
@@ -69,13 +66,21 @@ ABOUT = ["Люблю разбираться в сложных системах �
          "Интересуюсь архитектурой и производительностью."]
 
 
+def _share(part: int, whole: int) -> float:
+    """part / whole; an empty whole has nothing to get wrong and scores 1."""
+    return part / whole if whole else 1.0
+
+
 def prf(pred: set, gold: set) -> tuple[float, float, float]:
-    """Precision, recall, F1 of a predicted set; an empty prediction (or gold) scores 1 on that side."""
-    tp = len(pred & gold)
-    p = tp / len(pred) if pred else 1.0
-    r = tp / len(gold) if gold else 1.0
-    f = 2 * p * r / (p + r) if p + r else 0.0
-    return round(p, 3), round(r, 3), round(f, 3)
+    """Precision, recall and F1 of a predicted set against the gold set, rounded to 3 digits.
+
+    An empty prediction scores precision 1, an empty gold set scores recall 1; F1 is their harmonic mean.
+    """
+    overlap = len(pred.intersection(gold))
+    precision, recall = _share(overlap, len(pred)), _share(overlap, len(gold))
+    total = precision + recall
+    f1 = 0.0 if total == 0 else 2 * precision * recall / total
+    return tuple(round(x, 3) for x in (precision, recall, f1))
 
 
 def _phone(rng: random.Random) -> tuple[str, str]:
