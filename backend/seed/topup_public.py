@@ -38,8 +38,9 @@ TARGET = 6
 PREFIX = "public-"
 BIRTH = date(1996, 3, 1)
 # DoR-10 also names «data»: the seed's showcase has no data row, so its skills live here.
-SPECS = (*SHOWCASE_SPECS, "data")
-SKILLS = {**_SHOWCASE_SKILLS, "data": ["Python", "SQL", "Airflow", "Spark"]}
+SPECS = (*SHOWCASE_SPECS, "data", "security")
+SKILLS = {**_SHOWCASE_SKILLS, "data": ["Python", "SQL", "Airflow", "Spark"],
+          "security": ["Linux", "Python", "Pentesting", "Web Security"]}
 CELLS = tuple((spec, grade) for spec in SPECS for grade in SHOWCASE_CORE)
 
 
@@ -93,12 +94,12 @@ async def backfill_jury(db) -> int:
     return fixed
 
 
-async def sit_like_a_person(db, person: Participant, grade: str, email: str) -> bool:
+async def sit_like_a_person(db, person: Participant, grade: str, email: str, strong: bool = False) -> bool:
     """A real session through the service, but not a perfect one: each answer is right with a share drawn
     per profile (seeded by the address), so places inside a category differ instead of six ties at 100 %."""
     from app.services import assessment
     rng = random.Random(email)
-    share = rng.uniform(0.5, 0.85)
+    share = 1.0 if strong else rng.uniform(0.75, 0.97)
     session, item = await assessment.start_session(db, person.id, person.specialization, grade, code_language="python")
     for _ in range(25):
         token = assessment.item_token(session.id, item.seq, item.id)
@@ -145,12 +146,13 @@ async def topup(target: int = TARGET) -> dict:
         dist = documents()["pd_distribution"]
         added = passed = 0
         for spec, grade, need in missing_for(before, target):
-            n = 0
-            while need > 0 and n < target * 4:
+            n = tries = 0
+            while need > 0 and tries < target * 4 and n < 999:
                 n += 1
                 email = f"{PREFIX}{spec}-{grade}-{n:02d}@demo.talent"
                 if email in ours:
                     continue
+                tries += 1
                 now = datetime.now(UTC)
                 person = Participant(
                     email=email, display_name=f"Публичный {spec} {grade} {n:02d}", region="Новосибирск",
@@ -170,15 +172,24 @@ async def topup(target: int = TARGET) -> dict:
                 await db.commit()
                 added += 1
                 try:
-                    ok = await sit_like_a_person(db, person, grade, email)
+                    # The last attempts of a cell answer every item: a hard calibrated band must still reach the target.
+                    ok = await sit_like_a_person(db, person, grade, email, strong=tries > target * 2)
                 except Exception as exc:  # one failed sitting must not stop the top-up
                     await db.rollback()
                     print(f"topup test skipped {email}: {type(exc).__name__}")
+                    person = await db.get(Participant, person.id)
+                    if person is not None:
+                        person.public_profile = False
+                        await db.commit()
                     continue
                 await db.commit()
                 if ok:
                     passed += 1
                     need -= 1
+                else:
+                    # Did not pass: stays a declared profile for employers, never on a public page.
+                    person.public_profile = False
+                    await db.commit()
         after = await public_counts(db)
     short = [f"{s}/{g}={after.get((s, g), 0)}" for s, g in CELLS if after.get((s, g), 0) < BANK_MIN]
     print(f"topup_public jury_fixed={jury_fixed} relocked={relocked} added={added} passed={passed} "
