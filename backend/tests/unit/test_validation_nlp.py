@@ -42,3 +42,14 @@ def test_vacancy_gold_set_is_scored():
     assert report["n"] == 24
     assert 0.0 <= report["required"]["skills_f1"] <= 1.0
     assert set(report) >= {"role", "grade", "salary", "work_format", "city", "nice", "all_skills"}
+
+
+def test_field_prf_counts_misses_and_wrong_values():
+    assert nlp.field_prf([("a", "a"), (None, "b"), ("x", "c"), (None, None)]) == {"p": 0.5, "r": 0.333, "f1": 0.4}
+    assert nlp.field_prf([(None, None)]) == {"p": 1.0, "r": 1.0, "f1": 1.0}
+
+
+def test_held_out_vacancy_set_is_scored_separately():
+    report = nlp.vacancy_eval("nlp_vacancies_holdout.json")
+    assert report["n"] == 30
+    assert set(report["fields_prf"]) == {"role", "grade", "salary", "work_format", "city"}

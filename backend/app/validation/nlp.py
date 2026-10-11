@@ -8,8 +8,11 @@ Two parts, both rule-based and deterministic (no LLM: the model needs a key and 
    `extract_pdf_text` → `extract_resume_fields` + `extract_skills`; each field is compared with the truth.
 2. Vacancies. 24 hand-written vacancy texts of different styles (`resources/nlp_vacancies_gold.json`) go through
    `draft_need`; role, grade, required and nice-to-have skills, salary range, work format and city are compared.
+   A second, held-out set of 30 texts (`resources/nlp_vacancies_holdout.json`) was written before the parser
+   rules for salary ranges, city case forms and stack-named titles were tuned, and is reported separately.
 
-Scalar fields: exact match (a missing value counts as an error; a gold `null` is right only if nothing is found).
+Scalar fields: exact match (a missing value counts as an error; a gold `null` is right only if nothing is found),
+plus field-level precision / recall / F1 (`field_prf`).
 Skill sets: precision, recall and F1 averaged over documents (CoNLL-2003 style, arXiv:cs/0306050).
 """
 from __future__ import annotations
@@ -214,28 +217,66 @@ def _mean_prf(scores: list[tuple[float, float, float]]) -> dict:
             "skills_f1": round(statistics.fmean(s[2] for s in scores), 3)}
 
 
-def vacancy_eval() -> dict:
-    items = json.loads((RESOURCES / "nlp_vacancies_gold.json").read_text(encoding="utf-8"))
-    keys = ("role", "grade", "salary", "work_format", "city")
-    hits = {k: 0 for k in keys}
+VACANCY_FIELDS = ("role", "grade", "salary", "work_format", "city")
+
+
+def _field_values(d: dict, g: dict) -> dict[str, tuple]:
+    """(found, gold) per scalar field; the salary range is one field with both bounds."""
+    return {"role": (d["role"], g["role"]), "grade": (d["grade"], g["grade"]),
+            "salary": ((d["salary_from"], d["salary_to"]) if d["salary_from"] is not None else None,
+                       (g["salary_from"], g["salary_to"]) if g["salary_from"] is not None else None),
+            "work_format": (d["work_format"], g["work_format"]), "city": (d["city"], g["city"])}
+
+
+def field_prf(pairs: list[tuple]) -> dict:
+    """Field-level P/R/F1 over documents: a found value is right or wrong, a missed gold value lowers recall.
+
+    TP = found and equal to gold; precision = TP / found; recall = TP / gold present.
+    """
+    tp = sum(1 for got, gold in pairs if got is not None and got == gold)
+    found = sum(1 for got, _ in pairs if got is not None)
+    present = sum(1 for _, gold in pairs if gold is not None)
+    p, r = _share(tp, found), _share(tp, present)
+    f1 = 2 * p * r / (p + r) if p + r else 0.0
+    return {"p": round(p, 3), "r": round(r, 3), "f1": round(f1, 3)}
+
+
+def vacancy_eval(name: str = "nlp_vacancies_gold.json") -> dict:
+    items = json.loads((RESOURCES / name).read_text(encoding="utf-8"))
+    hits = {k: 0 for k in VACANCY_FIELDS}
+    pairs: dict[str, list[tuple]] = {k: [] for k in VACANCY_FIELDS}
     req, nice, all_sk, errors = [], [], [], []
     for it in items:
         g, d = it["gold"], draft_need(it["text"])
-        ok = {"role": d["role"] == g["role"], "grade": d["grade"] == g["grade"],
-              "salary": (d["salary_from"], d["salary_to"]) == (g["salary_from"], g["salary_to"]),
-              "work_format": d["work_format"] == g["work_format"], "city": d["city"] == g["city"]}
-        for k in keys:
+        values = _field_values(d, g)
+        ok = {k: got == gold for k, (got, gold) in values.items()}
+        for k in VACANCY_FIELDS:
             hits[k] += ok[k]
+            pairs[k].append(values[k])
         req.append(prf(set(d["skills"]), set(g["skills"])))
         if g["nice"]:
             nice.append(prf(set(d["nice_to_have"]), set(g["nice"])))
         all_sk.append(prf(set(d["skills"]) | set(d["nice_to_have"]), set(g["skills"]) | set(g["nice"])))
-        bad = [k for k in keys if not ok[k]]
+        bad = [k for k in VACANCY_FIELDS if not ok[k]]
         if bad:
             errors.append({"title": it["text"].splitlines()[0], "fields": bad})
     n = len(items)
     return {"n": n, **{k: round(v / n, 3) for k, v in hits.items()},
+            "fields_prf": {k: field_prf(v) for k, v in pairs.items()},
             "required": _mean_prf(req), "nice": _mean_prf(nice), "all_skills": _mean_prf(all_sk), "errors": errors}
+
+
+def _print_vacancies(title: str, v: dict) -> None:
+    print(f"\n{title}: {v['n']} текстов, draft_need")
+    print(f"{'поле':<18}{'точность':>9}{'P':>8}{'R':>8}{'F1':>8}")
+    for k in VACANCY_FIELDS:
+        f = v["fields_prf"][k]
+        print(f"{k:<18}{v[k]:>9.3f}{f['p']:>8.3f}{f['r']:>8.3f}{f['f1']:>8.3f}")
+    for name in ("required", "nice", "all_skills"):
+        s = v[name]
+        print(f"{name:<18} P {s['skills_p']:.3f}  R {s['skills_r']:.3f}  F1 {s['skills_f1']:.3f}")
+    for e in v["errors"]:
+        print(f"  ошибка: {e['title'][:50]} → {', '.join(e['fields'])}")
 
 
 def main(argv: list[str] | None = None) -> dict:
@@ -245,7 +286,8 @@ def main(argv: list[str] | None = None) -> dict:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     t0 = time.perf_counter()
-    report = {"seed": args.seed, "resumes": resume_eval(args.resumes, args.seed), "vacancies": vacancy_eval()}
+    report = {"seed": args.seed, "resumes": resume_eval(args.resumes, args.seed), "vacancies": vacancy_eval(),
+              "vacancies_holdout": vacancy_eval("nlp_vacancies_holdout.json")}
     report["seconds"] = round(time.perf_counter() - t0, 1)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -256,15 +298,8 @@ def main(argv: list[str] | None = None) -> dict:
     print(f"{'поле':<18}{'hh (2 колонки)':>16}{'свободный':>12}")
     for f in fields:
         print(f"{f:<18}{report['resumes']['hh'][f]:>16.3f}{report['resumes']['free'][f]:>12.3f}")
-    v = report["vacancies"]
-    print(f"\nВакансии: {v['n']} текстов вручную, draft_need")
-    for k in ("role", "grade", "salary", "work_format", "city"):
-        print(f"{k:<18}{v[k]:>8.3f}")
-    for name in ("required", "nice", "all_skills"):
-        s = v[name]
-        print(f"{name:<18} P {s['skills_p']:.3f}  R {s['skills_r']:.3f}  F1 {s['skills_f1']:.3f}")
-    for e in v["errors"]:
-        print(f"  ошибка: {e['title'][:50]} → {', '.join(e['fields'])}")
+    _print_vacancies("Вакансии (набор PR #305)", report["vacancies"])
+    _print_vacancies("Вакансии (отложенный набор)", report["vacancies_holdout"])
     print(f"\nВремя: {report['seconds']} с")
     return report
 
