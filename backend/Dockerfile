@@ -1,6 +1,10 @@
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# Cyrillic in the candidate's PDF profile (fpdf2 embeds DejaVuSans.ttf). Only the core package, no fontconfig.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml requirements.lock ./
 COPY app ./app
 # requirements.lock pins the versions the test suite passed on, so a rebuild months later gets the same stack.
