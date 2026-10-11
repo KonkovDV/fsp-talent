@@ -103,7 +103,7 @@ def latest_failed_targets(rows: list[tuple]) -> dict:
 
     Rows are (participant_id, specialization, target_grade, flags), newest first. An express trial and
     a vacancy test are skipped like in latest_grade_flags. A newer passed or accepted-lower attempt
-    hides an older failure: only the newest grade test of the specialization speaks (DoR-N7).
+    hides an older failure: only the newest grade test of the specialization speaks.
     """
     seen: set = set()
     failed: dict = {}
