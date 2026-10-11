@@ -13,7 +13,7 @@
   <img alt="W3C VC 2.0" src="https://img.shields.io/badge/W3C_VC-2.0-555">
 </p>
 
-<p align="center"><b>📊 Презентация: <a href="submission/03-presentation/FSP_Talent_presentation.pdf">PDF</a> · <a href="submission/03-presentation/FSP_Talent_presentation.pptx">PPTX</a></b></p>
+<p align="center"><b>Презентация: <a href="submission/03-presentation/FSP_Talent_presentation.pdf">PDF</a> · <a href="submission/03-presentation/FSP_Talent_presentation.pptx">PPTX</a></b></p>
 
 # ФСП Талант
 
