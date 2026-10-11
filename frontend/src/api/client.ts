@@ -17,15 +17,119 @@ export function apiErrorDetails<T = Record<string, unknown>>(error: unknown): T 
   return payloadOf(error)?.error?.details as T | undefined
 }
 
+/** Russian labels for common API field names in 422 loc paths. */
+const FIELD_RU: Record<string, string> = {
+  username: 'логин',
+  password: 'пароль',
+  email: 'email',
+  full_name: 'имя',
+  display_name: 'отображаемое имя',
+  role: 'специализация',
+  grade: 'грейд',
+  title: 'название',
+  skills: 'навыки',
+  nice_to_have: 'желательные навыки',
+  salary_from: 'вилка от',
+  salary_to: 'вилка до',
+  city: 'город',
+  work_format: 'формат',
+  industry: 'отрасль',
+  website: 'сайт',
+  inn: 'ИНН',
+  description: 'описание',
+  status: 'статус',
+  limit: 'лимит',
+  offset: 'смещение',
+  query: 'запрос',
+  token: 'токен',
+  code: 'код',
+  message: 'сообщение',
+  company_name: 'компания',
+  phone: 'телефон',
+  birth_date: 'дата рождения',
+  target_grade: 'целевой грейд',
+  specialization: 'специализация',
+  vacancy_id: 'вакансия',
+  need_id: 'потребность',
+  candidate_id: 'кандидат',
+  grade_match: 'сопоставление грейда',
+  work_goal: 'цель работы',
+  has_fsp: 'наличие ФСП',
+  answer: 'ответ',
+  text: 'текст',
+  url: 'ссылка',
+  name: 'имя',
+}
+
+function fieldLabel(path: string): string {
+  if (!path) return ''
+  return path.split('.').map(part => {
+    if (/^\d+$/.test(part)) return part
+    return FIELD_RU[part] ?? part
+  }).join('.')
+}
+
+/** Map common FastAPI/pydantic English validation fragments to Russian (SD-06 / SDK-09). */
+function translateValidationMsg(msg: string): string {
+  const m = msg.trim()
+  if (!m) return m
+  const exact: Record<string, string> = {
+    'Field required': 'Обязательное поле',
+    'field required': 'Обязательное поле',
+    'Not Found': 'Не найдено',
+    'not found': 'Не найдено',
+    'Invalid credentials': 'Неверный логин или пароль',
+  }
+  if (exact[m]) return exact[m]
+  let out = m
+  out = out.replace(/^Input should be a valid UUID(?:.*?)$/i, 'Некорректный идентификатор')
+  out = out.replace(/^Input should be a valid email(?:.*?)$/i, 'Некорректный email')
+  out = out.replace(/^Input should be a valid integer(?:.*?)$/i, 'Нужно целое число')
+  out = out.replace(/^Input should be a valid number(?:.*?)$/i, 'Нужно число')
+  out = out.replace(/^Input should be a valid boolean(?:.*?)$/i, 'Нужно да или нет')
+  out = out.replace(/^Input should be less than or equal to (-?\d+(?:\.\d+)?)$/i, 'Значение должно быть не больше $1')
+  out = out.replace(/^Input should be greater than or equal to (-?\d+(?:\.\d+)?)$/i, 'Значение должно быть не меньше $1')
+  out = out.replace(/^Input should be less than (-?\d+(?:\.\d+)?)$/i, 'Значение должно быть меньше $1')
+  out = out.replace(/^Input should be greater than (-?\d+(?:\.\d+)?)$/i, 'Значение должно быть больше $1')
+  out = out.replace(/^String should have at least (\d+) characters?$/i, 'Не короче $1 символов')
+  out = out.replace(/^String should have at most (\d+) characters?$/i, 'Не длиннее $1 символов')
+  out = out.replace(/^List should have at least (\d+) items?$/i, 'Нужно не меньше $1 элементов')
+  out = out.replace(/^List should have at most (\d+) items?$/i, 'Нужно не больше $1 элементов')
+  out = out.replace(/^Input should be a valid string$/i, 'Нужна строка')
+  out = out.replace(/^Value error,\s*/i, '')
+  // Enum-style: Input should be 'a', 'b' or 'c'
+  const enumMatch = out.match(/^Input should be (.+)$/i)
+  if (enumMatch && /^'[^']+'/.test(enumMatch[1])) {
+    const opts = enumMatch[1].replace(/\bor\b/g, 'или')
+    return `Допустимые значения: ${opts}`
+  }
+  if (out !== m) return out
+  // Already Russian or unknown — leave as-is
+  return m
+}
+
+function detailText(detail: unknown): string {
+  if (typeof detail === 'string') return translateValidationMsg(detail)
+  if (!Array.isArray(detail)) return ''
+  return detail
+    .map((item) => {
+      if (typeof item === 'string') return translateValidationMsg(item)
+      const msg = (item as { msg?: string }).msg ?? ''
+      const loc = (item as { loc?: unknown[] }).loc
+      const fieldPath = Array.isArray(loc) ? loc.filter(x => x !== 'body' && x !== 'query' && x !== 'path').map(String).join('.') : ''
+      const field = fieldLabel(fieldPath)
+      const translated = translateValidationMsg(msg)
+      return field && translated ? `${field}: ${translated}` : translated
+    })
+    .filter(Boolean)
+    .join('; ')
+}
+
 export function apiError(error: unknown, fallback = 'Ошибка'): string {
   const data = payloadOf(error)
-  const detail = data?.detail
-  if (Array.isArray(detail)) {
-    const text = detail.map((item) => (typeof item === 'string' ? item : (item as { msg?: string }).msg ?? '')).filter(Boolean).join('; ')
-    return text || fallback
-  }
-  if (data?.error?.message) return data.error.message
-  if (typeof detail === 'string') return detail
+  const fromDetail = detailText(data?.detail)
+  if (fromDetail) return fromDetail
+  if (data?.error?.message) return translateValidationMsg(data.error.message)
   return fallback
 }
 
