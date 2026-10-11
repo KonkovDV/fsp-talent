@@ -53,7 +53,7 @@ def test_paused_company_cannot_send_an_invitation(monkeypatch):
 
     body = OfferCreate(
         candidate_id=uuid.uuid4(), salary_from_gross=100_000, salary_to_gross=150_000,
-        role="backend", contact_method="почта",
+        role="backend", contact_method="hr@example.ru",
     )
     try:
         asyncio.run(_create_offer(body, {"sub": str(employer_id)}, _Db()))
