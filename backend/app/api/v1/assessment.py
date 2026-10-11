@@ -84,7 +84,7 @@ TOPIC_LABELS = {"python": "Python", "sql": "SQL", "algorithms": "Алгорит�
                 "security": "Безопасность", "network": "Сети", "ml": "Машинное обучение",
                 "embedded": "Встраиваемые системы", "concept": "Понимание",
                 "testing": "Тестирование", "metrics": "Метрики", "pipelines": "Конвейеры данных",
-                "requirements": "Требования"}
+                "requirements": "Требования", "infra": "Инфраструктура"}
 
 
 class StartIn(BaseModel):
