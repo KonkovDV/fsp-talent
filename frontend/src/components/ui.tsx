@@ -1,8 +1,13 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { ROLE_RU, gradeRu } from '../labels'
 
 export function PageHeader({ title, lead, actions }: { title: string; lead?: ReactNode; actions?: ReactNode }) {
+  useEffect(() => {
+    const prev = document.title
+    document.title = `${title} — ФСП Талант`
+    return () => { document.title = prev }
+  }, [title])
   return (
     <div className="page-head">
       <div className="min-w-0 max-w-full">

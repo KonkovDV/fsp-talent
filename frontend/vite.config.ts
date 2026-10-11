@@ -9,6 +9,12 @@ export default defineConfig({
       '/api': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+    },
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,
