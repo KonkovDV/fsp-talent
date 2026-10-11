@@ -5,11 +5,30 @@ import { JOB_SEARCH_BADGE, ROLE_RU, gradeRu } from '../labels'
 import { CategoryPlate, Meter, RankBadge } from './ui'
 import AiNote from './AiNote'
 
+/** Competitor idea 5: what the card's evidence confirms and what it does not (claim boundary). */
+export function claimBoundary(card: Pick<CandidateCardData, 'grade' | 'grade_source' | 'grade_borderline' | 'skill_evidence'>,
+                              hasFsp: boolean): { yes: string[]; no: string[] } {
+  const yes: string[] = []
+  if (card.grade_source === 'assessed') {
+    yes.push(`Тест: знания по специализации на уровне ${gradeRu(card.grade)}${card.grade_borderline ? ' (на границе уровня)' : ''}`)
+  }
+  if (hasFsp) yes.push('ФСП: места в протоколах соревнований из реестра')
+  if (card.skill_evidence && Object.keys(card.skill_evidence).length > 0) yes.push('Навыки с источником: тест, ФСП или цитата из резюме')
+  const no = [
+    'опыт коммерческой разработки и его длительность',
+    'руководство командой и soft skills',
+    'навыки без указанного источника — их назвал сам кандидат',
+  ]
+  if (card.grade_source !== 'assessed') no.unshift('грейд — он заявлен кандидатом, тестом не подтверждён')
+  return { yes, no }
+}
+
 export interface CandidateCardData {
   candidate_id: string
   role: string | null
   grade: string | null
   grade_source: string | null
+  grade_borderline?: boolean
   also_primary?: { role: string | null; grade: string | null; grade_source: string | null } | null
   region: string | null
   experience_years: number | null
@@ -20,6 +39,8 @@ export interface CandidateCardData {
   matched_skills: string[]
   missing_skills: string[]
   skill_evidence?: Record<string, string>
+  /** Optional (older API answers omit it): source, date and method of each confirmed skill. */
+  skill_provenance?: Record<string, { source: string; verified_at: string | null; method_version: string }>
   why: string[]
   shortlisted?: boolean
   hidden?: boolean
@@ -99,6 +120,13 @@ interface Props {
 }
 
 const years = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет')
+
+export function skillProvenance(name: string, card: Pick<CandidateCardData, 'skill_provenance'>): string | undefined {
+  const p = card.skill_provenance?.[name]
+  if (!p) return undefined
+  const how = p.source === 'test_confirmed' ? 'тест' : p.source === 'resume_confirmed' ? 'цитата из резюме' : p.source
+  return `Источник: ${how}${p.verified_at ? `, ${p.verified_at}` : ''}; методика ${p.method_version}`
+}
 
 function skillChip(name: string, evidence?: Record<string, string>): string {
   const trust = evidence?.[name]
@@ -233,16 +261,33 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {card.grade_source === 'assessed'
-              ? <span className="badge-ok">Грейд подтверждён тестом</span>
+              ? <>
+                  <span className="badge-ok">Грейд подтверждён тестом</span>
+                  {card.grade_borderline && (
+                    <span className="badge-vc" title="Оценка теста в пределах погрешности от порога уровня. На повторе такие решения совпадают реже: около 59 % против 82 %.">
+                      на границе уровня
+                    </span>
+                  )}
+                </>
               : <span className="badge-vc">Грейд не подтверждён</span>}
             {disc ? <><RankBadge rank={disc.best_rank} assignedAt={disc.rank_assigned_at} orderRef={disc.rank_order_ref} /><span className="text-ink-2">{disc.label}</span></>
               : <span className="text-ink-3">Без истории ФСП</span>}
           </div>
+          {(() => {
+            const b = claimBoundary(card, Boolean(disc))
+            return (
+              <details className="text-xs text-ink-2">
+                <summary className="cursor-pointer">Что подтверждено и что нет</summary>
+                {b.yes.length > 0 && <p className="mt-1">Подтверждает: {b.yes.join('; ')}.</p>}
+                <p className="mt-1">Не подтверждает: {b.no.join('; ')}.</p>
+              </details>
+            )
+          })()}
           {(card.matched_skills.length > 0 || card.missing_skills.length > 0 || card.stack.length > 0) && (
             <div className="flex flex-wrap gap-1.5">
-              {card.matched_skills.map(s => <span key={s} className="chip-active">{skillChip(s, card.skill_evidence)}</span>)}
+              {card.matched_skills.map(s => <span key={s} className="chip-active" title={skillProvenance(s, card)}>{skillChip(s, card.skill_evidence)}</span>)}
               {card.missing_skills.map(s => <span key={s} className="chip-missing">нет {s}</span>)}
-              {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default">{skillChip(s, card.skill_evidence)}</span>)}
+              {card.stack.filter(s => !card.matched_skills.includes(s)).slice(0, 6).map(s => <span key={s} className="chip-default" title={skillProvenance(s, card)}>{skillChip(s, card.skill_evidence)}</span>)}
             </div>
           )}
           {!!card.soft_skills?.length && (

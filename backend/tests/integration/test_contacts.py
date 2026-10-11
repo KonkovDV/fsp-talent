@@ -40,7 +40,7 @@ async def test_contacts_wait_for_acceptance(db):
         employer_id=company.id, candidate_id=person.id,
         salary_from_gross=100_000, salary_to_gross=150_000,
         currency="RUB", role="backend", work_format="remote",
-        contact_method="почта", status="pending",
+        contact_method="hr@example.ru", status="pending",
     )
     db.add(offer)
     await db.commit()

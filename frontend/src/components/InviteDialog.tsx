@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { apiError, createOffer, previewOffer } from '../api/client'
+import { apiError, createOffer, getLimits, previewOffer } from '../api/client'
 import { PERK_RU } from '../labels'
 import { grossForNet, netLine, netMonthly } from '../money'
+import { contactOk } from '../contact'
 import Modal from './Modal'
 
 /** The invitation: role, salary range in roubles (mandatory, TZ 2.2), format and how to reach the employer. */
@@ -19,6 +20,8 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const [market, setMarket] = useState('')
   const [basis, setBasis] = useState<'gross' | 'net'>('gross')
   const [idem] = useState(() => crypto.randomUUID())
+  // The floor comes from the backend; until it loads the backend check (422) still applies.
+  const floor = useQuery({ queryKey: ['limits'], queryFn: getLimits, staleTime: Infinity }).data?.min_monthly_gross
 
   const send = useMutation({
     mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis, perks: form.perks, practice: form.practice }, idem),
@@ -28,9 +31,9 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (form.role.trim().length < 2) return setError('Укажите должность')
-    if (form.salary_from_gross < 27093 || form.salary_to_gross < form.salary_from_gross) return setError('Вилка не ниже МРОТ 27 093 ₽ в месяц до вычета НДФЛ, «до» не меньше «от»')
+    if ((floor != null && form.salary_from_gross < floor) || form.salary_to_gross < form.salary_from_gross) return setError(`Вилка не ниже МРОТ ${(floor ?? 0).toLocaleString('ru-RU')} ₽ в месяц до вычета НДФЛ, «до» не меньше «от»`)
     if (form.contact_method.trim().length < 3) return setError('Укажите, как кандидату связаться с вами')
-    if (/https?:\/\/|www\./i.test(form.contact_method)) return setError('Ссылку в способ связи писать нельзя: укажите почту, телефон или Telegram')
+    if (!contactOk(form.contact_method)) return setError('Способ связи: почта, @ник в Telegram или телефон в формате +79991234567')
     setError('')
     send.mutate()
   }
@@ -92,7 +95,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
                 <option value="remote">удалённо</option><option value="hybrid">гибрид</option><option value="office">в офисе</option>
               </select></div>
             <div><label className="field-label" htmlFor="inv-contact">Как связаться с вами</label>
-              <input id="inv-contact" value={form.contact_method} onChange={set('contact_method')} className="input" placeholder="Telegram или email" /></div>
+              <input id="inv-contact" value={form.contact_method} onChange={set('contact_method')} className="input" placeholder="hr@company.ru, @telegram или +79991234567" /></div>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" checked={form.practice} onChange={e => setForm(prev => ({ ...prev, practice: e.target.checked }))} />

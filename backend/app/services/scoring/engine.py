@@ -43,7 +43,7 @@ from datetime import date
 from itertools import combinations
 from typing import TypedDict
 
-VERSION = "v4.0.0"
+VERSION = "v4.1.0"
 HALF_LIFE_MONTHS = 18.0
 PRIOR_STRENGTH = 2.0      # K: prior counts as two full-weight events
 PRIOR_MEAN = 0.30
@@ -64,6 +64,11 @@ RESULT_CLASS_LABELS = {
 }
 # Winning a field of two is not a win: prize classes need a real field, otherwise the share of the field decides.
 MIN_FIELD_FOR_PRIZE = 6
+# audit-4 F-1: evidence from a field of N people weighs 1 − e^(−N/FIELD_SCALE): a place among 6 is about a fifth
+# of a place among 200. Combined with EVENT_CAP this bounds what any number of small fields can add.
+FIELD_SCALE = 30.0
+# At most this many result events per calendar month and discipline enter the pool (the strongest by q, then w).
+PER_MONTH_CAP = 2
 
 # Strongest rank first. Youth ranks stay separate. The product does not invent МСМК: the sport's
 # norms do not list it. A rank is never derived from a place; this order is only for the filter.
@@ -124,9 +129,15 @@ def event_quality(place: int, total: int, status: str | None = None) -> float:
     return RESULT_CLASSES[result_class(place, total)]
 
 
-def event_weight(event_date: date, team_size: int, ref: date) -> float:
+def field_weight(total: int | None) -> float:
+    if not total:
+        return 1.0
+    return 1.0 - math.exp(-max(int(total), 1) / FIELD_SCALE)
+
+
+def event_weight(event_date: date, team_size: int, ref: date, total: int | None = None) -> float:
     decay = 2.0 ** (-months_between(event_date, ref) / HALF_LIFE_MONTHS)
-    return decay / math.sqrt(max(team_size, 1))
+    return decay / math.sqrt(max(team_size, 1)) * field_weight(total)
 
 
 def posterior(pairs: list[tuple[float, float]]) -> tuple[float, float, float]:
@@ -220,7 +231,12 @@ def _result_pool(events: list[EventInput], ref: date) -> list[tuple[float, float
         q = event_quality(e["place"], e["total_participants"], e["competition_status"])
         if q <= 0:
             continue
-        pool.append((q, event_weight(e["event_date"], e["team_size"], ref), e))
+        pool.append((q, event_weight(e["event_date"], e["team_size"], ref, e["total_participants"]), e))
+    by_month: dict[tuple[int, int], list] = {}
+    for item in pool:
+        by_month.setdefault((item[2]["event_date"].year, item[2]["event_date"].month), []).append(item)
+    pool = [item for items in by_month.values()
+            for item in sorted(items, key=lambda t: (t[0], t[1]), reverse=True)[:PER_MONTH_CAP]]
     if len(pool) > EXACT_SUBSET_LIMIT:
         pool = sorted(pool, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:EXACT_SUBSET_LIMIT]
     return pool

@@ -6,6 +6,7 @@ from Mailpit (the docker compose stand: `make check`).
 import glob
 import json
 import os
+import random
 import re
 import time
 import urllib.error
@@ -158,10 +159,14 @@ def check_registration():
     assert status == 409 and taken_fsp["error"]["code"] == "fsp_taken", taken_fsp
     status, bad_fsp = link_fsp(token, "FSP2001", password="nope")
     assert status == 400 and bad_fsp["error"]["code"] == "fsp_invalid", bad_fsp
-    fsp_id = f"FSP{2000 + int(time.time()) % 100}"
-    status, linked = link_fsp(token, fsp_id)
-    if status == 409:   # a previous smoke run on the same database already linked this id
+    # A random free id from the mock's unclaimed range; ids linked by earlier runs answer 409 and are skipped.
+    for fsp_id in unclaimed_ids():
+        status, linked = link_fsp(token, fsp_id)
+        if status != 409:
+            break
         assert linked["error"]["code"] == "fsp_taken", linked
+    if status == 409:   # every unclaimed id is linked already (a database after 100 runs)
+        print("FSP LINK skipped: no unclaimed mock id left")
     else:
         assert status == 200 and linked["fsp_id"] == fsp_id and linked["results"] >= 1, linked
         status, me = call("GET", "/candidates/me", token=token)
@@ -264,12 +269,12 @@ def main():
     status, offer = call("POST", "/offers/", {
         "candidate_id": me["id"], "salary_from_gross": 180000, "salary_to_gross": 260000,
         "role": "Backend-разработчик", "work_format": "remote", "message": "Ждём в команде",
-        "contact_method": "Telegram @sibcode_hr",
+        "contact_method": "@sibcode_hr",
     }, token=employer_token)
     assert status == 201, offer
     status, seen = call("GET", "/candidates/me/offers", token=participant_token)
     mine = next(o for o in seen if o["id"] == offer["id"])
-    assert status == 200 and mine["contact_method"] == "Telegram @sibcode_hr", mine
+    assert status == 200 and mine["contact_method"] == "@sibcode_hr", mine
     status, listed = call("GET", "/offers/", token=employer_token)
     assert next(o for o in listed if o["id"] == offer["id"])["candidate_viewed_at"], "viewed status not recorded"
     status, no_salary = call("POST", "/vacancies/", {"title": "Без вилки", "skills": ["Python"]}, token=employer_token)
@@ -397,6 +402,13 @@ def check_employer_tasks(employer_token, participant_token, candidate_id):
     print("TASKS OK", task["title"], "|", open_task["title"])
 
 
+def unclaimed_ids():
+    """The mock registry's unclaimed ids (FSP2000–FSP2099) in a random order."""
+    numbers = list(range(2000, 2100))
+    random.SystemRandom().shuffle(numbers)
+    return [f"FSP{n}" for n in numbers]
+
+
 def _fsp_signin(fsp_id):
     status, started = call("POST", "/auth/fsp/authorize")
     assert status == 200, started
@@ -421,8 +433,19 @@ def check_fsp_signin(linked_id):
     assert out["status"] == "signed_in", out
     status, me = call("GET", "/candidates/me", token=out["access_token"])
     assert status == 200 and me["id"] == linked_id, me
-    fresh = f"FSP{2000 + int(time.time()) % 100}"
-    out = _fsp_signin(fresh)
+    # Not the time-based id: in the same second it was the one linked above, so sign-in landed in that
+    # e-mail account and the check below failed (flaky CI). Prefer an id nobody has used yet.
+    fallback = None
+    for fresh in unclaimed_ids():
+        out = _fsp_signin(fresh)
+        if out["status"] == "needs_consent":
+            break
+        status, me = call("GET", "/candidates/me", token=out["access_token"])
+        if status == 200 and me["email"] is None and fallback is None:
+            fallback = (fresh, out)   # an FSP-only account from an earlier run: still a valid sign-in
+    else:
+        assert fallback is not None, "no unclaimed mock FSP id is usable"
+        fresh, out = fallback
     if out["status"] == "needs_consent":   # the first run on this database
         status, refused = call("POST", "/auth/fsp/signup", {"ticket": out["ticket"], "consents": ["terms"]})
         assert status == 422 and refused["error"]["code"] == "consent_required", refused

@@ -2,7 +2,7 @@
 
 1. Сервер с Docker и открытыми портами 80 и 443. Адрес сайта — IP через дефисы плюс `.sslip.io`, например `203-0-113-10.sslip.io`: сервис sslip.io отвечает этим IP на любой такой домен, Caddy сам получает сертификат Let's Encrypt.
 2. `cp deploy/.env.example deploy/.env` и заполнить: `SITE_ADDRESS`, `SECRET_KEY`, `POSTGRES_PASSWORD` и `APP_DB_PASSWORD` (`openssl rand -hex 32`), SMTP для писем с кодами. `ACME_EMAIL` — почта, на которую Let's Encrypt пришлёт напоминание об окончании сертификата; пустое значение оставляют, пока такого ящика нет. Пароль приложения — вход роли `fsp_app`: у неё нет прав суперпользователя, миграции идут от владельца базы. Для стенда жюри без почтовой учётки — `DEMO_MODE=true` и `DEMO_SHOW_CODE=true`: код подтверждения показывается на экране тому, кто регистрируется.
-3. Запуск: `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build`.
+3. Запуск: `GIT_SHA=$(git rev-parse HEAD) docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build`. `GIT_SHA` попадает в `/health`, по нему видно, какой коммит развёрнут.
 4. Демо-данные: `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T -u appuser backend python -m seed.generate_seed`. Пользователь обязателен: сид от root создаёт ключ подписи, который приложение не читает, и проверка удостоверения отвечает 500.
 5. Вернуть показ жюри: `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T -u appuser backend python -m seed.reset_demo`. Затем войти как `jury1@demo.talent` с паролем `demo12345`.
 6. Проверка: `curl https://$SITE_ADDRESS/health`.

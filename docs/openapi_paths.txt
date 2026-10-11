@@ -150,6 +150,7 @@
 /api/v1/public/issuer
 /api/v1/public/jury-free
 /api/v1/public/leaderboard
+/api/v1/public/limits
 /api/v1/public/method/weights
 /api/v1/public/passport/{passport_id}
 /api/v1/public/telegram/achievements

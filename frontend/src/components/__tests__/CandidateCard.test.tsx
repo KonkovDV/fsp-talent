@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import CandidateCard, { type CandidateCardData } from '../CandidateCard'
+import CandidateCard, { claimBoundary, skillProvenance, type CandidateCardData } from '../CandidateCard'
 
 const card: CandidateCardData = {
   candidate_id: '11111111-1111-1111-1111-111111111111',
@@ -85,5 +85,38 @@ describe('карточка кандидата', () => {
     render(<CandidateCard card={{ ...card, grade_source: 'declared', match: undefined }} onOffer={() => undefined} />)
     expect(screen.getByText('Грейд не подтверждён')).toBeInTheDocument()
     expect(screen.queryByText('Грейд подтверждён тестом')).not.toBeInTheDocument()
+  })
+
+  it('помечает подтверждённый грейд на границе уровня и не прячет его', () => {
+    render(<CandidateCard card={{ ...card, grade_borderline: true, match: undefined }} onOffer={() => undefined} />)
+    expect(screen.getByText('Грейд подтверждён тестом')).toBeInTheDocument()
+    expect(screen.getByText('на границе уровня')).toBeInTheDocument()
+  })
+
+  it('без пометки границы не пишет её', () => {
+    render(<CandidateCard card={{ ...card, match: undefined }} onOffer={() => undefined} />)
+    expect(screen.queryByText('на границе уровня')).not.toBeInTheDocument()
+  })
+
+  it('граница утверждения: заявленный грейд прямо назван неподтверждённым', () => {
+    const b = claimBoundary({ grade: 'middle', grade_source: 'declared' }, false)
+    expect(b.yes).toEqual([])
+    expect(b.no[0]).toMatch(/заявлен кандидатом/)
+  })
+
+  it('граница утверждения: тест и ФСП подтверждают своё, опыт — нет', () => {
+    const b = claimBoundary({ grade: 'senior', grade_source: 'assessed', grade_borderline: true }, true)
+    expect(b.yes.join(' ')).toMatch(/Тест.*на границе уровня/)
+    expect(b.yes.join(' ')).toMatch(/ФСП/)
+    expect(b.no.join(' ')).toMatch(/опыт коммерческой разработки/)
+    render(<CandidateCard card={{ ...card, match: undefined }} onOffer={() => undefined} />)
+    expect(screen.getByText('Что подтверждено и что нет')).toBeInTheDocument()
+  })
+
+  it('у подтверждённого навыка есть источник, дата и методика; без поля API — ничего', () => {
+    const card2 = { skill_provenance: { Python: { source: 'test_confirmed', verified_at: '2026-10-01', method_version: 'test/cat-3pl' } } }
+    expect(skillProvenance('Python', card2)).toBe('Источник: тест, 2026-10-01; методика test/cat-3pl')
+    expect(skillProvenance('Go', card2)).toBeUndefined()
+    expect(skillProvenance('Python', {})).toBeUndefined()
   })
 })

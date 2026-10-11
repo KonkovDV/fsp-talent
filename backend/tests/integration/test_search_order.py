@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from sqlalchemy import select
 
@@ -24,6 +25,8 @@ async def _person(db, tag: str, index: int) -> Participant:
         password_hash=PASSWORD_HASH,
         email_verified_at=now(),
         is_minor=False,
+        # discoverable() needs a birth date (since 7f0217a); without it search returns nobody.
+        birth_date=date(1998, 5, 1),
         is_visible=True,
         public_profile=False,
         specialization="backend",

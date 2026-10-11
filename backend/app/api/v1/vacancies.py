@@ -25,6 +25,7 @@ from app.models import (
     Skill,
     Vacancy,
 )
+from app.models.participant import adult_confirmed
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
 from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
@@ -221,7 +222,7 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         "grade": category.grade if category else None,
         "skills": skills,
         "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
-        "is_minor": participant.minor_now(),
+        "is_minor": not adult_confirmed(participant),
     }
     needs_guardian = participant.minor_now() and not participant.minor_consent_given
     applied = set(await db.scalars(
@@ -282,7 +283,7 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
         "grade": category.grade if category else None,
         "skills": skills,
         "disciplines": [{"discipline": s.discipline, "best_rank": s.best_rank} for s in scores],
-        "is_minor": participant.minor_now(),
+        "is_minor": not adult_confirmed(participant),
     }, {
         "role": vacancy.role, "grade": vacancy.grade, "grade_match": vacancy.grade_match,
         "discipline": vacancy.discipline,

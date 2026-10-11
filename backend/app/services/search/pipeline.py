@@ -40,6 +40,7 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.ambition import ambition_note
+from app.services.cat import PASS_P, is_borderline
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.code_profile import code_profile_line
 from app.services.fsp.mock import STATUS_LABELS
@@ -244,6 +245,7 @@ def _in_search(adult):
     ))
     return and_(
         Participant.is_visible.is_(True),
+        Participant.deleted_at.is_(None),
         Participant.suspended_at.is_(None),
         Participant.guest_until.is_(None),
         Participant.job_search != "not_looking",
@@ -261,7 +263,8 @@ async def searchable_count(db: AsyncSession) -> int:
 
 
 def visible_in_search():
-    """The search visibility rule as of now, for lists that are not a search (favorites)."""
+    """The one "visible to an employer" rule as of now (audit-3 P1-1): search, favorites, the salary market
+    and the public category ranking all use it, so an aggregate never counts someone the search would hide."""
     return _in_search(age_confirmed_adult())
 
 
@@ -765,7 +768,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         facts = CandidateFacts(
             role=role_name, grade=grade_name,
             grade_source=grade_source, skills=skills.get(pid, {}),
-            test_p=conf.p_pass if conf and conf.p_pass is not None else (1.0 if conf else None),
+            # A legacy confirmation without a probability counts as a bare pass, not as certainty (audit-4 F-2).
+            test_p=conf.p_pass if conf and conf.p_pass is not None else (PASS_P if conf else None),
             test_spec=conf.specialization if conf else None,
             fsp_lcb=fsp_lcb, fsp_kind=fsp_kind, fsp_discipline=fsp_discipline,
             industry=p.industry if p else None,
@@ -826,12 +830,32 @@ async def _category_percentiles(db, cats: dict) -> dict:
     return out
 
 
+# Method behind each confirmed trust level. Bump the tag when the method changes.
+SKILL_METHODS = {"test_confirmed": "test/cat-3pl", "resume_confirmed": "resume-quote/2026-10"}
+
+
 async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
                        fsp_choice: dict | None = None, scored: dict | None = None,
                        full_card: bool = True) -> list[dict]:
     parts = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ordered)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ordered)))}
+    # Where each confirmed skill comes from, when, and by which method (competitor idea 5). Self-reported
+    # skills have no entry: nothing confirmed them.
+    provenance: dict = {}
+    for sk in await db.scalars(select(Skill).where(Skill.participant_id.in_(ordered),
+                                                   Skill.trust_level.in_(tuple(SKILL_METHODS)))):
+        when = sk.confirmed_at or sk.created_at
+        provenance.setdefault(sk.participant_id, {})[sk.name] = {
+            "source": sk.trust_level, "verified_at": when.date().isoformat() if when else None,
+            "method_version": SKILL_METHODS[sk.trust_level]}
+    # NEW-2: a test decision within one SE of the cut is shown as "on the border", not hidden.
+    borderline: set = set()
+    for c in await db.scalars(select(GradeConfirmation).where(GradeConfirmation.participant_id.in_(ordered))):
+        cat_c = cats.get(c.participant_id)
+        if (cat_c and cat_c.grade_source == "assessed" and c.specialization == cat_c.primary_role
+                and c.grade == cat_c.grade and is_borderline(c.theta, c.se, c.grade)):
+            borderline.add(c.participant_id)
     scores: dict = {}
     for ds in await db.scalars(select(DisciplineScore).where(DisciplineScore.participant_id.in_(ordered))
                                .order_by(DisciplineScore.lcb.desc())):
@@ -943,6 +967,8 @@ async def _build_cards(db, ordered, wanted, have, dense_hit, discipline_filter,
             "role": header_role,
             "grade": header_grade,
             "grade_source": header_source,
+            "grade_borderline": pid in borderline,
+            "skill_provenance": provenance.get(pid, {}),
             "also_primary": also_primary,
             "region": shown_region(p.region, show_city),
             "experience_years": experience,

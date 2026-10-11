@@ -48,6 +48,11 @@ def beat_schedule() -> dict:
             "task": "app.workers.tasks.deliver_webhooks",
             "schedule": 60,
         },
+        # Decay runs from the computation date: recompute every FSP score once a day (audit 2026-10).
+        "rescore-fsp-nightly": {
+            "task": "app.workers.tasks.rescore_fsp_nightly",
+            "schedule": crontab(hour=3, minute=20),
+        },
         "grade-fail-rates-nightly": {
             "task": "app.workers.tasks.refresh_grade_fail_rates",
             "schedule": crontab(hour=3, minute=40),

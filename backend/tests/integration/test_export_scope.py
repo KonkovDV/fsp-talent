@@ -28,12 +28,12 @@ async def test_export_omits_another_participants_offer(db):
     own = Offer(
         employer_id=company.id, candidate_id=owner.id,
         salary_from_gross=100_000, salary_to_gross=120_000, currency="RUB",
-        role=f"own-{tag}", work_format="remote", contact_method="почта", status="pending",
+        role=f"own-{tag}", work_format="remote", contact_method="hr@example.ru", status="pending",
     )
     alien = Offer(
         employer_id=company.id, candidate_id=other.id,
         salary_from_gross=100_000, salary_to_gross=120_000, currency="RUB",
-        role=f"alien-{tag}", work_format="remote", contact_method="почта", status="pending",
+        role=f"alien-{tag}", work_format="remote", contact_method="hr@example.ru", status="pending",
     )
     db.add_all([own, alien])
     await db.commit()

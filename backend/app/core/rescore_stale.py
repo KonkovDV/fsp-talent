@@ -15,27 +15,52 @@ import sys
 logger = logging.getLogger("app.core.rescore_stale")
 
 
-async def stale_participant_ids(db) -> list:
-    from sqlalchemy import select
+async def stale_participant_ids(db, max_age_hours: float | None = None) -> list:
+    """Old scoring version, or (nightly) computed more than max_age_hours ago.
+
+    Decay runs from the date of the computation, so a score left alone for a month compares
+    candidates against different reference dates (audit 2026-10, item 5). The nightly pass fixes that.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import or_, select
 
     from app.models.profile import DisciplineScore
     from app.services.scoring.engine import VERSION
 
-    rows = await db.execute(
-        select(DisciplineScore.participant_id).where(DisciplineScore.scoring_version != VERSION).distinct()
-    )
+    stale = DisciplineScore.scoring_version != VERSION
+    if max_age_hours is not None:
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        stale = or_(stale, DisciplineScore.computed_at < cutoff, DisciplineScore.computed_at.is_(None))
+    rows = await db.execute(select(DisciplineScore.participant_id).where(stale).distinct())
     return list(rows.scalars())
 
 
-async def rescore_stale() -> tuple[int, int]:
+async def rescore_stale(max_age_hours: float | None = None) -> tuple[int, int]:
     from app.core.database import AsyncSessionLocal
+    from app.core.rls import bypass_rls, reset_rls
     from app.models.participant import Participant
     from app.services.profile import rebuild_profile
+    from app.workers.tasks import _acquire_rebuild_lock, _release_rebuild_lock
 
+    # audit-4 F-3: a system job, like the worker (tasks.run_async). Without the bypass the rebuild cannot see
+    # FORCE-RLS tables such as candidate_resumes and writes a search row without the resume stack.
+    scope = bypass_rls()
+    try:
+        return await _rescore(max_age_hours, AsyncSessionLocal, Participant, rebuild_profile,
+                              _acquire_rebuild_lock, _release_rebuild_lock)
+    finally:
+        reset_rls(scope)
+
+
+async def _rescore(max_age_hours, AsyncSessionLocal, Participant, rebuild_profile, acquire, release):
     async with AsyncSessionLocal() as db:
-        ids = await stale_participant_ids(db)
+        ids = await stale_participant_ids(db, max_age_hours)
     done = failed = 0
     for pid in ids:
+        # The same per-participant lock as the worker: a deploy start must not race a queued rebuild.
+        if not await acquire(str(pid)):
+            continue
         try:
             async with AsyncSessionLocal() as db:
                 participant = await db.get(Participant, pid)
@@ -46,6 +71,8 @@ async def rescore_stale() -> tuple[int, int]:
         except Exception:  # noqa: BLE001 - one bad profile must not block the start
             failed += 1
             logger.exception("rescore failed for %s", pid)
+        finally:
+            await release(str(pid))
     return done, failed
 
 

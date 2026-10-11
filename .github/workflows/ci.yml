@@ -113,6 +113,10 @@ jobs:
       - name: Seed demo data
         env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: cd backend && python -m seed.generate_seed
+      # Every demo account still shows its INSTALL.md case; before smoke, which changes demo data.
+      - name: Demo stand self-check
+        env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
+        run: cd backend && python -m seed.demo_check
       - name: API smoke test
         env: {DEMO_MODE: 'true', FSP_ID_MODE: mock}
         run: |
@@ -273,5 +277,5 @@ jobs:
             git pull origin main
             # The server env file is the operator's and changes only by hand (deploy/README.md). The pipeline never
             # rewrites it: turning on the language model changes the processing of personal data and needs review.
-            docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+            GIT_SHA=$(git rev-parse HEAD) docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"

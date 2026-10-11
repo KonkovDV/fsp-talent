@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Participant
 from app.services.fsp.mock import FSPAdapter
-from app.services.profile import append_new_results, rebuild_profile
+from app.services.profile import rebuild_profile, reconcile_results
 
 CURSOR = "fsp:changes:since"
 
 
 async def pull_registry_changes(db: AsyncSession, redis, adapter: FSPAdapter) -> tuple[int, datetime]:
-    """Read ids changed since the stored cursor and append their new protocol lines.
+    """Read ids changed since the stored cursor and reconcile their protocol lines with the registry.
 
     The first run looks back two hours, then the cursor moves to the registry's `next_since`.
     """
@@ -29,7 +29,8 @@ async def pull_registry_changes(db: AsyncSession, redis, adapter: FSPAdapter) ->
             data = await adapter.fetch_participant(person.fsp_id or "")
             if data is None:
                 continue
-            if await append_new_results(db, person, data):
+            # Annulled and corrected lines are applied too, not only new ones (audit M-3).
+            if any((await reconcile_results(db, person, data)).values()):
                 await rebuild_profile(db, person)
                 updated += 1
     return updated, page.next_since

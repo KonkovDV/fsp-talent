@@ -567,10 +567,13 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                       f"(точечная оценка {round(c.test_p * 100)} %)")
             else:
                 _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
+            # audit-4 F-2: a passed test never scores below "not tested". The lower bound at the pass mark
+            # (Φ(Φ⁻¹(0.75) − 1.64) ≈ 0.17) fell under UNTESTED = 0.20; age now shrinks only the part above it.
+            shown = max(UNTESTED, shown)
             values["test"] = shown
             factor, fresh = freshness_of(c.tested_at)
             if factor != 1.0:
-                values["test"] = round(shown * factor, 4)
+                values["test"] = round(UNTESTED + (shown - UNTESTED) * factor, 4)
             if fresh:
                 _note(info, reasons, "info", "TEST_FRESH", fresh)
         else:

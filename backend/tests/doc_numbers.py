@@ -26,6 +26,19 @@ VALIDATION = ROOT / "docs" / "VALIDATION_MATCHING.md"
 FIGURES = ROOT / "frontend" / "src" / "methodFigures.ts"
 
 
+# audit-3 P2-3: a run reports every mismatch at once, not the first one only.
+PROBLEMS: list[str] = []
+
+
+def fail(message: str) -> None:
+    PROBLEMS.append(message)
+
+
+def report_problems() -> None:
+    if PROBLEMS:
+        raise SystemExit(f"doc numbers: расхождений {len(PROBLEMS)}\n" + "\n".join(f"- {p}" for p in PROBLEMS))
+
+
 def ru_tests(count: int) -> str:
     last_two = count % 100
     last = count % 10
@@ -71,8 +84,10 @@ def matching_report() -> tuple[str, str]:
     return digest.group(1), f"{_ru3(model.group(1))} и {_ru3(base.group(1))}"
 
 
-# A machine without the extra compilers covers a few different lines. 0.1 point is that gap, not a new figure.
-COVERAGE_TOLERANCE = 0.2
+# The total moves with the interpreter and the installed compilers: 73.1 % on Python 3.12 with every compiler (CI),
+# 73.0-73.4 % elsewhere
+# (audit-4 F-11). Half a point is that environment gap, not a new figure.
+COVERAGE_TOLERANCE = 0.5
 
 
 def coverage_within(measured: float, published: float, tolerance: float = COVERAGE_TOLERANCE) -> bool:
@@ -103,7 +118,7 @@ def require_coverage(text: str, pattern: str, measured: float, services: int, ap
     shown = f"{measured:.1f}".replace(".", ",")
     needle = f"{shown} %, {services} % и {api} %"
     if found is None or found[1] != services or found[2] != api or not coverage_within(measured, found[0]):
-        raise SystemExit(f"{where} не содержит «{needle}»")
+        fail(f"{where} не содержит «{needle}»")
 
 
 def pitch_deck_matches_html() -> None:
@@ -116,14 +131,14 @@ def pitch_deck_matches_html() -> None:
     with zipfile.ZipFile(deck) as package:
         core = package.read("docProps/core.xml").decode("utf-8")
     if needle not in core:
-        raise SystemExit(
+        fail(
             "перерисуйте слайды: node docs/tools/build_pitch.mjs && python docs/tools/build_pitch_template.py"
         )
 
 
 def require(text: str, needle: str, where: str) -> None:
     if needle not in text:
-        raise SystemExit(f"{where} не содержит «{needle}»")
+        fail(f"{where} не содержит «{needle}»")
 
 
 # These sentences described the product before the profile-discipline weight. The code now uses it.
@@ -139,7 +154,7 @@ def forbid_stale_discipline_claims() -> None:
         text = path.read_text(encoding="utf-8")
         for phrase in STALE_DISCIPLINE:
             if phrase in text:
-                raise SystemExit(f"{path.relative_to(ROOT)} содержит устаревшую фразу «{phrase}»")
+                fail(f"{path.relative_to(ROOT)} содержит устаревшую фразу «{phrase}»")
 
 
 def method_figure_values() -> list[str]:
@@ -157,7 +172,7 @@ def require_method_figures(readme: str) -> None:
     section = section[:section.index("\n## ", 3)]
     for value in method_figure_values():
         if re.search(rf"(?<![\d,]){re.escape(value)}", section) is None:
-            raise SystemExit(f"README не содержит «{value}»")
+            fail(f"README не содержит «{value}»")
 
 
 def forbid_stale_method_names() -> None:
@@ -176,9 +191,9 @@ def forbid_stale_method_names() -> None:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         if "M-step of MML-EM" in text:
-            raise SystemExit(f"{path} содержит «M-step of MML-EM»")
+            fail(f"{path} содержит «M-step of MML-EM»")
         if "never lifts the mean" in text and "does not lower" not in text:
-            raise SystemExit(f"{path} содержит «never lifts the mean» без «does not lower»")
+            fail(f"{path} содержит «never lifts the mean» без «does not lower»")
 
 
 def main() -> None:
@@ -212,6 +227,7 @@ def main() -> None:
     require(VALIDATION.read_text(encoding="utf-8"), digest, "VALIDATION_MATCHING.md")
     pitch_deck_matches_html()
     require_method_figures(readme)
+    report_problems()
     print(f"doc numbers: {count} {word}, coverage {total} %, services {services} %, API {api} %, sha256 {digest}")
 
 

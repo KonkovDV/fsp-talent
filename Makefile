@@ -3,7 +3,7 @@
 export GIT_SHA ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 COMPOSE := docker compose$(if $(GPU), -f docker-compose.yml -f docker-compose.gpu.yml,)
 
-.PHONY: help demo up down reset seed demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
+.PHONY: help demo up down reset seed demo-check demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
 
 help:
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск); с видеокартой: make demo GPU=1"
@@ -42,6 +42,9 @@ reset:
 
 seed:
 	docker compose exec -T -u appuser backend python -m seed.generate_seed
+
+demo-check:
+	docker compose exec -T -u appuser backend python -m seed.demo_check
 
 demo-reset:
 	docker compose exec -T -u appuser backend python -m seed.reset_demo
