@@ -224,6 +224,14 @@ docker compose exec -T backend python -m app.validation.matching --seed 7
 | `EMBEDDINGS_MODE` | off | `model` включает смысловой поиск по эмбеддингам. На стенде жюри библиотека в образ не ставится: там нет GPU, а памяти около 3 ГБ. Ставится аргументом сборки `INSTALL_RERANKER=1`: `make demo GPU=1` или `INSTALL_RERANKER=1 docker compose up -d --build`. По умолчанию выключено, образ backend без torch |
 | `CROSS_ENCODER_MODE`, `CROSS_ENCODER_MODEL`, `CROSS_ENCODER_DEVICE` | off, пусто, auto | Локальная модель пары `BAAI/bge-reranker-v2-m3` переставляет верхние 50 фактора «Запрос». Веса лежат в `models/bge-reranker-v2-m3` и в репозиторий не входят. Устройство: `auto`, `cpu` или `gpu`. Пока режима нет или папки нет, порядок прежний. BM25 — формула без файла весов и в выдачу не входит. Навыки, грейд и нижняя граница ФСП не меняются |
 | `MAIL_MODE`, `SMTP_*` | smtp → Mailpit | Настоящий SMTP на стенде |
+| `MAIL_FILE_DIR`, `SMTP_STARTTLS`, `EMAIL_CODE_TTL_MINUTES` | /tmp/fsp-talent-mail, false, 30 | Папка писем при `MAIL_MODE=file` (её читают CI и smoke, у параллельных прогонов своя папка); STARTTLS для SMTP; срок кода подтверждения в минутах |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `ALGORITHM` | 60, 30, HS256 | Срок access-токена и refresh-cookie, алгоритм подписи |
+| `SECRET_KEY_FILE` | /secrets/secret_key | Файл случайного ключа подписи, если `SECRET_KEY` оставлен заглушкой: первый процесс создаёт ключ, остальные читают тот же файл |
+| `MIGRATE_DATABASE_URL`, `APP_DB_PASSWORD` | пусто, пусто | Адрес суперпользователя только для миграций и пароль роли `fsp_app` для API, worker и beat. Пусто — локальный запуск под одной ролью |
+| `SANDBOX_SOCKET`, `SANDBOX_REQUIRED` | пусто, true | Сокет контейнера песочницы. Без сокета код кандидата запускается только при явном `SANDBOX_REQUIRED=false` (тесты, ноутбук) |
+| `DEMO_PROTECTED_SUFFIXES` | @demo.talent,.demo | Окончания адресов, которые на демо-стенде не закрываются целиком после серии неверных паролей: этими входами пользуется жюри (`services/login_lock.py:51`). Смену пароля и удаление у опубликованных входов закрывает их список в `core/demo_guard.py` |
+| `EMBEDDING_MODEL`, `EMBEDDING_DIM` | deepvk/USER-bge-m3, 1024 | Модель векторов при `EMBEDDINGS_MODE=model` и размерность столбца pgvector |
+| `GRADE_MODEL` | legacy | `legacy`: заявленный грейд весит 0,85 от подтверждённого; `expected`: ожидаемая релевантность по апостериорному распределению грейда |
 
 ## 10. Запуск без Docker (для разработки)
 
