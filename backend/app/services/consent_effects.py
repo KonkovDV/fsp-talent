@@ -15,6 +15,8 @@ def planned_effects(role: str, kind: str) -> list[dict[str, str]]:
         return [
             {"code": "public_page_off",
              "text": "Публичная страница выключится. Карточка в поиске от этого согласия не зависит."},
+            {"code": "fsp_lookup_off",
+             "text": "Вы пропадёте из рейтинга, а по ФСП ID ваши протоколы больше не найдутся."},
         ]
     if role == "employer" and kind == "pd_employer":
         return [

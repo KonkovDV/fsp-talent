@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.rls import bypass_rls, reset_rls
 from app.models import Offer, Participant, WebhookDelivery, WebhookEndpoint
+from app.services.csv_safe import safe_row
 from app.services.privacy import contacts_allowed
 from app.services.webhooks import (
     _read_secret,
@@ -158,7 +159,7 @@ async def export(fmt: str = Query("json", pattern="^(json|csv)$"),
         buf = io.StringIO()
         writer = csv.DictWriter(buf, fieldnames=["ref", "name", "email", "phone", "telegram", "source", "role"])
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(safe_row(r) for r in rows)
         return Response(buf.getvalue(), media_type="text/csv")
     return {"items": rows}
 

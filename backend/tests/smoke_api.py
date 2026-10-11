@@ -275,6 +275,8 @@ def main():
     status, seen = call("GET", "/candidates/me/offers", token=participant_token)
     mine = next(o for o in seen if o["id"] == offer["id"])
     assert status == 200 and mine["contact_method"] == "@sibcode_hr", mine
+    # «Почему вас пригласили»: the candidate's own signals only, every line coded.
+    assert mine["why_you"] and all(line["code"] and line["text"] for line in mine["why_you"]), mine
     status, listed = call("GET", "/offers/", token=employer_token)
     assert next(o for o in listed if o["id"] == offer["id"])["candidate_viewed_at"], "viewed status not recorded"
     status, no_salary = call("POST", "/vacancies/", {"title": "Без вилки", "skills": ["Python"]}, token=employer_token)
@@ -707,6 +709,9 @@ def check_minor():
     token = tokens["access_token"]
     status, me = call("GET", "/candidates/me", token=token)
     assert me["is_minor"] and not me["minor_consent_given"], me
+    # SD-08: an adult first birth date does not undo the 15–17 signup.
+    status, older = call("PUT", "/candidates/me/profile", {"birth_date": "1990-01-01"}, token=token)
+    assert status == 422 and older["error"]["code"] == "age_mismatch", older
     guardian = f"parent-{int(time.time() * 1000)}@example.com"
     status, asked = call("POST", "/candidates/me/guardian", {"guardian_email": guardian}, token=token)
     assert status == 200, asked

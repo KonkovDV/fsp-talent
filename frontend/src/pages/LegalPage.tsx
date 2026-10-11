@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { legalDocuments, type LegalDoc } from '../api/client'
+import { legalDocuments, legalProcessor, type LegalDoc } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import { LegalDocModal } from '../components/LegalConsents'
 import { PageHeader, Skeleton } from '../components/ui'
@@ -9,6 +9,7 @@ import { PageHeader, Skeleton } from '../components/ui'
 export default function LegalPage() {
   const [open, setOpen] = useState<string | null>(null)
   const { data: docs = [], isLoading } = useQuery<LegalDoc[]>({ queryKey: ['legal-all'], queryFn: () => legalDocuments().then(r => r.data) })
+  const { data: processor } = useQuery({ queryKey: ['legal-processor'], queryFn: () => legalProcessor().then(r => r.data) })
   return (
     <PublicShell>
       <PageHeader title="Документы и согласия"
@@ -29,6 +30,13 @@ export default function LegalPage() {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="card mt-4 space-y-2 text-sm text-ink-2">
+        <p><span className="font-medium text-ink">Оператор.</span> Демонстрационный стенд: команда проекта «ФСП Талант». Наименование, ОГРН/ИНН и адрес оператора эксплуатации указываются в согласиях до запуска.</p>
+        <p data-testid="processor"><span className="font-medium text-ink">Помощник на основе модели.</span>{' '}
+          {processor?.enabled
+            ? `Сейчас обработчик — ${processor.label}; серверы в Российской Федерации, резюме передаётся без имени и контактов.`
+            : 'Сейчас выключен: резюме за пределы платформы не передаётся.'}</p>
       </div>
       {open && <LegalDocModal kind={open} onClose={() => setOpen(null)} />}
     </PublicShell>

@@ -21,7 +21,11 @@ interface Offer {
     reputation?: { reply: { shown: boolean; lower?: number; n: number }; complaints: { shown: boolean; count?: number; n: number }; applications?: ResponsivenessFact }
     rating?: { score: number; label: string; demo: boolean; note: string } }
   contacts_revoked_at?: string | null; unread_messages?: number
+  why_you?: WhyLine[]
 }
+interface WhyLine { code: string; text: string }
+// Signals the test, the FSP protocols or the survey confirmed: shown with a mark, the rest as plain notes.
+const WHY_CONFIRMED = new Set(['CATEGORY_MATCH', 'GRADE_ASSESSED', 'FSP_RELEVANT', 'FORMAT_MATCH'])
 const STATUS: Record<string, [string, string]> = {
   pending: ['ждёт ответа', 'badge-warn'], accepted: ['принято', 'badge-ok'], rejected: ['отклонено', 'badge-vc'],
   expired: ['срок истёк', 'badge-vc'], withdrawn: ['отозвано', 'badge-vc'],
@@ -153,6 +157,20 @@ export default function CandidateOffers() {
                 </div>
               </div>
               {o.message && <blockquote className="mt-4 max-w-prose border-l-2 border-accent pl-3 text-sm text-ink">{o.message}</blockquote>}
+              {(o.why_you ?? []).length > 0 && (
+                <section className="mt-4 max-w-prose rounded-lg border border-line p-3" aria-labelledby={`why-${o.id}`}>
+                  <h3 id={`why-${o.id}`} className="text-sm font-semibold text-ink">Почему вас пригласили</h3>
+                  <ul className="mt-1 space-y-0.5 text-sm text-ink-2">
+                    {(o.why_you ?? []).map(line => (
+                      <li key={line.code} data-code={line.code}>
+                        <span aria-hidden className={WHY_CONFIRMED.has(line.code) ? 'text-ok' : 'text-ink-3'}>{WHY_CONFIRMED.has(line.code) ? '✓ ' : '· '}</span>
+                        {line.text}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-ink-3">Это ваши данные из профиля, теста и протоколов ФСП — те же сигналы, по которым подбор упорядочивает кандидатов. Запрос компании и других кандидатов здесь не показываются.</p>
+                </section>
+              )}
               {o.company_profile?.about && (
                 <details className="mt-3 max-w-prose text-sm">
                   <summary className="inline-flex min-h-6 cursor-pointer items-center font-medium text-accent">О компании</summary>

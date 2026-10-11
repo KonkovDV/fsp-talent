@@ -231,7 +231,9 @@ async def get_code(offer_id: uuid.UUID, current: dict = Depends(get_any_auth),
     offer, _side = await _offer(db, offer_id, current)
     row = await db.scalar(select(InterviewCode).where(InterviewCode.offer_id == offer.id))
     if row is None:
-        raise ApiError(404, "not_found", "Задания пока нет")
+        # No task yet is a normal state of an accepted offer, not a missing resource: 200 with null,
+        # so the offers page does not log a 404 for every card (jury walk 11.10).
+        return None
     return _code_out(row)
 
 
