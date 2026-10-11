@@ -636,6 +636,8 @@ async def main(extra_candidates: int | None = None) -> None:
     await ensure_pay_wishes()
     await ensure_jury_widgets()
     await ensure_category_market()
+    from seed.topup_public import topup
+    await topup()
     if extra_candidates is not None:
         await sync_extra(extra_candidates)
 

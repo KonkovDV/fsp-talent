@@ -181,7 +181,7 @@ export default function JuryPage() {
         </div>
         {rankError && <p className="notice-error" role="alert">{rankError}</p>}
         {ranks && (ranks.length === 0
-          ? <p className="text-sm text-ink-2">{rankHidden
+          ? <p className="text-sm text-ink-2" data-testid="rank-hidden">{rankHidden
             ? `Скрыто: в категории меньше ${rankHidden} участников с публичным профилем — защита персональных данных.`
             : 'В этой категории пока нет участников с подтверждённым тестом грейдом.'}</p>
           : <ol className="text-sm text-ink">{ranks.map(row => <li key={row.place}>{row.place}. тест {Math.round(row.test * 100)} %</li>)}</ol>)}
