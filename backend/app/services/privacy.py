@@ -27,6 +27,7 @@ from app.models import (
     ProfileEmbedding,
     ProfileSearchIndex,
     Skill,
+    SurveyHistory,
     TaskSubmission,
 )
 from app.services.identity import active_consent
@@ -57,6 +58,7 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
     pid = participant.id
     await db.execute(delete(Skill).where(Skill.participant_id == pid))
     await db.execute(delete(CandidateResume).where(CandidateResume.participant_id == pid))
+    await db.execute(delete(SurveyHistory).where(SurveyHistory.participant_id == pid))
     await db.execute(delete(ProfileEmbedding).where(ProfileEmbedding.participant_id == pid))
     await db.execute(delete(ProfileSearchIndex).where(ProfileSearchIndex.participant_id == pid))
     await db.execute(delete(CategoryAssignment).where(CategoryAssignment.participant_id == pid))

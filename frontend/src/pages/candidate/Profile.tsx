@@ -9,6 +9,7 @@ import ConsentsPanel from '../../components/ConsentsPanel'
 import AccountSecurity from '../../components/AccountSecurity'
 import DeleteAccountCard from '../../components/DeleteAccountCard'
 import SurveyCard, { type SurveyHint } from '../../components/SurveyCard'
+import SurveyHistory from '../../components/SurveyHistory'
 import SkillPassport from '../../components/SkillPassport'
 import ResumesCard from '../../components/ResumesCard'
 import PassportCard from '../../components/PassportCard'
@@ -259,6 +260,8 @@ export default function CandidateProfile() {
                 onSurvey={applySurvey} />}
             </div>
           </section>
+
+          <SurveyHistory />
 
           <section className="card space-y-4" aria-labelledby="contacts-h">
             <h2 id="contacts-h" className="section-title">Контакты для работодателя</h2>

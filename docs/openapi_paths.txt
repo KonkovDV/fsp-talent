@@ -62,6 +62,7 @@
 /api/v1/candidates/me/resumes/{resume_id}
 /api/v1/candidates/me/salary-market
 /api/v1/candidates/me/survey
+/api/v1/candidates/me/survey/history
 /api/v1/candidates/me/visibility
 /api/v1/candidates/survey-options
 /api/v1/employer/ats-sandbox

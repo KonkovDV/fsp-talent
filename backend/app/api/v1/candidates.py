@@ -36,6 +36,7 @@ from app.models import (
 from app.models.complaint import REASONS
 from app.models.participant import Result, Skill
 from app.models.profile import DisciplineScore
+from app.models.resume import SurveyHistory
 from app.services.account_close import close_allowed
 from app.services.ai import providers
 from app.services.ai.assistant import parse_resume
@@ -1122,6 +1123,17 @@ class SurveyIn(BaseModel):
     region: str | None = Field(None, max_length=40)
 
 
+@router.get("/me/survey/history")
+async def survey_history(limit: int = Query(20, ge=1, le=100), current: dict = Depends(get_current_participant),
+                         db: AsyncSession = Depends(get_db)):
+    """TZ 2.1: история опроса. Newest first; every submit of the survey is kept."""
+    rows = await db.scalars(select(SurveyHistory).where(SurveyHistory.participant_id == _pid(current))
+                            .order_by(SurveyHistory.created_at.desc()).limit(limit))
+    return [{"specialization": r.specialization, "industry": r.industry, "work_goal": r.work_goal,
+             "declared_grade": r.declared_grade, "experience_years": r.experience_years,
+             "created_at": r.created_at.isoformat()} for r in rows]
+
+
 @router.put("/me/survey")
 async def save_survey(body: SurveyIn, current: dict = Depends(get_current_participant),
                       db: AsyncSession = Depends(get_db)):
@@ -1161,6 +1173,9 @@ async def save_survey(body: SurveyIn, current: dict = Depends(get_current_partic
     if body.experience_years is not None:
         p.experience_years = body.experience_years
     p.survey_at = datetime.now(UTC)
+    db.add(SurveyHistory(participant_id=p.id, specialization=p.specialization, industry=p.industry,
+                         work_goal=p.work_goal, declared_grade=p.declared_grade,
+                         experience_years=p.experience_years, created_at=p.survey_at))
     # The confirmed grade shown on the card is the one for the chosen specialization.
     await sync_assessed_grade(db, p)
     await rebuild_profile(db, p)
