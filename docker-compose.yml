@@ -7,6 +7,7 @@ services:
       context: ./backend
       args:
         INSTALL_RERANKER: "1"
+        GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent

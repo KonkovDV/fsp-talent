@@ -1,5 +1,6 @@
 # Короткие команды для локального запуска. Без make те же шаги описаны в docs/INSTALL.md.
 # GPU=1 adds docker-compose.gpu.yml (NVIDIA Container Toolkit required). The default runs on any Docker host.
+export GIT_SHA ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 COMPOSE := docker compose$(if $(GPU), -f docker-compose.yml -f docker-compose.gpu.yml,)
 
 .PHONY: help demo up down reset seed demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch

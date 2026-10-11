@@ -144,7 +144,16 @@ app.include_router(api_router)
 
 @app.get("/health", tags=["health"])
 async def health():
-    return {"status": "ok", "version": settings.VERSION, "mode": settings.FSP_MODE}
+    # NEW-17: the jury can tell which commit is running. GIT_SHA is baked in at build time; no secret.
+    return {"status": "ok", "version": settings.VERSION, "mode": settings.FSP_MODE, "build": build_sha()}
+
+
+def build_sha() -> str:
+    import os
+    import re
+
+    sha = os.environ.get("GIT_SHA", "").strip().lower()
+    return sha[:40] if re.fullmatch(r"[0-9a-f]{7,40}", sha) else "unknown"
 
 
 @app.get("/.well-known/did.json", tags=["public"])
