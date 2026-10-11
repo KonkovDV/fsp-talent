@@ -337,6 +337,16 @@ class ProfileUpdate(BaseModel):
     expected_version: int | None = Field(None, ge=0)
 
 
+def _first_date_fits_minor_signup(p: Participant, born: date) -> bool:
+    """A person who signed up as 15–17 was under 18 on the signup day by the first birth date they enter.
+
+    Someone who has turned 18 since then fits; a date that was already 18+ at signup does not (SD-08).
+    """
+    from app.services.profile import age_on
+    signed_up = p.created_at.date() if p.created_at else date.today()
+    return age_on(born, signed_up) < 18
+
+
 @router.put("/me/profile")
 async def update_profile(body: ProfileUpdate, current: dict = Depends(get_current_participant),
                          db: AsyncSession = Depends(get_db)):
@@ -392,6 +402,10 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         p.job_search = data["job_search"]
     if "birth_date" in data and data["birth_date"] is not None and p.fsp_id is None:
         born = data["birth_date"]
+        if p.birth_date is None and p.is_minor and not _first_date_fits_minor_signup(p, born):
+            # SD-08 (152-ФЗ ст. 9): the signup said 15–17. A first date that was 18+ already at signup would
+            # open the profile without the guardian's consent, so it goes through support like a date change.
+            raise ApiError(422, "age_mismatch")
         if born > date.today():
             raise ApiError(422, "validation_error", "Дата рождения ещё не наступила")
         from app.services.profile import age_on
