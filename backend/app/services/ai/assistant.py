@@ -231,7 +231,7 @@ async def parse_resume(text: str, allow_llm: bool = True) -> dict:
         try:
             for item in await _llm_skills(for_model(text)):
                 name, quote = normalize_skill(str(item.get("skill", ""))), str(item.get("quote", ""))
-                # The quote must be in the resume and must name this skill (N-3): otherwise the pair would
+                # The quote must be in the resume and must name this skill: otherwise the pair would
                 # be signed into resume_token and raise the skill to "resume quote" trust.
                 if name and quote and is_grounded(quote, text) and quote_names_skill(name, quote):
                     found.setdefault(name, {"name": name, "source_quote": quote, "source": "llm"})

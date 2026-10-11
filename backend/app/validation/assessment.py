@@ -387,7 +387,7 @@ class Retest:
     weighted_kappa: float      # quadratic weighted kappa of the two earned grades
     own_overlap: float = 0.0   # share of the second test's item keys the same person already saw in the first
     decision_consistency: float = 0.0  # predicted repeat agreement at the product's 0.75 rule
-    # NEW-2: the band is what the first test itself can see, |θ̂ − cut| / SE < 1 ("borderline").
+    # The band is what the first test itself can see, |θ̂ − cut| / SE < 1 ("borderline").
     borderline_share: float = 0.0
     agreement_confident: float = 1.0
     agreement_confident_ci: tuple[float, float] = (1.0, 1.0)

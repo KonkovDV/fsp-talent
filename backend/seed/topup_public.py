@@ -38,7 +38,7 @@ from seed.generate_seed import (
 TARGET = 6
 PREFIX = "public-"
 BIRTH = date(1996, 3, 1)
-# DoR-10 also names «data»: the seed's showcase has no data row, so its skills live here.
+# The public showcase also needs «data»: the seed's showcase has no data row, so its skills live here.
 SPECS = (*SHOWCASE_SPECS, "data", "security")
 SKILLS = {**_SHOWCASE_SKILLS, "data": ["Python", "SQL", "Airflow", "Spark"],
           "security": ["Linux", "Python", "Pentesting", "Web Security"]}

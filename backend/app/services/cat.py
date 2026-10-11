@@ -34,7 +34,7 @@ CUTS = {"intern": -2.5, "junior": -1.5, "middle": -0.5, "senior": 0.5, "lead": 1
 
 
 def is_borderline(theta: float | None, se: float | None, grade: str | None) -> bool:
-    """NEW-2: the estimate sits within one standard error of the grade's cut.
+    """The estimate sits within one standard error of the grade's cut.
 
     Such a decision repeats on a retest in ~59 % of cases against ~82 % for the rest
     (docs/VALIDATION_ASSESSMENT.md), so the card says so. The grade itself does not change.

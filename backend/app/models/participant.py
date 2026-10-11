@@ -191,7 +191,7 @@ class Skill(Base):
 
 
 def adult_confirmed(person, today: date | None = None) -> bool:
-    """18+ by a birth date on file. The signup checkbox alone never opens an adult-only action (audit-3 P3-2)."""
+    """18+ by a birth date on file. The signup checkbox alone never opens an adult-only action."""
     born = getattr(person, "birth_date", None)
     if born is None:
         return False
