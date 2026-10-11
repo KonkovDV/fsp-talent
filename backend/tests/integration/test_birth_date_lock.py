@@ -34,3 +34,33 @@ async def test_a_minor_cannot_move_the_birth_date_to_adult(db):
     finally:
         await db.rollback()
         await wipe_people([pid])
+
+
+async def test_setting_the_birth_date_is_logged(db):
+    """SEC3-04: the first saved date (it decides the guardian's consent and 18+) leaves a ConsentLog entry."""
+    from sqlalchemy import select
+
+    from app.models import ConsentLog
+
+    today = date.today()
+    person = Participant(email=f"dbtest-born-{stamp()}@example.com", display_name="Без даты",
+                         password_hash=PASSWORD_HASH, email_verified_at=now(), is_minor=False,
+                         birth_date=None, is_visible=True, public_profile=False)
+    db.add(person)
+    await db.commit()
+    pid = person.id
+    current = {"sub": str(pid)}
+    try:
+        born = date(today.year - 30, 1, 1)
+        await update_profile(ProfileUpdate(birth_date=born), current, db)
+        rows = list(await db.scalars(select(ConsentLog).where(
+            ConsentLog.participant_id == pid, ConsentLog.event_type == "birth_date_set")))
+        assert len(rows) == 1 and rows[0].meta["minor"] is False
+        # The same date again is not a change and is not logged twice.
+        await update_profile(ProfileUpdate(birth_date=born), current, db)
+        rows = list(await db.scalars(select(ConsentLog).where(
+            ConsentLog.participant_id == pid, ConsentLog.event_type == "birth_date_set")))
+        assert len(rows) == 1
+    finally:
+        await db.rollback()
+        await wipe_people([pid])

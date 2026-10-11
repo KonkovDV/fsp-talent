@@ -242,7 +242,7 @@ class ParticipantRegister(BaseModel):
     consents: list[str] = Field(default_factory=list, max_length=10)
     # LEG-06: search shows a person only with a birth date on file (a checkbox is not an age). Asked here so a
     # new adult is not silently hidden until they find the profile field. Still optional for API clients.
-    birth_date: date | None = None
+    birth_date: date | None = Field(None, ge=date(1900, 1, 1))   # SEC3-05
 
 
 @router.post("/participant/register", response_model=VerificationSent, status_code=202)
