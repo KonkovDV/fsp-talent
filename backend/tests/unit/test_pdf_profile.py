@@ -68,6 +68,10 @@ def test_upload_rejects_one_extra_byte_and_a_broken_file():
 
 
 def test_profile_pdf_starts_as_a_pdf():
+    from app.services.pdf_profile import _font
+
+    if _font() is None:
+        pytest.skip("нет системного шрифта с кириллицей")
     blob = render_profile_pdf(profile_lines("Анна", "Backend-разработка", "middle", ["Python"], 
                                             [{"label": "Алгоритмы", "lcb": 0.62, "rank": "I"}]))
     assert blob.startswith(b"%PDF")
@@ -96,8 +100,9 @@ def test_profile_pdf_without_cyrillic_font_is_refused(monkeypatch):
     import app.services.pdf_profile as pp
 
     monkeypatch.setattr(pp, "_font", lambda: None)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ApiError) as refused:
         pp.render_profile_pdf(["Иванов"])
+    assert refused.value.status_code == 503
 
 
 def test_backend_image_installs_a_cyrillic_font():
@@ -105,6 +110,9 @@ def test_backend_image_installs_a_cyrillic_font():
 
     import app.services.pdf_profile as pp
 
-    dockerfile = (Path(__file__).resolve().parents[2] / "Dockerfile").read_text(encoding="utf-8")
-    assert "fonts-dejavu-core" in dockerfile
+    dockerfile = Path(__file__).resolve().parents[2] / "Dockerfile"
+    if not dockerfile.is_file():  # inside the image the Dockerfile is not copied; the font itself is there
+        assert pp._font() is not None
+        return
+    assert "fonts-dejavu-core" in dockerfile.read_text(encoding="utf-8")
     assert Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") in pp._FONTS

@@ -71,7 +71,10 @@ def render_profile_pdf(lines: list[str]) -> bytes:
     font = _font()
     if font is None:
         # Helvetica has no Cyrillic; a transliterated name is a wrong name on a document.
-        raise RuntimeError("Нет шрифта с кириллицей: установите fonts-dejavu-core (см. backend/Dockerfile)")
+        # 503 with a stable code instead of a bare 500 (SD-07).
+        from app.api.errors import ApiError
+
+        raise ApiError(503, "unavailable", "PDF временно недоступен: на сервере нет шрифта с кириллицей")
     pdf.add_font("Body", "", str(font))
     pdf.set_font("Body", size=12)
     for line in lines:
