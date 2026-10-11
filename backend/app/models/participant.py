@@ -138,7 +138,8 @@ class Qualification(Base):
 
 
 class Result(Base):
-    """Append-only table -- never UPDATE or DELETE."""
+    """Registry protocol lines. Not edited in place: a line is only added, or removed when the registry annuls
+    or corrects it (profile.reconcile_results, audit M-3) and on erasure (152-FZ)."""
     __tablename__ = "results"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id"), nullable=False, index=True)
