@@ -2,8 +2,14 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 # Cyrillic in the candidate's PDF profile (fpdf2 embeds DejaVuSans.ttf). Only the core package, no fontconfig.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+# The Debian mirror sometimes answers 500 (seen on a cold jury build): retry before failing the build.
+RUN for i in 1 2 3 4 5; do \
+        apt-get -o Acquire::Retries=3 update \
+        && apt-get -o Acquire::Retries=3 install -y --no-install-recommends fonts-dejavu-core \
+        && break; \
+        echo "apt attempt $i failed, retrying" >&2; sleep $((i * 5)); \
+    done \
+    && test -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf \
     && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml requirements.lock ./
 COPY app ./app

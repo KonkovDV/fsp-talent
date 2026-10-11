@@ -5,13 +5,19 @@ services:
   backend:
     # The sandbox socket is 0660, owner uid/gid 10001 (sandbox image). Join its group to connect.
     group_add: ["10001"]
+    # One image for backend, worker, beat and demo-seed: built once, not three times.
+    image: fsp-talent-backend:local
     build:
       context: ./backend
       args:
         # The pair model and embeddings pull torch with CUDA wheels (~5 GB). Off by default; GPU=1 turns it on.
         INSTALL_RERANKER: ${INSTALL_RERANKER:-0}
         GIT_SHA: ${GIT_SHA:-unknown}
-    env_file: .env
+    # .env.example is read first, so `docker compose up` works on a fresh clone with no .env at all;
+    # values from your own .env (optional) win.
+    env_file: &envfiles
+      - {path: .env.example, required: true}
+      - {path: .env, required: false}
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
@@ -27,14 +33,14 @@ services:
       SMTP_PORT: ${SMTP_PORT:-1025}
       SANDBOX_SOCKET: /run/sandbox/sandbox.sock
       SANDBOX_TOKEN: ${SANDBOX_TOKEN:-local-sandbox}
-    ports: ['127.0.0.1:8010:8000']
+    ports: ['127.0.0.1:${API_PORT:-8010}:8000']
     # No GPU here: a host without the NVIDIA Container Toolkit refuses `gpus: all`
     # ("could not select device driver"). With a video card: make demo GPU=1 (docker-compose.gpu.yml).
     volumes: [vc_keys:/secrets, sandbox_sock:/run/sandbox, ./models:/models:ro]
     depends_on:
       postgres: {condition: service_healthy}
-      redis: {condition: service_started}
-      sandbox: {condition: service_started}
+      redis: {condition: service_healthy}
+      sandbox: {condition: service_healthy}
     # worker and beat start after this check passes.
     healthcheck:
       test: ["CMD", "python", "-c",
@@ -46,8 +52,9 @@ services:
     restart: unless-stopped
 
   worker:
-    build: ./backend
-    env_file: .env
+    image: fsp-talent-backend:local
+    pull_policy: never
+    env_file: *envfiles
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
@@ -71,8 +78,9 @@ services:
     restart: unless-stopped
 
   beat:
-    build: ./backend
-    env_file: .env
+    image: fsp-talent-backend:local
+    pull_policy: never
+    env_file: *envfiles
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
@@ -89,6 +97,23 @@ services:
       retries: 6
       start_period: 20s
     restart: unless-stopped
+
+  # One-shot: loads the demo data (idempotent, adds only what is missing) once the API is healthy,
+  # then exits 0. So plain `docker compose up` gives a ready demo. Skipped when DEMO_MODE=false.
+  demo-seed:
+    image: fsp-talent-backend:local
+    pull_policy: never
+    env_file: *envfiles
+    environment:
+      DATABASE_URL: postgresql+asyncpg://fsp:fsp@postgres:5432/fsp_talent
+      REDIS_URL: redis://redis:6379/0
+      DEMO_MODE: ${DEMO_MODE:-true}
+      VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
+    command: ["sh", "-c", "if [ \"$$DEMO_MODE\" = true ]; then python -m seed.generate_seed; else echo 'DEMO_MODE=false: seed skipped'; fi"]
+    volumes: [vc_keys:/secrets]
+    depends_on:
+      backend: {condition: service_healthy}
+    restart: "no"
 
   # Practice code (Python, Node). No network, no secrets from .env, read-only root, small limits.
   # The API reaches it only through the socket on the shared volume.
@@ -109,7 +134,7 @@ services:
 
   frontend:
     build: ./frontend
-    ports: ['127.0.0.1:3010:80']
+    ports: ['127.0.0.1:${FRONTEND_PORT:-3010}:80']
     depends_on: [backend]
     restart: unless-stopped
     healthcheck:
@@ -137,11 +162,16 @@ services:
     image: redis:7.2-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
   mailpit:
     image: axllent/mailpit:v1.31.4
-    ports: ['127.0.0.1:8025:8025']
+    ports: ['127.0.0.1:${MAIL_PORT:-8025}:8025']
     restart: unless-stopped
 
   # Real OIDC check of В«Р’РѕР№С‚Рё С‡РµСЂРµР· Р¤РЎРџ IDВ» only on request: `docker compose --profile fsp-id up -d`
