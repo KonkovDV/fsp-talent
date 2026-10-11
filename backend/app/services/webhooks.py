@@ -72,6 +72,23 @@ def signature_ok(secret: str, headers, body: bytes, now: datetime, skew: int = S
     return hmac.compare_digest(expected, offered.split(",", 1)[1].strip())
 
 
+async def first_delivery(endpoint_id: str, msg_id: str, skew: int = SKEW_SECONDS) -> bool:
+    """SEC4: a signed message is accepted once. The webhook-id is remembered for the whole skew window
+    (both sides of it), so a captured request cannot be replayed while its timestamp is still fresh.
+    Redis down: accept (the signature and the window still hold) and log it."""
+    import logging
+
+    from app.core.redis_client import get_redis
+
+    try:
+        redis = await get_redis()
+        fresh = await redis.set(f"webhook:seen:{endpoint_id}:{msg_id[:128]}", "1", nx=True, ex=2 * skew)
+        return bool(fresh)
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).warning("webhook replay guard unavailable", exc_info=True)
+        return True
+
+
 def check_url(url: str) -> str:
     """https to a public host, or the stand's own sandbox receiver. Raises ValueError."""
     from app.core.config import settings

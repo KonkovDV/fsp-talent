@@ -32,6 +32,7 @@ from app.services.webhooks import (
     deliver_due,
     enqueue,
     new_secret,
+    first_delivery,
     signature_ok,
 )
 
@@ -178,6 +179,8 @@ async def receive(endpoint_id: uuid.UUID, request: Request, db: AsyncSession = D
         secret = _read_secret(row.employer_id, row.secret)
         if not signature_ok(secret, request.headers, body, datetime.now(UTC)):
             raise ApiError(401, "invalid_credentials", "Подпись не сошлась")
+        if not await first_delivery(str(endpoint_id), request.headers.get("webhook-id", "")):
+            raise ApiError(409, "conflict", "Это сообщение уже принято (webhook-id)")
     finally:
         reset_rls(token)
     return Response(status_code=204)
