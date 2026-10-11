@@ -52,7 +52,7 @@ export default function CandidateDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name.split(' ')[0]}` : 'Кабинет'}
+      <PageHeader title={p.display_name ? `Здравствуйте, ${p.display_name}` : 'Кабинет'}
         lead="Так вас видит работодатель в поиске: без имени и контактов, по категории и подтверждениям." />
 
       {p.is_minor && !p.minor_consent_given && (
@@ -75,7 +75,9 @@ export default function CandidateDashboard() {
             </span>
           </div>
           <p className="mt-6 font-display text-xl font-bold sm:text-2xl">{ROLE_RU[p.primary_role] ?? p.primary_role ?? 'Специализация не выбрана'}</p>
-          <p className="font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3.25rem,8vw,5.5rem)]">{p.grade ? gradeRu(p.grade) : '—'}</p>
+          {p.grade && p.grade_source !== 'default'
+            ? <p className="font-display font-bold leading-none tracking-[-0.04em] [font-size:clamp(3.25rem,8vw,5.5rem)]">{gradeRu(p.grade)}</p>
+            : <p className="mt-2 text-sm on-hero-muted">Грейд не выбран. До опроса карточка стоит в выдаче как {gradeRu('junior')}.</p>}
           {(p.skills ?? []).length > 0 && (
             <ul className="mt-6 flex flex-wrap gap-1.5" aria-label="Навыки">
               {(p.skills ?? []).slice(0, 12).map((sk: { name: string; trust_level: string }) => (
