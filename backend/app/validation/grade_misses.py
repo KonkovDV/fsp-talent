@@ -5,7 +5,7 @@ fails its target ends «не подтверждён», and `within_one` of the m
 the true grade exists. This splits the misses into: (a) declared above the truth and not confirmed — the
 intended outcome; (a2) declared at or below the truth and not confirmed — a false negative at the cut;
 (b) confirmed, but two or more steps from the truth; and reports ±1 among confirmed grades only.
-Six classes, from «ниже стажёра» to lead; competitors that report 95–100 % use four.
+Six classes, from «ниже стажёра» to lead.
 """
 from __future__ import annotations
 
