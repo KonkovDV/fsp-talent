@@ -500,7 +500,7 @@ export const getMyPassport = () => api.get<MyPassport | null>('/candidates/me/pa
 export const issueMyPassport = () => api.post<MyPassport>('/candidates/me/passport')
 export const revokeMyCredential = (id: string) => api.post(`/candidates/me/credentials/${id}/revoke`)
 export const getPublicPassport = (id: string) => api.get<PublicPassport>(`/public/passport/${id}`)
-export interface EvaluateRow { method: string; title: string; ndcg10: number; ndcg_ci: [number, number] | null; p10: number; map: number }
+export interface EvaluateRow { method: string; title: string; ndcg10: number; ndcg_ci: [number, number] | null; p10: number; p5?: number; map: number }
 export interface EvaluateNeedRow {
   need_id: string; role: string | null; grade: string | null; judged: number; relevant: number; k: number
   p_at_k_model: number; p_at_k_resume: number; ndcg10_model: number; ndcg10_resume: number

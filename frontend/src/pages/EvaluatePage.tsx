@@ -1,8 +1,9 @@
 import { useState, type ChangeEvent } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { apiError, evaluatePairs, type EvaluateNeedRow, type EvaluatePairedDelta } from '../api/client'
 import PublicShell from '../components/PublicShell'
-import { PageHeader } from '../components/ui'
+import { PageHeader, Skeleton } from '../components/ui'
+import SelfLabel, { type BlindSheet } from './evaluate/SelfLabel'
 
 const need = '{"id": "n1", "role": "backend", "grade": "middle", "skills": ["Python", "PostgreSQL"]}'
 const EXAMPLE = [
@@ -65,8 +66,8 @@ function NeedTable({ rows }: { rows: EvaluateNeedRow[] }) {
   )
 }
 
-/** The jury's own labelled pairs, scored by the model and by the resume baseline. Nothing is stored. */
-export default function EvaluatePage() {
+/** Upload mode: the jury's own labelled pairs as JSONL. */
+function UploadMode() {
   const [text, setText] = useState('')
   const run = useMutation({ mutationFn: (body: string) => evaluatePairs(body).then(r => r.data) })
 
@@ -76,11 +77,11 @@ export default function EvaluatePage() {
   }
 
   return (
-    <PublicShell>
-      <PageHeader
-        title="Проверка подбора на своей разметке"
-        lead="Вставьте пары в JSONL: потребность, наблюдаемый профиль кандидата и ваша оценка 0–3. Страница посчитает nDCG@10, P@min(10, n) и MAP для модели, для сортировки по резюме и для случайного порядка. Пары не сохраняются, банк кандидатов не читается."
-      />
+    <>
+      <p className="mb-3 text-sm text-ink-2">
+        Вставьте пары в JSONL: потребность, наблюдаемый профиль кандидата и ваша оценка 0–3. Страница посчитает nDCG@10,
+        P@min(10, n) и MAP для модели, для сортировки по резюме и для случайного порядка.
+      </p>
       <form className="card space-y-3 p-5" onSubmit={e => { e.preventDefault(); run.mutate(text) }}>
         <label className="block text-sm text-ink-2" htmlFor="pairs-jsonl">Пары, одна на строку (до 500, до 256 КБ)</label>
         <textarea id="pairs-jsonl" value={text} onChange={e => setText(e.target.value)} rows={10}
@@ -125,6 +126,43 @@ export default function EvaluatePage() {
           <p className="mt-3 break-all font-mono text-xs text-ink-3">sha256 {run.data.sha256}</p>
         </section>
       )}
+    </>
+  )
+}
+
+const loadSheet = () => import('../data/blindSheet.json').then(m => m.default as unknown as BlindSheet)
+
+function SelfMode() {
+  const sheet = useQuery({ queryKey: ['blind-sheet-2029'], queryFn: loadSheet, staleTime: Infinity })
+  if (sheet.isError) return <p className="notice-error" role="alert">Не удалось загрузить лист для разметки. Обновите страницу.</p>
+  if (!sheet.data) return <Skeleton className="h-64" />
+  return <SelfLabel sheet={sheet.data} />
+}
+
+type Mode = 'self' | 'upload'
+const MODES: { id: Mode; title: string }[] = [{ id: 'self', title: 'Разметить самому' }, { id: 'upload', title: 'Загрузить JSONL' }]
+
+/** The jury's own labels, scored by the model, the resume baseline and a random order. Nothing is stored on the server. */
+export default function EvaluatePage() {
+  const [mode, setMode] = useState<Mode>('self')
+  return (
+    <PublicShell>
+      <PageHeader
+        title="Проверка подбора на своей разметке"
+        lead="Оцените кандидатов сами и сравните: насколько хорошо их упорядочила наша модель, сортировка по резюме и случайный порядок. Банк кандидатов не читается, ваши оценки на сервере не сохраняются."
+      />
+      <div className="mb-4 grid max-w-md grid-cols-2 rounded-lg bg-sunken p-1 text-sm" role="tablist" aria-label="Режим проверки">
+        {MODES.map(m => (
+          <button key={m.id} type="button" role="tab" id={`mode-${m.id}`} aria-selected={mode === m.id} aria-controls="mode-panel"
+            onClick={() => setMode(m.id)}
+            className={`flex min-h-9 items-center justify-center rounded-md text-center transition-colors ${mode === m.id ? 'bg-panel font-semibold text-ink shadow-xs ring-1 ring-line-strong' : 'text-ink-2 hover:text-ink'}`}>
+            {m.title}
+          </button>
+        ))}
+      </div>
+      <div id="mode-panel" role="tabpanel" aria-labelledby={`mode-${mode}`}>
+        {mode === 'self' ? <SelfMode /> : <UploadMode />}
+      </div>
     </PublicShell>
   )
 }
