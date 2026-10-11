@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_any_auth
 from app.api.errors import ApiError
 from app.core.database import get_db
-from app.legal import documents, get_document
+from app.legal import consent_documents, documents, get_document
 from app.models import Consent, Participant
 from app.services.consent_effects import planned_effects
 from app.services.identity import give_consent, withdraw_consent
@@ -20,7 +20,7 @@ router = APIRouter(tags=["legal"])
 
 def _summary(doc) -> dict:
     return {"kind": doc.kind, "version": doc.version, "title": doc.title, "roles": list(doc.roles),
-            "required": doc.required, "sha256": doc.sha256}
+            "required": doc.required, "consent": doc.consent, "sha256": doc.sha256}
 
 
 @router.get("/legal/processor")
@@ -61,7 +61,7 @@ async def my_consents(current: dict = Depends(get_any_auth), db: AsyncSession = 
     rows = list(await db.scalars(select(Consent).where(
         Consent.subject_type == role, Consent.subject_id == subject_id).order_by(Consent.given_at.desc())))
     out = []
-    for doc in documents().values():
+    for doc in consent_documents():
         if role not in doc.roles:
             continue
         active = next((r for r in rows if r.kind == doc.kind and r.withdrawn_at is None), None)
@@ -100,7 +100,8 @@ async def give(body: ConsentIn, request: Request, current: dict = Depends(get_an
 async def withdraw(kind: str, request: Request, current: dict = Depends(get_any_auth),
                    db: AsyncSession = Depends(get_db)):
     role, subject_id = _subject(current)
-    if get_document(kind) is None:
+    doc = get_document(kind)
+    if doc is None or not doc.consent:
         raise ApiError(404, "consent_unknown")
     consent = await withdraw_consent(db, role, subject_id, kind, request)
     effect_items: list[dict[str, str]] = []

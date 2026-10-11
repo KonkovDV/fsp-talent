@@ -41,6 +41,8 @@ export default function AuthShell({ title, lead, children, aside }: {
         </main>
         <footer className="px-4 pb-6 text-center text-xs text-ink-3">
           <Link to="/" className="inline-flex min-h-6 items-center underline hover:text-ink">На главную</Link>
+          <span aria-hidden className="mx-2">·</span>
+          <Link to="/privacy" className="inline-flex min-h-6 items-center underline hover:text-ink">Политика обработки данных</Link>
         </footer>
       </div>
     </div>
