@@ -64,9 +64,17 @@ def _grade(theta: float) -> str:
     return g
 
 
+# Measurement error of the simulated test. 0 keeps the published benchmark: the test probability is then a
+# noiseless function of the hidden θ. A real session estimates θ with error (RMSE ≈ 0,47 in
+# app.validation.assessment), so `--test-noise 0.47` shows how much of the within-category order survives.
+# The noise has its own random stream: the default dataset and its SHA-256 do not change.
+TEST_NOISE_SD = 0.0
+
+
 def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
                  overclaim: float | None = None) -> dict:
     rng = random.Random(seed)
+    noise = random.Random(seed + 4242)
     candidates = []
     for i in range(n_candidates):
         role = rng.choice(ROLES)
@@ -94,7 +102,8 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
         tested = rng.random() < 0.45
         grade, source, test_p, failed_grade = declared_grade, "declared", None, None
         if tested:
-            test_p = 1.0 / (1.0 + math.exp(-3.0 * (theta - CUTS[declared_grade])))
+            measured = theta + (noise.gauss(0.0, TEST_NOISE_SD) if TEST_NOISE_SD > 0 else 0.0)
+            test_p = 1.0 / (1.0 + math.exp(-3.0 * (measured - CUTS[declared_grade])))
             if test_p >= 0.75:
                 grade, source = declared_grade, "assessed"
             else:
@@ -1476,6 +1485,7 @@ def _print_holdout(seeds: list[int], n_candidates: int, n_needs: int) -> None:
 
 
 def main() -> None:
+    global TEST_NOISE_SD
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--candidates", type=int, default=800)
     parser.add_argument("--needs", type=int, default=80)
@@ -1493,6 +1503,8 @@ def main() -> None:
     parser.add_argument("--export", help="write the generated dataset (with labels) to this JSON file")
     parser.add_argument("--import", dest="imported", help="evaluate a labelled dataset in the same JSON format")
     parser.add_argument("--pairs", help="JSONL of jury pairs: need, candidate, label 0..3")
+    parser.add_argument("--test-noise", type=float, default=0.0,
+                        help="SD of the measurement error of the simulated test θ; 0 is the published benchmark")
     parser.add_argument("--check", action="store_true", help="fail unless the thresholds in checks_ok hold")
     parser.add_argument("--ladder", action="store_true",
                         help="print only the base ladder (random, self-description, BM25, resume) and exit")
@@ -1514,6 +1526,7 @@ def main() -> None:
     parser.add_argument("--protocol", choices=("a", "b", "all"),
                         help="graded protocols of published methods (app.validation.protocols); print and exit")
     args = parser.parse_args()
+    TEST_NOISE_SD = args.test_noise
     if args.protocol:
         import sys
 
