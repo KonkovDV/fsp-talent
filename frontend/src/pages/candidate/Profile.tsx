@@ -279,7 +279,7 @@ export default function CandidateProfile() {
             </div>
             <div>
               <label className="field-label" htmlFor="kit-file">Свидетельство о навыках</label>
-              <input id="kit-file" type="file" accept=".pdf,application/pdf" className="text-sm"
+              <input id="kit-file" type="file" accept=".pdf,application/pdf" className="w-full max-w-full text-sm"
                 onChange={e => {
                   const picked = e.target.files?.[0]
                   e.target.value = ''
