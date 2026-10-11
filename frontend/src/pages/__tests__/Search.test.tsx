@@ -25,11 +25,11 @@ const declared = {
   match: { score: 0.4, plus: [], minus: [], info: [], factors: [], reasons: [] },
 }
 
-function renderPage(ui: ReactNode) {
+function renderPage(ui: ReactNode, path = '/employer/search') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -65,6 +65,14 @@ describe('поиск работодателя', () => {
     renderPage(<EmployerSearch />)
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'История ФСП' }), 'true')
     expect(await screen.findByText(/фильтры изменены, список ещё прежний/)).toBeInTheDocument()
+  })
+
+  it('ссылка с ?role и ?grade открывает уже применённый поиск, без пометки о смене фильтров', async () => {
+    renderPage(<EmployerSearch />, '/employer/search?role=backend&grade=senior')
+    expect(await screen.findByText(/Смысловой поиск выключен/)).toBeInTheDocument()
+    expect(screen.queryByText(/фильтры изменены/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Применить фильтры' })).not.toBeInTheDocument()
+    expect(searchCandidates).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'backend', grade: 'senior', grade_span: 'near' }))
   })
 
   it('пишет, что на экране только начало длинной выдачи', async () => {
