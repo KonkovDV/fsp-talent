@@ -22,7 +22,9 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
     if role and candidate.get("role") and role != candidate["role"]:
         return None
     mode = vacancy.get("grade_match") or "plus_minus"
-    if not grade_matches(candidate.get("grade"), vacancy.get("grade"), mode):
+    # No grade yet (no test passed): the candidate still sees the published list and can apply (ТЗ 2.1).
+    ungraded = not candidate.get("grade")
+    if not ungraded and not grade_matches(candidate.get("grade"), vacancy.get("grade"), mode):
         return None
     disciplines = candidate.get("disciplines") or []
     disc = vacancy.get("discipline")
@@ -41,7 +43,9 @@ def match_vacancy(candidate: dict, vacancy: dict) -> dict | None:
         why.append(f"Навыки: {len(have)} из {len(wanted)}" + (f" ({matched})" if matched else ""))
     if role and candidate.get("role") == role:
         why.append(f"Специализация совпадает: {SPECIALIZATIONS.get(role, role)}")
-    if vacancy.get("grade") and mode != "any":
+    if ungraded and vacancy.get("grade") and mode != "any":
+        why.append(f"Грейд ещё не подтверждён тестом, вакансия ждёт {vacancy['grade']}")
+    elif vacancy.get("grade") and mode != "any":
         why.append("Грейд совпадает" if mode == "exact" else f"Грейд не дальше одного шага от {vacancy['grade']}")
     if disc:
         why.append(f"Есть результаты ФСП: {DISCIPLINE_LABELS.get(disc, disc).lower()}")
