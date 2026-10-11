@@ -52,6 +52,7 @@ CODE_CLASS: dict[str, str] = {
     "email_taken": "E04",
     "fsp_taken": "E04",
     "fsp_already_linked": "E04",
+    "birth_date_locked": "E04",
     "complaint_duplicate": "E04",
     "validation_error": "E05",
     "bad_request": "E05",
