@@ -72,7 +72,9 @@ TEST_NOISE_SD = 0.0
 
 
 def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
-                 overclaim: float | None = None) -> dict:
+                 overclaim: float | None = None, clean: bool = False) -> dict:
+    """`clean=True` is the comparable-data scenario: every candidate tested, grade shown as the true one, no false
+    skills declared. Truth, labels and needs are drawn exactly as in the default world."""
     rng = random.Random(seed)
     noise = random.Random(seed + 4242)
     candidates = []
@@ -85,7 +87,7 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
         others = [s for s in pool if s not in true_skills]
         p_false = 0.15 * len(true_skills) / max(1, len(others))   # ~15 % of declared skills are false
         for s in others:
-            if rng.random() < p_false:
+            if rng.random() < p_false and not clean:
                 declared.setdefault(s, "self_reported")
         for s in list(declared):
             if s in true_skills and rng.random() < 0.3:
@@ -99,18 +101,24 @@ def make_dataset(n_candidates: int = 800, n_needs: int = 80, seed: int = 2026,
         else:
             # The sweep names only the share who claim one step up. Everyone else states the true grade.
             declared_grade = GRADES[min(gi + 1, len(GRADES) - 1)] if r < overclaim else true_grade
-        tested = rng.random() < 0.45
+        drawn_tested = rng.random() < 0.45
+        tested = drawn_tested or clean
+        if clean:
+            declared_grade = true_grade
         grade, source, test_p, failed_grade = declared_grade, "declared", None, None
         if tested:
             measured = theta + (noise.gauss(0.0, TEST_NOISE_SD) if TEST_NOISE_SD > 0 else 0.0)
             test_p = 1.0 / (1.0 + math.exp(-3.0 * (measured - CUTS[declared_grade])))
+            if clean:
+                test_p = max(test_p, 0.75)
             if test_p >= 0.75:
                 grade, source = declared_grade, "assessed"
             else:
                 # The platform stores the failed attempt (outcome "not_passed"); the grade stays declared.
                 test_p, failed_grade = None, declared_grade
             for s in true_skills:
-                if s in TESTABLE and rng.random() < 0.9:
+                # Extra clean-scenario tests do not draw from rng, so truth and needs stay those of the default world.
+                if s in TESTABLE and (rng.random() < 0.9 if drawn_tested else True):
                     declared[s] = "test_confirmed"
         test_n = test_correct = None
         if test_p is not None:

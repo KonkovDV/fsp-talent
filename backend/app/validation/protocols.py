@@ -92,8 +92,9 @@ def mrr(ranked: list[str], labels: dict[str, int]) -> float:
     return next((1.0 / (i + 1) for i, cid in enumerate(ranked) if labels.get(cid, 0) >= 2), 0.0)
 
 
-def run_seed(seed: int, protocol: str, method: str = "full", n_candidates: int = 800, n_needs: int = 80) -> dict:
-    data = make_dataset(n_candidates, n_needs, seed)
+def run_seed(seed: int, protocol: str, method: str = "full", n_candidates: int = 800, n_needs: int = 80,
+             clean: bool = False) -> dict:
+    data = make_dataset(n_candidates, n_needs, seed, clean=clean)
     by_id = {c["id"]: c for c in data["candidates"]}
     rng = random.Random(seed)
     out = {"ndcg": [], "p10": [], "mrr": [], "skipped": 0}
@@ -113,11 +114,11 @@ def run_seed(seed: int, protocol: str, method: str = "full", n_candidates: int =
     return out
 
 
-def summary(seeds: tuple[int, ...], protocol: str, method: str = "full") -> dict:
+def summary(seeds: tuple[int, ...], protocol: str, method: str = "full", clean: bool = False) -> dict:
     pooled = {"ndcg": [], "p10": [], "mrr": []}
     per_seed, skipped = {}, 0
     for sd in seeds:
-        r = run_seed(sd, protocol, method)
+        r = run_seed(sd, protocol, method, clean=clean)
         skipped += r["skipped"]
         per_seed[sd] = round(statistics.mean(r["ndcg"]), 3)
         for k in pooled:
@@ -134,15 +135,17 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--protocol", choices=("a", "b", "strict", "all"), default="all")
     p.add_argument("--method", default="full", help="ranker from app.validation.matching.rank (full, bm25, keyword…)")
+    p.add_argument("--clean", action="store_true",
+                   help="comparable-data scenario: all tested, true grade shown, no false skills (labels unchanged)")
     args = p.parse_args()
     protos = ("strict", "a", "b") if args.protocol == "all" else (args.protocol,)
     print("| Протокол | Зёрна | Ранжирование | nDCG@10 [95 % ДИ] | P@10 | MRR | Потребностей (пропущено) |")
     print("|---|---|---|---|---|---|---|")
     for proto in protos:
         for name, seeds in (("2026–2028", PUBLIC_SEEDS), ("4001–4005", HOLDOUT_SEEDS)):
-            s = summary(seeds, proto, args.method)
+            s = summary(seeds, proto, args.method, args.clean)
             m = s["metrics"]
-            print(f"| {proto} | {name} | {args.method} | {_fmt(m['ndcg'])} | {_fmt(m['p10'])} | {_fmt(m['mrr'])} "
+            print(f"| {proto}{" (clean)" if args.clean else ""} | {name} | {args.method} | {_fmt(m['ndcg'])} | {_fmt(m['p10'])} | {_fmt(m['mrr'])} "
                   f"| {s['needs']} ({s['skipped']}) |", flush=True)
 
 
