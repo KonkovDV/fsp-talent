@@ -1,4 +1,4 @@
-"""A tenth of a point of coverage is the same published figure. Three tenths is not."""
+"""Half a point of coverage (Python 3.12 vs 3.13, compilers present or not) is the same figure. More is not."""
 import sys
 from pathlib import Path
 
@@ -12,8 +12,12 @@ def test_a_tenth_of_a_point_is_the_same_coverage():
     assert coverage_within(65.9, 66.1)
 
 
-def test_four_tenths_is_a_different_coverage():
-    assert coverage_within(66.4, 66.1) is False
+def test_the_interpreter_gap_is_the_same_coverage():
+    assert coverage_within(73.4, 73.0)  # audit-4 F-11: 3.13 with all compilers vs 3.12 in CI
+
+
+def test_more_than_half_a_point_is_a_different_coverage():
+    assert coverage_within(66.7, 66.1) is False
 
 
 def test_every_mismatch_is_reported_in_one_run():

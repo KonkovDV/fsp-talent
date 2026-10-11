@@ -84,8 +84,10 @@ def matching_report() -> tuple[str, str]:
     return digest.group(1), f"{_ru3(model.group(1))} и {_ru3(base.group(1))}"
 
 
-# A machine without the extra compilers covers a few different lines. 0.1 point is that gap, not a new figure.
-COVERAGE_TOLERANCE = 0.2
+# The total moves with the interpreter and the installed compilers: 73.1 % on Python 3.12 with every compiler (CI),
+# 73.0-73.4 % elsewhere
+# with all compilers (audit-4 F-11). Half a point is that environment gap, not a new figure.
+COVERAGE_TOLERANCE = 0.5
 
 
 def coverage_within(measured: float, published: float, tolerance: float = COVERAGE_TOLERANCE) -> bool:
