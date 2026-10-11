@@ -277,5 +277,5 @@ jobs:
             git pull origin main
             # The server env file is the operator's and changes only by hand (deploy/README.md). The pipeline never
             # rewrites it: turning on the language model changes the processing of personal data and needs review.
-            docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+            GIT_SHA=$(git rev-parse HEAD) docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
             echo "Deployed $(date)"

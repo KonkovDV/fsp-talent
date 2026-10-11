@@ -36,7 +36,11 @@ services:
   backend:
     # The sandbox socket is 0660, owner uid/gid 10001 (sandbox image). Join its group to connect.
     group_add: ["10001"]
-    build: ../backend
+    build:
+      context: ../backend
+      # /health reports this commit (audit-4 F-7). The deploy passes GIT_SHA=$(git rev-parse HEAD).
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
@@ -75,7 +79,11 @@ services:
 
   # Weekly tasks, offer expiry, FSP sync and scoring run here; without them the stand misses scheduled work.
   worker:
-    build: ../backend
+    build:
+      context: ../backend
+      # /health reports this commit (audit-4 F-7). The deploy passes GIT_SHA=$(git rev-parse HEAD).
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
@@ -102,7 +110,11 @@ services:
     restart: unless-stopped
 
   beat:
-    build: ../backend
+    build:
+      context: ../backend
+      # /health reports this commit (audit-4 F-7). The deploy passes GIT_SHA=$(git rev-parse HEAD).
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
