@@ -22,7 +22,7 @@
 | NFR-01 | Новый пароль — Argon2id | `test_argon2id_does_not_store_the_password` |
 | NFR-02 | Старый bcrypt переписывается | `test_an_old_bcrypt_hash_still_matches_and_asks_to_be_rewritten` |
 | NFR-03 | Cookie сессии требует тот же CSRF-токен | `test_a_cookie_refresh_needs_the_same_csrf_token` |
-| NFR-04 | Refresh не попадает в тело ответа браузеру | `test_the_browser_does_not_receive_the_refresh_token_in_the_body` |
+| NFR-04 | Токен обновления сессии (refresh) не попадает в тело ответа браузеру | `test_the_browser_does_not_receive_the_refresh_token_in_the_body` |
 | NFR-05 | Классы ошибок E01–E20 покрывают все коды | `test_every_code_belongs_to_one_of_twenty_classes` |
 | NFR-06 | Ошибка отдаётся как RFC 9457 | `test_an_error_is_problem_json_and_keeps_the_old_fields` |
 | NFR-07 | Каждый код ошибки описан | `test_every_raised_code_is_registered_and_documented` |
