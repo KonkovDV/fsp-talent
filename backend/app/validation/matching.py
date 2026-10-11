@@ -25,6 +25,7 @@ printed; `--import` evaluates a labelled file in the same JSON format, `--pairs`
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import hashlib
 import json
@@ -496,6 +497,57 @@ def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tup
     n = len(values)
     means = sorted(statistics.mean(rng.choices(values, k=n)) for _ in range(rounds))
     return means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
+
+
+def stuff_skills(dataset: dict, share: float = 0.2, seed: int = 41,
+                 trust: str = "self_reported") -> tuple[dict, set[str]]:
+    """A copy where `share` of candidates declare every skill of their role. Truth and labels stay the same."""
+    rng = random.Random(seed)
+    data = copy.deepcopy(dataset)
+    stuffed: set[str] = set()
+    for c in data["candidates"]:
+        if rng.random() >= share:
+            continue
+        stuffed.add(c["id"])
+        skills = c["observed"]["skills"]
+        for s in _pool(c["observed"]["role"]):
+            if trust == "self_reported":
+                skills.setdefault(s, trust)
+            else:
+                skills[s] = trust
+    return data, stuffed
+
+
+def stuffing_study(dataset: dict, share: float = 0.2, k: int = 10, seed: int = 41) -> list[dict]:
+    """Share of skill stuffers in the top k, against their share among same-role candidates of the need.
+
+    Ratio 1 means stuffing buys nothing. The keyword baseline shows what an unprotected ranking does.
+    Perturbation study in the spirit of arXiv:2501.04316.
+    """
+    rng = random.Random(0)
+    rows = []
+    # Baseline: the platform takes every claimed skill as confirmed. Shows what the trust weights buy.
+    for method, trust in (("full", "self_reported"), ("keyword", "self_reported"), ("full", "test_confirmed")):
+        data, stuffed = stuff_skills(dataset, share, seed, trust)
+        top_share, pool_share, ndcgs, before = [], [], [], []
+        for need in data["needs"]:
+            same = [c["id"] for c in data["candidates"] if c["observed"]["role"] == need["role"]]
+            if not same:
+                continue
+            ranked = rank(data, need, method, rng)
+            top = ranked[:k]
+            top_share.append(sum(1 for cid in top if cid in stuffed) / len(top))
+            # Control: the same people in the same top k before they stuffed their profiles.
+            clean_top = rank(dataset, need, method, rng)[:k]
+            before.append(sum(1 for cid in clean_top if cid in stuffed) / len(clean_top))
+            pool_share.append(sum(1 for cid in same if cid in stuffed) / len(same))
+            ndcgs.append(ndcg(ranked, data["labels"][need["id"]]))
+        top_mean, pool_mean = statistics.mean(top_share), statistics.mean(pool_share)
+        rows.append({"method": method if trust == "self_reported" else f"{method}, всё подтверждено",
+                     "top": top_mean, "pool": pool_mean, "before": statistics.mean(before),
+                     "ratio": top_mean / pool_mean if pool_mean else float("nan"),
+                     "top_ci": bootstrap_ci(top_share), "ndcg": statistics.mean(ndcgs)})
+    return rows
 
 
 UNCONFIRMED_POLICIES = (
@@ -1201,6 +1253,8 @@ def main() -> None:
     parser.add_argument("--merge-raters", nargs=2, metavar=("A", "B"),
                         help="floor of the mean of two sheets, written as JSONL for --pairs")
     parser.add_argument("--merged", help="where --merge-raters writes the JSONL")
+    parser.add_argument("--stuffing", type=float, default=0.0,
+                        help="share of candidates who declare every skill of their role; does not change the product")
     parser.add_argument("--unconfirmed", action="store_true",
                         help="show, demote or hide unconfirmed grades; does not change the product")
     parser.add_argument("--overclaim", default="",
@@ -1230,6 +1284,19 @@ def main() -> None:
         return
     if args.overclaim:
         _print_overclaim(args)
+        return
+    if args.stuffing:
+        print(f"Накрутка навыков: {args.stuffing:.0%} кандидатов заявляют все навыки своей специализации. "
+              f"Зерно {args.seed}, {args.candidates} кандидатов, {args.needs} потребностей.")
+        print("| Метод | В топ-10 до накрутки | В топ-10 после (95 % ДИ) | В своей специализации "
+              "| Отношение | nDCG@10 |")
+        print("|---|---|---|---|---|---|")
+        for r in stuffing_study(make_dataset(args.candidates, args.needs, args.seed), args.stuffing):
+            def pct(x: float) -> str:
+                return f"{x * 100:.1f} %".replace(".", ",")
+            ci = f"{pct(r['top_ci'][0])}…{pct(r['top_ci'][1])}"
+            print(f"| {r['method']} | {pct(r['before'])} | {pct(r['top'])} ({ci}) "
+                  f"| {pct(r['pool'])} | {r['ratio']:.2f} | {r['ndcg']:.4f} |".replace(".", ","))
         return
     if args.unconfirmed:
         rows = unconfirmed_study(make_dataset(args.candidates, args.needs, args.seed))
