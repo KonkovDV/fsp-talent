@@ -62,7 +62,7 @@ docker compose exec -T -u appuser backend python -m seed.generate_seed
 | Адрес | Что там |
 |---|---|
 | http://localhost | Кабинеты кандидата и работодателя |
-| http://localhost/docs | Swagger UI, спецификация OpenAPI 3.1 |
+| http://localhost/docs | Swagger UI, спецификация OpenAPI 3.1. Без стенда — снимок [docs/openapi.json](docs/openapi.json), тест сверяет его с приложением |
 | http://localhost:8025 | Mailpit: письма с кодами подтверждения и уведомления |
 
 Проверить требования без базы: `make accept` (или из `backend`: `python -m app.validation.accept`). Список — [docs/requirements_trace.md](docs/requirements_trace.md). Живой стенд одной командой: `make check` (регистрация, привязка ФСП ID и вход через ФСП ID, тест, поиск, задания работодателя, приглашение, раскрытие контактов, переписка, закрытие контактов для компании). Порт 80 занят, нет make, что-то не стартует — [подробная инструкция](docs/INSTALL.md) с разделом частых проблем. CI на каждом изменении проходит этот же путь на чистой машине.
