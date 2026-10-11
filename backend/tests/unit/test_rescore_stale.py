@@ -25,3 +25,14 @@ def test_a_failure_never_blocks_the_start(monkeypatch):
 
     monkeypatch.setattr(rescore_stale, "rescore_stale", boom)
     assert rescore_stale.main() == 0
+
+
+def test_startup_rescore_bypasses_rls_and_takes_the_worker_lock():
+    """audit-4 F-3: reproduced on PG17 (tests/integration/test_rescore_rls.py)."""
+    import inspect
+
+    from app.core import rescore_stale as module
+
+    source = inspect.getsource(module)
+    assert "bypass_rls()" in source and "reset_rls(scope)" in source
+    assert "_acquire_rebuild_lock" in source and "await release(str(pid))" in source
