@@ -72,8 +72,10 @@ describe('apiError — русские тексты валидации', () => {
 
   it('переводит типичные сообщения pydantic/422', () => {
     expect(apiError(err({ detail: [{ loc: ['body', 'limit'], msg: 'Input should be less than or equal to 50', type: 'less_than_equal' }] }), 'x'))
-      .toBe('limit: Значение должно быть не больше 50')
+      .toBe('лимит: Значение должно быть не больше 50')
     expect(apiError(err({ detail: [{ msg: 'Field required' }] }), 'x')).toBe('Обязательное поле')
+    expect(apiError(err({ detail: [{ loc: ['body', 'username'], msg: 'Field required' }] }), 'x')).toBe('логин: Обязательное поле')
+    expect(apiError(err({ detail: [{ loc: ['body', 'salary_from'], msg: 'Input should be a valid integer' }] }), 'x')).toBe('вилка от: Нужно целое число')
     expect(apiError(err({ detail: 'Input should be a valid UUID, invalid character' }), 'x')).toBe('Некорректный идентификатор')
     expect(apiError(err({ detail: "Input should be 'reviewing', 'accepted' or 'rejected'" }), 'x'))
       .toBe("Допустимые значения: 'reviewing', 'accepted' или 'rejected'")

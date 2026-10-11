@@ -17,6 +17,58 @@ export function apiErrorDetails<T = Record<string, unknown>>(error: unknown): T 
   return payloadOf(error)?.error?.details as T | undefined
 }
 
+/** Russian labels for common API field names in 422 loc paths. */
+const FIELD_RU: Record<string, string> = {
+  username: 'логин',
+  password: 'пароль',
+  email: 'email',
+  full_name: 'имя',
+  display_name: 'отображаемое имя',
+  role: 'специализация',
+  grade: 'грейд',
+  title: 'название',
+  skills: 'навыки',
+  nice_to_have: 'желательные навыки',
+  salary_from: 'вилка от',
+  salary_to: 'вилка до',
+  city: 'город',
+  work_format: 'формат',
+  industry: 'отрасль',
+  website: 'сайт',
+  inn: 'ИНН',
+  description: 'описание',
+  status: 'статус',
+  limit: 'лимит',
+  offset: 'смещение',
+  query: 'запрос',
+  token: 'токен',
+  code: 'код',
+  message: 'сообщение',
+  company_name: 'компания',
+  phone: 'телефон',
+  birth_date: 'дата рождения',
+  target_grade: 'целевой грейд',
+  specialization: 'специализация',
+  vacancy_id: 'вакансия',
+  need_id: 'потребность',
+  candidate_id: 'кандидат',
+  grade_match: 'сопоставление грейда',
+  work_goal: 'цель работы',
+  has_fsp: 'наличие ФСП',
+  answer: 'ответ',
+  text: 'текст',
+  url: 'ссылка',
+  name: 'имя',
+}
+
+function fieldLabel(path: string): string {
+  if (!path) return ''
+  return path.split('.').map(part => {
+    if (/^\d+$/.test(part)) return part
+    return FIELD_RU[part] ?? part
+  }).join('.')
+}
+
 /** Map common FastAPI/pydantic English validation fragments to Russian (SD-06 / SDK-09). */
 function translateValidationMsg(msg: string): string {
   const m = msg.trim()
@@ -64,7 +116,8 @@ function detailText(detail: unknown): string {
       if (typeof item === 'string') return translateValidationMsg(item)
       const msg = (item as { msg?: string }).msg ?? ''
       const loc = (item as { loc?: unknown[] }).loc
-      const field = Array.isArray(loc) ? loc.filter(x => x !== 'body' && x !== 'query' && x !== 'path').join('.') : ''
+      const fieldPath = Array.isArray(loc) ? loc.filter(x => x !== 'body' && x !== 'query' && x !== 'path').map(String).join('.') : ''
+      const field = fieldLabel(fieldPath)
       const translated = translateValidationMsg(msg)
       return field && translated ? `${field}: ${translated}` : translated
     })
