@@ -256,7 +256,8 @@ async def vacancies_for_me(current: dict = Depends(get_current_participant), db:
         cards.append(_out(vacancy, {**hit, "applied": vacancy.id in applied,
                                     "can_apply": not needs_guardian and not hit["needs_test"]}))
     if candidate["grade"]:
-        cards.sort(key=lambda c: (-c["coverage"], c["title"]))
+        # Skill coverage first; FSP results in the vacancy's discipline lift a card among equals (boost, not gate).
+        cards.sort(key=lambda c: (-c["coverage"], not c.get("fsp_match"), c["title"]))
     # Without a grade the rows keep the query order: newest vacancy first.
     return cards
 
