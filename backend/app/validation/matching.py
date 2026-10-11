@@ -509,6 +509,19 @@ def _unconfirmed(c: dict) -> bool:
     return c["observed"].get("grade_source") != "assessed"
 
 
+MULTIPLIERS = (0.0, 0.25, 0.5, 0.75, 1.0)
+
+
+def multiplier_rank(dataset: dict, need: dict, m: float) -> list[str]:
+    """Order by the model score, an unconfirmed grade multiplied by m. 1 keeps the score, 0 pushes them down."""
+    spec = _spec(need)
+    rows = []
+    for c in dataset["candidates"]:
+        value = score(spec, _facts(c)).score
+        rows.append((-(value * m if _unconfirmed(c) else value), c["id"]))
+    return [cid for _, cid in sorted(rows)]
+
+
 def apply_unconfirmed_policy(ranked: list[str], by_id: dict[str, dict], policy: str) -> list[str]:
     """Reorder one ranking. The relevance labels are not touched, so a hidden relevant candidate is a loss."""
     if policy == "product":
@@ -551,8 +564,22 @@ def unconfirmed_study(dataset: dict, rounds: int = 1000, seed: int = 11) -> list
             share = returned_share(ranked, labels, by_id)
             if not math.isnan(share):
                 per[key]["returned"].append(share)
+    for m in MULTIPLIERS:
+        key = f"x{m}"
+        per[key] = {"ndcg": [], "p10": [], "returned": []}
+    for need in labelled:
+        labels = dataset["labels"][need["id"]]
+        for m in MULTIPLIERS:
+            ranked = multiplier_rank(dataset, need, m)
+            per[f"x{m}"]["ndcg"].append(ndcg(ranked, labels))
+            per[f"x{m}"]["p10"].append(_at_k(ranked, labels, 10))
+            share = returned_share(ranked, labels, by_id)
+            if not math.isnan(share):
+                per[f"x{m}"]["returned"].append(share)
+    titles = [*UNCONFIRMED_POLICIES,
+              *((f"x{m}", f"балл, неподтверждённым × {m:g}".replace(".", ",")) for m in MULTIPLIERS)]
     rows = []
-    for key, title in UNCONFIRMED_POLICIES:
+    for key, title in titles:
         d_ndcg = [a - b for a, b in zip(per[key]["ndcg"], per["product"]["ndcg"], strict=True)]
         d_p10 = [a - b for a, b in zip(per[key]["p10"], per["product"]["p10"], strict=True)]
         rows.append({

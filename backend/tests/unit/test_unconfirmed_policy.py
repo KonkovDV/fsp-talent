@@ -32,3 +32,9 @@ def test_study_hides_nobody_relevant_in_product_and_delta_of_product_is_zero():
     assert rows["product"]["d_ndcg"] == 0.0 and rows["product"]["d_p10"] == 0.0
     assert rows["hide"]["returned"] == 0.0
     assert rows["product"]["returned"] >= rows["demote"]["returned"]
+
+
+def test_the_multiplier_grid_is_monotone_and_one_keeps_the_score():
+    rows = {r["policy"]: r for r in unconfirmed_study(make_dataset(120, 12, 5), rounds=50)}
+    grid = [rows[f"x{m}"]["returned"] for m in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    assert grid == sorted(grid)
