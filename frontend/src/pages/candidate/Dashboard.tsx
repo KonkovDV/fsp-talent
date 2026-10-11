@@ -5,6 +5,7 @@ import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, my
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
+import DemoResetCard from '../../components/DemoResetCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
 import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -62,6 +63,7 @@ export default function CandidateDashboard() {
           Работодатели пока не видят вас в поиске: укажите дату рождения в <Link to="/candidate/profile" className="underline">профиле</Link>. Отметка «18 лет» возраст не подтверждает.
         </p>
       )}
+      {p.demo_reset_available && <DemoResetCard />}
       {!p.survey_done && <SurveyCard profile={p} />}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">
