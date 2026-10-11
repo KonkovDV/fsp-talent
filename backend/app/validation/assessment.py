@@ -505,6 +505,63 @@ class Report:
     reliability: list[tuple[int, float, float]] = field(default_factory=list)
     spec_rows: list[tuple[str, float, str, int]] = field(default_factory=list)
     overlap_spec: float = 0.0
+    adjacent_auc: list[AdjacentAuc] = field(default_factory=list)
+
+
+@dataclass
+class AdjacentAuc:
+    lower: str
+    upper: str
+    n_lower: int
+    n_upper: int
+    auc: float
+    ci: tuple[float, float]
+
+
+def auc(lower: list[float], upper: list[float]) -> float:
+    """P(score of an upper-grade candidate > score of a lower-grade one), ties count one half.
+
+    Mann–Whitney U / (n₁·n₂) through ranks, O(n log n). Hanley & McNeil 1982, doi:10.1148/radiology.143.1.7063747.
+    """
+    if not lower or not upper:
+        return float("nan")
+    pooled = sorted([(x, 0) for x in lower] + [(x, 1) for x in upper])
+    rank_sum = 0.0
+    i = 0
+    while i < len(pooled):
+        j = i
+        while j < len(pooled) and pooled[j][0] == pooled[i][0]:
+            j += 1
+        mid = (i + j + 1) / 2   # average 1-based rank of the tied run
+        rank_sum += mid * sum(1 for k in range(i, j) if pooled[k][1] == 1)
+        i = j
+    n1, n2 = len(upper), len(lower)
+    return (rank_sum - n1 * (n1 + 1) / 2) / (n1 * n2)
+
+
+def adjacent_auc(sessions: list[Session], draws: int = 1000, seed: int = 2026,
+                 min_n: int = 20) -> list[AdjacentAuc]:
+    """How well θ̂ separates neighbouring true grades. 95 % CI: percentile bootstrap stratified by grade.
+
+    Each grade is resampled on its own, so both group sizes stay fixed (Efron & Tibshirani 1993, ch. 13).
+    Pairs with fewer than `min_n` people in a group are skipped.
+    """
+    by_grade: dict[str, list[float]] = {}
+    for s in sessions:
+        g = true_grade(s.theta)
+        if g is not None:
+            by_grade.setdefault(g, []).append(s.theta_hat)
+    rng = random.Random(seed)
+    rows: list[AdjacentAuc] = []
+    for lo, hi in zip(GRADE_ORDER, GRADE_ORDER[1:]):
+        a, b = by_grade.get(lo, []), by_grade.get(hi, [])
+        if len(a) < min_n or len(b) < min_n:
+            continue
+        boot = sorted(auc([a[rng.randrange(len(a))] for _ in a], [b[rng.randrange(len(b))] for _ in b])
+                      for _ in range(draws))
+        ci = (boot[int(0.025 * draws)], boot[int(0.975 * draws) - 1]) if draws else (float("nan"),) * 2
+        rows.append(AdjacentAuc(lo, hi, len(a), len(b), auc(a, b), ci))
+    return rows
 
 
 def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
@@ -1150,6 +1207,7 @@ def run(n: int = 3000, seed: int = 7, extras: bool = True) -> Report:
         misspec=study_misspec(people, truth, offsets, seed) if extras else [],
         fixed_form=fixed_form(seed=seed) if extras else None,
         stolen=stolen_sessions(truth, offsets, seed + 31) if extras else None,
+        adjacent_auc=adjacent_auc(clean_sessions, draws=1000 if extras else 200),
     )
 
 
@@ -1326,6 +1384,7 @@ def markdown(r: Report, n: int, seed: int) -> str:
         *[f"| {MATRIX_LABELS[i]} | {r.ladder[g][0]} | {r.ladder[g][1]:.1%} |"
           for i, g in enumerate(("below", *GRADE_ORDER)) if g in r.ladder],
         "",
+        *_auc_lines(r),
         *_path_lines(r),
         *_misspec_lines(r),
         *_form_lines(r),
@@ -1408,6 +1467,24 @@ def _path_detail_lines(path: PathStudy) -> list[str]:
             f"θ − порог, где доля сдавших равна 0,5: {path.half_shift:+.3f} "
             "(линейная интерполяция между соседними корзинами)."
         )
+    lines.append("")
+    return lines
+
+
+def _auc_lines(r: Report) -> list[str]:
+    if not r.adjacent_auc:
+        return []
+    lines = [
+        "Разделение соседних грейдов. AUC — вероятность, что у кандидата старшего грейда оценка θ̂ выше, "
+        "чем у кандидата младшего (Mann–Whitney, Hanley & McNeil 1982). 95 % интервал — перцентильный бутстрап, "
+        "1000 повторов, выборка внутри каждого грейда отдельно. Истинный грейд — по θ из симуляции.",
+        "",
+        "| Пара грейдов | Людей (младший / старший) | AUC | 95 % ДИ |",
+        "|---|---|---|---|",
+    ]
+    for row in r.adjacent_auc:
+        lines.append(f"| {row.lower} / {row.upper} | {row.n_lower} / {row.n_upper} | {row.auc:.3f} | "
+                     f"{row.ci[0]:.3f}–{row.ci[1]:.3f} |")
     lines.append("")
     return lines
 
