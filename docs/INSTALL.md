@@ -147,7 +147,7 @@ make check
 
 ### Проверить самим за десять минут
 
-Самопроверка стенда: `make demo-check` (`python -m seed.demo_check`) печатает таблицу «аккаунт → ожидается → факт» по таблице выше и завершается с ошибкой, если хоть один кейс сломан. В `ci.yml` она идёт сразу после сида.
+Самопроверка стенда: `make demo-check` (`python -m seed.demo_check`) печатает таблицу «аккаунт → ожидается → факт» по таблице выше и завершается с ошибкой, если хоть одна строка не сошлась. В `ci.yml` она идёт сразу после загрузки демо-данных.
 
 Пароль демо-аккаунтов `demo12345`. На странице входа при включённом демо-режиме есть строка про аккаунты жюри и кнопка «Взять свободный аккаунт жюри». Кнопка берёт ответ `GET /api/v1/public/jury-free`: адрес из `jury1@demo.talent`…`jury10@demo.talent`, в который дольше всех не входили. В ответе только адрес. Если запрос не удался, номер выбирается случайно. Два нажатия до входа могут получить один адрес. Ночной сброс в 04:10 это время входа не очищает. Рядом с «Войти через ФСП ID» написано: демо `FSP001` / `test`.
 
@@ -223,7 +223,7 @@ docker compose exec -T backend python -m app.validation.matching --seed 7
 | `FSP_ID_MODE` | mock в демо-сборке | В Compose и `.env` демо стоит `mock`: страница провайдера на этом сайте. Без переменной код берёт `oidc`. Мок при выключенном `DEMO_MODE` процесс не запускает. `oidc` — Keycloak Федерации (`FSP_ID_ISSUER`, `FSP_ID_CLIENT_ID`, `FSP_ID_CLIENT_SECRET`) |
 | `AI_ENABLED`, `GIGACHAT_CREDENTIALS` | true, пусто | Без ключа модели резюме разбирается правилами. С ключом модель добавляет навыки с дословной цитатой, пишет черновики заданий для модератора и мнение по карточке; балл и порядок она не меняет |
 | `YANDEX_API_KEY`, `YANDEX_FOLDER_ID`, `YANDEX_MODEL`, `YANDEX_CHECK_MODEL` | пусто, пусто, yandexgpt-5.1/latest (URI не сверен с официальной страницей, см. SOLUTION.md), в коде пусто, в `.env.example` — `yandexgpt-5-lite/latest` | YandexGPT вместо GigaChat, если `GIGACHAT_CREDENTIALS` пуст. Основная модель — YandexGPT Pro 5.1. Псевдоним `yandexgpt/latest` — это Pro 5, его не используют. Ключ сервисного аккаунта с ролью `ai.languageModels.user`; запросы уходят с `x-data-logging-enabled: false`. Для черновиков заданий нужна вторая модель, `yandexgpt-5-lite/latest` |
-| `EMBEDDINGS_MODE` | off | `model` включает смысловой поиск по эмбеддингам. На стенде жюри библиотека в образ не ставится: там нет GPU, а памяти около 3 ГБ. Ставится аргументом сборки `INSTALL_RERANKER=1`: `make demo GPU=1` или `INSTALL_RERANKER=1 docker compose up -d --build`. По умолчанию выключено, образ backend без torch |
+| `EMBEDDINGS_MODE` | off | `model` включает смысловой поиск по векторным представлениям текста (эмбеддингам). На стенде жюри библиотека в образ не ставится: там нет GPU, а памяти около 3 ГБ. Ставится аргументом сборки `INSTALL_RERANKER=1`: `make demo GPU=1` или `INSTALL_RERANKER=1 docker compose up -d --build`. По умолчанию выключено, образ backend без torch |
 | `CROSS_ENCODER_MODE`, `CROSS_ENCODER_MODEL`, `CROSS_ENCODER_DEVICE` | off, пусто, auto | Локальная модель пары `BAAI/bge-reranker-v2-m3` переставляет верхние 50 фактора «Запрос». Веса лежат в `models/bge-reranker-v2-m3` и в репозиторий не входят. Устройство: `auto`, `cpu` или `gpu`. Пока режима нет или папки нет, порядок прежний. BM25 — формула без файла весов и в выдачу не входит. Навыки, грейд и нижняя граница ФСП не меняются |
 | `MAIL_MODE`, `SMTP_*` | smtp → Mailpit | Настоящий SMTP на стенде |
 | `MAIL_FILE_DIR`, `SMTP_STARTTLS`, `EMAIL_CODE_TTL_MINUTES` | /tmp/fsp-talent-mail, false, 30 | Папка писем при `MAIL_MODE=file` (её читают CI и smoke, у параллельных прогонов своя папка); STARTTLS для SMTP; срок кода подтверждения в минутах |
@@ -272,7 +272,7 @@ npm run dev        # http://localhost:5173, запросы /api уходят н�
 | Что | Минимум |
 |---|---|
 | ОС | Linux с Docker Engine 24+ и Compose v2 |
-| Процессор и память | 1 vCPU и 4 ГБ. Стенд жюри работает на 8 ГБ, воркер — один процесс |
+| Процессор и память | 1 vCPU и 4 ГБ. Стенд жюри работает на 8 ГБ, фоновый обработчик задач (worker) — один процесс |
 | Диск | 10 ГБ: образы, база, 14 ночных копий |
 | Сеть | Открытые 80 и 443. Без своего домена подходит адрес вида `203-0-113-10.sslip.io`: sslip.io отвечает этим IP на такое имя |
 | Почта | SMTP-ящик для кодов подтверждения или профиль `mailpit` для закрытого показа |
@@ -300,7 +300,7 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env ps
 
 При старте backend применяет миграции Alembic от владельца базы, досоздаёт новые таблицы и колонки (`app.core.schema_sync`), выставляет пароль роли `fsp_app` и только потом запускает uvicorn.
 
-Демо-данные загружаются от пользователя `appuser`. Сид от root создаёт ключ подписи удостоверений, который приложение потом не прочитает, и проверка удостоверения отвечает 500.
+Демо-данные загружаются от пользователя `appuser`. Загрузка от root создаёт ключ подписи удостоверений, который приложение потом не прочитает, и проверка удостоверения отвечает 500.
 
 ```bash
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T -u appuser backend python -m seed.generate_seed
@@ -313,7 +313,7 @@ curl -s https://$SITE_ADDRESS/health          # "status":"ok" и "build" — к�
 SMOKE_BASE=https://$SITE_ADDRESS/api/v1 SMOKE_MAIL=demo python backend/tests/smoke_api.py
 ```
 
-Второй командой smoke проверяет стенд снаружи без доступа к почте, если включены `DEMO_MODE` и `DEMO_SHOW_CODE`. Он берёт код из ответа регистрации, проверяет, что `GET /public/issuer` отвечает 200, и пропускает шаги, которым нужны другие письма (сброс пароля, согласие законного представителя). Нужен только Python 3.12, сторонних пакетов скрипт не использует.
+Второй командой быстрая проверка (smoke) смотрит стенд снаружи без доступа к почте, если включены `DEMO_MODE` и `DEMO_SHOW_CODE`. Он берёт код из ответа регистрации, проверяет, что `GET /public/issuer` отвечает 200, и пропускает шаги, которым нужны другие письма (сброс пароля, согласие законного представителя). Нужен только Python 3.12, сторонних пакетов скрипт не использует.
 
 ### 11.3. Файл `deploy/.env`
 
@@ -440,7 +440,7 @@ curl -s https://$SITE_ADDRESS/health    # "build" — коммит отката
 | `backend` не становится `healthy` | Посмотрите `docker compose logs backend`. Если там `SECRET_KEY is a published placeholder`, том `vc_keys` недоступен на запись: задайте `SECRET_KEY` в `.env` |
 | Вход не работает, `503` | Redis не запущен: `docker compose ps redis`, затем `docker compose up -d redis` |
 | Письмо с кодом не пришло | На локальном стенде откройте Mailpit http://localhost:8025. Код можно запросить повторно через минуту. На стенде жюри с `MAIL_MODE=console` письма не уходят: код регистрации показывается на экране, код сброса пароля — нет |
-| Проверка удостоверения отвечает 500 | Ключ в томе создан от root. Сид запускают от `appuser` (раздел 11.2). Перезапуск backend отдаёт уже лежащий ключ пользователю `appuser` |
+| Проверка удостоверения отвечает 500 | Ключ в томе создан от root. Демо-данные загружают от `appuser` (раздел 11.2). Перезапуск backend отдаёт уже лежащий ключ пользователю `appuser` |
 | Caddy не получает сертификат | Порт 80 закрыт или `SITE_ADDRESS` не указывает на этот сервер. Проверьте `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env logs caddy` |
 | `required variable … is missing a value` | В `deploy/.env` не задан `SITE_ADDRESS`, `POSTGRES_PASSWORD` или `APP_DB_PASSWORD` |
 | sandbox перезапускается с `SANDBOX_TOKEN is required` | Задайте `SANDBOX_TOKEN` в `deploy/.env` |
