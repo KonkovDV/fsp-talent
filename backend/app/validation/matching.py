@@ -1511,7 +1511,16 @@ def main() -> None:
                         help="show, demote or hide unconfirmed grades; does not change the product")
     parser.add_argument("--overclaim", default="",
                         help="comma-separated shares who declare one grade too high; print the curve and exit")
+    parser.add_argument("--protocol", choices=("a", "b", "all"),
+                        help="graded protocols of published methods (app.validation.protocols); print and exit")
     args = parser.parse_args()
+    if args.protocol:
+        import sys
+
+        from app.validation import protocols
+        sys.argv = [sys.argv[0], "--protocol", args.protocol]
+        protocols.main()
+        return
     global ORDER_MODEL
     ORDER_MODEL = args.order
     if args.ladder:
