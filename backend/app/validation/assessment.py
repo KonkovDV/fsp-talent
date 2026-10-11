@@ -1471,6 +1471,11 @@ def _path_detail_lines(path: PathStudy) -> list[str]:
     return lines
 
 
+def _dec(x: float) -> str:
+    """Three decimals with a comma, as in the Russian documents."""
+    return f"{x:.3f}".replace(".", ",")
+
+
 def _auc_lines(r: Report) -> list[str]:
     if not r.adjacent_auc:
         return []
@@ -1483,8 +1488,12 @@ def _auc_lines(r: Report) -> list[str]:
         "|---|---|---|---|",
     ]
     for row in r.adjacent_auc:
-        lines.append(f"| {row.lower} / {row.upper} | {row.n_lower} / {row.n_upper} | {row.auc:.3f} | "
-                     f"{row.ci[0]:.3f}–{row.ci[1]:.3f} |")
+        lines.append(f"| {row.lower} / {row.upper} | {row.n_lower} / {row.n_upper} | {_dec(row.auc)} | "
+                     f"{_dec(row.ci[0])}–{_dec(row.ci[1])} |")
+    mean = statistics.mean(row.auc for row in r.adjacent_auc)
+    lines.append(f"| среднее по парам | — | {_dec(mean)} | — |")
+    lines.append("")
+    lines.append("Экспресс-режима теста в продукте нет, поэтому сравнения «полный тест против экспресс-теста» нет.")
     lines.append("")
     return lines
 
