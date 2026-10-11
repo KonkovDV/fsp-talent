@@ -42,6 +42,7 @@
 /api/v1/candidates/me/certificate
 /api/v1/candidates/me/complaints
 /api/v1/candidates/me/credentials/{credential_id}/revoke
+/api/v1/candidates/me/demo/reset
 /api/v1/candidates/me/exclusions
 /api/v1/candidates/me/fsp/authorize
 /api/v1/candidates/me/fsp/callback

@@ -7764,6 +7764,84 @@
         ]
       }
     },
+    "/api/v1/candidates/me/demo/reset": {
+      "post": {
+        "description": "Demo stand only, jury1..jury10 only: start over. Survey, test sessions, grade confirmations,\ncategory, skills, invitations and the grade cooldown are cleared. The password stays.\nRepeating the call is harmless. Q&A §6: the jury takes the test itself.",
+        "operationId": "reset_my_demo_api_v1_candidates_me_demo_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "description": "Не демо-аккаунт жюри или не демо-стенд"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Reset My Demo",
+        "tags": [
+          "candidates"
+        ]
+      }
+    },
     "/api/v1/candidates/me/exclusions": {
       "get": {
         "operationId": "my_exclusions_api_v1_candidates_me_exclusions_get",

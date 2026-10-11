@@ -41,6 +41,7 @@ CODE_CLASS: dict[str, str] = {
     "account_suspended": "E02",
     "csrf_invalid": "E02",
     "contacts_hidden": "E02",
+    "demo_reset_forbidden": "E02",
     "contacts_revoked": "E02",
     "consent_withdrawn": "E02",
     "not_found": "E03",

@@ -42,6 +42,7 @@ from app.services.ai.assistant import parse_resume
 from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
+from app.services.demo_reset import clear_jury, is_jury, restore_consents
 from app.services.employer_score import company_score
 from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
@@ -475,6 +476,22 @@ async def delete_my_account(body: DeleteAccountIn, current: dict = Depends(get_c
     await erase_participant(db, p, reason="account_deleted")
     await db.commit()
     return {"deleted": True}
+
+
+@router.post("/me/demo/reset", responses={403: {"description": "Не демо-аккаунт жюри или не демо-стенд"}})
+async def reset_my_demo(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """Demo stand only, jury1..jury10 only: start over. Survey, test sessions, grade confirmations,
+    category, skills, invitations and the grade cooldown are cleared. The password stays.
+    Repeating the call is harmless. Q&A §6: the jury takes the test itself."""
+    p = await db.get(Participant, _pid(current))
+    if not p or p.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    if not settings.DEMO_MODE or not is_jury(p.email):
+        raise ApiError(403, "demo_reset_forbidden", "Сброс доступен только демо-аккаунтам жюри на демо-стенде")
+    await clear_jury(db, p)
+    await restore_consents(db, p, datetime.now(UTC))
+    await db.commit()
+    return {"reset": True}
 
 
 @router.get("/me/results")
