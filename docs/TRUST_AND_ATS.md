@@ -113,7 +113,8 @@ flowchart LR
   classDef core fill:#dcfce7,stroke:#16a34a,color:#0f172a
   classDef data fill:#fef3c7,stroke:#d97706,color:#0f172a
   classDef ext fill:#f3e8ff,stroke:#9333ea,color:#0f172a,stroke-dasharray:4 3
-  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a```
+  classDef warn fill:#fee2e2,stroke:#dc2626,color:#0f172a
+```
 
 Подпись и защита от повтора (`app/services/webhooks.py`, `api_keys.py`):
 
