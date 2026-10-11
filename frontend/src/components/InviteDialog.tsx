@@ -16,6 +16,8 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
     role: defaultRole, salary_from_gross: 150_000, salary_to_gross: 250_000, work_format: 'remote', message: '', contact_method: '', perks: [] as string[], practice: false,
   })
   const [error, setError] = useState('')
+  // 409: this candidate already has an active offer; resending cannot succeed, so the button stays off.
+  const [conflict, setConflict] = useState(false)
   const [hint, setHint] = useState('')
   const [market, setMarket] = useState('')
   const [basis, setBasis] = useState<'gross' | 'net'>('gross')
@@ -26,7 +28,10 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
   const send = useMutation({
     mutationFn: () => createOffer({ ...form, candidate_id: candidateId, salary_basis: basis, perks: form.perks, practice: form.practice }, idem),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employerOffers'] }); onSent?.(); onClose() },
-    onError: e => setError(apiError(e, 'Приглашение не отправлено')),
+    onError: e => {
+      if ((e as { response?: { status?: number } })?.response?.status === 409) setConflict(true)
+      setError(apiError(e, 'Приглашение не отправлено'))
+    },
   })
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -121,7 +126,7 @@ export default function InviteDialog({ candidateId, defaultRole = '', onClose, o
         {error && <p className="notice-error mt-4" role="alert">{error}</p>}
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="btn-secondary">Отмена</button>
-          <button type="submit" disabled={send.isPending || !rangeReady} className="btn-invite">{send.isPending ? 'Отправляем…' : 'Отправить приглашение'}</button>
+          <button type="submit" disabled={send.isPending || !rangeReady || conflict} className="btn-invite">{send.isPending ? 'Отправляем…' : 'Отправить приглашение'}</button>
         </div>
       </form>
     </Modal>
