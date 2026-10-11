@@ -523,6 +523,14 @@ async def telegram_vacancies(request: Request, db: AsyncSession = Depends(get_db
     return vacancy_digest(rows)
 
 
+def public_handle(participant_id) -> str:
+    """How a person appears in a public list: no name, a stable short tag (the /jury page promises no names).
+
+    The name stays on the person's own public page, which they opened with a separate consent.
+    """
+    return f"Участник {str(participant_id).replace('-', '')[:4].upper()}"
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(
     discipline: str | None = None,
@@ -553,7 +561,7 @@ async def get_leaderboard(
         {
             "rank": i + 1,
             "participant_id": str(ds.participant_id),
-            "display_name": p.display_name,
+            "display_name": public_handle(ds.participant_id),
             "region": p.region,
             "discipline": ds.discipline,
             "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),

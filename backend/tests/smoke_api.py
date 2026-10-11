@@ -309,6 +309,7 @@ def main():
     assert status == 200 and "fsp_id" not in public and public["display_name"], public
     status, board = call("GET", "/public/leaderboard?discipline=algorithmic")
     assert status == 200 and board and "fsp_id" not in board[0]
+    assert all(row["display_name"].startswith("Участник ") for row in board)    # /jury: a list without names
     assert board == sorted(board, key=lambda row: -row["lcb"])
     status, credentials = call("GET", f"/public/credentials/{me['id']}")
     assert status == 200 and credentials and credentials[0]["valid"]
