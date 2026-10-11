@@ -503,11 +503,37 @@ async def test_demo_fsp_login_returns_a_code(quiet, monkeypatch):
     assert bad.value.status_code == 400
 
 
-async def test_parse_endpoints_return_a_reading(quiet):
-    resume = await ai.parse_resume_endpoint(ai.ResumeIn(text="Пишу сервисы на Python и FastAPI"), {"sub": str(_uid())})
+async def test_parse_endpoints_return_a_reading(quiet, monkeypatch):
+    async def current(*_args, **_kwargs):
+        return True
+
+    monkeypatch.setattr(ai, "consent_is_current", current)
+    text = ai.ResumeIn(text="Пишу сервисы на Python и FastAPI")
+    resume = await ai.parse_resume_endpoint(text, {"sub": str(_uid())}, Bag())
     assert any(item["name"] == "Python" for item in resume["skills"])
+    assert "consent_outdated" not in resume
     query = await ai.parse_query_endpoint(ai.QueryIn(q="сеньор бэкенд python"), {"sub": str(_uid())})
     assert query["role"] or query["grade"] or query["skills"] is not None
+
+
+async def test_outdated_consent_keeps_resume_away_from_the_model(quiet, monkeypatch):
+    """LEG-01: until the person reconfirms consent v1.3 (which names every processor), no model call."""
+    async def outdated(*_args, **_kwargs):
+        return False
+
+    calls = []
+
+    async def model(*_args, **_kwargs):
+        calls.append(1)
+        return []
+
+    monkeypatch.setattr(ai, "consent_is_current", outdated)
+    monkeypatch.setattr(ai.providers, "active", lambda: object())
+    from app.services.ai import assistant
+    monkeypatch.setattr(assistant, "_llm_skills", model)
+    resume = await ai.parse_resume_endpoint(ai.ResumeIn(text="Пишу сервисы на Python"), {"sub": str(_uid())}, Bag())
+    assert resume["consent_outdated"] is True and resume["llm_used"] is False and calls == []
+    assert any(item["name"] == "Python" for item in resume["skills"])
 
 
 async def test_search_bank_and_filters(quiet, monkeypatch):
@@ -939,3 +965,21 @@ async def test_tab_leave_dispute_and_review(quiet, monkeypatch):
     monkeypatch.setattr(assessment, "abandon", stopped)
     abandoned = await assessment.abandon_session(session.id, current, db)
     assert abandoned.status == "abandoned"
+
+
+async def test_legal_processor_names_the_active_model(quiet, monkeypatch):
+    from app.api.v1 import legal as legal_api
+    from app.services.ai import providers
+
+    async def none(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(providers, "refresh", none)
+    assert await legal_api.model_processor() == {"enabled": False, "label": None}
+
+    async def yandex(*_a, **_k):
+        return SimpleNamespace(kind="yandex")
+
+    monkeypatch.setattr(providers, "refresh", yandex)
+    out = await legal_api.model_processor()
+    assert out["enabled"] is True and "YandexGPT" in out["label"]

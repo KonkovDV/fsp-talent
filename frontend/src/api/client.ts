@@ -214,6 +214,7 @@ export const loginEmployer = (email: string, password: string) =>
   api.post('/auth/employer/token', ...form(email, password))
 
 export interface LegalDoc { kind: string; version: string; title: string; required: boolean; roles: string[]; sha256: string }
+export const legalProcessor = () => api.get<{ enabled: boolean; label: string | null }>('/legal/processor')
 export const legalDocuments = (role?: Role) =>
   api.get<LegalDoc[]>('/legal/documents', { params: role ? { role } : {} })
 export const legalDocument = (kind: string) => api.get<LegalDoc & { body_md: string }>(`/legal/documents/${kind}`)

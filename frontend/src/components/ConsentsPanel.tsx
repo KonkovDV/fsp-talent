@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ShieldCheck } from 'lucide-react'
-import { apiError, myConsents, withdrawConsent } from '../api/client'
+import { apiError, giveConsent, myConsents, withdrawConsent } from '../api/client'
 import { LegalDocModal } from './LegalConsents'
 
 interface Effect { code: string; text: string }
@@ -26,9 +26,23 @@ export default function ConsentsPanel() {
     },
     onError: (e: unknown) => setNote(apiError(e)),
   })
+  const reconfirm = useMutation({
+    mutationFn: (kind: string) => giveConsent(kind).then(r => r.data),
+    onSuccess: () => {
+      setNote('Новая редакция согласия принята')
+      qc.invalidateQueries({ queryKey: ['myConsents'] }); qc.invalidateQueries({ queryKey: ['myProfile'] })
+    },
+    onError: (e: unknown) => setNote(apiError(e)),
+  })
+  const outdated = data.filter(row => row.active && row.outdated)
   return (
     <div className="card space-y-3">
       <h2 className="section-title flex items-center gap-2"><ShieldCheck size={18} className="text-accent" />Согласия</h2>
+      {outdated.length > 0 && (
+        <p className="text-sm text-ink-2" role="alert">
+          Текст согласия обновлён. Прочитайте новую редакцию и подтвердите её — до этого действуют только условия, на которые вы уже согласились.
+        </p>
+      )}
       <ul className="divide-y divide-line text-sm">
         {data.map(row => (
           <li key={row.kind} className="py-2 flex flex-wrap items-center gap-2 justify-between">
@@ -38,6 +52,10 @@ export default function ConsentsPanel() {
                 ? `дано ${new Date(row.given_at!).toLocaleDateString('ru-RU')}, версия ${row.accepted_version}${row.outdated ? ' (текст обновлён)' : ''}`
                 : 'не дано'}
             </span>
+            {row.active && row.outdated && (
+              <button onClick={() => reconfirm.mutate(row.kind)} disabled={reconfirm.isPending}
+                className="inline-flex min-h-6 items-center text-xs font-medium text-accent hover:underline">Подтвердить версию {row.version}</button>
+            )}
             {row.active && (
               <button onClick={() => {
                 const lines = (row.if_withdrawn ?? []).map(item => item.text).join('\n')
