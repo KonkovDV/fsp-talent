@@ -24,6 +24,7 @@
 | [TRUST_AND_ATS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/TRUST_AND_ATS.md) | Защита от фиктивных вакансий и интеграция с ATS |
 | [COMPLIANCE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/COMPLIANCE.md) | Персональные данные (152-ФЗ), честность решений, права |
 | [API_ERRORS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/API_ERRORS.md) | Коды ошибок API |
+| [BUSINESS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/BUSINESS.md) | Бизнес-модель: кто платит и за что, сравнение с hh.ru, Хабр Карьерой, GeekJob и командами хакатона |
 | [DESIGN.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/DESIGN.md) | Дизайн-система «Протокол» по брендбуку ФСП |
 | [THIRD_PARTY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/THIRD_PARTY.md) | Сторонние компоненты и лицензии |
 | [requirements_trace.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/requirements_trace.md) | Прослеживаемость: требование → проверка, `make accept` |
