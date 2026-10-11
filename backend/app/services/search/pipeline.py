@@ -40,7 +40,7 @@ from app.models.profile import CategoryAssignment, DisciplineScore, ProfileEmbed
 from app.services import matching as matching_service
 from app.services.ai.embedder import embed, embeddings_enabled
 from app.services.ambition import ambition_note
-from app.services.cat import is_borderline
+from app.services.cat import PASS_P, is_borderline
 from app.services.categorization import DISCIPLINE_LABELS
 from app.services.code_profile import code_profile_line
 from app.services.fsp.mock import STATUS_LABELS
@@ -768,7 +768,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         facts = CandidateFacts(
             role=role_name, grade=grade_name,
             grade_source=grade_source, skills=skills.get(pid, {}),
-            test_p=conf.p_pass if conf and conf.p_pass is not None else (1.0 if conf else None),
+            # A legacy confirmation without a probability counts as a bare pass, not as certainty (audit-4 F-2).
+            test_p=conf.p_pass if conf and conf.p_pass is not None else (PASS_P if conf else None),
             test_spec=conf.specialization if conf else None,
             fsp_lcb=fsp_lcb, fsp_kind=fsp_kind, fsp_discipline=fsp_discipline,
             industry=p.industry if p else None,
