@@ -1,17 +1,14 @@
 import asyncio
-import os
-import sys
 from logging.config import fileConfig
-
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
 from alembic import context
-
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import app.models  # noqa: F401 -- register all ORM models
 from app.core.config import migration_database_url
 from app.core.database import Base
+import app.models  # noqa: F401 -- register all ORM models
 
 config = context.config
 config.set_main_option("sqlalchemy.url", migration_database_url())
