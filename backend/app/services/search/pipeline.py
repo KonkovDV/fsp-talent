@@ -222,8 +222,12 @@ def bank_cells(rows: list[tuple[str | None, str | None, int, int]], min_n: int =
         if not role or not grade:
             continue
         hidden = people < min_n
+        # SEC3-10: «tested» and «not tested» are cells too. Fewer than min_n on either side would let a
+        # difference of two counts point at one or two people, so that count is not shown.
+        small = tested < min_n or people - tested < min_n
         cells.append({"role": role, "grade": grade, "hidden": hidden,
-                      "candidates": None if hidden else people, "tested": None if hidden else tested})
+                      "candidates": None if hidden else people,
+                      "tested": None if hidden or small else tested})
     return cells
 
 

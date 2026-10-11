@@ -14,6 +14,7 @@ const bank = {
   cells: [
     { role: 'backend', grade: 'middle', hidden: false, candidates: 12, tested: 4 },
     { role: 'backend', grade: 'intern', hidden: true, candidates: 2, tested: 0 },
+    { role: 'embedded', grade: 'middle', hidden: false, candidates: 7, tested: null },
   ],
 }
 
@@ -55,4 +56,11 @@ describe('витрина банка', () => {
     expect(screen.getByText(/Число — по основной категории/)).toBeInTheDocument()
   })
 
+
+  it('не показывает малое число «с тестом» (SEC3-10)', async () => {
+    renderGrid()
+    const link = await screen.findByRole('link', { name: /Встраиваемые системы, мидл/ })
+    expect(link).toHaveTextContent('7(—)')
+    expect(link.getAttribute('aria-label')).toContain('число скрыто')
+  })
 })
