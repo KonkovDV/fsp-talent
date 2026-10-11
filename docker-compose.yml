@@ -8,7 +8,8 @@ services:
     build:
       context: ./backend
       args:
-        INSTALL_RERANKER: "1"
+        # The pair model and embeddings pull torch with CUDA wheels (~5 GB). Off by default; GPU=1 turns it on.
+        INSTALL_RERANKER: ${INSTALL_RERANKER:-0}
         GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
     environment:
