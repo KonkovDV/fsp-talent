@@ -154,7 +154,7 @@ export default function LandingPage() {
         <section className="relative isolate overflow-hidden bg-[#402FFF] text-white">
           <div className="mx-auto grid max-w-page items-center gap-10 px-4 pb-12 pt-10 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pb-20 lg:pt-16">
             <div>
-              <p className="text-sm text-white/85">Федерация спортивного программирования, ЛЦТ 2026</p>
+              <p className="text-sm text-white/85">ФСП Талант · команда Дмитрия Конькова · ЛЦТ 2026</p>
               <h1 className="mt-5 font-display font-bold leading-[1.04] tracking-[-0.035em] [font-size:clamp(2.1rem,4.6vw,3.6rem)]">
                 Приглашайте разработчиков по&nbsp;результату, а&nbsp;не по&nbsp;резюме
               </h1>

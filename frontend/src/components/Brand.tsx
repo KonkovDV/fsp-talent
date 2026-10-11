@@ -10,12 +10,12 @@ export function BrandMark({ size = 32, tile = false }: { size?: number; tile?: b
 
 export function Brand({ to = '/', compact = false }: { to?: string; compact?: boolean }) {
   return (
-    <Link to={to} className="-m-1 flex items-center gap-2.5 rounded-lg p-1" aria-label="ФСП Талант — на главную">
+    <Link to={to} className="-m-1 flex items-center gap-2.5 rounded-lg p-1" aria-label="ФСП Талант · команда Дмитрия Конькова — на главную">
       <BrandMark />
       {!compact && (
         <span className="leading-none">
           <span className="block font-display text-[15px] font-extrabold tracking-[-0.02em] text-ink">ФСП Талант</span>
-          <span className="block pt-1 text-2xs text-ink-3">подбор по результату</span>
+          <span className="block pt-1 text-2xs text-ink-3">команда Дмитрия Конькова</span>
         </span>
       )}
     </Link>
