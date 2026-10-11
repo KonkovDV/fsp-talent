@@ -62,7 +62,7 @@ export default function Layout() {
           <div className="flex items-center gap-1">
             {userRole && <GuideBox role={userRole === 'participant' ? 'participant' : 'employer'} />}
             <NotificationBell />
-            <span className="hidden md:inline-flex"><ThemeToggle /></span>
+            <span className="inline-flex"><ThemeToggle /></span>
             <button type="button" onClick={exit} className="btn-nav gap-1.5 max-md:w-9 max-md:px-0" title="Выйти">
               <LogOut size={16} aria-hidden /><span className="sr-only md:not-sr-only">Выйти</span>
             </button>

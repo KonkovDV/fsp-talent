@@ -1,10 +1,10 @@
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getPublicCompany } from '../api/client'
+import { ROLE_RU, gradeRu, industryRu } from '../labels'
 import PublicShell from '../components/PublicShell'
 import Responsiveness from '../components/Responsiveness'
 import { Empty, Skeleton, rub } from '../components/ui'
-import { ROLE_RU, gradeRu } from '../labels'
 
 interface VacancyRow {
   id: string; title: string; role: string | null; grade: string | null
@@ -31,7 +31,7 @@ export default function CompanyPage() {
       <article className="card space-y-4">
         <h1 className="font-display text-2xl font-bold text-ink">{company.name}</h1>
         <p className="text-sm text-ink-2">
-          {[company.industry, company.trust_label].filter(Boolean).join(' · ')}
+          {[company.industry ? industryRu(company.industry) : null, company.trust_label].filter(Boolean).join(' · ')}
         </p>
         {company.rating && (
           <p className="text-sm text-ink-2">

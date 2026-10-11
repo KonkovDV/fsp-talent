@@ -27,7 +27,7 @@ export function PublicHeader({ onBrand = false }: { onBrand?: boolean }) {
               </li>
             ))}
           </ul>
-          <span className="hidden md:inline-flex"><ThemeToggle /></span>
+          <span className="inline-flex"><ThemeToggle /></span>
           {role ? <Link to={role === 'participant' ? '/candidate' : '/employer'} className="btn-primary btn-sm">Мой кабинет</Link> : <>
             <Link to="/login" className="btn-nav">Войти</Link>
             <Link to="/register?role=employer" className="btn-primary btn-sm hidden sm:inline-flex">Найти кандидата</Link>

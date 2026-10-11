@@ -124,7 +124,7 @@ export default function MethodPage() {
     <PublicShell>
       <PageHeader
         title="Как устроен тест"
-        lead="Задание выбирается там, где оно лучше всего отделяет заявленный уровень от соседнего. Среди пяти лучших срабатывает Симпсон–Хеттер: без измеренной экспозиции выбор равномерный, а ключ чаще целевой доли берётся реже. Здесь параметры и счётчики показов, без текстов и правильных ответов."
+        lead="Задание выбирается там, где оно лучше всего отделяет заявленный уровень от соседнего. Среди пяти лучших срабатывает Симпсон–Хеттер (ограничение частоты показа одного задания): без измеренной экспозиции выбор равномерный, а ключ чаще целевой доли берётся реже. Здесь параметры и счётчики показов, без текстов и правильных ответов."
         actions={
           <select value={spec} onChange={e => setSpec(e.target.value)} className="select w-auto" aria-label="Специализация">
             {Object.entries(ROLE_RU).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -134,7 +134,7 @@ export default function MethodPage() {
       {weights.data && (
         <section className="card mb-6 p-5">
           <h2 className="font-display text-lg font-bold text-ink">Веса балла на этом стенде</h2>
-          <p className="mt-1 text-sm text-ink-2">{weights.data.note} Вне демо этот блок скрыт. Грейд этими весами не ставится.</p>
+          <p className="mt-1 text-sm text-ink-2">{weights.data.note} Грейд этими весами не ставится.</p>
           <ul className="mt-3 text-sm text-ink">
             {weights.data.fit.map(item => <li key={item.key}>{item.label}: {item.weight}</li>)}
           </ul>

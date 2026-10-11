@@ -7,7 +7,7 @@ import CodeInterview from '../../components/CodeInterview'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
 import { Empty, PageHeader, Skeleton, date, rub } from '../../components/ui'
-import { PERK_RU } from '../../labels'
+import { PERK_RU, industryRu } from '../../labels'
 import { netLine } from '../../money'
 import Responsiveness, { type ResponsivenessFact } from '../../components/Responsiveness'
 
@@ -126,7 +126,7 @@ export default function CandidateOffers() {
                 <div className="flex min-w-0 items-start gap-4">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-accent-soft font-display text-lg font-bold text-accent" aria-hidden>{o.company.slice(0, 1)}</span>
                 <div className="min-w-0">
-                  <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${o.company_profile.industry}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}{o.company_id && <> · <Link to={`/companies/${o.company_id}`} className="text-accent hover:underline">Страница компании</Link></>}
+                  <p className="text-sm text-ink-2">{o.company}{o.company_profile?.industry ? `, ${industryRu(o.company_profile.industry)}` : ''}{o.company_profile?.trust_label ? ` · ${o.company_profile.trust_label}` : ''}{o.company_id && <> · <Link to={`/companies/${o.company_id}`} className="text-accent hover:underline">Страница компании</Link></>}
                     {o.company_id && <button type="button" className="btn-ghost btn-sm ml-2" onClick={() => interest.mutate({ id: o.company_id!, on: !o.company_interest })}>{o.company_interest ? 'Интерес отмечен' : 'Интересна компания'}</button>}
                   </p>
                   {o.company_profile?.reputation?.reply?.shown && (

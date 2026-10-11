@@ -49,6 +49,27 @@ export const PERK_RU: Record<string, string> = {
   equipment: 'Техника',
 }
 
+
+/** Canonical skill keys that must stay English in matching; show Russian only in UI. */
+export const SKILL_RU: Record<string, string> = {
+  Algorithms: 'Алгоритмы',
+}
+
+/** Subject-area codes from the survey (backend INDUSTRIES). Free text is shown as-is. */
+export const INDUSTRY_RU: Record<string, string> = {
+  fintech: 'Финансы и финтех',
+  ecommerce: 'Электронная коммерция и ритейл',
+  gamedev: 'Игры',
+  edtech: 'Образование',
+  govtech: 'Госсектор',
+  telecom: 'Телеком',
+  industry: 'Промышленность и робототехника',
+  healthtech: 'Медицина',
+  media: 'Медиа и контент',
+  security: 'Кибербезопасность',
+  any: 'Не важно',
+}
+
 export function gradeRu(grade?: string | null): string {
   if (!grade) return ''
   return GRADE_RU[grade] ?? grade
@@ -57,4 +78,14 @@ export function gradeRu(grade?: string | null): string {
 export function roleRu(role?: string | null): string {
   if (!role) return 'роль не определена'
   return ROLE_RU[role] ?? role
+}
+
+export function skillRu(name?: string | null): string {
+  if (!name) return ''
+  return SKILL_RU[name] ?? name
+}
+
+export function industryRu(code?: string | null): string {
+  if (!code) return ''
+  return INDUSTRY_RU[code] ?? code
 }

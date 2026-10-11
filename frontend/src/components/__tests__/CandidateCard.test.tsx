@@ -137,4 +137,17 @@ describe('карточка кандидата', () => {
     expect(skillProvenance('Go', card2)).toBeUndefined()
     expect(skillProvenance('Python', {})).toBeUndefined()
   })
+
+  it('показывает Algorithms по-русски как Алгоритмы', () => {
+    render(<CandidateCard card={{
+      ...card,
+      matched_skills: ['Algorithms'],
+      stack: ['Algorithms'],
+      skill_evidence: { Algorithms: 'test_confirmed' },
+      match: undefined,
+    }} onOffer={() => undefined} />)
+    expect(screen.getByText('Алгоритмы, подтверждён')).toBeInTheDocument()
+    expect(screen.queryByText(/Algorithms/)).not.toBeInTheDocument()
+  })
+
 })

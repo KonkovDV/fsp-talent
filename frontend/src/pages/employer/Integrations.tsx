@@ -33,7 +33,7 @@ export default function Integrations() {
 
   return (
     <div>
-      <PageHeader title="Интеграции" lead="События уходят в вашу ATS после согласия кандидата. Подпись Standard Webhooks, повтор доставки, чужой адрес только по https." />
+      <PageHeader title="Интеграции" lead="События уходят в вашу ATS (систему учёта кандидатов) после согласия кандидата. Подпись по стандарту Standard Webhooks (подпись событий), повтор доставки, чужой адрес только по https." />
       <form className="card space-y-3" onSubmit={e => { e.preventDefault(); create.mutate({ url }) }}>
         <label className="field-label" htmlFor="ats-url">Адрес приёмника</label>
         <input id="ats-url" className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://ats.example.ru/hooks/fsp" />

@@ -48,4 +48,11 @@ describe('витрина банка', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     expect(screen.queryByRole('link', { name: /Frontend/ })).not.toBeInTheDocument()
   })
+
+  it('объясняет расхождение числа ячейки и поиска', async () => {
+    renderGrid()
+    await screen.findByRole('link', { name: /Backend, мидл/ })
+    expect(screen.getByText(/Число — по основной категории/)).toBeInTheDocument()
+  })
+
 })

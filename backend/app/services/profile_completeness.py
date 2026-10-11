@@ -15,7 +15,7 @@ _CHECKS = (
     ("grade", "Грейд выбран", "/candidate/profile"),
     ("test", "Грейд подтверждён тестом", "/candidate/assessment"),
     ("skills", "В паспорте есть навык", "/candidate/profile"),
-    ("salary", "Названо ожидание по зарплате", "/candidate/profile"),
+    ("salary", "Указаны ожидания по зарплате", "/candidate/profile"),
     ("city", "Указан город", "/candidate/profile"),
     ("format", "Указан формат работы", "/candidate/profile"),
 )
