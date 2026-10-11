@@ -24,6 +24,7 @@ from sqlalchemy import and_, bindparam, exists, func, literal, or_, select, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models import (
     CandidateResume,
@@ -239,9 +240,12 @@ def _in_search(adult):
 
     The showcase uses this same predicate, so a profile that only has FSP protocols is not counted.
     """
-    graded = exists(select(CategoryAssignment.id).where(
-        CategoryAssignment.participant_id == Participant.id,
-        CategoryAssignment.grade_source.in_(("declared", "assessed")),
+    # An alias, so the rule also works in a query that already joins CategoryAssignment (the public
+    # category ranking): without it the subquery correlates away its own FROM and the query fails.
+    own = aliased(CategoryAssignment)
+    graded = exists(select(own.id).where(
+        own.participant_id == Participant.id,
+        own.grade_source.in_(("declared", "assessed")),
     ))
     return and_(
         Participant.is_visible.is_(True),
