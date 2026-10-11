@@ -19,7 +19,9 @@ def test_stuffing_adds_every_role_skill_and_keeps_truth_and_labels():
 
 def test_study_reports_both_methods_with_a_control():
     rows = {r["method"]: r for r in stuffing_study(make_dataset(150, 8, 4), share=0.2)}
-    assert set(rows) == {"full", "keyword"}
+    assert set(rows) == {"full", "keyword", "full, всё подтверждено"}
+    # Trust weights are what keeps stuffing down: taking every claim as confirmed lets more stuffers in.
+    assert rows["full, всё подтверждено"]["top"] >= rows["full"]["top"]
     for r in rows.values():
         assert 0.0 <= r["before"] <= 1.0 and 0.0 <= r["top"] <= 1.0
         assert r["top_ci"][0] <= r["top"] <= r["top_ci"][1]

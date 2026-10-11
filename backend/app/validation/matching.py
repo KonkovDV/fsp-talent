@@ -499,7 +499,8 @@ def bootstrap_ci(values: list[float], seed: int = 11, rounds: int = 1000) -> tup
     return means[int(0.025 * rounds)], means[int(0.975 * rounds) - 1]
 
 
-def stuff_skills(dataset: dict, share: float = 0.2, seed: int = 41) -> tuple[dict, set[str]]:
+def stuff_skills(dataset: dict, share: float = 0.2, seed: int = 41,
+                 trust: str = "self_reported") -> tuple[dict, set[str]]:
     """A copy where `share` of candidates declare every skill of their role. Truth and labels stay the same."""
     rng = random.Random(seed)
     data = copy.deepcopy(dataset)
@@ -510,7 +511,10 @@ def stuff_skills(dataset: dict, share: float = 0.2, seed: int = 41) -> tuple[dic
         stuffed.add(c["id"])
         skills = c["observed"]["skills"]
         for s in _pool(c["observed"]["role"]):
-            skills.setdefault(s, "self_reported")
+            if trust == "self_reported":
+                skills.setdefault(s, trust)
+            else:
+                skills[s] = trust
     return data, stuffed
 
 
@@ -520,10 +524,11 @@ def stuffing_study(dataset: dict, share: float = 0.2, k: int = 10, seed: int = 4
     Ratio 1 means stuffing buys nothing. The keyword baseline shows what an unprotected ranking does.
     Perturbation study in the spirit of arXiv:2501.04316.
     """
-    data, stuffed = stuff_skills(dataset, share, seed)
     rng = random.Random(0)
     rows = []
-    for method in ("full", "keyword"):
+    # Baseline: the platform takes every claimed skill as confirmed. Shows what the trust weights buy.
+    for method, trust in (("full", "self_reported"), ("keyword", "self_reported"), ("full", "test_confirmed")):
+        data, stuffed = stuff_skills(dataset, share, seed, trust)
         top_share, pool_share, ndcgs, before = [], [], [], []
         for need in data["needs"]:
             same = [c["id"] for c in data["candidates"] if c["observed"]["role"] == need["role"]]
@@ -538,7 +543,8 @@ def stuffing_study(dataset: dict, share: float = 0.2, k: int = 10, seed: int = 4
             pool_share.append(sum(1 for cid in same if cid in stuffed) / len(same))
             ndcgs.append(ndcg(ranked, data["labels"][need["id"]]))
         top_mean, pool_mean = statistics.mean(top_share), statistics.mean(pool_share)
-        rows.append({"method": method, "top": top_mean, "pool": pool_mean, "before": statistics.mean(before),
+        rows.append({"method": method if trust == "self_reported" else f"{method}, всё подтверждено",
+                     "top": top_mean, "pool": pool_mean, "before": statistics.mean(before),
                      "ratio": top_mean / pool_mean if pool_mean else float("nan"),
                      "top_ci": bootstrap_ci(top_share), "ndcg": statistics.mean(ndcgs)})
     return rows
@@ -1170,9 +1176,11 @@ def main() -> None:
               "| Отношение | nDCG@10 |")
         print("|---|---|---|---|---|---|")
         for r in stuffing_study(make_dataset(args.candidates, args.needs, args.seed), args.stuffing):
-            print(f"| {r['method']} | {r['before']:.3f} | {r['top']:.3f} ({r['top_ci'][0]:.3f}…{r['top_ci'][1]:.3f}) "
-                  f"| {r['pool']:.3f} "
-                  f"| {r['ratio']:.2f} | {r['ndcg']:.4f} |")
+            def pct(x: float) -> str:
+                return f"{x * 100:.1f} %".replace(".", ",")
+            ci = f"{pct(r['top_ci'][0])}…{pct(r['top_ci'][1])}"
+            print(f"| {r['method']} | {pct(r['before'])} | {pct(r['top'])} ({ci}) "
+                  f"| {pct(r['pool'])} | {r['ratio']:.2f} | {r['ndcg']:.4f} |".replace(".", ","))
         return
     if args.pass_floor:
         _print_pass_floor(seed_list(args.seeds, args.seed), args.candidates, args.needs)
