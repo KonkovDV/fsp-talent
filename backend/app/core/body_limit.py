@@ -1,4 +1,4 @@
-"""Refuse a request body above 10 MB with 413.
+"""Refuse a request body above 10 MB with 413, and a NUL byte in the URL with 422.
 
 Caddy's own limit closes the TLS connection, so the client never sees a status.
 The check uses Content-Length when the client sent one, and otherwise counts the
@@ -21,6 +21,9 @@ class LimitRequestBody:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
+            return
+        if _has_nul(scope):
+            await _reject(send, 422, "nul_byte", "Нулевой байт в адресе или параметрах запроса")
             return
         length = _content_length(scope)
         if length is not None and length > self.max_bytes:
@@ -64,14 +67,23 @@ def _content_length(scope) -> int | None:
     return None
 
 
-async def _reject(send) -> None:
+def _has_nul(scope) -> bool:
+    """PostgreSQL refuses NUL in text, so `?q=%00` used to end as a 500 (RT-01)."""
+    if "\x00" in (scope.get("path") or ""):
+        return True
+    query = (scope.get("query_string") or b"").lower()
+    return b"%00" in query or b"\x00" in query
+
+
+async def _reject(send, status: int = 413, code: str = "payload_too_large",
+                  message: str = "Тело запроса больше 10 МБ") -> None:
     payload = json.dumps(
-        error_body("payload_too_large", "Тело запроса больше 10 МБ"),
+        error_body(code, message),
         ensure_ascii=False,
     ).encode()
     await send({
         "type": "http.response.start",
-        "status": 413,
+        "status": status,
         "headers": [
             (b"content-type", b"application/json; charset=utf-8"),
             (b"content-length", str(len(payload)).encode()),
