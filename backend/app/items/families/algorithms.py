@@ -36,7 +36,7 @@ def ops_generate(rng: random.Random, level: int, spec: str, lang: str = "python"
                      [(b - a) // s, (b - a) // s + 1 + (1 if (b - a) % s == 0 else 0), b - a],
                      "Цикл от a до b с шагом s выполняется ceil((b − a) / s) раз; b не входит.")
     if level == 2:
-        n = rng.randint(6, 12)
+        n = rng.randint(6, 300)  # wide range: a few dozen variants repeat across 20 leaked sessions
         kind = "tri_lt" if rng.random() < 0.5 else "tri_ge"
         return _loop(rng, lang, kind, {"n": n}, [n * n, n * (n - 1), n * (n + 1) // 2 + n],
                      "Внутренний цикл зависит от i: сумма арифметической прогрессии, порядка n²/2.")
@@ -47,10 +47,10 @@ def ops_generate(rng: random.Random, level: int, spec: str, lang: str = "python"
                      [round(math.log(n, d)) + 1, n // d, int(math.log2(n)) + (d == 3) * 2],
                      f"Каждый шаг делит i на {d}: число шагов — логарифм n по основанию {d} (с округлением вниз).")
     if level == 4:
-        n, k = rng.randint(5, 9), rng.randint(2, 4)
+        n, k = rng.randint(5, 60), rng.randint(2, 7)
         return _loop(rng, lang, "pairs", {"n": n, "k": k}, [n * n // k, n * n // k + 1, (n // k) * n],
                      "Нужно точно посчитать пары (i, j) с суммой, кратной k; оценка n²/k даёт только порядок.")
-    n = rng.randint(5, 9)
+    n = rng.randint(5, 14)
     if rng.random() < 0.5 or lang != "python":
         fib = [0, 1]
         for _ in range(n + 2):

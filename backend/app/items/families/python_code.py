@@ -32,7 +32,8 @@ def generate(rng: random.Random, level: int, spec: str) -> Item:
         return _item(rng, code, [a // b, a % b, round(a / b) + a % b, a // b * b],
                      f"// — целочисленное деление ({a // b}), % — остаток ({a % b}).")
     if level == 2:
-        n, i, j, k = rng.randint(10, 16), rng.randint(1, 3), rng.randint(6, 9), rng.randint(2, 3)
+        # Wide ranges: with a few dozen variants 20 leaked sessions cover a large share of the items.
+        n, i, j, k = rng.randint(16, 40), rng.randint(0, 5), rng.randint(6, 15), rng.randint(2, 4)
         code = f"xs = list(range({n}))\nprint(sum(xs[{i}:{j}:{k}]))"
         incl = sum(range(i, j + 1, k))
         no_step = sum(range(i, j))
