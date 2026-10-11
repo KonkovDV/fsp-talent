@@ -374,7 +374,7 @@ export const saveSurvey = (data: {
 export const getPublicProfile = (id: string) => api.get(`/public/candidates/${id}`)
 export const getPublicCompany = (id: string) => api.get(`/public/companies/${id}`)
 export const categoryRanking = (role: string, grade: string) =>
-  api.get<{ total: number; items: { place: number; test: number }[] }>(`/public/categories/${role}/${grade}/ranking`)
+  api.get<{ total: number; min_cell?: number; items: { place: number; test: number }[] }>(`/public/categories/${role}/${grade}/ranking`)
 export const telegramAchievements = (fspId: string) =>
   api.get('/public/telegram/achievements', { params: { fsp_id: fspId } })
 export const telegramVacancies = () => api.get('/public/telegram/vacancies')

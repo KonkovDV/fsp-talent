@@ -5,14 +5,15 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import JuryPage from '../JuryPage'
 
-const { telegramAchievements, telegramVacancies } = vi.hoisted(() => ({
+const { telegramAchievements, telegramVacancies, categoryRanking } = vi.hoisted(() => ({
   telegramAchievements: vi.fn(),
   telegramVacancies: vi.fn(),
+  categoryRanking: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
-  return { ...actual, telegramAchievements, telegramVacancies }
+  return { ...actual, telegramAchievements, telegramVacancies, categoryRanking }
 })
 
 beforeEach(() => {
@@ -31,5 +32,18 @@ describe('канал без кабинета', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Протоколы' }))
     expect(telegramAchievements).toHaveBeenCalledWith('FSP001')
     expect(await screen.findByRole('status')).toHaveTextContent('не ставится')
+  })
+
+  it('объясняет пустой порядок порогом k-анонимности', async () => {
+    categoryRanking.mockResolvedValue({ data: { total: 0, items: [], min_cell: 5 } })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><JuryPage /></MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Показать порядок' }))
+    expect(categoryRanking).toHaveBeenCalledWith('backend', 'middle')
+    expect(await screen.findByText(/меньше 5 участников с публичным профилем — защита персональных данных/)).toBeInTheDocument()
   })
 })
