@@ -128,7 +128,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
         "display_name": p.display_name, "region": p.region,
         "birth_date": p.birth_date.isoformat() if p.birth_date else None,
-        # LEG-06: an adult without a birth date is not shown in search; the cabinet says so.
+        # An adult without a birth date is not shown in search; the cabinet says so.
         "search_blocker": "birth_date_missing" if p.birth_date is None and not getattr(p, "is_minor", False) else None,
         "email": p.email, "email_verified": p.email_verified_at is not None,
         "demo_reset_available": bool(settings.DEMO_MODE and is_jury(p.email)),

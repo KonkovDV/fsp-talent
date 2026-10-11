@@ -280,7 +280,7 @@ async def _matches_cached(db: AsyncSession, need: Need, params: NeedParams, limi
     if page is not None:
         return page
     # The shared ranking is keyed by what the exclusions depend on; a company with its own blocks
-    # never reads or writes it, so one company's exclusions do not reach another (audit-5 A8).
+    # never reads or writes it, so one company's exclusions do not reach another.
     scope = await shared_scope(db, need.employer_id, params.industry)
     shared = shortlist_cache.shared_key({**params.model_dump(), "_exclusions": scope}, epoch)
     own = scope is None or await _employer_met_someone(db, need.employer_id)

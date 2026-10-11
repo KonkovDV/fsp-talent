@@ -481,7 +481,7 @@ def conditions_value(need: NeedSpec, c: CandidateFacts) -> float | None:
 
 
 def grade_for_matching(grade: str | None, source: str | None, failed_grade: str | None) -> tuple[str | None, bool]:
-    """The grade the need-fit reads, and whether a failed test lowered it (DoR-N7).
+    """The grade the need-fit reads, and whether a failed test lowered it.
 
     A test at grade G that was not passed is evidence that the ability is below the cut of G
     (P(θ ≥ cut_G) < PASS_P, app/services/cat.py). While the candidate keeps an unconfirmed grade
@@ -614,7 +614,7 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                       f"(точечная оценка {round(c.test_p * 100)} %)")
             else:
                 _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
-            # audit-4 F-2: a passed test never scores below "not tested". The lower bound at the pass mark
+            # A passed test never scores below "not tested". The lower bound at the pass mark
             # (Φ(Φ⁻¹(0.75) − 1.64) ≈ 0.17) fell under UNTESTED = 0.20; age now shrinks only the part above it.
             shown = max(UNTESTED, shown)
             values["test"] = shown

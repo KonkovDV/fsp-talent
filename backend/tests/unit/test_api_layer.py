@@ -517,7 +517,7 @@ async def test_parse_endpoints_return_a_reading(quiet, monkeypatch):
 
 
 async def test_outdated_consent_keeps_resume_away_from_the_model(quiet, monkeypatch):
-    """LEG-01: until the person reconfirms consent v1.3 (which names every processor), no model call."""
+    """Until the person reconfirms consent v1.3 (which names every processor), no model call."""
     async def outdated(*_args, **_kwargs):
         return False
 
@@ -787,7 +787,7 @@ async def test_vacancy_write_exam_and_apply(quiet):
 
 
 async def test_application_webhook_carries_no_candidate_contacts(quiet, monkeypatch):
-    """LEG-03: the application.created event left with name, email, phone and Telegram for any https hook."""
+    """The application.created event left with name, email, phone and Telegram for any https hook."""
     from app.services import webhooks
 
     sent = []
