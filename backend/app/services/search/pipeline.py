@@ -245,6 +245,7 @@ def _in_search(adult):
     ))
     return and_(
         Participant.is_visible.is_(True),
+        Participant.deleted_at.is_(None),
         Participant.suspended_at.is_(None),
         Participant.guest_until.is_(None),
         Participant.job_search != "not_looking",
@@ -262,7 +263,8 @@ async def searchable_count(db: AsyncSession) -> int:
 
 
 def visible_in_search():
-    """The search visibility rule as of now, for lists that are not a search (favorites)."""
+    """The one "visible to an employer" rule as of now (audit-3 P1-1): search, favorites, the salary market
+    and the public category ranking all use it, so an aggregate never counts someone the search would hide."""
     return _in_search(age_confirmed_adult())
 
 

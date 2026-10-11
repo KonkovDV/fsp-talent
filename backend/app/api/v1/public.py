@@ -39,7 +39,7 @@ from app.services.passport import is_passport
 from app.services.pdf_profile import profile_lines, render_profile_pdf
 from app.services.profile import age_confirmed_adult
 from app.services.search.cache import bump_bank_epoch
-from app.services.search.pipeline import _bucket
+from app.services.search.pipeline import BANK_MIN, _bucket, visible_in_search
 from app.services.skills import skill_line
 from app.services.survey import SPECIALIZATIONS
 from app.services.telegram_digest import achievement_digest, clean_fsp_id, vacancy_digest
@@ -421,11 +421,14 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
             GradeConfirmation.specialization == role,
             GradeConfirmation.grade == grade,
             GradeConfirmation.p_pass.is_not(None),
-            Participant.deleted_at.is_(None),
-            Participant.suspended_at.is_(None),
-            Participant.is_visible.is_(True),
+            visible_in_search(),
         )))
-    page = rank_scores([float(score) for score in scores if score is not None])
+    values = [float(score) for score in scores if score is not None]
+    if len(values) < BANK_MIN:
+        # k-anonymity: a ranking of fewer than five people can point at one person (audit-3 P1-1).
+        return {"total": 0, "items": [], "min_cell": BANK_MIN, "role": role, "grade": grade}
+    page = rank_scores(values)
+    page["min_cell"] = BANK_MIN
     page["role"] = role
     page["grade"] = grade
     return page

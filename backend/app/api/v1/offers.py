@@ -32,6 +32,7 @@ from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.practice_track import next_stage
 from app.services.privacy import contacts_allowed
 from app.services.salary_net import as_gross
+from app.services.search.pipeline import visible_in_search
 from app.services.trust_level import invite_limit, next_step, trust_level
 
 router = APIRouter(prefix="/offers", tags=["offers"])
@@ -128,8 +129,7 @@ async def offer_market(current: dict = Depends(get_current_employer), db: AsyncS
     rows = (await db.execute(
         select(CategoryAssignment.primary_role, CategoryAssignment.grade, Participant.salary_from_gross)
         .join(Participant, Participant.id == CategoryAssignment.participant_id)
-        .where(Participant.salary_from_gross.is_not(None), Participant.deleted_at.is_(None),
-               Participant.is_visible.is_(True)))).all()
+        .where(Participant.salary_from_gross.is_not(None), visible_in_search()))).all()
     buckets: dict[tuple[str, str], list[int]] = {}
     for role, grade, amount in rows:
         if role and grade and amount:
