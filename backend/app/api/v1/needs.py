@@ -10,7 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -162,9 +162,15 @@ async def list_needs(current: dict = Depends(get_current_employer), db: AsyncSes
     if not needs:
         return []
     ids = [need.id for need in needs]
-    counts = {need_id: count for need_id, count in (await db.execute(
-        select(NeedShortlist.need_id, func.count()).where(NeedShortlist.need_id.in_(ids))
-        .group_by(NeedShortlist.need_id))).all()}
+    # Same rule as GET /{need_id}/shortlist: a card whose owner left the search is not counted, so the
+    # list and the shortlist tab show one number (jury walk 11.10: «в шорт-листе 3» vs «Шорт-лист 2»).
+    counts: dict = {}
+    for need_id, person in (await db.execute(
+            select(NeedShortlist.need_id, Participant)
+            .join(Participant, Participant.id == NeedShortlist.participant_id)
+            .where(NeedShortlist.need_id.in_(ids)))).all():
+        if person.discoverable:
+            counts[need_id] = counts.get(need_id, 0) + 1
     versions = {(row.need_id, row.version): row for row in await db.scalars(
         select(NeedVersion).where(NeedVersion.need_id.in_(ids)))}
     out = []
