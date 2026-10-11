@@ -3,7 +3,7 @@
 export GIT_SHA ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 COMPOSE := docker compose$(if $(GPU), -f docker-compose.yml -f docker-compose.gpu.yml,)
 
-.PHONY: help demo up down reset seed demo-check demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
+.PHONY: help demo up down reset seed seed-topup demo-check demo-reset logs test lint check validate evaluate load docs-pdf docs-pitch
 
 help:
 	@echo "make demo      — собрать, запустить и загрузить демо-данные (первый запуск); с видеокартой: make demo GPU=1"
@@ -11,6 +11,7 @@ help:
 	@echo "make down      — остановить, данные сохраняются"
 	@echo "make reset     — остановить и удалить данные (база, ключи)"
 	@echo "make seed      — загрузить демо-данные ещё раз (повтор безопасен)"
+	@echo "make seed-topup — только добавить публичные профили в пустые категории (без удаления)"
 	@echo "make demo-reset — вернуть пароли и показ жюри (только при DEMO_MODE)"
 	@echo "make logs      — журнал API"
 	@echo "make test      — юнит-тесты внутри контейнера"
@@ -39,6 +40,9 @@ down:
 
 reset:
 	docker compose down -v
+
+seed-topup:
+	docker compose exec -T -u appuser backend python -m seed.topup_public
 
 seed:
 	docker compose exec -T -u appuser backend python -m seed.generate_seed

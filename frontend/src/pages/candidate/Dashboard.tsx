@@ -5,6 +5,7 @@ import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, my
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import GuardianCard from '../../components/GuardianCard'
+import DemoResetCard from '../../components/DemoResetCard'
 import { Empty, Meter, PageHeader, RankBadge, SOURCE_LABEL, Skeleton, plural, rub } from '../../components/ui'
 import { netLine } from '../../money'
 import { ROLE_RU, gradeRu } from '../../labels'
@@ -57,6 +58,12 @@ export default function CandidateDashboard() {
       {p.is_minor && !p.minor_consent_given && (
         <GuardianCard sentTo={p.guardian_email ?? null} demoLink={p.guardian_demo_link ?? null} />
       )}
+      {p.search_blocker === 'birth_date_missing' && (
+        <p className="notice-info" role="status" data-testid="birth-date-missing">
+          Работодатели пока не видят вас в поиске: укажите дату рождения в <Link to="/candidate/profile" className="underline">профиле</Link>. Отметка «18 лет» возраст не подтверждает.
+        </p>
+      )}
+      {p.demo_reset_available && <DemoResetCard />}
       {!p.survey_done && <SurveyCard profile={p} />}
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]" aria-label="Категория">
@@ -114,7 +121,7 @@ export default function CandidateDashboard() {
             ))}
           </ul>
           {(career.data?.gained ?? 0) > 0 && (
-            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, закроется ещё {career.data?.gained} открытых вакансий. Грейд от этого сам не вырастет.</p>
+            <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, {plural(career.data?.gained ?? 0, ['подойдёт', 'подойдут', 'подойдут'])} ещё {career.data?.gained} {plural(career.data?.gained ?? 0, ['открытая вакансия', 'открытые вакансии', 'открытых вакансий'])}. Грейд от этого сам не вырастет.</p>
           )}
           <p className="mt-4 text-xs text-ink-3">
             {p.has_fsp ? 'ФСП ID привязан.' : 'ФСП ID не привязан: на заполненность это не влияет.'}

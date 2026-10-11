@@ -110,7 +110,8 @@ export default function EmployerVacancies() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div><label className="field-label" htmlFor="v-disc">Дисциплина ФСП, если важна</label>
               <select id="v-disc" className="select" value={form.discipline} onChange={set('discipline')}>
-                <option value="">Не важна</option>{Object.entries(DISC_RU).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                <option value="">Не важна</option>{Object.entries(DISC_RU).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+              <p className="mt-1 text-xs text-ink-3">Кандидаты с результатами в этой дисциплине стоят выше. Без истории ФСП вакансию тоже видят и могут откликнуться.</p></div>
             <label className="flex items-end gap-2 pb-3 text-sm text-ink sm:col-span-2">
               <input type="checkbox" checked={form.allows_minors} onChange={set('allows_minors')} />Можно кандидатам 16–17 лет (с согласия родителей)</label>
           </div>

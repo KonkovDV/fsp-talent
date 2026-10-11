@@ -11,3 +11,9 @@ def test_distribution_does_not_claim_to_hide_the_search_card():
     items = planned_effects("participant", "pd_distribution")
     assert items[0]["code"] == "public_page_off"
     assert "поиске" in items[0]["text"]
+
+
+def test_distribution_withdrawal_names_the_fsp_id_lookup():
+    items = planned_effects("participant", "pd_distribution")
+    assert [item["code"] for item in items] == ["public_page_off", "fsp_lookup_off"]
+    assert "ФСП ID" in items[1]["text"]

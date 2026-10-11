@@ -9,9 +9,11 @@ from app.items.families import (
     algorithms,
     analyst,
     concepts,
+    containers,
     data,
     embedded,
     javascript,
+    linux_shell,
     ml,
     network,
     python_code,
@@ -26,6 +28,7 @@ FAMILIES: dict[str, Family] = {f.id: f for f in [
     network.FAMILY, ml.FAMILY, embedded.FAMILY, qa.FAMILY, qa.FAMILY_DIFF, analyst.FAMILY, analyst.FAMILY_SHARE,
     data.FAMILY, data.FAMILY_LATE, requirements.FAMILY, requirements.FAMILY_STEPS,
     concepts.BANK, concepts.HTTP_FAMILY,
+    containers.DOCKER, containers.K8S, linux_shell.FAMILY,
 ]}
 
 # Target share of each topic in a session. "concept" is also hard-capped at 30 % (CONCEPT_MAX_SHARE).
@@ -35,7 +38,7 @@ BLUEPRINTS: dict[str, dict[str, float]] = {
     "frontend":  {"javascript": 0.50, "algorithms": 0.30, "concept": 0.20},
     "mobile":    {"javascript": 0.35, "algorithms": 0.30, "embedded": 0.15, "concept": 0.20},
     "ml":        {"ml": 0.40, "python": 0.20, "sql": 0.15, "algorithms": 0.10, "concept": 0.15},
-    "devops":    {"network": 0.35, "security": 0.20, "python": 0.20, "algorithms": 0.05, "concept": 0.20},
+    "devops":    {"infra": 0.40, "network": 0.20, "security": 0.10, "python": 0.10, "concept": 0.20},
     "security":  {"security": 0.40, "network": 0.20, "python": 0.15, "embedded": 0.05, "concept": 0.20},
     "embedded":  {"embedded": 0.45, "algorithms": 0.25, "python": 0.10, "network": 0.05, "concept": 0.15},
     "qa":        {"testing": 0.50, "python": 0.25, "sql": 0.25},

@@ -38,6 +38,26 @@ describe('подбор на своей разметке', () => {
     expect(within(table).getByText('0,800')).toBeInTheDocument()
   })
 
+  it('раскрывает таблицу по потребностям и подсвечивает, где модель хуже по P@k', async () => {
+    evaluatePairs.mockResolvedValue({ data: { ...report, needs: 2, judged_needs: 2,
+      per_need: [
+        { need_id: 'n1', role: 'backend', grade: 'middle', judged: 3, relevant: 1, k: 3, p_at_k_model: 0.3333,
+          p_at_k_resume: 0.3333, ndcg10_model: 1, ndcg10_resume: 0.8, top: [{ candidate_id: 'c1', label: 3 }] },
+        { need_id: 'n2', role: 'frontend', grade: 'junior', judged: 3, relevant: 2, k: 3, p_at_k_model: 0.3333,
+          p_at_k_resume: 0.6667, ndcg10_model: 0.5, ndcg10_resume: 0.9, top: [{ candidate_id: 'f3', label: 0 }] },
+      ],
+      paired_delta: { mean: -0.1, ci: [-0.4, 0.2], needs: 2, model_better: 1, resume_better: 1 } } })
+    show()
+    await userEvent.click(screen.getByRole('button', { name: 'Вставить пример' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Посчитать' }))
+    expect(await screen.findByTestId('paired-delta')).toHaveTextContent('−0,100')
+    await userEvent.click(screen.getByText(/По потребностям \(2, модель хуже по P@k: 1\)/))
+    const rows = within(screen.getByTestId('per-need-table')).getAllByRole('row')
+    expect(rows).toHaveLength(3)
+    expect(rows[2]).toHaveAttribute('data-lower', 'true')
+    expect(rows[1]).not.toHaveAttribute('data-lower')
+  })
+
   it('показывает причину отказа', async () => {
     evaluatePairs.mockRejectedValue({ response: { data: { error: { code: 'validation_error', message: 'Строка 1: это не JSON' } } } })
     show()

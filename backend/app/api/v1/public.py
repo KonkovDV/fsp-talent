@@ -29,7 +29,7 @@ from app.models import (
 from app.models.profile import DisciplineScore
 from app.services.assessment import JURY_EMAILS
 from app.services.categorization import DISCIPLINE_LABELS
-from app.services.category_rank import rank_scores
+from app.services.category_rank import rank_pairs
 from app.services.field_cipher import blind_index
 from app.services.formula_sheet import formula_sheet
 from app.services.fsp.mock import STATUS_LABELS
@@ -415,8 +415,8 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
         raise ApiError(429, "rate_limited")
     if role not in SPECIALIZATIONS or grade not in GRADES:
         raise ApiError(404, "not_found", "Такой категории нет")
-    scores = list(await db.scalars(
-        select(GradeConfirmation.p_pass)
+    scores = list(await db.execute(
+        select(GradeConfirmation.p_pass, GradeConfirmation.theta, GradeConfirmation.participant_id)
         .join(Participant, Participant.id == GradeConfirmation.participant_id)
         .join(CategoryAssignment, and_(
             CategoryAssignment.participant_id == Participant.id,
@@ -433,12 +433,16 @@ async def category_ranking(role: str, grade: str, request: Request, db: AsyncSes
             # to employers inside the product, never on a public page (audit-5 A1b, 152-FZ art. 10.1).
             *_public_filter(),
         )))
-    values = [float(score) for score in scores if score is not None]
+    # The participant id only makes the order stable; rank_pairs never prints it.
+    values = [(float(score), None if theta is None else float(theta), str(pid))
+              for score, theta, pid in scores if score is not None]
     if len(values) < BANK_MIN:
         # k-anonymity over the public set: fewer than five people can point at one person (audit-3 P1-1).
-        return {"total": 0, "items": [], "min_cell": BANK_MIN, "role": role, "grade": grade}
-    page = rank_scores(values)
+        # "hidden" tells an empty cell from a hidden one; it does not reveal how many people are there.
+        return {"total": 0, "items": [], "min_cell": BANK_MIN, "hidden": bool(values), "role": role, "grade": grade}
+    page = rank_pairs(values)
     page["min_cell"] = BANK_MIN
+    page["hidden"] = False
     page["role"] = role
     page["grade"] = grade
     return page
@@ -521,6 +525,14 @@ async def telegram_vacancies(request: Request, db: AsyncSession = Depends(get_db
     return vacancy_digest(rows)
 
 
+def public_handle(participant_id) -> str:
+    """How a person appears in a public list: no name, a stable short tag (the /jury page promises no names).
+
+    The name stays on the person's own public page, which they opened with a separate consent.
+    """
+    return f"Участник {str(participant_id).replace('-', '')[:4].upper()}"
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(
     discipline: str | None = None,
@@ -546,12 +558,15 @@ async def get_leaderboard(
             .order_by(DisciplineScore.participant_id, DisciplineScore.lcb.desc())
         )
         q = q.where(DisciplineScore.id.in_(best))
-    rows = (await db.execute(q.order_by(DisciplineScore.lcb.desc()).limit(limit))).all()
+    # RG-05: an equal lower bound falls back to the score and then to the participant id, so a tie
+    # keeps one order between requests instead of the order of the query plan.
+    rows = (await db.execute(q.order_by(DisciplineScore.lcb.desc(), DisciplineScore.score.desc(),
+                                        DisciplineScore.participant_id).limit(limit))).all()
     return [
         {
             "rank": i + 1,
             "participant_id": str(ds.participant_id),
-            "display_name": p.display_name,
+            "display_name": public_handle(ds.participant_id),
             "region": p.region,
             "discipline": ds.discipline,
             "label": DISCIPLINE_LABELS.get(ds.discipline, ds.discipline),

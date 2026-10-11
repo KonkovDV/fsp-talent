@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CandidateVacancies from '../candidate/Vacancies'
 
-const { vacanciesForMe } = vi.hoisted(() => ({ vacanciesForMe: vi.fn() }))
+const { vacanciesForMe, getMyProfile } = vi.hoisted(() => ({ vacanciesForMe: vi.fn(), getMyProfile: vi.fn() }))
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
-  return { ...actual, vacanciesForMe, myApplications: vi.fn(() => Promise.resolve({ data: [] })) }
+  return { ...actual, vacanciesForMe, getMyProfile, myApplications: vi.fn(() => Promise.resolve({ data: [] })) }
 })
 
 const card = {
@@ -23,6 +23,7 @@ function renderPage() {
 }
 
 describe('вакансии кандидата', () => {
+  beforeEach(() => { getMyProfile.mockResolvedValue({ data: { birth_date: '1998-05-01' } }) })
   it('без теста показывает все открытые вакансии и зовёт пройти тест', async () => {
     vacanciesForMe.mockResolvedValue({ data: [{ ...card, match: 'not_assessed', needs_test: true, can_apply: false }] })
     renderPage()
@@ -35,5 +36,25 @@ describe('вакансии кандидата', () => {
     renderPage()
     expect(await screen.findByText('Backend-разработчик')).toBeInTheDocument()
     expect(screen.queryByText(/Пройдите тест/)).not.toBeInTheDocument()
+  })
+  it('без даты рождения объясняет, почему вакансий мало, и ведёт в профиль', async () => {
+    getMyProfile.mockResolvedValue({ data: { birth_date: null } })
+    vacanciesForMe.mockResolvedValue({ data: [] })
+    renderPage()
+    const hint = await screen.findByTestId('vacancies-birth-date')
+    expect(hint).toHaveTextContent(/дату рождения/)
+    expect(screen.getByRole('link', { name: 'профиле' })).toHaveAttribute('href', '/candidate/profile')
+  })
+  it('с датой рождения подсказки о дате нет', async () => {
+    vacanciesForMe.mockResolvedValue({ data: [{ ...card, match: 'matched' }] })
+    renderPage()
+    expect(await screen.findByText('Backend-разработчик')).toBeInTheDocument()
+    expect(screen.queryByTestId('vacancies-birth-date')).not.toBeInTheDocument()
+  })
+  it('в карточке видно, открывает ли компания отклики', async () => {
+    vacanciesForMe.mockResolvedValue({ data: [{ ...card, match: 'matched', company_responsiveness: {
+      shown: true, n: 8, count: 6, lower: 0.43, median_days: 1.5, window_days: 90, within_days: 7 } }] })
+    renderPage()
+    expect(await screen.findByTestId('responsiveness')).toHaveTextContent('не реже 43 %')
   })
 })

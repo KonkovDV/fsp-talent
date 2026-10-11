@@ -176,6 +176,13 @@ async def active_consent(db: AsyncSession, subject_type: str, subject_id: uuid.U
         Consent.withdrawn_at.is_(None)))
 
 
+async def consent_is_current(db: AsyncSession, subject_type: str, subject_id: uuid.UUID, kind: str) -> bool:
+    """True only when the person accepted exactly the current text (version + SHA-256) of this document."""
+    doc = get_document(kind)
+    current = await active_consent(db, subject_type, subject_id, kind)
+    return bool(doc is not None and current is not None and current.sha256 == doc.sha256)
+
+
 async def give_consent(db: AsyncSession, subject_type: str, subject_id: uuid.UUID, kind: str,
                        request: Request | None = None) -> Consent:
     doc = get_document(kind)

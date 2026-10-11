@@ -51,11 +51,16 @@ export default function EmployerSearch() {
     fresh_days: freshDays,
   }
   // Filters edit a draft; the list on screen changes only on «Найти» and stays visible while the new one loads.
-  const [submitted, setSubmitted] = useState<Params>({ role: url.get('role') || undefined, grade: url.get('grade') || undefined })
+  // The URL opens the search already applied: the same keys the draft builds, so no «filters changed» on first load.
+  const fromUrl = (r: string, g: string): Params => ({
+    role: r || undefined, grade: g || undefined, grade_span: r && g ? gradeSpan : undefined,
+  })
+  const [submitted, setSubmitted] = useState<Params>(() => fromUrl(url.get('role') ?? '', url.get('grade') ?? ''))
   useEffect(() => {
     const r = url.get('role') ?? '', g = url.get('grade') ?? ''
     setRole(r); setGrade(g)
-    setSubmitted(prev => ({ ...prev, role: r || undefined, grade: g || undefined }))
+    setSubmitted(prev => ({ ...prev, ...fromUrl(r, g) }))
+    // gradeSpan is read once per URL change on purpose: the user's later choice goes through «Применить».
   }, [url])
   const { data, isFetching, isLoading, isError, error } = useQuery({
     queryKey: ['search', submitted],
@@ -183,7 +188,7 @@ export default function EmployerSearch() {
           {parsed.isError && <p className="notice-error mb-4" role="alert">{apiError(parsed.error, 'Не удалось разобрать запрос')}</p>}
           {data && (
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-              <p className="text-sm text-ink-2">{data.in_category != null && count.main === 0 ? 'В выбранной категории точных совпадений нет' : <><span className="num font-semibold text-ink">{count.main}</span> {plural(count.main, ['кандидат', 'кандидата', 'кандидатов'])}{data.in_category != null ? ' в выбранной категории' : ''}</>}{count.related > 0 ? `, ещё ${count.related} ${plural(count.related, ['похожий', 'похожих', 'похожих'])}: соседний грейд или смежная специализация` : ''}{data.total > cards.length ? ` — на экране первые ${cards.length} из ${data.total}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}.{data.text_blend === 'rules+meaning' ? ' Смысл запроса — 15%, слова — 85%.' : ' Смысловой поиск выключен: порядок по словам.'}{(data.platform_held ?? 0) > 0 ? ` Площадка не показала ${data.platform_held}. Уровень компании в этом списке не пишется.` : ''}</p>
+              <p className="text-sm text-ink-2">{data.in_category != null && count.main === 0 ? 'В выбранной категории точных совпадений нет' : <><span className="num font-semibold text-ink">{count.main}</span> {plural(count.main, ['кандидат', 'кандидата', 'кандидатов'])}{data.in_category != null ? ' в выбранной категории' : ''}{data.in_category_hidden ? ' (в самой выбранной категории меньше 5 — точное число скрыто)' : ''}</>}{count.related > 0 ? `, ещё ${count.related} ${plural(count.related, ['похожий', 'похожих', 'похожих'])}: соседний грейд или смежная специализация` : ''}{data.total > cards.length ? ` — на экране первые ${cards.length} из ${data.total}` : ''}{draftChanged && ' — фильтры изменены, список ещё прежний'}.{data.text_blend === 'rules+meaning' ? ' Смысл запроса — 15%, слова — 85%.' : ' Смысловой поиск выключен: порядок по словам.'}{(data.platform_held ?? 0) > 0 ? ` Площадка не показала ${data.platform_held}. Уровень компании в этом списке не пишется.` : ''}</p>
               {data.recommended_categories?.length > 0 && (
                 <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Сильнее всего:
                   {data.recommended_categories.filter((c: { candidates: number | null }) => (c.candidates ?? 0) >= 5).map((c: { role: string; grade: string; candidates: number }) => (

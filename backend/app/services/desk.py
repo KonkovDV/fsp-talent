@@ -4,6 +4,8 @@ from __future__ import annotations
 import csv
 import io
 
+from app.services.csv_safe import safe_row
+
 PROTECTED_EMAILS = frozenset({"hr@sibcode.demo"})
 
 
@@ -18,7 +20,7 @@ def complaints_csv(rows: list[dict]) -> str:
     writer = csv.writer(buf)
     writer.writerow(["id", "reason", "vacancy_id", "offer_id", "created_at"])
     for row in rows:
-        writer.writerow([
+        writer.writerow(safe_row([
             row["id"], row["reason"], row.get("vacancy_id") or "", row.get("offer_id") or "", row["created_at"],
-        ])
+        ]))
     return buf.getvalue()

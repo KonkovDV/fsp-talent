@@ -10,7 +10,7 @@ import os
 import random
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -112,6 +112,11 @@ DEMO_VACANCIES = [
      "Прошивки для промышленных роботов и беспилотников. Пишем на C++ под STM32 с RTOS, верхний уровень "
      "на ROS. Подойдёт участникам соревнований ФСП по робототехнике и БАС."),
 ]
+
+
+# Entry-level demo vacancies open to any grade (grade_match="any"): a juror who has only filled in the survey can
+# apply right away. Graded vacancies wait for a test-confirmed grade (ТЗ 2.1, #289, SDK-03).
+OPEN_GRADE_TITLES = frozenset({"Стажёр backend", "Аналитик SOC", "Frontend-разработчик"})
 
 
 def job_search_of(rng: random.Random) -> str:
@@ -407,6 +412,7 @@ async def ensure_category_market() -> None:
     from app.core.rls import bypass_rls
     from app.models import CategoryAssignment
     from app.models.profile import ProfileSearchIndex
+    from app.services.search.pipeline import visible_in_search
     bypass_rls()
     floors = (190_000, 230_000, 260_000, 300_000, 340_000, 380_000)
     in_demo_need = ProfileSearchIndex.skills_tsv.op("@@")(func.to_tsquery("simple", "Python & PostgreSQL"))
@@ -418,7 +424,8 @@ async def ensure_category_market() -> None:
             .where(
                 CategoryAssignment.primary_role == "backend",
                 CategoryAssignment.grade == "middle",
-                Participant.is_visible.is_(True),
+                # The market counts only people an employer may see (offers.offer_market).
+                visible_in_search(),
                 Participant.salary_from_gross.is_(None),
                 or_(ProfileSearchIndex.participant_id.is_(None), ~in_demo_need),
             )
@@ -429,6 +436,69 @@ async def ensure_category_market() -> None:
             person.salary_to_gross = floor + 40_000
         await db.commit()
         print(f"category market set={len(people)}")
+
+
+# The jury page opens the ranking on backend · middle; the employer market shows salary quartiles.
+# Both hide a cell under five people (k-anonymity), so the demo keeps these cells above it.
+JURY_CELLS = (("backend", "middle"),)
+JURY_CELL_TARGET = 6
+
+
+async def ensure_jury_widgets() -> None:
+    """At least JURY_CELL_TARGET public adults with a test-confirmed grade in each jury cell.
+
+    Public means what every public page requires: a birth date of 18+, a public profile and a consent
+    to distribution (public._public_filter). The grade comes from a real session (`_sit_grade`).
+    Idempotent; demo logins and load-test profiles are left alone. The threshold itself is not lowered.
+    """
+    from app.api.v1.public import _public_filter
+    from app.core.rls import bypass_rls
+    from app.models import CategoryAssignment, GradeConfirmation
+    from app.services.search.pipeline import visible_in_search
+    bypass_rls()
+    now = datetime.now(UTC)
+    async with AsyncSessionLocal() as db:
+        for role, grade in JURY_CELLS:
+            def ranked(stmt):
+                return (stmt.join(Participant, Participant.id == GradeConfirmation.participant_id)
+                        .join(CategoryAssignment, and_(
+                            CategoryAssignment.participant_id == Participant.id,
+                            CategoryAssignment.primary_role == role, CategoryAssignment.grade == grade))
+                        .where(GradeConfirmation.specialization == role, GradeConfirmation.grade == grade,
+                               GradeConfirmation.p_pass.is_not(None), visible_in_search(), *_public_filter()))
+            have = int(await db.scalar(ranked(select(func.count()).select_from(GradeConfirmation))) or 0)
+            confirmed = select(GradeConfirmation.participant_id)
+            # Prefer people outside the demo need's Python & PostgreSQL pool, so its pay hint stays put and
+            # ensure_category_market can name their wishes for the market quartiles.
+            from app.models.profile import ProfileSearchIndex
+            in_demo_need = ProfileSearchIndex.skills_tsv.op("@@")(func.to_tsquery("simple", "Python & PostgreSQL"))
+            candidates = list(await db.scalars(
+                select(Participant)
+                .outerjoin(ProfileSearchIndex, ProfileSearchIndex.participant_id == Participant.id)
+                .where(visible_in_search(), Participant.specialization == role, Participant.id.not_in(confirmed))
+                .order_by(case((in_demo_need, 1), else_=0), Participant.id)))
+            added = 0
+            for person in candidates:
+                if have + added >= JURY_CELL_TARGET:
+                    break
+                if _reserved(person) or _showcase(person) or not person.adult_confirmed():
+                    continue
+                if not person.public_profile:
+                    person.public_profile = True
+                public_ok = await db.scalar(select(Consent.id).where(
+                    Consent.subject_type == "participant", Consent.subject_id == person.id,
+                    Consent.kind == "pd_distribution", Consent.withdrawn_at.is_(None)).limit(1))
+                if public_ok is None:
+                    doc = documents()["pd_distribution"]
+                    db.add(Consent(subject_type="participant", subject_id=person.id, kind=doc.kind,
+                                   version=doc.version, sha256=doc.sha256, given_at=now))
+                person.declared_grade = grade
+                await db.flush()
+                if await _sit_grade(db, person, grade):
+                    await rebuild_profile(db, person)
+                    added += 1
+                await db.commit()
+            print(f"jury cell {role}/{grade}: {have} + {added}")
 
 
 async def main(extra_candidates: int | None = None) -> None:
@@ -559,6 +629,7 @@ async def main(extra_candidates: int | None = None) -> None:
                 existing.description = existing.description or text
                 continue
             db.add(Vacancy(employer_id=employer.id, title=title, description=text, role=role, grade=grade,
+                           grade_match="any" if title in OPEN_GRADE_TITLES else "plus_minus",
                            discipline=disc, min_rank=rank, skills=skills, salary_from_gross=lo,
                            salary_to_gross=hi, work_format=fmt))
             jobs += 1
@@ -569,7 +640,12 @@ async def main(extra_candidates: int | None = None) -> None:
     await demo_activity()
     await fill_showcase()
     await ensure_pay_wishes()
+    await ensure_jury_widgets()
     await ensure_category_market()
+    from seed.topup_public import topup
+    await topup()
+    from seed.demo_ready import main_async as demo_ready
+    await demo_ready()
     if extra_candidates is not None:
         await sync_extra(extra_candidates)
 

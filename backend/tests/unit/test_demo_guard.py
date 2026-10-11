@@ -103,3 +103,16 @@ def test_an_empty_cron_drops_the_nightly_reset(monkeypatch):
     monkeypatch.setattr(settings, "DEMO_RESET_CRON", "10 4 * * *")
     monkeypatch.setattr(settings, "DEMO_MODE", False)
     assert demo_reset_entry() is None
+
+
+def test_only_published_jury_accounts_may_self_reset():
+    from app.services.demo_reset import is_jury
+    assert is_jury("jury1@demo.talent") and is_jury("JURY10@demo.talent ")
+    assert not is_jury("fsp001@demo.talent") and not is_jury("hr@sibcode.demo")
+    assert not is_jury("jury11@demo.talent") and not is_jury("jury1@demo.talent.evil") and not is_jury(None)
+
+
+def test_the_app_and_the_seed_use_the_same_jury_birth_date():
+    from app.services.demo_reset import JURY_BIRTH
+    from seed.generate_seed import JURY_BIRTH as SEED_BIRTH
+    assert JURY_BIRTH == SEED_BIRTH

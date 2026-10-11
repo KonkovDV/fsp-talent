@@ -503,11 +503,37 @@ async def test_demo_fsp_login_returns_a_code(quiet, monkeypatch):
     assert bad.value.status_code == 400
 
 
-async def test_parse_endpoints_return_a_reading(quiet):
-    resume = await ai.parse_resume_endpoint(ai.ResumeIn(text="Пишу сервисы на Python и FastAPI"), {"sub": str(_uid())})
+async def test_parse_endpoints_return_a_reading(quiet, monkeypatch):
+    async def current(*_args, **_kwargs):
+        return True
+
+    monkeypatch.setattr(ai, "consent_is_current", current)
+    text = ai.ResumeIn(text="Пишу сервисы на Python и FastAPI")
+    resume = await ai.parse_resume_endpoint(text, {"sub": str(_uid())}, Bag())
     assert any(item["name"] == "Python" for item in resume["skills"])
+    assert "consent_outdated" not in resume
     query = await ai.parse_query_endpoint(ai.QueryIn(q="сеньор бэкенд python"), {"sub": str(_uid())})
     assert query["role"] or query["grade"] or query["skills"] is not None
+
+
+async def test_outdated_consent_keeps_resume_away_from_the_model(quiet, monkeypatch):
+    """LEG-01: until the person reconfirms consent v1.3 (which names every processor), no model call."""
+    async def outdated(*_args, **_kwargs):
+        return False
+
+    calls = []
+
+    async def model(*_args, **_kwargs):
+        calls.append(1)
+        return []
+
+    monkeypatch.setattr(ai, "consent_is_current", outdated)
+    monkeypatch.setattr(ai.providers, "active", lambda: object())
+    from app.services.ai import assistant
+    monkeypatch.setattr(assistant, "_llm_skills", model)
+    resume = await ai.parse_resume_endpoint(ai.ResumeIn(text="Пишу сервисы на Python"), {"sub": str(_uid())}, Bag())
+    assert resume["consent_outdated"] is True and resume["llm_used"] is False and calls == []
+    assert any(item["name"] == "Python" for item in resume["skills"])
 
 
 async def test_search_bank_and_filters(quiet, monkeypatch):
@@ -629,6 +655,20 @@ async def test_messages_open_after_accept(quiet):
     assert counts == {}
 
 
+async def test_no_code_task_yet_is_null_not_404(quiet):
+    company = _company()
+    person = _person()
+    offer = _offer(company.id, person.id, status="accepted")
+    db = Bag()
+    db.gets = [offer]
+    db.scalar_q = [None]
+    assert await interviews.get_code(offer.id, _current("participant", person.id), db) is None
+    db.gets = [None]
+    with pytest.raises(ApiError) as missing:
+        await interviews.get_code(offer.id, _current("participant", person.id), db)
+    assert missing.value.status_code == 404
+
+
 async def test_interview_slots_choice_and_outcome(quiet):
     company = _company()
     person = _person()
@@ -682,10 +722,11 @@ async def test_need_versions(quiet):
     need = db.added[0]
     ver = db.added[1]
     db.scalars_q = [[need]]
-    db.execute_q = [Exec([(need.id, 2)])]
+    shown, gone = SimpleNamespace(discoverable=True), SimpleNamespace(discoverable=False)
+    db.execute_q = [Exec([(need.id, shown), (need.id, shown), (need.id, gone)])]
     db.scalars_q.append([ver])
     listed = await needs.list_needs(current, db)
-    assert listed[0]["shortlist_count"] == 2
+    assert listed[0]["shortlist_count"] == 2   # the hidden card is not counted, as in the shortlist tab
 
     db.gets = [need]
     db.scalar_q = [ver]
@@ -723,7 +764,7 @@ async def test_vacancy_write_exam_and_apply(quiet):
     assert (await vacancies.close_vacancy(vacancy.id, current, db))["is_open"] is False
 
     person = _person()
-    category = SimpleNamespace(primary_role="backend", grade="middle")
+    category = SimpleNamespace(primary_role="backend", grade="middle", grade_source="assessed")
     score = SimpleNamespace(discipline="algorithmic", best_rank=None)
     open_vacancy = SimpleNamespace(
         id=_uid(), employer_id=company.id, employer=company, title="Бэкенд", role="backend", grade="junior",
@@ -793,11 +834,11 @@ async def test_candidate_profile_market_and_growth(quiet):
     db.scalars_q = [[]]
     profile = await candidates.get_my_profile(current, db)
     assert profile["display_name"] == "Аня" and profile["discoverable"] is True
-    assert profile["completeness"]["total"] == 8
+    assert profile["completeness"]["total"] == 9
     assert "skills" in profile["completeness"]["missing"]
     assert "city" not in profile["completeness"]["missing"]
 
-    category = SimpleNamespace(primary_role="backend", grade="middle")
+    category = SimpleNamespace(primary_role="backend", grade="middle", grade_source="assessed")
     db.gets = [person]
     db.scalar_q = [category]
     db.scalars_q = [[180_000, 200_000, 220_000, 240_000, 260_000]]
@@ -844,8 +885,14 @@ async def test_public_profile_credential_and_pdf(quiet):
     assert card["display_name"] == "Аня" and card["skills"]
 
     db.scalar_q = [person]
-    pdf = await public.public_profile_pdf(person.id, db)
-    assert pdf.media_type == "application/pdf"
+    from app.services.pdf_profile import _font
+    if _font() is not None:
+        pdf = await public.public_profile_pdf(person.id, db)
+        assert pdf.media_type == "application/pdf"
+    else:  # no Cyrillic font on this machine: a clean 503, not a bare 500 (SD-07)
+        with pytest.raises(ApiError) as no_font:
+            await public.public_profile_pdf(person.id, db)
+        assert no_font.value.status_code == 503
 
     credential = SimpleNamespace(id=_uid(), participant_id=person.id, credential_json={"id": "urn:uuid:" + str(_uid())},
                                  revoked_at=None, issued_at=NOW)
@@ -939,3 +986,21 @@ async def test_tab_leave_dispute_and_review(quiet, monkeypatch):
     monkeypatch.setattr(assessment, "abandon", stopped)
     abandoned = await assessment.abandon_session(session.id, current, db)
     assert abandoned.status == "abandoned"
+
+
+async def test_legal_processor_names_the_active_model(quiet, monkeypatch):
+    from app.api.v1 import legal as legal_api
+    from app.services.ai import providers
+
+    async def none(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(providers, "refresh", none)
+    assert await legal_api.model_processor() == {"enabled": False, "label": None}
+
+    async def yandex(*_a, **_k):
+        return SimpleNamespace(kind="yandex")
+
+    monkeypatch.setattr(providers, "refresh", yandex)
+    out = await legal_api.model_processor()
+    assert out["enabled"] is True and "YandexGPT" in out["label"]

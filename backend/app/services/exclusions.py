@@ -19,17 +19,38 @@ def refused(industries: list[str] | None, blocked: bool, industry: str | None) -
     return False
 
 
+async def _sector(db, employer_id, industry: str | None) -> str | None:
+    from app.models import Employer
+    sector = industry if industry in INDUSTRIES and industry != "any" else None
+    if sector is None:
+        stored = await db.scalar(select(Employer.industry).where(Employer.id == employer_id))
+        sector = stored if stored in INDUSTRIES and stored != "any" else None
+    return sector
+
+
+async def shared_scope(db, employer_id, industry: str | None) -> str | None:
+    """What a shared ranking may be keyed by, or None when this company's list must not be shared.
+
+    `drop_refused` removes people who blocked the company and people who excluded its industry. Two
+    companies without blocks and with the same industry get the same exclusions, so they may share a
+    cached ranking keyed by that industry. A company with any block gets its own ranking (audit-5 A8).
+    """
+    from app.models import CandidateBlock
+    blocked = await db.scalar(select(CandidateBlock.participant_id).where(
+        CandidateBlock.employer_id == employer_id).limit(1))
+    if blocked is not None:
+        return None
+    return await _sector(db, employer_id, industry) or "-"
+
+
 async def drop_refused(db, ids: set[uuid.UUID], employer_id: uuid.UUID | None,
                        industry: str | None) -> set[uuid.UUID]:
     """Ids this company must not be shown. Empty when there is no company on the request."""
     if employer_id is None or not ids:
         return set()
-    from app.models import CandidateBlock, Employer, Participant
+    from app.models import CandidateBlock, Participant
 
-    sector = industry if industry in INDUSTRIES and industry != "any" else None
-    if sector is None:
-        stored = await db.scalar(select(Employer.industry).where(Employer.id == employer_id))
-        sector = stored if stored in INDUSTRIES and stored != "any" else None
+    sector = await _sector(db, employer_id, industry)
     blocked = set(await db.scalars(select(CandidateBlock.participant_id).where(
         CandidateBlock.employer_id == employer_id, CandidateBlock.participant_id.in_(ids))))
     if not sector:

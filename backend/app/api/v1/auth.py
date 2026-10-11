@@ -6,7 +6,7 @@ tokens; a new person gets an account built from the FSP registry only after acce
 An account linked to FSP ID in the profile (/candidates/me/fsp/*) signs in the same way.
 """
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -51,6 +51,7 @@ from app.models import (
     TaskSubmission,
     Vacancy,
 )
+from app.services import login_lock
 from app.services.account_export import (
     employer_record,
     participant_record,
@@ -239,6 +240,9 @@ class ParticipantRegister(BaseModel):
     # Under 18: registration is open from 15; the card waits for the guardian's consent (services/guardian.py).
     age_15_17: bool = False
     consents: list[str] = Field(default_factory=list, max_length=10)
+    # LEG-06: search shows a person only with a birth date on file (a checkbox is not an age). Asked here so a
+    # new adult is not silently hidden until they find the profile field. Still optional for API clients.
+    birth_date: date | None = None
 
 
 @router.post("/participant/register", response_model=VerificationSent, status_code=202)
@@ -247,6 +251,15 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     reject_reserved(email)
     if not body.is_adult and not body.age_15_17:
         raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
+    if body.birth_date is not None:
+        from app.services.profile import age_on
+        if body.birth_date > date.today():
+            raise ApiError(422, "validation_error", "Дата рождения ещё не наступила")
+        years = age_on(body.birth_date, date.today())
+        if years < 15:
+            raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
+        if (years >= 18) != body.is_adult:
+            raise ApiError(422, "validation_error", "Дата рождения не совпадает с отметкой «18 лет»")
     check_required_consents("participant", body.consents)
     await _charge_registration(request, email, "participant")
     p = await _account(db, "participant", email)
@@ -263,6 +276,8 @@ async def register_participant(body: ParticipantRegister, request: Request, db: 
     p.password_hash = _password_hash(body.password)
     p.display_name = (body.display_name or "").strip() or p.display_name
     p.is_minor = not body.is_adult
+    if body.birth_date is not None:
+        p.birth_date = body.birth_date
     try:
         await db.flush()
     except IntegrityError:
@@ -374,23 +389,39 @@ async def resend_verification(body: ResendIn, db: AsyncSession = Depends(get_db)
 
 # ── login ───────────────────────────────────────────────────────────────────
 
-async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -> TokenOut:
+async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm,
+                 request: Request | None = None) -> TokenOut:
+    from app.core.redis_client import get_redis
+    from app.services.identity import visitor_ip
     email = normalize_email(form.username)
-    # The printed demo account is the one the interface suite signs in with, many times a minute.
-    await _limit(role, email, limit=60 if settings.DEMO_MODE else 5)
+    ip = visitor_ip(request) if request is not None else "-"
+    # Windows per account × address and per address: a stranger's attempts do not close the door for
+    # the owner (stand audit I-01). The printed demo accounts are signed in many times a minute.
+    await _limit(f"login:{role}", f"{email}|{ip}", limit=60 if settings.DEMO_MODE else 5)
+    await _limit("login-ip", ip, limit=300 if settings.DEMO_MODE else 30)
     if "@" not in email:
         raise ApiError(401, "invalid_credentials",
                        "Здесь вход по email. По ФСП ID входите кнопкой «Войти через ФСП ID».")
+    redis = await get_redis()
+    pair = login_lock.pair_key(role, email, ip)
+    if await login_lock.pair_locked(redis, pair):
+        raise ApiError(429, "rate_limited", "С этого адреса вход закрыт на 15 минут после нескольких неверных паролей.",
+                       headers={"Retry-After": str(int(login_lock.LOCK_FOR.total_seconds()))})
     account = await _account(db, role, email)
     now = datetime.now(UTC)
-    if account is not None and still_locked(account.locked_until, now):
-        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после нескольких неверных паролей.")
+    protected = login_lock.demo_protected(email, settings.DEMO_PROTECTED_SUFFIXES, settings.DEMO_MODE)
+    if account is not None and not protected and still_locked(account.locked_until, now):
+        raise ApiError(429, "rate_limited", "Вход закрыт на 15 минут после множества неверных паролей.",
+                       headers={"Retry-After": str(login_lock.seconds_left(account.locked_until, now))})
     stored = account.password_hash if account is not None else None
     if not password_matches(form.password, stored):
+        await login_lock.pair_failed(redis, pair)
         if account is not None:
-            account.failed_logins, account.locked_until = next_failure(account.failed_logins or 0, now)
+            account.failed_logins, account.locked_until = next_failure(
+                account.failed_logins or 0, now, lockable=not protected, locked_until=account.locked_until)
             await db.commit()
         raise ApiError(401, "invalid_credentials")
+    await login_lock.pair_cleared(redis, pair)
     if account is not None and (account.failed_logins or account.locked_until):
         account.failed_logins = 0
         account.locked_until = None
@@ -406,15 +437,15 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm) -
 
 
 @router.post("/participant/token", response_model=TokenOut)
-async def login_participant(response: Response, form: OAuth2PasswordRequestForm = Depends(),
+async def login_participant(request: Request, response: Response, form: OAuth2PasswordRequestForm = Depends(),
                             db: AsyncSession = Depends(get_db)):
-    return deliver(response, await _login(db, "participant", form))
+    return deliver(response, await _login(db, "participant", form, request))
 
 
 @router.post("/employer/token", response_model=TokenOut)
-async def login_employer(response: Response, form: OAuth2PasswordRequestForm = Depends(),
+async def login_employer(request: Request, response: Response, form: OAuth2PasswordRequestForm = Depends(),
                          db: AsyncSession = Depends(get_db)):
-    return deliver(response, await _login(db, "employer", form))
+    return deliver(response, await _login(db, "employer", form, request))
 
 
 class GuestIn(BaseModel):
