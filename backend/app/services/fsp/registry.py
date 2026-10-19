@@ -86,7 +86,7 @@ def parse_participant(payload: dict) -> FSPParticipant:
     return FSPParticipant(
         fsp_id=str(payload["fsp_id"]), display_name=str(payload.get("display_name") or ""),
         region=str(payload.get("region") or ""), birth_date=date.fromisoformat(payload["birth_date"]),
-        results=results, ranks=ranks,
+        results=results, ranks=ranks, complete=payload.get("complete") is True,
     )
 
 

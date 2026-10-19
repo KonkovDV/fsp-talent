@@ -198,10 +198,13 @@ def extract_skills(text: str) -> list[ExtractedSkill]:
     return sorted(found.values(), key=lambda s: s.start)
 
 
-TRUST_WEIGHT = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
+TRUST_WEIGHT = {
+    "test_confirmed": 1.0, "fsp_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55,
+}
 
 TRUST_RU = {
     "test_confirmed": "подтверждён тестом",
+    "fsp_confirmed": "подтверждено ФСП",
     "resume_confirmed": "цитата из резюме",
     "self_reported": "заявлен",
 }
@@ -216,6 +219,9 @@ class SkillDraft:
     confirmed: bool
     created_at: datetime | None
     confirmed_at: datetime | None
+    test_share: float | None = None
+    test_items: int | None = None
+    tested_at: datetime | None = None
 
 
 def sign_resume_evidence(participant_id: str, pairs: list[tuple[str, str]]) -> str:
@@ -264,9 +270,10 @@ def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str,
                            now: datetime, allowed: set[tuple[str, str]] | None = None) -> list[SkillDraft]:
     """Rebuild a skill list without throwing away evidence or accepting a quote the client invented.
 
-    A skill the test confirmed stays confirmed. A resume quote counts only when this server
-    extracted it (``allowed``) or the profile already stored that same quote. Saving again
-    does not move the date.
+    A skill the test confirmed stays confirmed, including when the form no longer sends it.
+    A checked miss keeps its item count the same way, so a later prize cannot replace it.
+    A resume quote counts only when this server extracted it (``allowed``) or the profile
+    already stored that same quote. Saving again does not move the date.
     """
     allowed = allowed or set()
     by_name = {row.name: row for row in existing}
@@ -282,7 +289,8 @@ def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str,
         if name in tested:
             src = tested[name]
             out.append(SkillDraft(name, src.raw_name or raw, src.source_quote, "test_confirmed", True,
-                                  src.created_at or now, src.confirmed_at or now))
+                                  src.created_at or now, src.confirmed_at or now,
+                                  src.test_share, src.test_items, src.tested_at))
             continue
         proven = bool(quote) and (name, quote) in allowed
         same = bool(old and old.trust_level == "resume_confirmed" and old.source_quote
@@ -290,9 +298,21 @@ def plan_skill_replacement(existing: list[SkillDraft], incoming: list[tuple[str,
         if proven or same:
             src_quote = quote if proven else old.source_quote
             confirmed_at = old.confirmed_at if same and old and old.confirmed_at else now
-            out.append(SkillDraft(name, raw, src_quote, "resume_confirmed", True, created, confirmed_at))
+            out.append(SkillDraft(
+                name, raw, src_quote, "resume_confirmed", True, created, confirmed_at,
+                old.test_share if old else None, old.test_items if old else None,
+                old.tested_at if old else None))
             continue
-        out.append(SkillDraft(name, raw, None, "self_reported", True, created, None))
+        out.append(SkillDraft(
+            name, raw, None, "self_reported", True, created, None,
+            old.test_share if old else None, old.test_items if old else None,
+            old.tested_at if old else None))
+    for name, row in by_name.items():
+        if name in seen or not (row.test_items or row.trust_level == "test_confirmed"):
+            continue
+        out.append(SkillDraft(
+            name, row.raw_name, row.source_quote, row.trust_level, row.confirmed,
+            row.created_at, row.confirmed_at, row.test_share, row.test_items, row.tested_at))
     return out
 
 

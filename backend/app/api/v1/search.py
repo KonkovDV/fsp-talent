@@ -8,6 +8,7 @@ from app.api.errors import ApiError
 from app.core.database import get_db
 from app.core.ratelimit import too_many
 from app.services.cities import WORK_FORMATS, city_name
+from app.services.demand import note_card_views
 from app.services.matching import NeedSpec
 from app.services.search.pipeline import bank_grid, search_candidates
 from app.services.skills import extract_skills, normalize_skill
@@ -80,7 +81,7 @@ async def search(
         raise ApiError(422, "validation_error", "Город выберите из справочника")
     if work_format and work_format not in WORK_FORMATS:
         raise ApiError(422, "validation_error", "Неизвестный формат работы")
-    return await search_candidates(
+    page = await search_candidates(
         db, role=role or None, grade=grade or None, discipline=discipline or None,
         min_rank=min_rank or None, skills=skill_list, q=q or None, limit=limit, fresh_days=fresh_days,
         assessed_only=assessed_only, has_fsp=has_fsp, work_goal=work_goal,
@@ -90,3 +91,12 @@ async def search(
                       industry=industry or None, text=bool(q)),
         employer_id=uuid.UUID(employer_id),
     )
+    shown: list[uuid.UUID] = []
+    for card in page.get("items") or []:
+        raw = card.get("candidate_id") if isinstance(card, dict) else None
+        try:
+            shown.append(uuid.UUID(str(raw)))
+        except (TypeError, ValueError):
+            continue
+    await note_card_views(db, uuid.UUID(employer_id), shown)
+    return page

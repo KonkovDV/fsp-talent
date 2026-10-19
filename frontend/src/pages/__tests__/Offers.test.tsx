@@ -63,6 +63,16 @@ describe('приглашения кандидата', () => {
     expect(await screen.findByRole('button', { name: 'Отклонить' })).toBeDisabled()
   })
 
+  it('отправляет условие и не открывает контакты', async () => {
+    getMyOffers.mockResolvedValue({ data: [pending] })
+    renderPage(<CandidateOffers />)
+    const send = await screen.findByRole('button', { name: 'Отправить условие' })
+    expect(send).toBeDisabled()
+    await userEvent.type(screen.getByRole('textbox', { name: 'Условие' }), 'вилка от 280 тысяч')
+    await userEvent.click(send)
+    expect(respondToOffer).toHaveBeenCalledWith('offer-1', 'yes_if', undefined, 'вилка от 280 тысяч')
+  })
+
   it('отклоняет с выбранной причиной', async () => {
     getMyOffers.mockResolvedValue({ data: [pending] })
     renderPage(<CandidateOffers />)

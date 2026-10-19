@@ -17,7 +17,8 @@ def test_only_a_grade_test_at_moderate_risk_lowers_the_place():
     assert integrity_flagged({"tab_leaves": 4, "copies": 2, "mode": "express"}) is False
     assert integrity_flagged({"pace_review": "x", "vacancy_id": "v"}) is False
     score, note = penalised(0.8, {"fast_correct": 2})
-    assert score == 0.68 and "умеренный" in note and "Грейд не изменён" in note
+    assert score == 0.8 and note is None
+    assert "умеренный" in (integrity_line({"fast_correct": 2}) or "")
     assert penalised(0.8, {"tab_leaves": 1}) == (0.8, None)
     assert penalised(0.8, {}) == (0.8, None)
 

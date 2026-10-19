@@ -27,6 +27,7 @@ class DemoLoginIn(BaseModel):
     state: str = Field(min_length=8, max_length=200)
     code_challenge: str = Field(min_length=43, max_length=128)
     code_challenge_method: str = Field(pattern="^S256$")
+    nonce: str | None = Field(default=None, min_length=8, max_length=200)
 
 
 @router.post("/login")
@@ -40,7 +41,8 @@ async def demo_login(body: DemoLoginIn):
     if not await MockFSPAdapter().verify_secret(fsp_id, body.password):
         raise ApiError(400, "fsp_invalid")
     try:
-        code = await MockFspIdProvider().issue_code(fsp_id, body.client_id, body.redirect_uri, body.code_challenge)
+        code = await MockFspIdProvider().issue_code(
+            fsp_id, body.client_id, body.redirect_uri, body.code_challenge, nonce=body.nonce)
     except FspIdError as e:
         raise ApiError(400, "validation_error", "Неизвестный клиент или адрес возврата") from e
     return {"redirect_to": f"{body.redirect_uri}?{urlencode({'code': code, 'state': body.state})}"}

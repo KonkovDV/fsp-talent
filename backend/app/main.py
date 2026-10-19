@@ -12,7 +12,7 @@ from app.api.errors import install_error_handlers
 from app.api.openapi_problem import install_problem_openapi
 from app.api.v1.router import api_router
 from app.core.body_limit import LimitRequestBody
-from app.core.config import PUBLISHED_SECRETS, settings
+from app.core.config import PUBLISHED_SECRETS, registry_mode_error, settings
 from app.core.csp import POLICY
 from app.core.rls import reset_rls, set_rls
 from app.core.security import decode_token
@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             "SECRET_KEY is a published placeholder and SECRET_KEY_FILE is not writable. "
             "Set a private value in .env: python -c \"import secrets; print(secrets.token_hex(32))\"")
+    if message := registry_mode_error():
+        raise RuntimeError(message)
     if not settings.DEMO_MODE and not settings.COOKIE_SECURE:
         logger.warning("COOKIE_SECURE is off while DEMO_MODE is off. The refresh cookie will travel without Secure.")
     logger.info(f"FSP Talent API v{settings.VERSION} starting (mode={settings.FSP_MODE})")

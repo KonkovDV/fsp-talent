@@ -23,10 +23,32 @@ from app.core.idempotency import (
     idem_finish,
 )
 from app.core.ratelimit import RateLimitUnavailable, too_many
-from app.models import AccessLog, CandidateInterest, CategoryAssignment, Employer, Offer, OfferFlag, Participant
+from app.models import (
+    AccessLog,
+    CandidateInterest,
+    CategoryAssignment,
+    ConsentLog,
+    Employer,
+    Offer,
+    OfferFlag,
+    Participant,
+)
 from app.services.contact import contact_ok
-from app.services.market import market_flag, quartiles, reason_shares, role_median, salary_gap_hint
+from app.services.field_cipher import public_ref
+from app.services.interest_signal import show_mark
+from app.services.market import (
+    fork_span,
+    market_flag,
+    offer_pulse,
+    own_reason_counts,
+    quartiles,
+    reason_shares,
+    reply_hours,
+    role_median,
+    salary_gap_hint,
+)
 from app.services.notify import Outbox, notify, salary
+from app.services.offer_flow import IllegalOfferMove, accept_counter, move_offer
 from app.services.offer_perks import PERKS, clean_perks
 from app.services.offers import expire_if_stale, expire_stale, reinvite_after
 from app.services.practice_track import next_stage
@@ -86,6 +108,8 @@ def _offer_out(o: Offer) -> dict:
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "contacts_revealed_at": o.contacts_revealed_at.isoformat() if o.contacts_revealed_at else None,
         "decline_reason": o.decline_reason,
+        "counter_note": getattr(o, "counter_note", None),
+        "counter_at": o.counter_at.isoformat() if getattr(o, "counter_at", None) else None,
     }
 
 
@@ -116,6 +140,7 @@ async def preview_offer(body: SalaryPreview, current: dict = Depends(get_current
     median = await role_median(db, cat.primary_role if cat else None, cat.grade if cat else None)
     return {"salary_hint": salary_gap_hint(body.salary_to_gross, candidate.salary_from_gross),
             "market_flag": market_flag(body.salary_from_gross, body.salary_to_gross, median),
+            "fork_span": fork_span(body.salary_from_gross, body.salary_to_gross),
             "market_median": median}
 
 
@@ -125,6 +150,8 @@ async def offer_market(current: dict = Depends(get_current_employer), db: AsyncS
     if await db.get(Employer, _eid(current)) is None:
         raise HTTPException(404, "Работодатель не найден")
     reasons = list(await db.scalars(select(Offer.decline_reason).where(Offer.status == "rejected")))
+    own = list(await db.scalars(select(Offer.decline_reason).where(
+        Offer.status == "rejected", Offer.employer_id == _eid(current))))
     rows = (await db.execute(
         select(CategoryAssignment.primary_role, CategoryAssignment.grade, Participant.salary_from_gross)
         .join(Participant, Participant.id == CategoryAssignment.participant_id)
@@ -138,7 +165,18 @@ async def offer_market(current: dict = Depends(get_current_employer), db: AsyncS
         cell = quartiles(amounts)
         if cell:
             salaries.append({"role": role, "grade": grade, **cell})
-    return {"reasons": reason_shares(list(reasons)), "salaries": salaries}
+    spans = (await db.execute(
+        select(Offer.created_at, Offer.responded_at).where(
+            Offer.employer_id == _eid(current), Offer.responded_at.is_not(None)))).all()
+    return {
+        "reasons": reason_shares(list(reasons)),
+        "own": own_reason_counts(own),
+        "salaries": salaries,
+        "reply": reply_hours(list(spans)),
+        "pulse": offer_pulse(list((await db.execute(
+            select(Offer.created_at, Offer.status, Offer.candidate_viewed_at).where(
+                Offer.employer_id == _eid(current)))).all()), datetime.now(UTC)),
+    }
 
 
 @router.post("/", status_code=201)
@@ -191,6 +229,7 @@ async def _create_offer(body: OfferCreate, current: dict, db: AsyncSession) -> d
                        f"Кандидат отклонил ваше приглашение. Повторно пригласить можно после {pause:%d.%m.%Y}",
                        details={"reinvite_after": pause.isoformat()})
     # Count only an invitation that passed the checks. A 404 or 409 must not spend the daily cap.
+    # A later refusal or an expiry does not return the slot: the counter only grows.
     # Redis down refuses the invite instead of opening the cap.
     try:
         level = trust_level(employer)
@@ -266,13 +305,15 @@ async def list_my_offers(current: dict = Depends(get_current_employer), db: Asyn
     cats = {c.participant_id: c for c in await db.scalars(select(CategoryAssignment).where(
         CategoryAssignment.participant_id.in_([o.candidate_id for o in rows])))} if rows else {}
     unread = await unread_counts(db, [o.id for o in rows if o.status == "accepted"], "employer")
+    ids = [o.candidate_id for o in rows]
     marked = set(await db.scalars(select(CandidateInterest.participant_id).where(
         CandidateInterest.employer_id == _eid(current),
-        CandidateInterest.participant_id.in_([o.candidate_id for o in rows])))) if rows else set()
+        CandidateInterest.participant_id.in_(ids)))) if rows else set()
     out = []
     for o in rows:
         card = _offer_out(o)
-        card["returned_interest"] = o.candidate_id in marked
+        # The invitation is the opening: the company already chose this card.
+        card["returned_interest"] = show_mark(o.candidate_id in marked, True)
         card["unread_messages"] = unread.get(o.id, 0)
         cat = cats.get(o.candidate_id)
         card["candidate"] = (
@@ -289,9 +330,10 @@ async def withdraw_offer(offer_id: uuid.UUID, current: dict = Depends(get_curren
     offer = await db.get(Offer, offer_id, with_for_update=True)
     if not offer or offer.employer_id != _eid(current):
         raise HTTPException(404, "Оффер не найден")
-    if offer.status != "pending":
-        raise HTTPException(409, "Отозвать можно только ожидающий оффер")
-    offer.status = "withdrawn"
+    try:
+        move_offer(offer, "withdrawn")
+    except IllegalOfferMove:
+        raise HTTPException(409, "Отозвать можно только ожидающий оффер") from None
     employer = await db.get(Employer, offer.employer_id)
     outbox = Outbox()
     await notify(db, outbox, "participant", offer.candidate_id, "offer_withdrawn",
@@ -302,6 +344,64 @@ async def withdraw_offer(offer_id: uuid.UUID, current: dict = Depends(get_curren
     await publish_invite()
     await outbox.deliver()
     return {"status": offer.status}
+
+
+@router.post("/{offer_id}/accept-counter")
+async def accept_counter_offer(offer_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                               db: AsyncSession = Depends(get_db)):
+    """Agree to the candidate's condition. Contacts open while processing consent still holds."""
+    offer = await db.get(Offer, offer_id, with_for_update=True)
+    if not offer or offer.employer_id != _eid(current):
+        raise HTTPException(404, "Оффер не найден")
+    if expire_if_stale(offer):
+        await db.commit()
+        raise HTTPException(409, "Срок оффера истёк")
+    person = await db.get(Participant, offer.candidate_id)
+    if person is None or not await contacts_allowed(db, person):
+        raise ApiError(403, "consent_withdrawn")
+    try:
+        note = accept_counter(offer)
+    except IllegalOfferMove:
+        raise HTTPException(409, "Принять условие можно только у ожидающего приглашения") from None
+    except ValueError:
+        raise HTTPException(422, "Кандидат ещё не написал условие") from None
+    db.add(ConsentLog(
+        participant_id=offer.candidate_id, event_type="contacts_revealed", actor_id=offer.employer_id,
+        meta={"offer_id": str(offer.id), "by": "counter"},
+    ))
+    employer = await db.get(Employer, offer.employer_id)
+    company = employer.company_name if employer is not None else "Компания"
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == offer.candidate_id))
+    outbox = Outbox()
+    await notify(
+        db, outbox, "participant", offer.candidate_id, "offer_accepted",
+        f"«{company}» приняла условие",
+        f"Условие по роли «{offer.role}» принято. Контакты открыты компании.",
+        "/candidate/offers",
+    )
+    event = {
+        "created_at": datetime.now(UTC).isoformat(), "employer_id": str(offer.employer_id),
+        "offer": {"id": str(offer.id), "role": offer.role},
+        "candidate": {"ref": public_ref(offer.candidate_id),
+                      "category": {"specialization": cat.primary_role if cat else None,
+                                   "grade": cat.grade if cat else None}},
+        "note": note,
+    }
+    if person is not None:
+        event["candidate"].update(
+            name=person.display_name, email=person.email, phone=person.phone, telegram=person.telegram)
+    from app.services.webhooks import deliver_due, enqueue
+    await enqueue(db, offer.employer_id, "offer.accepted", event)
+    await db.commit()
+    from app.services.search.cache import publish_invite
+    await publish_invite()
+    await outbox.deliver()
+    try:
+        await deliver_due(db, offer.employer_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+    return {"status": offer.status, "counter_note": note}
 
 
 @router.get("/{offer_id}/contacts")

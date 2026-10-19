@@ -18,9 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_employer
 from app.api.errors import ApiError
 from app.core.database import get_db
-from app.models import CandidateInterest, Employer, EmployerFavorite, Participant
+from app.models import AccessLog, CandidateInterest, Employer, EmployerFavorite, Participant
 from app.models.favorite import FAVORITES_MAX
 from app.services.hiring_practice import sees_senior
+from app.services.interest_signal import show_mark
 from app.services.search.pipeline import _build_cards, visible_in_search
 
 router = APIRouter(prefix="/employer/favorites", tags=["employer"])
@@ -50,11 +51,14 @@ async def list_favorites(current: dict = Depends(get_current_employer), db: Asyn
     returned = set(await db.scalars(select(CandidateInterest.participant_id).where(
         CandidateInterest.employer_id == employer_id,
         CandidateInterest.participant_id.in_(ordered)))) if ordered else set()
+    opened = set(await db.scalars(select(AccessLog.participant_id).where(
+        AccessLog.employer_id == employer_id, AccessLog.access_type == "card_view",
+        AccessLog.participant_id.in_(ordered)))) if ordered else set()
     for card in cards:
         pid = uuid.UUID(card["candidate_id"])
         card["saved_at"] = saved[pid].isoformat()
         card["interest"] = status.get(pid, "saved")
-        card["returned_interest"] = pid in returned
+        card["returned_interest"] = show_mark(pid in returned, pid in opened)
     return {"items": cards, "ids": [str(pid) for pid in ordered], "hidden": len(ids) - len(ordered),
             "max": FAVORITES_MAX}
 

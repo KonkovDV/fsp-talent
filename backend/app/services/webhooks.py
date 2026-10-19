@@ -75,7 +75,7 @@ def signature_ok(secret: str, headers, body: bytes, now: datetime, skew: int = S
 async def first_delivery(endpoint_id: str, msg_id: str, skew: int = SKEW_SECONDS) -> bool:
     """SEC4: a signed message is accepted once. The webhook-id is remembered for the whole skew window
     (both sides of it), so a captured request cannot be replayed while its timestamp is still fresh.
-    Redis down: accept (the signature and the window still hold) and log it."""
+    Redis down: refuse. A missed replay guard must not become an open door."""
     import logging
 
     from app.core.redis_client import get_redis
@@ -86,7 +86,7 @@ async def first_delivery(endpoint_id: str, msg_id: str, skew: int = SKEW_SECONDS
         return bool(fresh)
     except Exception:  # noqa: BLE001
         logging.getLogger(__name__).warning("webhook replay guard unavailable", exc_info=True)
-        return True
+        return False
 
 
 def check_url(url: str) -> str:

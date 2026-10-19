@@ -28,6 +28,7 @@ from app.core.security import decode_token
 from app.models import Employer, EmployerApiKey, Offer, Participant, WebhookDelivery, WebhookEndpoint
 from app.services.api_keys import MAX_ACTIVE, key_hash, new_key, well_formed
 from app.services.csv_safe import safe_row
+from app.services.field_cipher import public_ref
 from app.services.privacy import contacts_allowed
 from app.services.webhooks import (
     _read_secret,
@@ -255,7 +256,7 @@ async def export(fmt: str = Query("json", pattern="^(json|csv)$"),
         if person is None or not await contacts_allowed(db, person):
             continue
         rows.append({
-            "ref": str(person.id), "name": person.display_name, "email": person.email,
+            "ref": public_ref(person.id), "name": person.display_name, "email": person.email,
             "phone": person.phone, "telegram": person.telegram, "source": "offer", "role": offer.role,
         })
     if fmt == "csv":

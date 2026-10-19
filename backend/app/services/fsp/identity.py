@@ -62,8 +62,12 @@ class FspIdProvider(Protocol):
     name: str
 
     def redirect_uri(self, path: str = CALLBACK_PATH) -> str: ...
-    def authorize_url(self, state: str, challenge: str, path: str = CALLBACK_PATH) -> str: ...
-    async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str: ...
+    def authorize_url(
+        self, state: str, challenge: str, path: str = CALLBACK_PATH, *, nonce: str | None = None,
+    ) -> str: ...
+    async def exchange(
+        self, code: str, verifier: str, path: str = CALLBACK_PATH, *, nonce: str | None = None,
+    ) -> str: ...
 
 
 async def _put(key: str, value: dict, ttl: int) -> None:
@@ -101,29 +105,45 @@ class MockFspIdProvider:
     def redirect_uri(self, path: str = CALLBACK_PATH) -> str:
         return path
 
-    def authorize_url(self, state: str, challenge: str, path: str = CALLBACK_PATH) -> str:
-        query = urlencode({
+    def authorize_url(
+        self, state: str, challenge: str, path: str = CALLBACK_PATH, *, nonce: str | None = None,
+    ) -> str:
+        params = {
             "response_type": "code", "client_id": settings.FSP_ID_CLIENT_ID, "scope": "openid",
             "redirect_uri": self.redirect_uri(path), "state": state,
             "code_challenge": challenge, "code_challenge_method": "S256",
-        })
-        return f"{DEMO_AUTHORIZE_PATH}?{query}"
+        }
+        if nonce:
+            params["nonce"] = nonce
+        return f"{DEMO_AUTHORIZE_PATH}?{urlencode(params)}"
 
-    async def issue_code(self, fsp_id: str, client_id: str, redirect_uri: str, challenge: str) -> str:
+    async def issue_code(
+        self, fsp_id: str, client_id: str, redirect_uri: str, challenge: str, *, nonce: str | None = None,
+    ) -> str:
         """What the provider does after a successful login: a one-time code bound to the PKCE challenge."""
         if client_id != settings.FSP_ID_CLIENT_ID or redirect_uri not in self.ALLOWED_REDIRECTS:
             raise FspIdError("client")
         code = secrets.token_urlsafe(24)
-        await _put(f"fspid:code:{code}", {"fsp_id": fsp_id, "challenge": challenge,
-                                          "redirect_uri": redirect_uri}, CODE_TTL_S)
+        grant = {"fsp_id": fsp_id, "challenge": challenge, "redirect_uri": redirect_uri}
+        if nonce is not None:
+            grant["nonce"] = nonce
+        await _put(f"fspid:code:{code}", grant, CODE_TTL_S)
         return code
 
-    async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str:
+    async def exchange(
+        self, code: str, verifier: str, path: str = CALLBACK_PATH, *, nonce: str | None = None,
+    ) -> str:
         grant = await _take(f"fspid:code:{code}")
         if grant is None or grant["redirect_uri"] != self.redirect_uri(path):
             raise FspIdError("code")
         if not secrets.compare_digest(grant["challenge"], pkce_challenge(verifier)):
             raise FspIdError("pkce")
+        # A login that sent a nonce accepts only a grant carrying that same nonce.
+        # A code issued without one must not pass: the check used to skip a missing grant field.
+        if nonce is not None:
+            granted = grant.get("nonce")
+            if not isinstance(granted, str) or not secrets.compare_digest(granted, nonce):
+                raise FspIdError("nonce")
         return grant["fsp_id"]
 
 
@@ -142,18 +162,24 @@ class KeycloakFspIdProvider:
     def redirect_uri(self, path: str = CALLBACK_PATH) -> str:
         return settings.PUBLIC_BASE_URL.rstrip("/") + path
 
-    def authorize_url(self, state: str, challenge: str, path: str = CALLBACK_PATH) -> str:
-        query = urlencode({
+    def authorize_url(
+        self, state: str, challenge: str, path: str = CALLBACK_PATH, *, nonce: str | None = None,
+    ) -> str:
+        params = {
             "response_type": "code", "client_id": settings.FSP_ID_CLIENT_ID, "scope": "openid",
             "redirect_uri": self.redirect_uri(path), "state": state,
             "code_challenge": challenge, "code_challenge_method": "S256",
-        })
-        return f"{self.issuer}/protocol/openid-connect/auth?{query}"
+        }
+        if nonce:
+            params["nonce"] = nonce
+        return f"{self.issuer}/protocol/openid-connect/auth?{urlencode(params)}"
 
     async def _client(self) -> httpx.AsyncClient:
         return self._http or httpx.AsyncClient(timeout=10)
 
-    async def exchange(self, code: str, verifier: str, path: str = CALLBACK_PATH) -> str:
+    async def exchange(
+        self, code: str, verifier: str, path: str = CALLBACK_PATH, *, nonce: str | None = None,
+    ) -> str:
         client = await self._client()
         try:
             token = await client.post(f"{self.backend}/protocol/openid-connect/token", data={
@@ -180,6 +206,10 @@ class KeycloakFspIdProvider:
                                 audience=settings.FSP_ID_CLIENT_ID, issuer=self.issuer)
         except Exception as e:   # a bad signature, key, audience or issuer all mean "do not trust this token"
             raise FspIdError("id_token") from e
+        if nonce is not None:
+            token_nonce = claims.get("nonce")
+            if not isinstance(token_nonce, str) or not secrets.compare_digest(token_nonce, nonce):
+                raise FspIdError("nonce")
         fsp_id = claims.get(settings.FSP_ID_CLAIM)
         if not isinstance(fsp_id, str) or not fsp_id:
             raise FspIdError("claim")
@@ -191,12 +221,14 @@ def get_fsp_id_provider() -> MockFspIdProvider | KeycloakFspIdProvider:
 
 
 async def start(participant_id: uuid.UUID, provider: FspIdProvider | None = None) -> Started:
-    """Create state and the PKCE verifier on the server, bound to the signed-in candidate."""
+    """Create state, nonce and the PKCE verifier on the server, bound to the signed-in candidate."""
     provider = provider or get_fsp_id_provider()
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
-    await _put(f"fspid:state:{state}", {"participant_id": str(participant_id), "verifier": verifier}, STATE_TTL_S)
-    return Started(provider.authorize_url(state, pkce_challenge(verifier)), state)
+    nonce = secrets.token_urlsafe(24)
+    await _put(f"fspid:state:{state}",
+               {"participant_id": str(participant_id), "verifier": verifier, "nonce": nonce}, STATE_TTL_S)
+    return Started(provider.authorize_url(state, pkce_challenge(verifier), nonce=nonce), state)
 
 
 async def finish(participant_id: uuid.UUID, code: str, state: str, provider: FspIdProvider | None = None) -> str:
@@ -205,21 +237,23 @@ async def finish(participant_id: uuid.UUID, code: str, state: str, provider: Fsp
     saved = await _take(f"fspid:state:{state}")
     if saved is None or saved.get("participant_id") != str(participant_id):
         raise FspIdError("state")
-    return await provider.exchange(code, saved["verifier"])
+    return await provider.exchange(code, saved["verifier"], nonce=saved.get("nonce"))
 
 
 # --- sign-in by FSP ID (the single entry point of the Federation) ---------------------------------------
 
 async def start_signin(provider: FspIdProvider | None = None) -> Started:
-    """Same code flow with PKCE, but the state belongs to no account: the person is not signed in yet."""
+    """Same code flow with PKCE and nonce, but the state belongs to no account yet."""
     provider = provider or get_fsp_id_provider()
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
+    nonce = secrets.token_urlsafe(24)
     binder = secrets.token_urlsafe(32)
     digest = hashlib.sha256(binder.encode()).hexdigest()
     await _put(f"fspid:state:{state}",
-               {"purpose": "signin", "verifier": verifier, "binder_sha256": digest}, STATE_TTL_S)
-    return Started(provider.authorize_url(state, pkce_challenge(verifier), SIGNIN_CALLBACK_PATH), state, binder)
+               {"purpose": "signin", "verifier": verifier, "nonce": nonce, "binder_sha256": digest}, STATE_TTL_S)
+    return Started(provider.authorize_url(state, pkce_challenge(verifier), SIGNIN_CALLBACK_PATH, nonce=nonce),
+                   state, binder)
 
 
 async def finish_signin(code: str, state: str, provider: FspIdProvider | None = None,
@@ -236,7 +270,7 @@ async def finish_signin(code: str, state: str, provider: FspIdProvider | None = 
     saved = await _take(key)
     if saved is None or not _binder_matches(saved, binder):
         raise FspIdError("state")
-    return await provider.exchange(code, saved["verifier"], SIGNIN_CALLBACK_PATH)
+    return await provider.exchange(code, saved["verifier"], SIGNIN_CALLBACK_PATH, nonce=saved.get("nonce"))
 
 
 async def issue_ticket(fsp_id: str) -> str:

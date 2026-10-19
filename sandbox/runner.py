@@ -8,11 +8,13 @@ from __future__ import annotations
 import json
 import os
 import resource
+import select
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -68,6 +70,50 @@ def _clean(values: object, count: int) -> list[int | None] | None:
     return out
 
 
+def _collect_stdout(proc: subprocess.Popen, payload: bytes) -> bytes | None:
+    """Read until the process ends, the wall clock fires, or the byte cap is crossed.
+
+    None means the cap was hit and the process group was killed. communicate() would keep the
+    whole stream in memory and only then notice that it is too long.
+    """
+    assert proc.stdin is not None and proc.stdout is not None
+    proc.stdin.write(payload)
+    proc.stdin.close()
+    chunks: list[bytes] = []
+    size = 0
+    deadline = time.monotonic() + WALL_S
+    stream = proc.stdout.fileno()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(proc.args, WALL_S)
+        ready, _, _ = select.select([stream], [], [], min(0.2, remaining))
+        if not ready:
+            if proc.poll() is None:
+                continue
+            # Exited between the poll and the pipe becoming readable. Drain the buffer before returning.
+            while True:
+                pending, _, _ = select.select([stream], [], [], 0)
+                if not pending:
+                    return None if size > MAX_STDOUT else b"".join(chunks)
+                block = os.read(stream, 4096)
+                if not block:
+                    return None if size > MAX_STDOUT else b"".join(chunks)
+                size += len(block)
+                if size > MAX_STDOUT:
+                    return None
+                chunks.append(block)
+        block = os.read(stream, 4096)
+        if not block:
+            return b"".join(chunks)
+        size += len(block)
+        if size > MAX_STDOUT:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(timeout=1)
+            return None
+        chunks.append(block)
+
+
 def run(language: str, source: str, cases: list) -> dict:
     """{"outputs": [...], "timed_out": bool}. A crash is a list of nulls, not a timeout."""
     if language not in available_languages():
@@ -84,11 +130,15 @@ def run(language: str, source: str, cases: list) -> dict:
             preexec_fn=_limits(language), start_new_session=True,
         )
         try:
-            out, _ = proc.communicate(payload, timeout=WALL_S)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.communicate()
-            return {"outputs": blank, "timed_out": True}
+            try:
+                out = _collect_stdout(proc, payload)
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=1)
+                return {"outputs": blank, "timed_out": True}
+            if out is None:
+                return {"outputs": blank, "timed_out": False}
+            proc.wait(timeout=1)
         finally:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)

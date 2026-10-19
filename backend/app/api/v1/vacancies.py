@@ -27,6 +27,7 @@ from app.models import (
 )
 from app.models.participant import adult_confirmed
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
+from app.services.field_cipher import public_ref
 from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
 from app.services.reputation import applications_by_employer
@@ -331,7 +332,7 @@ async def apply(vacancy_id: uuid.UUID, current: dict = Depends(get_current_parti
         "vacancy": {"id": str(vacancy.id), "title": vacancy.title},
         # No name, email, phone or Telegram. The consent passes contacts only after an accepted
         # invitation; the employer opens them in «Вакансии», with an access log entry.
-        "candidate": {"ref": str(participant.id),
+        "candidate": {"ref": public_ref(participant.id),
                       "category": {"specialization": category.primary_role if category else None,
                                    "grade": category.grade if category else None}},
     })

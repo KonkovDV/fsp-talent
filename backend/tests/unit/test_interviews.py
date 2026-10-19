@@ -42,9 +42,10 @@ def test_a_failed_interview_lowers_accept_and_no_interview_leaves_it():
     passed = score(need, CandidateFacts(
         role="backend", grade="middle", grade_source="assessed",
         salary_from=300_000, salary_to=300_000, job_search="active", interview_outcome="passed"))
-    assert failed.score < plain.score
-    assert missed.score < failed.score
-    assert passed.score > plain.score
+    assert failed.score == plain.score == missed.score == passed.score
+    assert failed.accept < plain.accept
+    assert missed.accept < failed.accept
+    assert passed.accept > plain.accept
     assert any(r.code == "INTERVIEW_FAILED" for r in failed.reasons)
     assert all(r.code != "INTERVIEW_PASSED" for r in plain.reasons)
 

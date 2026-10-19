@@ -42,6 +42,8 @@ class Participant(Base):
     phone = Column(Text)
     birth_date = Column(Date)
     region = Column(String(100), index=True)
+    # Another city still scores, at 0.7 of a match, when this is on and the city is shown.
+    relocation = Column(Boolean, nullable=False, default=False, server_default="false")
     # The anonymous card omits a field when its switch is off. The score still reads the field,
     # except the city: a hidden city is not a filter the employer can probe.
     show_city = Column(Boolean, nullable=False, default=True, server_default="true")
@@ -76,6 +78,8 @@ class Participant(Base):
     # Legal representative of a candidate aged 15 to 17: who confirmed and when.
     guardian_email = Column(Text)
     guardian_consent_at = Column(DateTime(timezone=True))
+    # Bumped when a guardian link is sent or spent. An older letter stops working.
+    guardian_link_generation = Column(Integer, nullable=False, default=0, server_default="0")
     grade_locked_until = Column(DateTime(timezone=True))
     # Grade confirmed by a completed test. It outranks declared_grade and experience in the category:
     # employers must not rank candidates by a self-described grade (TZ section 2).

@@ -5,6 +5,9 @@ MIN_CELL people sit in the cell, so one person cannot be picked out of the numbe
 """
 from __future__ import annotations
 
+import statistics
+from datetime import UTC, timedelta
+
 DECLINE_REASONS = ("salary", "format", "stack", "not_looking", "other")
 DECLINE_LABELS = {
     "salary": "Зарплата",
@@ -43,6 +46,49 @@ def quartiles(values: list[int]) -> dict | None:
         return round(ordered[lo] * (1 - (pos - lo)) + ordered[hi] * (pos - lo))
 
     return {"p25": at(0.25), "median": at(0.5), "p75": at(0.75), "n": len(ordered)}
+
+
+WIDE_FORK = 3.5
+
+
+def fork_span(salary_from: int | None, salary_to: int | None) -> str | None:
+    """A fork wider than three and a half times warns. It never blocks and never changes rank."""
+    if not salary_from or not salary_to or salary_from <= 0 or salary_to < salary_from:
+        return None
+    if salary_to > salary_from * WIDE_FORK:
+        return "wide"
+    return None
+
+
+def offer_pulse(rows: list[tuple], now, days: int = 30) -> dict:
+    """This company's own invitations, this window against the one before it.
+
+    The counts are the company's own acts, so a small number stays on the page.
+    """
+    now = _aware(now)
+
+    def bucket(start, end) -> dict:
+        sent = viewed = accepted = declined = expired = 0
+        for created, status, seen in rows:
+            created = _aware(created)
+            if created is None or not (start <= created < end):
+                continue
+            sent += 1
+            if seen is not None or status in {"accepted", "rejected"}:
+                viewed += 1
+            if status == "accepted":
+                accepted += 1
+            elif status == "rejected":
+                declined += 1
+            elif status == "expired":
+                expired += 1
+        return {"sent": sent, "viewed": viewed, "accepted": accepted,
+                "declined": declined, "expired": expired}
+
+    current_start = now - timedelta(days=days)
+    previous_start = current_start - timedelta(days=days)
+    return {"days": days, "current": bucket(current_start, now + timedelta(seconds=1)),
+            "previous": bucket(previous_start, current_start)}
 
 
 def market_flag(salary_from: int | None, salary_to: int | None, median: int | None) -> str | None:
@@ -100,3 +146,33 @@ def reason_shares(reasons: list[str | None]) -> dict | None:
     counts = {code: named.count(code) for code in DECLINE_REASONS}
     total = len(named)
     return {"n": total, "shares": {code: round(counts[code] / total, 3) for code in DECLINE_REASONS if counts[code]}}
+
+
+def _aware(moment):
+    if moment is None:
+        return None
+    return moment if getattr(moment, "tzinfo", None) else moment.replace(tzinfo=UTC)
+
+
+def reply_hours(spans: list[tuple], floor: int = MIN_CELL) -> dict | None:
+    """Median hours from the invitation to the answer. Hidden below five answers."""
+    hours = []
+    for start, end in spans:
+        start, end = _aware(start), _aware(end)
+        if start is None or end is None:
+            continue
+        delta = (end - start).total_seconds() / 3600
+        if delta >= 0:
+            hours.append(delta)
+    if len(hours) < floor:
+        return None
+    return {"n": len(hours), "median_hours": round(statistics.median(hours), 1)}
+
+
+def own_reason_counts(reasons: list[str | None]) -> dict | None:
+    """Counts of this company's own refusals. Each one was already on that invitation."""
+    named = [reason for reason in reasons if reason in DECLINE_LABELS]
+    if not named:
+        return None
+    counts = {code: named.count(code) for code in DECLINE_REASONS if named.count(code)}
+    return {"n": len(named), "counts": counts}

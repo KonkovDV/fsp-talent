@@ -13,6 +13,7 @@ import socket
 import socketserver
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler
 
 from runner import available_languages, run
@@ -89,6 +90,34 @@ def health() -> int:
         return 1
 
 
+def _listen(server: Server) -> None:
+    """Bind the control socket again if a solution removed the path. The listening fd alone is not enough:
+    the next client opens the path."""
+    if os.path.exists(SOCKET):
+        return
+    try:
+        server.socket.close()
+    except OSError:
+        pass
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(SOCKET)
+    os.chmod(SOCKET, SOCKET_MODE)
+    sock.listen(getattr(server, "request_queue_size", 5))
+    server.socket = sock
+
+
+def _watch(server: Server) -> None:
+    """If a solution removes the socket path, wake accept() so the main loop can bind it again."""
+    while True:
+        time.sleep(0.25)
+        if os.path.exists(SOCKET):
+            continue
+        try:
+            server.socket.close()
+        except OSError:
+            continue
+
+
 def main() -> None:
     if not TOKEN:
         raise SystemExit("SANDBOX_TOKEN is required")
@@ -98,7 +127,13 @@ def main() -> None:
         # Audit M-1: owner and group only. The API container joins this uid's group (group_add in
         # compose), so no other local user can reach the runner even with the token.
         os.chmod(SOCKET, SOCKET_MODE)
-        server.serve_forever()
+        threading.Thread(target=_watch, args=(server,), daemon=True).start()
+        while True:
+            _listen(server)
+            try:
+                server.handle_request()
+            except OSError:
+                continue
 
 
 if __name__ == "__main__":

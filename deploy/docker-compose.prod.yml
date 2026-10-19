@@ -47,6 +47,8 @@ services:
       MIGRATE_DATABASE_URL: postgresql+asyncpg://fsp:${POSTGRES_PASSWORD:?}@postgres:5432/fsp_talent
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?}
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis-broker:6379/0
+      FSP_STRICT: "true"
       PUBLIC_BASE_URL: https://${SITE_ADDRESS}
       CORS_ORIGINS: https://${SITE_ADDRESS}
       # mock is the jury page. It is refused when DEMO_MODE is off.
@@ -56,6 +58,8 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       DEMO_MODE: ${DEMO_MODE:-false}
+      # mock is refused on this HTTPS stand unless DEMO_MODE is on. real is the registry client.
+      FSP_MODE: ${FSP_MODE:-mock}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       SANDBOX_SOCKET: /run/sandbox/sandbox.sock
       SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
@@ -68,6 +72,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_started}
+      redis-broker: {condition: service_started}
       sandbox: {condition: service_started}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
@@ -88,12 +93,15 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis-broker:6379/0
+      FSP_STRICT: "true"
       PUBLIC_BASE_URL: https://${SITE_ADDRESS}
       VC_PRIVATE_KEY_PATH: /secrets/vc_ed25519.pem
       MAIL_MODE: ${MAIL_MODE:-smtp}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       DEMO_MODE: ${DEMO_MODE:-false}
+      FSP_MODE: ${FSP_MODE:-mock}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       CROSS_ENCODER_MODE: "off"
       EMBEDDINGS_MODE: "off"
@@ -102,7 +110,7 @@ services:
     depends_on:
       backend: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "celery --broker \"$$REDIS_URL\" inspect ping -d \"celery@$$HOSTNAME\" --timeout 5"]
+      test: ["CMD-SHELL", "celery --broker \"$$CELERY_BROKER_URL\" inspect ping -d \"celery@$$HOSTNAME\" --timeout 5"]
       interval: 30s
       timeout: 15s
       retries: 5
@@ -119,7 +127,10 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fsp_app:${APP_DB_PASSWORD:?}@postgres:5432/fsp_talent
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis-broker:6379/0
+      FSP_STRICT: "true"
       DEMO_MODE: ${DEMO_MODE:-false}
+      FSP_MODE: ${FSP_MODE:-mock}
       # Empty DEMO_RESET_CRON turns the nightly jury reset off for the duration of a showing.
       DEMO_RESET_CRON: "${DEMO_RESET_CRON:-10 4 * * *}"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
@@ -176,7 +187,15 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # Guards, refresh families and rate limits. Not the task broker.
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes
+    volumes: [redis_data:/data]
+    restart: unless-stopped
+
+  redis-broker:
+    image: redis:7.2-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes
+    volumes: [redis_broker_data:/data]
     restart: unless-stopped
 
   # Nightly dump at 03:30 server time, 14 kept. Restore: see deploy/README.md.
@@ -187,6 +206,7 @@ services:
     volumes:
       - ./backups:/backups
       - ./backup.sh:/backup.sh:ro
+      - vc_keys:/secrets:ro
     entrypoint: ["/bin/sh", "-c", "while true; do now=$$(date +%H%M); if [ \"$$now\" = \"0330\" ]; then sh /backup.sh; sleep 60; fi; sleep 30; done"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -197,4 +217,6 @@ volumes:
   caddy_data:
   caddy_config:
   vc_keys:
+  redis_data:
+  redis_broker_data:
   sandbox_sock:

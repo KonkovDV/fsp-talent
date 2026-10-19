@@ -30,6 +30,14 @@ def _signals(name: str) -> dict:
 
 
 def company_score(name: str) -> dict:
+    from app.core.config import settings
+    if not settings.DEMO_MODE:
+        return {
+            "score": None,
+            "label": "недостаточно данных",
+            "demo": False,
+            "note": "Внешние проверки не подключены. Синтетический балл не показывается.",
+        }
     row = _signals(name or "")
     value = compute_trust_score(EmployerTrustSignals(
         inn="",

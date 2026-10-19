@@ -50,6 +50,38 @@ def impact_report(rows: list[tuple[str, bool]]) -> dict:
     }
 
 
+def funnel_report(rows: list[tuple[str, bool, bool, bool]]) -> dict:
+    """Shortlist, invitation and acceptance by a label that is not a score input.
+
+    A group under five people stays out of the ratio. Each step uses the four-fifths floor.
+    """
+    steps = ("shortlist", "invited", "accepted")
+    buckets: dict[str, list[tuple[bool, bool, bool]]] = {}
+    for label, shortlisted, invited, accepted in rows:
+        buckets.setdefault(label or "не указан", []).append((bool(shortlisted), bool(invited), bool(accepted)))
+    groups = []
+    for label, flags in sorted(buckets.items()):
+        counts = [sum(1 for row in flags if row[index]) for index in range(3)]
+        groups.append({"region": label, "n": len(flags), **dict(zip(steps, counts, strict=True))})
+    usable = [group for group in groups if group["n"] >= MIN_GROUP]
+    if len(usable) < 2:
+        return {"groups": groups, "ratios": {}, "clears": True, "floor": FLOOR,
+                "note": "Мало групп для сравнения. Регион в балл не входит."}
+    ratios: dict[str, float] = {}
+    clears = True
+    for index, step in enumerate(steps):
+        best = max(group[step] / group["n"] for group in usable)
+        if best <= 0:
+            ratios[step] = 1.0
+            continue
+        lowest = min((group[step] / group["n"]) / best for group in usable)
+        ratios[step] = round(lowest, 3)
+        if lowest + 1e-9 < FLOOR:
+            clears = False
+    return {"groups": groups, "ratios": ratios, "clears": clears, "floor": FLOOR,
+            "note": "Доли подборки, приглашений и принятий. Регион в балл не входит."}
+
+
 def skew_at_k(ranked_labels: list[str], pool_labels: list[str], label: str, k: int) -> float | None:
     """Skew@k of Geyik et al. (KDD 2019, doi:10.1145/3292500.3330691).
 

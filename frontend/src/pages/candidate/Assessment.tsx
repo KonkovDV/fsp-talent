@@ -7,6 +7,9 @@ import {
   saveAssessmentDraft,
   disputeGrade, getMyProfile, leaveAssessment, noteAssessmentCopy, reviewAssessment, startAssessment,
 } from '../../api/client'
+import DesignProbe from '../../components/DesignProbe'
+import IndustryCase from '../../components/IndustryCase'
+import QaProbe from '../../components/QaProbe'
 import SurveyCard from '../../components/SurveyCard'
 import { Meter, PageHeader, plural } from '../../components/ui'
 
@@ -18,6 +21,7 @@ interface Item {
   options: { index: number; text: string }[]; topic_label: string; family_title: string; kind: string
   time_limit_s: number; served_at: string
   draft_version?: number; draft_index?: number | null; draft_text?: string | null
+  copy_text?: string | null
 }
 interface ReviewItem {
   seq: number; stem: string; code: string | null; answer_mode: 'choice' | 'number'; options: string[]
@@ -212,7 +216,14 @@ export default function CandidateAssessment() {
         setMarkNote('Уход со вкладки записан. Тест продолжается, грейд из-за этого не меняется.')
       }).catch(() => undefined)
     }
-    const onCopy = () => {
+    const onCopy = (event: ClipboardEvent) => {
+      const twin = state.item?.copy_text
+      const box = document.querySelector('[data-question]')
+      const target = event.target
+      if (twin && box && target instanceof Node && box.contains(target) && event.clipboardData) {
+        event.preventDefault()
+        event.clipboardData.setData('text/plain', twin)
+      }
       void noteAssessmentCopy(id).then(() => {
         setMarkNote('Копирование текста задания записано. Тест продолжается, грейд из-за этого не меняется.')
       }).catch(() => undefined)
@@ -344,10 +355,12 @@ export default function CandidateAssessment() {
             <ConfidenceScale p={state.progress.p_pass} trial={state.progress.min_items === state.progress.max_items}
               detail={state.progress.se != null ? `θ ${state.progress.theta?.toFixed(2)} ± ${state.progress.se.toFixed(2)}` : ''} />
           )}
-          <p className={`whitespace-pre-wrap text-sm leading-relaxed ${item.stem.includes(" | ") ? "font-mono" : ""}`}>{item.stem}</p>
-          {item.code && (
-            <pre className="code-block"><code>{item.code}</code></pre>
-          )}
+          <div data-question>
+            <p className={`whitespace-pre-wrap text-sm leading-relaxed ${item.stem.includes(" | ") ? "font-mono" : ""}`}>{item.stem}</p>
+            {item.code && (
+              <pre className="code-block"><code>{item.code}</code></pre>
+            )}
+          </div>
           {item.answer_mode === 'number' ? (
             <form onSubmit={e => { e.preventDefault(); if (ready && !answer.isPending) answer.mutate() }}>
               <label htmlFor="typed-answer" className="field-label">Ответ — целое число</label>
@@ -529,6 +542,10 @@ export default function CandidateAssessment() {
       )}
 
       {error && <p className="notice-error" role="alert"><Lock size={14} className="mt-0.5 shrink-0" aria-hidden />{error}</p>}
+
+      {!item && <QaProbe />}
+      {!item && <DesignProbe />}
+      {!item && <IndustryCase />}
 
       {(history?.items ?? []).length > 0 && (
         <div className="card">

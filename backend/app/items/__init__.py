@@ -97,9 +97,10 @@ def near_int(rng: random.Random, value: int, spread: int = 5) -> Callable[[], in
 def typed_answer(kind: str, item: Item) -> str | None:
     """A code item whose answer is a whole number is answered by typing it, without options on screen.
 
-    With four options a weak candidate gets one item in four for free (c = 0.25), and at the grade cut that
-    noise costs about 40 % of the item's information. Typing removes it, so the grade repeats more often on a
-    retest. Other answers (hex, addresses, decimals) keep the options: their format is ambiguous to type.
+    With four options a weak candidate gets one item in four for free (c = 0.25). At the grade cut that
+    leaves 0.15 of information against 0.25 with no guessing. A typed integer still carries c = 0.02,
+    so its information at the cut is 0.240, about 1.60 times the four-option item.
+    Other answers (hex, addresses, decimals) keep the options: their format is ambiguous to type.
     """
     right = item.options[item.correct].strip()
     return right if kind == "code" and _WHOLE.fullmatch(right) else None

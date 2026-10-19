@@ -32,6 +32,25 @@ def test_better_place_scores_higher():
     assert compute_discipline_score([ev(1)])["score"] > compute_discipline_score([ev(40)])["score"]
 
 
+def test_month_cap_keeps_the_heavy_field_not_the_two_highest_classes():
+    """Three results in one month: two wins in a field of six and a prize in a field of 200.
+
+    A cut that keeps the two highest classes would drop the prize. The bound must keep it.
+    """
+    day = date(2026, 10, 1)
+    tiny_a = ev(1, 6, when=day)
+    tiny_b = ev(1, 6, when=day)
+    heavy = ev(2, 200, when=day)
+    tiny_a["id"], tiny_b["id"], heavy["id"] = "tiny-a", "tiny-b", "heavy"
+    scored = compute_discipline_score([tiny_a, tiny_b, heavy], day)
+    prize_only = compute_discipline_score([heavy], day)
+    two_tiny = compute_discipline_score([tiny_a, tiny_b], day)
+    assert "heavy" in scored["top_event_ids"]
+    assert len(scored["top_event_ids"]) <= 2
+    assert scored["lcb"] + 1e-9 >= prize_only["lcb"]
+    assert scored["lcb"] > two_tiny["lcb"]
+
+
 def test_single_participant_is_defined():
     score = compute_discipline_score([ev(1, 1, "regional")])
     assert score["events_count"] == 1

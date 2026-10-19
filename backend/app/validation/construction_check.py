@@ -93,7 +93,9 @@ def model_rows(n: int, seed: int) -> list[tuple[str, dict]]:
 def collision_rates(rng: random.Random, pairs: int = 40) -> dict[str, float]:
     rates: dict[str, float] = {}
     for fam in FAMILIES.values():
-        spec = next(iter(fam.specs))
+        # Alphabetical specialization, not frozenset order: that order follows
+        # PYTHONHASHSEED and the rate would change between processes.
+        spec = sorted(fam.specs)[0]
         same = total = 0
         for level in fam.levels:
             if not fam.available(spec, level):

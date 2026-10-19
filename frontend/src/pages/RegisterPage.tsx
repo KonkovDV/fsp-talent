@@ -19,6 +19,7 @@ const participantSchema = z.object({
   is_adult: z.boolean(),
   age_15_17: z.boolean(),
   birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Укажите дату рождения'),
+  synthetic_ack: z.boolean().optional(),
 }).refine(v => v.is_adult || v.age_15_17, { message: 'Регистрация открыта с 15 лет', path: ['age_15_17'] })
 const employerSchema = z.object({
   company_name: z.string().min(2, 'Название компании'),
@@ -26,6 +27,7 @@ const employerSchema = z.object({
   password: passwordRule,
   inn: z.string().regex(/^(\d{10}|\d{12})?$/, '10 или 12 цифр').optional(),
   website: z.string().optional(),
+  synthetic_ack: z.boolean().optional(),
 })
 type ParticipantForm = z.infer<typeof participantSchema>
 type EmployerForm = z.infer<typeof employerSchema>
@@ -59,12 +61,20 @@ export default function RegisterPage() {
   }
   const onParticipant = async (data: ParticipantForm) => {
     setError('')
-    try { const r = await registerParticipant({ ...data, consents }); done(data.email, r.data?.demo_code) } catch (e) { fail(e) }
+    if (demo && !data.synthetic_ack) {
+      setError('На демо-стенде отметьте, что имя, почта и дата рождения вымышлены.')
+      return
+    }
+    try { const r = await registerParticipant({ ...data, synthetic_ack: Boolean(data.synthetic_ack), consents }); done(data.email, r.data?.demo_code) } catch (e) { fail(e) }
   }
   const onEmployer = async (data: EmployerForm) => {
     setError('')
+    if (demo && !data.synthetic_ack) {
+      setError('На демо-стенде отметьте, что данные компании вымышлены.')
+      return
+    }
     try {
-      const r = await registerEmployer({ ...data, inn: data.inn || null, website: data.website || null, consents })
+      const r = await registerEmployer({ ...data, inn: data.inn || null, website: data.website || null, synthetic_ack: Boolean(data.synthetic_ack), consents })
       done(data.email, r.data?.demo_code)
     } catch (e) { fail(e) }
   }
@@ -124,6 +134,12 @@ export default function RegisterPage() {
             История соревнований ФСП не нужна. ФСП ID можно привязать позже в профиле — результаты появятся
             в карточке отдельным подтверждённым блоком.
           </p>
+          {demo && (
+            <label className="flex items-start gap-2.5 text-sm text-ink">
+              <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...pf.register('synthetic_ack')} />
+              <span>Имя, почта и дата рождения вымышлены. Настоящие персональные данные на этот стенд не отправляю.</span>
+            </label>
+          )}
           <ConsentChecklist role={role} value={consents} onChange={setConsents} />
           <p className="text-xs text-ink-3">Как мы обращаемся с данными — в{' '}
             <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>
@@ -147,6 +163,12 @@ export default function RegisterPage() {
           <div><label className="field-label" htmlFor="inn">ИНН, если есть</label>
             <input id="inn" {...ef.register('inn')} inputMode="numeric" className="input" />
             {err(ef.formState.errors.inn?.message)}</div>
+          {demo && (
+            <label className="flex items-start gap-2.5 text-sm text-ink">
+              <input type="checkbox" className="mt-1 accent-[rgb(var(--accent))]" {...ef.register('synthetic_ack')} />
+              <span>Название, почта и ИНН вымышлены. Настоящие данные компании на этот стенд не отправляю.</span>
+            </label>
+          )}
           <ConsentChecklist role={role} value={consents} onChange={setConsents} />
           <p className="text-xs text-ink-3">Как мы обращаемся с данными — в{' '}
             <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>

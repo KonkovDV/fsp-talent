@@ -135,6 +135,7 @@ async def reconcile_results(db: AsyncSession, participant: Participant, data: FS
     rows = list(await db.scalars(select(Result).where(
         Result.participant_id == participant.id, Result.trust_level == "verified_fsp")))
     incoming = {r.event_id: r for r in data.results}
+    authoritative = bool(getattr(data, "complete", False))
     stale: list[Result] = []
     replaced = 0
     if incoming:
@@ -145,8 +146,10 @@ async def reconcile_results(db: AsyncSession, participant: Participant, data: FS
             elif any(getattr(row, f) != getattr(line, f) for f in _COMPARED):
                 stale.append(row)
                 replaced += 1
+    elif authoritative:
+        stale = list(rows)
     dropped = len(stale) - replaced
-    if dropped > 1 and dropped > MAX_REMOVED_SHARE * len(rows):
+    if not authoritative and dropped > 1 and dropped > MAX_REMOVED_SHARE * len(rows):
         import logging
         logging.getLogger("app.services.profile").warning(
             "registry answer for %s drops %d of %d rows; kept as is (partial answer?)",

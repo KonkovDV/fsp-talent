@@ -1,7 +1,7 @@
 """Recompute FSP scores stored by an older scoring version (audit 2026-10, PR #243).
 
-`DisciplineScore` rows keep `scoring_version`. When the method changes (v3.2.0 -> v4.0.0 made the
-axis monotone), an existing volume would keep showing old numbers until each profile changed.
+`DisciplineScore` rows keep `scoring_version`. The method in this tree is v4.2.0. A row stamped
+with anything else, including v3.2.0, keeps the old number until each such profile is rebuilt.
 This step runs on every start after `schema_sync` and in the seed. It rebuilds only participants
 with a stale row, the same way the worker does, so it is idempotent and cheap on a fresh stand.
 A failure for one participant is logged and the rest still run; the API starts regardless.

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ExternalLink } from 'lucide-react'
-import { apiError, getMyResults, importProtocols, presentResult } from '../../api/client'
+import { apiError, getMyResults, importProtocols, presentResult, previewProtocols } from '../../api/client'
 import { DISC_RU } from '../../labels'
 import { Empty, PageHeader, Skeleton, date } from '../../components/ui'
 
@@ -30,6 +30,11 @@ export default function CandidateResults() {
   const [cardError, setCardError] = useState('')
   const { data: rows = [], isLoading, isError, error, refetch } = useQuery<Row[]>({ queryKey: ['myResults'], queryFn: () => getMyResults().then(r => r.data) })
   const [fileNote, setFileNote] = useState('')
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<{
+    rows: { discipline: string; place: number; total: number; date: string; name: string }[]
+    can_bind: boolean
+  } | null>(null)
   const openCard = async (id: string) => {
     setBusy(id)
     setCardError('')
@@ -55,12 +60,37 @@ export default function CandidateResults() {
             e.target.value = ''
             if (!picked) return
             setFileNote('')
-            void importProtocols(picked).then(r => {
-              setFileNote(r.data.added ? `Добавлено строк: ${r.data.added}. Грейд не изменился, в балл они не входят.` : 'Новых строк нет.')
-              void refetch()
+            setPreview(null)
+            setPendingFile(picked)
+            void previewProtocols(picked).then(r => {
+              setPreview({ rows: r.data.rows, can_bind: r.data.can_bind })
             }).catch(err => setFileNote(apiError(err, 'Файл не разобран')))
           }} />
-        <p className="text-xs text-ink-3">Колонки: дисциплина, дата, место, всего участников. Строка из файла в балл не входит.</p>
+        <p className="text-xs text-ink-3">Сначала предпросмотр. Строка крепится к ФСП ID и в балл не входит.</p>
+        {preview && (
+          <div className="space-y-2">
+            <ul className="text-sm text-ink-2">
+              {preview.rows.map(row => (
+                <li key={`${row.discipline}-${row.date}-${row.place}`}>{row.name}: {row.place} из {row.total}, {row.date}</li>
+              ))}
+            </ul>
+            {preview.can_bind ? (
+              <button type="button" className="btn-secondary" onClick={() => {
+                if (!pendingFile) return
+                void importProtocols(pendingFile).then(r => {
+                  setFileNote(r.data.added
+                    ? `Добавлено строк: ${r.data.added}. Грейд не изменился, в балл они не входят.`
+                    : 'Новых строк нет.')
+                  setPreview(null)
+                  setPendingFile(null)
+                  void refetch()
+                }).catch(err => setFileNote(apiError(err, 'Файл не разобран')))
+              }}>Прикрепить к ФСП ID</button>
+            ) : (
+              <p className="text-sm text-ink-2">Чтобы прикрепить строки, сначала привяжите ФСП ID в профиле.</p>
+            )}
+          </div>
+        )}
         {fileNote && <p className="text-sm text-ink-2" role="status">{fileNote}</p>}
       </form>
       {isLoading && <Skeleton className="h-64" />}

@@ -3,7 +3,8 @@
 Only providers listed in KINDS exist: their hosts are fixed here, the desk never takes a URL.
 All four are Russian clouds. The stored key is sealed with AES-GCM and never returned by the API.
 Before a call the host must resolve to public addresses only, and redirects are refused.
-Every user message passes through `for_model`, so no provider sees a name, an email or a phone.
+Every user message passes through `for_model`. Known patterns are removed.
+That does not prove the remaining text is anonymous.
 
 The model reads résumé text for skills with quotes and writes test drafts for a human.
 It never ranks candidates: the match score stays the decomposable sum in services/matching.py.

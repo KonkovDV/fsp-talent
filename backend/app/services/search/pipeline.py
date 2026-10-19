@@ -33,6 +33,7 @@ from app.models import (
     InterviewSlot,
     Offer,
     Participant,
+    Qualification,
     Result,
     Skill,
     TestSession,
@@ -46,13 +47,15 @@ from app.services.categorization import DISCIPLINE_LABELS
 from app.services.code_profile import code_profile_line
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.fsp.relevance import lcb_for_need
+from app.services.fsp_skills import apply_fsp_skills, prize_confirms, skills_for_discipline
 from app.services.hiring_practice import sees_senior
 from app.services.matching import (
-    RELATED,
     CandidateFacts,
     NeedSpec,
     category_pairs,
     category_percentile,
+    expanded_skills,
+    neighbor_edge,
     pay_counterfactual,
     reason_source,
     recommended_categories,
@@ -420,11 +423,8 @@ async def search_candidates(
     if wanted_list or q:
         parts: list = []
         if wanted_list:
-            # Related technologies are retrieved too: the factor score gives them half credit.
-            retrieval = set(wanted_list) | (set(need.nice) if need else set())
-            for group in RELATED:
-                if retrieval & group:
-                    retrieval |= group
+            # Related technologies and tools that imply a wanted skill are retrieved too.
+            retrieval = expanded_skills(set(wanted_list) | (set(need.nice) if need else set()))
             skill_q = _skill_or_tsquery(sorted(retrieval))
             if skill_q:
                 parts.append(func.to_tsquery("simple", skill_q))
@@ -583,6 +583,14 @@ async def search_candidates(
 
     matches = await score_pool(
         db, all_ids, need, text_fused, discipline, employer_id, by_discipline=by_discipline)
+    if wanted:
+        for pid, row in matches.items():
+            facts = row.facts
+            if facts is None:
+                continue
+            for name, trust in facts.skills.items():
+                if trust == "fsp_confirmed" and name in wanted:
+                    have.setdefault(pid, set()).add(name)
     platform_held = 0
     full_card = True
     if employer_id is not None:
@@ -637,6 +645,16 @@ async def search_candidates(
     in_category_hidden = in_category is not None and 0 < in_category < BANK_MIN
     if in_category_hidden:
         in_category = None
+    edges: dict[uuid.UUID, dict] = {}
+    for left, right in zip(ordered, ordered[1:]):
+        # A diversity seat is not a factor gap, in either direction.
+        if left in cold_seats or right in cold_seats:
+            continue
+        edge = neighbor_edge(
+            matches[left].factors, matches[right].factors,
+            higher_congestion=matches[left].congestion, lower_congestion=matches[right].congestion)
+        if edge:
+            edges[left] = edge
     categories = recommended_categories(
         [(f.role, f.grade, matches[i].score) for i in ordered[:200] if (f := matches[i].facts)],
         min_n=BANK_MIN)
@@ -658,7 +676,7 @@ async def search_candidates(
                 "scored_role": facts.role if facts else None,
                 "scored_grade": facts.grade if facts else None,
                 "scored_source": facts.grade_source if facts else None,
-                "match": _match_body(m, pid in cold_seats),
+                "match": _with_edge(_match_body(m, pid in cold_seats), edges.get(pid)),
             })
         return {**header, "items": items}
     ordered = ordered[offset:offset + limit]
@@ -671,7 +689,8 @@ async def search_candidates(
         full_card=full_card)
     for card in cards:
         m = matches[uuid.UUID(card["candidate_id"])]
-        card["match"] = _match_body(m, uuid.UUID(card["candidate_id"]) in cold_seats)
+        card["match"] = _with_edge(
+            _match_body(m, uuid.UUID(card["candidate_id"]) in cold_seats), edges.get(uuid.UUID(card["candidate_id"])))
         if not full_card:
             card["match"]["info"] = [line for line in card["match"]["info"] if "признаков роста" not in line]
         card["skill_evidence"] = dict(m.facts.skills) if m.facts else {}
@@ -680,6 +699,12 @@ async def search_candidates(
             "text_blend": text_blend(bool(dense_order)), "pair_device": pair_device(),
             "platform_held": platform_held, "in_category": in_category,
             "in_category_hidden": in_category_hidden, "items": cards}
+
+
+def _with_edge(body: dict, edge: dict | None) -> dict:
+    if edge:
+        body["ahead_of_next"] = edge
+    return body
 
 
 def _match_body(m: PoolMatch, cold_seat: bool) -> dict:
@@ -737,16 +762,34 @@ async def _interview_outcomes(db: AsyncSession, employer_id: uuid.UUID, ids: lis
     return {pid: outcome for pid, (outcome, _) in found.items()}
 
 
+async def _fsp_granted(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, frozenset[str]]:
+    """Personal prizes and assigned ranks. A team result is not one member's skill."""
+    found: dict[uuid.UUID, set[str]] = {}
+    if not ids:
+        return {}
+    for pid, disc, place, total, team in await db.execute(
+            select(Result.participant_id, Result.discipline, Result.place,
+                   Result.total_participants, Result.is_team)
+            .where(Result.participant_id.in_(ids))):
+        if team or not prize_confirms(int(place or 0), int(total or 0)):
+            continue
+        found.setdefault(pid, set()).update(skills_for_discipline(disc))
+    for pid, disc in await db.execute(
+            select(Qualification.participant_id, Qualification.discipline).where(
+                Qualification.participant_id.in_(ids),
+                Qualification.rank.is_not(None),
+                Qualification.rank != "")):
+        found.setdefault(pid, set()).update(skills_for_discipline(disc))
+    return {pid: frozenset(names) for pid, names in found.items()}
+
+
 async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, text_fused: dict[uuid.UUID, float],
                      discipline: str | None = None, employer_id: uuid.UUID | None = None,
                      by_discipline: dict[uuid.UUID, dict[str, float]] | None = None) -> dict[uuid.UUID, PoolMatch]:
     """Load the facts the factor score needs. ``text_fused`` is words and meaning only."""
     if not ids:
         return {}
-    names = set(need.skills) | set(need.nice)
-    for group in RELATED:
-        if names & group:
-            names |= group
+    names = expanded_skills(set(need.skills) | set(need.nice))
     skills: dict[uuid.UUID, dict[str, str]] = {}
     checked: dict[uuid.UUID, set[str]] = {}
     if names:
@@ -756,6 +799,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             skills.setdefault(pid, {})[name] = trust
             if items:
                 checked.setdefault(pid, set()).add(name)
+    granted_by = await _fsp_granted(db, ids)
     people = {p.id: p for p in await db.scalars(select(Participant).where(Participant.id.in_(ids)))}
     cats = {c.participant_id: c for c in await db.scalars(
         select(CategoryAssignment).where(CategoryAssignment.participant_id.in_(ids)))}
@@ -776,6 +820,10 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         select(Offer.candidate_id, func.count()).where(
             Offer.candidate_id.in_(ids), Offer.status == "rejected",
             Offer.decline_reason == "salary").group_by(Offer.candidate_id))}
+    format_refusals = {pid: n for pid, n in await db.execute(
+        select(Offer.candidate_id, func.count()).where(
+            Offer.candidate_id.in_(ids), Offer.status == "rejected",
+            Offer.decline_reason == "format").group_by(Offer.candidate_id))}
     session_ids = [c.session_id for c in confs.values() if c.session_id]
     counts: dict[uuid.UUID, tuple[int, int]] = {}
     if session_ids:
@@ -807,6 +855,9 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         spec = need.role or (p.specialization if p else None) or (cat.primary_role if cat else None)
         conf = confs.get((pid, spec)) if spec else None
         has_fsp = bool(p and p.fsp_id)
+        show_fsp = bool(getattr(p, "show_fsp", True)) if p is not None else False
+        granted = granted_by.get(pid, frozenset()) if has_fsp and show_fsp else frozenset()
+        tested = frozenset(checked.get(pid, ()))
         if has_fsp:
             fsp_lcb, fsp_kind, fsp_discipline = lcb_for_need(need.role, by_discipline.get(pid, {}), discipline)
         else:
@@ -814,7 +865,8 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
         role_name, grade_name, grade_source = _role_for_need(cat, need.role, conf, extra.get((pid, need.role)))
         facts = CandidateFacts(
             role=role_name, grade=grade_name,
-            grade_source=grade_source, skills=skills.get(pid, {}),
+            grade_source=grade_source,
+            skills=apply_fsp_skills(skills.get(pid, {}), granted, tested),
             # A legacy confirmation without a probability counts as a bare pass, not as certainty (audit-4 F-2).
             test_p=conf.p_pass if conf and conf.p_pass is not None else (PASS_P if conf else None),
             test_spec=conf.specialization if conf else None,
@@ -827,13 +879,16 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             test_n=counts.get(conf.session_id, (None, None))[1] if conf and conf.session_id else None,
             open_invites=int(pending.get(pid, 0)),
             salary_refusals=int(refusals.get(pid, 0)),
+            format_refusals=int(format_refusals.get(pid, 0)),
             job_search=(p.job_search if p else None) or "open",
             interview_outcome=interviews.get(pid),
             city=p.region if p and bool(getattr(p, "show_city", True)) else None,
+            relocation=bool(getattr(p, "relocation", False)) and bool(getattr(p, "show_city", True)),
             work_formats=tuple(p.work_formats or ()) if p else (),
             tested_at=conf.confirmed_at if conf else None,
             failed_grade=failed_targets.get((pid, role_name)) if role_name else None,
-            tested_skills=frozenset(checked.get(pid, ())),
+            tested_skills=tested,
+            fsp_skills=granted,
         )
         m = match_score(need, facts)
         adjusted, note = penalised(m.score, marks.get(pid))

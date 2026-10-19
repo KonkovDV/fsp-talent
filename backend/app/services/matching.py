@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.core.config import settings
 from app.services.categorization import DISCIPLINE_LABELS
+from app.services.fsp_skills import apply_fsp_skills
 from app.services.grade_posterior import expected_rel, mass_assessed, mass_declared
 from app.services.scoring.engine import LCB0
 from app.services.survey import SPECIALIZATIONS
@@ -72,8 +73,23 @@ LABELS = {
     "conditions": "Город и формат",
 }
 # confirmed / quoted / declared. A skill with no row is "no data" and scores 0.
-TRUST = {"test_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
+TRUST = {"test_confirmed": 1.0, "fsp_confirmed": 1.0, "resume_confirmed": 0.75, "self_reported": 0.55}
 RELATED_CREDIT = 0.3
+# A shown city the person will leave. Same city is 1, a refusal to move is 0.
+RELOCATION_CITY = 0.7
+# A more specific tool covers the general skill. The reverse stays on the flat group credit.
+# The weights are shares of the evidence trust, from the same idea as a directed similarity edge.
+IMPLIES: dict[str, dict[str, float]] = {
+    "PostgreSQL": {"SQL": 0.85},
+    "MySQL": {"SQL": 0.85},
+    "ClickHouse": {"SQL": 0.70},
+    "TypeScript": {"JavaScript": 0.80},
+    "Next.js": {"React": 0.75},
+    "Kubernetes": {"Docker": 0.70},
+    "Django": {"Python": 0.60},
+    "Flask": {"Python": 0.60},
+    "FastAPI": {"Python": 0.60},
+}
 # Groups of interchangeable technologies: knowing one gives partial credit for another.
 RELATED = [
     {"PostgreSQL", "MySQL", "SQL", "ClickHouse"},
@@ -157,16 +173,20 @@ def near_pairs(role: str, grade: str) -> list[tuple[str, str]]:
 
 
 def freshness_of(tested_at: datetime | None, now: datetime | None = None) -> tuple[float, str | None]:
-    """Full credit for half a year, 0.85 until a year, 0.70 after. No date leaves the factor alone."""
+    """Extra share of the stated error. The level estimate itself does not move.
+
+    No date adds nothing, so a list without dates does not shift. The number is 0, 0.15 or 0.30.
+    It is not a score multiplier.
+    """
     if tested_at is None:
-        return 1.0, None
+        return 0.0, None
     moment = tested_at if tested_at.tzinfo else tested_at.replace(tzinfo=UTC)
     age = (now or datetime.now(UTC)) - moment
     if age <= timedelta(days=180):
-        return 1.0, "Тест не старше полугода"
+        return 0.0, "Тест не старше полугода"
     if age <= timedelta(days=365):
-        return 0.85, "Тесту больше полугода: вклад теста ×0,85"
-    return 0.70, "Тесту больше года: вклад теста ×0,70"
+        return 0.15, "Тесту больше полугода: оценка уровня прежняя, погрешность шире"
+    return 0.30, "Тесту больше года: оценка уровня прежняя, погрешность шире"
 
 
 def category_band(role: str | None, grade: str | None,
@@ -203,13 +223,16 @@ CONGESTION_CAP = 0.10
 # One earlier refusal over pay lowers P(accept). Three is the cap, so a long history cannot zero it.
 SALARY_REFUSAL_FACTOR = 0.85
 SALARY_REFUSAL_CAP = 3
+# A past refusal about format lowers only the shown chance of a reply, and only when this need names a format.
+FORMAT_REFUSAL_LOGIT = 0.35
+FORMAT_REFUSAL_CAP = 3
 # Latest interview with this company, applied only when both sides named a salary.
 # A pass can lift P(accept) up to 1. A fail and a no-show lower it. No interview leaves the score as it is.
 INTERVIEW_FACTOR = {"passed": 1.10, "failed": 0.85, "no_show": 0.70}
 REASON_SOURCE = {
     "VERIFIED_SKILL": "тест", "TEST_SCORE": "тест", "TEST_FRESH": "тест", "UNTESTED": "тест",
     "FSP_BONUS": "ФСП", "FSP_SCORE": "ФСП", "FSP_NEUTRAL": "ФСП", "FSP_NO_LIFT": "ФСП",
-    "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП",
+    "FSP_RELEVANT": "ФСП", "FSP_OTHER": "ФСП", "FSP_SKILL": "ФСП",
     "GRADE_DECLARED": "заявлено", "GRADE_TEST_FAILED": "тест", "SKILL_COVERAGE": "заявлено", "SKILL_GAP": "заявлено",
     "SKILL_UNTESTED": "заявлено", "SKILL_NOT_PASSED": "тест",
     "RELATED_SKILL": "заявлено",
@@ -217,6 +240,7 @@ REASON_SOURCE = {
     "CONGESTION": "очередь",
     "JOB_SEARCH_ACTIVE": "профиль", "JOB_SEARCH_OPEN": "профиль",
     "PLACE_MATCH": "город", "PLACE_OTHER": "город", "PLACE_OPEN": "город",
+    "PLACE_RELOCATE": "город",
     "FORMAT_MATCH": "формат", "FORMAT_PART": "формат", "FORMAT_OTHER": "формат",
     "INTERVIEW_PASSED": "собеседование", "INTERVIEW_FAILED": "собеседование",
     "INTERVIEW_NO_SHOW": "собеседование",
@@ -257,9 +281,11 @@ class CandidateFacts:
     test_n: int | None = None             # answers in that session; with test_correct, Wilson enters the rank
     open_invites: int = 0                 # pending invitations; above the free allowance the card steps down
     salary_refusals: int = 0              # earlier declines whose reason was the pay band
+    format_refusals: int = 0              # earlier declines whose reason was the work format
     job_search: str = "open"              # active | open | not_looking; open multiplies P(accept) by 0.8
     interview_outcome: str | None = None  # passed | failed | no_show with this company; None leaves P(accept)
     city: str | None = None
+    relocation: bool = False
     work_formats: tuple[str, ...] = ()
     p_up: float | None = None             # P(θ ≥ cut of the next grade); used only by GRADE_MODEL=expected
     fail_rate: float | None = None        # π for a declared grade; None keeps the legacy 0.85 factor
@@ -267,8 +293,12 @@ class CandidateFacts:
     # Target of the latest grade test in this specialization that was not passed (outcome "not_passed").
     # Only read while the shown grade is not confirmed; see grade_for_matching.
     failed_grade: str | None = None
-    # Profile skills a finished test had items on (F24b). Read only by the explanation, never by the score.
+    # Profile skills a finished test had items on. The line on the card uses this.
+    # A measured miss does not drop the credit below the claim: sitting the test must not
+    # rank under a person who only wrote the skill down.
     tested_skills: frozenset[str] = frozenset()
+    # Skills a prize or a rank in that discipline confirms. Empty when FSP is hidden or absent.
+    fsp_skills: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -445,6 +475,31 @@ def _with_points(reasons: list[Reason], factors: list[Factor], scale: float) -> 
     return out
 
 
+def expanded_skills(skills: set[str]) -> set[str]:
+    """Skills to load and retrieve: the group neighbours and the specific tools that imply a wanted skill."""
+    out = set(skills)
+    for group in RELATED:
+        if out & group:
+            out |= group
+    for tool, targets in IMPLIES.items():
+        if skills & set(targets):
+            out.add(tool)
+    return out
+
+
+def _implied(skill: str, have: dict[str, str]) -> tuple[float, str] | None:
+    """Best directed cover: the candidate's tool implies this required skill."""
+    best: tuple[float, str] | None = None
+    for other, trust_name in have.items():
+        weight = IMPLIES.get(other, {}).get(skill, 0.0)
+        if weight <= 0:
+            continue
+        credit = weight * TRUST.get(trust_name, 0.6)
+        if best is None or credit > best[0]:
+            best = (credit, f"related:{other}")
+    return best
+
+
 def _related(skill: str, have: dict[str, str]) -> str | None:
     for group in RELATED:
         if skill in group:
@@ -458,20 +513,35 @@ def _skill_credit(skill: str, have: dict[str, str]) -> tuple[float, str]:
     if skill in have:
         trust = have[skill]
         return TRUST.get(trust, 0.6), trust
+    options: list[tuple[float, str]] = []
+    implied = _implied(skill, have)
+    if implied:
+        options.append(implied)
     other = _related(skill, have)
     if other:
-        return RELATED_CREDIT * TRUST.get(have[other], 0.6), f"related:{other}"
+        options.append((RELATED_CREDIT * TRUST.get(have[other], 0.6), f"related:{other}"))
+    if options:
+        return max(options, key=lambda item: item[0])
     return 0.0, "missing"
+
+
+def shown_city_match(need_city: str, person_city: str, relocation: bool) -> float:
+    """1 when the shown cities match, RELOCATION_CITY when the person will move, otherwise 0."""
+    if person_city.casefold() == need_city.casefold():
+        return 1.0
+    if relocation:
+        return RELOCATION_CITY
+    return 0.0
 
 
 def conditions_value(need: NeedSpec, c: CandidateFacts) -> float | None:
     """City and format as one factor. An unnamed side is not a penalty. A mismatch is not a ban."""
     parts: list[float] = []
     if need.city:
-        if not c.city or c.city.casefold() == need.city.casefold():
+        if not c.city:
             parts.append(1.0)
         else:
-            parts.append(0.0)
+            parts.append(shown_city_match(need.city, c.city, c.relocation))
     if need.work_format:
         have = tuple(c.work_formats or ())
         if not have or need.work_format in have:
@@ -514,10 +584,11 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
 
     wanted = [(s, 1.0) for s in need.skills] + [(s, 0.5) for s in need.nice if s not in need.skills]
     if wanted:
+        have_skills = apply_fsp_skills(c.skills, c.fsp_skills, c.tested_skills) if use_fsp else c.skills
         total = got = 0.0
-        confirmed, related, missing, untested, not_passed = [], [], [], [], []
+        confirmed, fsp_named, related, missing, untested, not_passed = [], [], [], [], [], []
         for skill, w in wanted:
-            credit, how = _skill_credit(skill, c.skills)
+            credit, how = _skill_credit(skill, have_skills)
             if not use_trust and credit > 0 and not how.startswith("related"):
                 credit = 1.0
             if not use_related and how.startswith("related"):
@@ -526,21 +597,26 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             got += w * credit
             if how == "test_confirmed":
                 confirmed.append(skill)
+            elif how == "fsp_confirmed":
+                fsp_named.append(skill)
             elif how != "missing" and not how.startswith("related"):
                 # In the profile, but no test confirmed it. Not the same as a missing skill (SKILL_GAP).
-                # F24b: a finished test with items on it is "checked, not confirmed"; otherwise never checked.
+                # The line changes. The credit stays on the claim: a measured miss does not rank
+                # under a skill nobody has tested.
                 (not_passed if skill in c.tested_skills else untested).append(skill)
             elif how.startswith("related") and credit > 0:
                 related.append(f"{skill} ≈ {how.split(':', 1)[1]}")
             elif how == "missing" and w == 1.0:
                 missing.append(skill)
         values["skills"] = got / total
-        have_n = sum(1 for s, w in wanted if w == 1.0 and s in c.skills)
+        have_n = sum(1 for s, w in wanted if w == 1.0 and s in have_skills)
         if need.skills:
             _note(plus, reasons, "plus", "SKILL_COVERAGE",
                   f"Навыки: {have_n} из {len(need.skills)} обязательных")
         if confirmed:
             _note(plus, reasons, "plus", "VERIFIED_SKILL", "Подтверждены тестом: " + ", ".join(confirmed))
+        if fsp_named:
+            _note(plus, reasons, "plus", "FSP_SKILL", "Подтверждены ФСП: " + ", ".join(fsp_named))
         # F24/F24b: only the explanation changes; the credit above already weighs these by TRUST.
         if not_passed:
             _note(info, reasons, "info", "SKILL_NOT_PASSED",
@@ -620,12 +696,11 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
             else:
                 _note(plus, reasons, "plus", "TEST_SCORE", f"Тест: вероятность уровня {round(c.test_p * 100)}%")
             # A passed test never scores below "not tested". The lower bound at the pass mark
-            # (Φ(Φ⁻¹(0.75) − 1.64) ≈ 0.17) fell under UNTESTED = 0.20; age now shrinks only the part above it.
+            # (Φ(Φ⁻¹(0.75) − 1.64) ≈ 0.17) fell under UNTESTED = 0.20. Age widens the stated
+            # error and leaves this level where it is.
             shown = max(UNTESTED, shown)
             values["test"] = shown
-            factor, fresh = freshness_of(c.tested_at)
-            if factor != 1.0:
-                values["test"] = round(UNTESTED + (shown - UNTESTED) * factor, 4)
+            _extra, fresh = freshness_of(c.tested_at)
             if fresh:
                 _note(info, reasons, "info", "TEST_FRESH", fresh)
         else:
@@ -687,6 +762,8 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
                 _note(info, reasons, "info", "PLACE_OPEN", "Город не указан и не штрафуется")
             elif c.city.casefold() == need.city.casefold():
                 _note(plus, reasons, "plus", "PLACE_MATCH", f"Город совпадает: {need.city}")
+            elif c.relocation:
+                _note(info, reasons, "info", "PLACE_RELOCATE", f"Другой город, готов к переезду: {c.city}")
             else:
                 _note(minus, reasons, "minus", "PLACE_OTHER", f"Другой город: {c.city}")
         if need.work_format:
@@ -748,11 +825,9 @@ def score(need: NeedSpec, c: CandidateFacts, use_trust: bool = True, use_test: b
         _note(info, reasons, "info", "JOB_SEARCH_OPEN", "Открыт к предложениям")
     factors = _contributions(bare, evidence, closeness, basis)
     congestion = 0.0
+    # Professional fit orders the list. The pay heuristic stays on `accept` and in the explanation.
+    # It is not a calibrated probability and does not hide a person who asked for more.
     total = employer
-    if accept is not None:
-        # Reciprocal score: harmonic mean of "the employer would invite" and "the candidate would accept".
-        # Absent on either side, the factor is omitted and the ranking stays the employer-only score.
-        total = _harmonic(employer, accept)
     if c.open_invites > OPEN_INVITE_FREE:
         congestion = min(CONGESTION_CAP, CONGESTION_STEP * (c.open_invites - OPEN_INVITE_FREE))
         total = max(0.0, total - congestion)
@@ -841,12 +916,17 @@ def reply_outlook(need: NeedSpec, person: CandidateFacts) -> dict | None:
 
     A named salary on both sides is required: without it the figure would be a guess, and the
     list order must not move when the figure appears. Format and city enter only when the need
-    names them. A city the candidate left blank is not a penalty. Looking now counts more than
-    "will consider".
+    names them. A past refusal about pay or an interview with this company moves the pay term
+    the same way as P(accept). A past refusal about format lowers this chance only. A city the
+    candidate left blank is not a penalty. Looking now counts more than "will consider".
     """
     pay = accept_probability(need.salary_from, need.salary_to, person.salary_from, person.salary_to)
     if pay is None:
         return None
+    if person.salary_refusals > 0:
+        pay *= SALARY_REFUSAL_FACTOR ** min(person.salary_refusals, SALARY_REFUSAL_CAP)
+    if person.interview_outcome in INTERVIEW_FACTOR:
+        pay = min(1.0, pay * INTERVIEW_FACTOR[person.interview_outcome])
     z = -0.15 + 1.8 * (pay - 0.5)
     if need.work_format:
         have = tuple(person.work_formats or ())
@@ -857,9 +937,11 @@ def reply_outlook(need: NeedSpec, person: CandidateFacts) -> dict | None:
         else:
             fmt = 0.0
         z += 0.9 * (fmt - 0.5)
+        if person.format_refusals > 0:
+            z -= FORMAT_REFUSAL_LOGIT * min(person.format_refusals, FORMAT_REFUSAL_CAP)
     if need.city and (person.city or "").strip():
-        same = person.city.strip().casefold() == need.city.strip().casefold()
-        z += 0.6 * ((1.0 if same else 0.0) - 0.5)
+        credit = shown_city_match(need.city, person.city.strip(), person.relocation)
+        z += 0.6 * (credit - 0.5)
     activity = {"active": 1.0, "open": 0.55}.get(person.job_search, 0.2)
     z += 0.8 * (activity - 0.5)
     p = round(min(0.99, max(0.01, 1.0 / (1.0 + math.exp(-z)))), 3)
@@ -868,7 +950,7 @@ def reply_outlook(need: NeedSpec, person: CandidateFacts) -> dict | None:
 
 
 def _harmonic(left: float, right: float) -> float:
-    """Harmonic mean. A zero on either side is a zero: one side unwilling ends the match."""
+    """Harmonic mean. Ranking no longer calls this: pay stays beside the professional score."""
     left = min(1.0, max(0.0, left))
     right = min(1.0, max(0.0, right))
     if left <= 0.0 or right <= 0.0:
@@ -926,23 +1008,63 @@ def category_percentile(value: float, others: list[float]) -> int | None:
     return round(100 * below / len(others))
 
 
+def _requirement_met(skill: str, have: dict[str, str]) -> bool:
+    """The skill itself, or a narrower tool that implies it. A flat neighbour does not count."""
+    return skill in have or _implied(skill, have) is not None
+
+
 def skill_counterfactual(need: NeedSpec, people: list[CandidateFacts]) -> dict | None:
     """The required skill that, dropped alone, would complete coverage for the most people.
 
-    Counts only candidates who already have every other required skill. Fewer than five people,
-    or a need with a single required skill, has no hint.
+    Coverage is the same directed edge the score uses: FastAPI meets a Python requirement.
+    A symmetric neighbour such as MySQL for PostgreSQL does not. Counts only candidates who
+    already meet every other required skill. Fewer than five people, or a need with a single
+    required skill, has no hint. The hint does not change the list order.
     """
     required = list(dict.fromkeys(need.skills))
     if len(required) < 2 or len(people) < 5:
         return None
     best_skill, best_gain = required[0], 0
     for skill in required:
-        gained = sum(1 for person in people if [s for s in required if s not in person.skills] == [skill])
+        gained = sum(
+            1 for person in people
+            if [s for s in required if not _requirement_met(s, person.skills)] == [skill]
+        )
         if gained > best_gain:
             best_skill, best_gain = skill, gained
     if best_gain < 1:
         return None
     return {"skill": best_skill, "gained": best_gain, "pool": len(people)}
+
+
+def neighbor_edge(higher, lower, *, higher_congestion: float = 0.0,
+                  lower_congestion: float = 0.0) -> dict | None:
+    """First factor, in the published order, whose contribution puts this place above the next.
+
+    A later, larger gap does not replace an earlier one. A cold-start seat is not explained here:
+    the caller skips it. Equal contributions leave the line empty; the spare sort key is not a factor.
+    """
+    by_key = {item.key: item for item in lower}
+    for factor in higher:
+        other = by_key.get(factor.key)
+        if other is None or factor.contrib is None or other.contrib is None:
+            continue
+        gap = factor.contrib - other.contrib
+        if gap > 1e-4:
+            return {
+                "key": factor.key,
+                "label": factor.label,
+                "points": round(gap, 4),
+                "text": f"Выше следующего места по фактору «{factor.label}»",
+            }
+    if lower_congestion - higher_congestion > 1e-4:
+        return {
+            "key": "queue",
+            "label": "Очередь",
+            "points": round(lower_congestion - higher_congestion, 4),
+            "text": "Выше следующего места: короче очередь приглашений",
+        }
+    return None
 
 
 def anonymous_compare(cards: list[dict], ids: list[str]) -> list[dict]:

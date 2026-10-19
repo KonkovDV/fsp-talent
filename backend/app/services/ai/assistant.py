@@ -85,11 +85,29 @@ def _word_hit(text: str, words) -> bool:
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(?<!\d)(?:\+7|8)(?:[\s().\-]*\d){10}(?!\d)")
+_INTL_PHONE = re.compile(r"(?<!\w)\+\d{1,3}(?:[\s().\-]*\d){8,14}(?!\d)")
 _TELEGRAM = re.compile(r"(?<![\w@])@[A-Za-z][A-Za-z0-9_]{4,31}")
+_URL = re.compile(r"https?://[^\s<>)\]]+", re.IGNORECASE)
+_PROFILE_URL = re.compile(
+    r"https?://(?:www\.)?(?:github\.com|gitlab\.com|t\.me|telegram\.me|linkedin\.com)/\S+",
+    re.IGNORECASE,
+)
+_CALLED_NAME = re.compile(
+    r"(?iu)\b(?:меня\s+зовут|моё\s+имя|мое\s+имя|my\s+name\s+is)\s+"
+    r"([A-ZА-ЯЁ][a-zа-яё]{1,19}(?:\s+[A-ZА-ЯЁ][a-zа-яё]{1,19}){1,2})"
+)
 _YEARS = re.compile(
     r"(?:стаж|опыт(?:\s+работы)?)[^\d]{0,40}(\d{1,2})\s*(?:года?|лет)(?!\w)"
     r"|(\d{1,2})\s*(?:года?|лет)(?!\w)\s+(?:опыт|стаж)"
     r"|(\d{1,2})\s*\+?\s*years?(?!\w)",
+    re.IGNORECASE,
+)
+_RELOCATE_NO = re.compile(
+    r"не\s+готов[а-яё]*\s+к\s+(?:переезду|релокац\w*)|not\s+(?:ready|willing)\s+to\s+relocate",
+    re.IGNORECASE,
+)
+_RELOCATE_YES = re.compile(
+    r"(?<!не\s)готов[а-яё]*\s+к\s+(?:переезду|релокац\w*)|(?:ready|willing)\s+to\s+relocate",
     re.IGNORECASE,
 )
 _NAME_LINE = re.compile(r"[A-Za-zА-Яа-яЁё\-]+(?:\s+[A-Za-zА-Яа-яЁё\-]+){1,2}")
@@ -150,6 +168,21 @@ def _phone(text: str) -> dict | None:
     return hit
 
 
+def _relocation(text: str) -> dict | None:
+    """Explicit relocation line only. A refusal wins over a positive match on the same text."""
+    refusal = _RELOCATE_NO.search(text)
+    if refusal is not None:
+        hit = _quoted(text, refusal)
+        hit["value"] = False
+        return hit
+    ready = _RELOCATE_YES.search(text)
+    if ready is not None:
+        hit = _quoted(text, ready)
+        hit["value"] = True
+        return hit
+    return None
+
+
 def extract_resume_fields(text: str) -> dict:
     """Name, contacts, years, grade and role. Each value keeps a verbatim quote; nothing is guessed.
 
@@ -178,26 +211,38 @@ def extract_resume_fields(text: str) -> dict:
             "value": year_value, "quote": _quoted(text, years)["quote"]},
         "grade": _earliest(text, _GRADE_WORDS),
         "role": _earliest(text, _ROLE_WORDS),
+        "relocation": _relocation(text),
         "soft_skills": soft,
     }
 
 
 def has_identity(text: str) -> bool:
     """True when the text carries an email, a phone, Telegram or a personal name."""
-    return bool(_EMAIL.search(text) or _PHONE.search(text) or _TELEGRAM.search(text) or _full_name(text))
+    return bool(
+        _EMAIL.search(text) or _PHONE.search(text) or _INTL_PHONE.search(text)
+        or _TELEGRAM.search(text) or _PROFILE_URL.search(text) or _full_name(text)
+        or _CALLED_NAME.search(text)
+    )
 
 
 def for_model(text: str) -> str:
-    """The model sees skills, not the name, the email, the phone or Telegram.
+    """Strip the patterns we know how to find before a cloud model sees the text.
 
-    The candidate still sees those fields: they are extracted from the original text and confirmed by hand.
+    This is not a guarantee that a free-text resume contains no name or contact. A short capitalized
+    line, a Russian phone, an email, Telegram, an international number, a URL and «меня зовут …»
+    are replaced. Anything else can remain, and the product must not promise a clean document.
+    The candidate still sees the original fields: they are extracted from the source and confirmed by hand.
     """
     redacted = _EMAIL.sub("[email]", text)
     redacted = _PHONE.sub("[phone]", redacted)
+    redacted = _INTL_PHONE.sub("[phone]", redacted)
     redacted = _TELEGRAM.sub("[telegram]", redacted)
+    redacted = _URL.sub("[url]", redacted)
     name = _full_name(text)
     if name:
         redacted = redacted.replace(name["value"], "[name]")
+    for match in _CALLED_NAME.finditer(text):
+        redacted = redacted.replace(match.group(1), "[name]")
     return redacted
 
 
@@ -225,11 +270,12 @@ async def _llm_skills(text: str) -> list[dict]:
 async def parse_resume(text: str, allow_llm: bool = True) -> dict:
     from app.services.ai import providers
 
+    sent = for_model(text)
     found = {e.skill: {"name": e.skill, "source_quote": e.evidence, "source": "rules"} for e in extract_skills(text)}
     llm_used, rejected = False, 0
     if allow_llm and providers.active() is not None:
         try:
-            for item in await _llm_skills(for_model(text)):
+            for item in await _llm_skills(sent):
                 name, quote = normalize_skill(str(item.get("skill", ""))), str(item.get("quote", ""))
                 # The quote must be in the resume and must name this skill: otherwise the pair would
                 # be signed into resume_token and raise the skill to "resume quote" trust.
@@ -245,5 +291,6 @@ async def parse_resume(text: str, allow_llm: bool = True) -> dict:
         "llm_used": llm_used,
         "llm_rejected": rejected,
         "note": "Проверьте навыки и нажмите «Применить» у полей, которые хотите перенести в профиль",
+        "model_text": sent,
         **extract_resume_fields(text),
     }

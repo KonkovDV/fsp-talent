@@ -62,6 +62,43 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(run("python", thread, [[[]]])["outputs"], [-1])
         self.assertEqual(run("python", PY_SUM, CASES)["outputs"], [4, 0, 10])
 
+    def test_a_solution_cannot_unlink_the_control_socket(self):
+        source = (
+            "def solve(xs):\n"
+            "    import os\n"
+            "    try:\n"
+            "        os.unlink('/run/sandbox/sandbox.sock')\n"
+            "        return 1\n"
+            "    except OSError:\n"
+            "        return 0\n"
+        )
+        self.assertEqual(run("python", source, [[[]]])["outputs"], [0])
+
+    def test_reloading_os_still_cannot_unlink_the_control_socket(self):
+        source = (
+            "def solve(xs):\n"
+            "    import importlib\n"
+            "    import os\n"
+            "    try:\n"
+            "        importlib.reload(os)\n"
+            "        os.unlink('/run/sandbox/sandbox.sock')\n"
+            "        return 1\n"
+            "    except OSError:\n"
+            "        return 0\n"
+        )
+        self.assertEqual(run("python", source, [[[]]])["outputs"], [0])
+
+    def test_a_solution_cannot_import_ctypes(self):
+        source = (
+            "def solve(xs):\n"
+            "    try:\n"
+            "        import ctypes\n"
+            "        return 1\n"
+            "    except ModuleNotFoundError:\n"
+            "        return 0\n"
+        )
+        self.assertEqual(run("python", source, [[[]]])["outputs"], [0])
+
     def test_wrong_shapes_are_nulls(self):
         self.assertEqual(run("python", "def solve(xs):\n    return 'x'\n", CASES)["outputs"], [None] * 3)
         self.assertEqual(run("javascript", "function solve(xs) { return 2 ** 80 }", [[[]]])["outputs"], [None])

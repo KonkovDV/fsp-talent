@@ -51,3 +51,4 @@ def test_a_failed_check_does_not_move_the_score():
     checked = score(NEED, _cand(skills, tested=("Python", "PostgreSQL")))
     assert checked.score == plain.score and checked.fit == plain.fit
     assert [f.value for f in checked.factors] == [f.value for f in plain.factors]
+    assert any(r.code == "SKILL_NOT_PASSED" for r in checked.reasons)

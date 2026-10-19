@@ -75,7 +75,8 @@ async def _code_for(fsp_id: str, provider=None):
     provider = provider or identity.MockFspIdProvider()
     started = await identity.start_signin(provider)
     q = _query(started.authorize_url)
-    code = await provider.issue_code(fsp_id, q["client_id"], q["redirect_uri"], q["code_challenge"])
+    code = await provider.issue_code(
+        fsp_id, q["client_id"], q["redirect_uri"], q["code_challenge"], nonce=q["nonce"])
     return q, code, started.binder
 
 

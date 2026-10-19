@@ -64,10 +64,11 @@ def beat_schedule() -> dict:
     return schedule
 
 
+_broker = (settings.CELERY_BROKER_URL or "").strip() or settings.REDIS_URL
 celery_app = Celery(
     "fsp_talent",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=_broker,
+    backend=_broker,
     include=["app.workers.tasks"],
 )
 celery_app.conf.update(
@@ -92,6 +93,7 @@ celery_app.conf.update(
         "app.workers.tasks.reset_demo":          {"queue": "maintenance"},
         "app.workers.tasks.refresh_grade_fail_rates": {"queue": "maintenance"},
         "app.workers.tasks.deliver_webhooks": {"queue": "maintenance"},
+        "app.workers.tasks.rescore_fsp_nightly": {"queue": "maintenance"},
     },
     beat_schedule=beat_schedule(),
 )

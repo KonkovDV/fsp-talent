@@ -93,6 +93,7 @@ def clear_personal(person: Participant) -> None:
     person.telegram = None
     person.github = None
     person.region = None
+    person.relocation = False
     person.soft_skills = []
     person.work_formats = []
     person.excluded_industries = []

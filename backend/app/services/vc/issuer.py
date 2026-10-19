@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -155,8 +156,8 @@ def issue_derived_credential(credential_id: str, subject_id: str, *, year: int, 
                              bucket: str, discipline: str) -> dict:
     """A signed card with the year, the competition status and the place band.
 
-    The event title and the holder's name are not in the document. It is not stored, so it has no
-    revocation entry: the signature is the whole check.
+    The event title and the holder's name are not in the document. The caller stores the row when
+    the card must be revocable. This function only signs.
     """
     return issue_achievement_credential(credential_id, subject_id, {
         "type": "DerivedFSPClaim",
@@ -173,8 +174,35 @@ def _hash_data(document: dict, proof_config: dict) -> bytes:
     return hashlib.sha256(_jcs(proof_config)).digest() + hashlib.sha256(_jcs(document)).digest()
 
 
+def blinded_subject(person_id: str, audience: str) -> str:
+    """A receipt id for one holder and one audience.
+
+    The key is the issuer secret. The published public key cannot recompute it, and the person id
+    is not in the document.
+    """
+    secret = _private_key().private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+    return hmac.new(secret, f"receipt\n{person_id}\n{audience}".encode(), hashlib.sha256).hexdigest()
+
+
+def issue_audience_receipt(credential_id: str, person_id: str, audience: str, *, year: int,
+                           status: str, bucket: str, discipline: str) -> dict:
+    """A signed fact for one audience. Another audience gets another subject, so the files do not share an id."""
+    subject = blinded_subject(person_id, audience)
+    return issue_achievement_credential(credential_id, subject, {
+        "type": "DerivedFSPClaim",
+        "name": f"Результат ФСП, {year}",
+        "year": year,
+        "competitionStatus": status,
+        "bucket": bucket,
+        "discipline": discipline,
+        "seal": subject[:16],
+        "criteria": {"narrative": "Год, статус и корзина места. Имени и общего идентификатора держателя нет."},
+    }, status=False, subject_urn=f"urn:receipt:{subject}")
+
+
 def issue_achievement_credential(credential_id: str, subject_id: str, achievement: dict, *,
-                                  status: bool = True) -> dict:
+                                  status: bool = True, subject_urn: str | None = None) -> dict:
     now = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     achievement = _open_badge(achievement)
     document = {
@@ -187,7 +215,7 @@ def issue_achievement_credential(credential_id: str, subject_id: str, achievemen
         "issuer": {"id": issuer_id(), "name": "ФСП Талант (прототип платформы)"},
         "validFrom": now,
         "credentialSubject": {
-            "id": f"urn:uuid:{subject_id}",
+            "id": subject_urn or f"urn:uuid:{subject_id}",
             "type": ["AchievementSubject"],
             "achievement": achievement,
         },
@@ -247,11 +275,13 @@ def _b64url_decode(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
-def issue_sd_jwt(subject_id: str, claims: dict) -> tuple[str, dict[str, str]]:
+def issue_sd_jwt(subject_id: str, claims: dict, *, jti: str | None = None) -> tuple[str, dict[str, str]]:
     """SD-JWT (salted hashes, EdDSA). Every claim is hidden behind `_sd` until the holder discloses it.
 
     Returns the issuer JWT and the disclosure for each claim name. The event title can be one of the
-    claims and still stay out of a presentation.
+    claims and still stay out of a presentation. `subject_id` is not copied into the token: the clear
+    `sub` is random, so a shared presentation is not an account id. `jti` is the stored credential id
+    when the caller keeps a revocation row. The signature check does not read that row.
     """
     disclosures: dict[str, str] = {}
     hashes: list[str] = []
@@ -262,13 +292,27 @@ def issue_sd_jwt(subject_id: str, claims: dict) -> tuple[str, dict[str, str]]:
         hashes.append(_b64url(hashlib.sha256(disclosure.encode()).digest()))
     now = int(datetime.now(UTC).timestamp())
     payload = {
-        "iss": issuer_id(), "sub": f"urn:uuid:{subject_id}", "iat": now, "exp": now + 86400 * 365,
+        # A random subject. The account id must not ride in the clear part of a presentation.
+        "iss": issuer_id(), "sub": f"urn:uuid:{secrets.token_hex(16)}", "iat": now, "exp": now + 86400 * 365,
         "_sd_alg": "sha-256", "_sd": sorted(hashes),
     }
+    if jti:
+        payload["jti"] = jti
     header = {"alg": "EdDSA", "typ": "sd-jwt", "kid": f"{issuer_id()}#key-1"}
     signing_input = f"{_b64url(_jcs(header))}.{_b64url(_jcs(payload))}".encode()
     token = signing_input.decode() + "." + _b64url(_private_key().sign(signing_input))
     return token, disclosures
+
+
+def sd_jwt_jti(presentation: str) -> str | None:
+    """The stored credential id carried in the issuer payload, if the caller set one."""
+    token = presentation.split("~", 1)[0]
+    try:
+        payload = json.loads(_b64url_decode(token.split(".")[1]))
+    except (ValueError, IndexError, json.JSONDecodeError):
+        return None
+    jti = payload.get("jti")
+    return jti if isinstance(jti, str) and jti else None
 
 
 def present_sd_jwt(token: str, disclosures: dict[str, str], keep: set[str]) -> str:
@@ -297,6 +341,20 @@ def verify_sd_jwt(presentation: str) -> dict | None:
         return None
     if header.get("kid") != f"{issuer_id()}#key-1":
         return None
+    if payload.get("iss") != issuer_id():
+        return None
+    now = int(datetime.now(UTC).timestamp())
+    issued_at, expires_at = payload.get("iat"), payload.get("exp")
+    if isinstance(issued_at, bool) or isinstance(expires_at, bool):
+        return None
+    if not isinstance(issued_at, int) or not isinstance(expires_at, int):
+        return None
+    if issued_at > now + 120 or expires_at <= now:
+        return None
+    not_before = payload.get("nbf")
+    if not_before is not None and (isinstance(not_before, bool) or not isinstance(not_before, int)
+                                   or not_before > now + 120):
+        return None
     digest_set = set(payload.get("_sd") or [])
     revealed: dict = {}
     for disclosure in attached:
@@ -312,3 +370,19 @@ def verify_sd_jwt(presentation: str) -> dict | None:
             return None
         revealed[name] = value
     return revealed
+
+
+def sd_jwt_status(presentation: str, *, revoked: bool) -> dict:
+    """Signature result together with a revocation bit the caller already looked up.
+
+    `verify_sd_jwt` stays free of the database. A stored row with `revoked_at` makes
+    `valid` false while the signature still holds. A bad signature does not report revocation:
+    the `jti` in an unsigned payload is not trusted.
+    """
+    claims = verify_sd_jwt(presentation)
+    signed = claims is not None
+    return {
+        "valid": signed and not revoked,
+        "signature": signed,
+        "revoked": signed and revoked,
+    }

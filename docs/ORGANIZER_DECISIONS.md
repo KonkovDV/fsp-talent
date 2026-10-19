@@ -34,7 +34,7 @@
 | До принятия закрыты только контакты | Контакты и переписка — после принятия приглашения | `test_contacts_wait_for_acceptance`, `test_messages_open_after_accept` |
 | Одно адресное приглашение | Условия неизменны, одно ожидающее на пару | `test_offer_terms_stay_immutable_and_one_pending_pair_is_unique` |
 | Зарплата: подписать gross или net | Вилка хранится до вычета налога | `test_an_invite_typed_take_home_is_stored_before_tax` |
-| Вилка влияет, только если её назвали | Место двигает, только если вилку назвали обе стороны | `test_salary_changes_rank_only_when_both_sides_named_a_band` |
+| Вилка влияет, только если её назвали | Разрыв по вилке и вероятность согласия считаются, только если вилку назвали обе стороны; место в списке от вилки не зависит | `test_salary_changes_rank_only_when_both_sides_named_a_band` |
 | ATS — в MVP концепция | Подписанные вебхуки, описание приёмника | `docs/TRUST_AND_ATS.md` |
 
 ## Право, стенд, сдача

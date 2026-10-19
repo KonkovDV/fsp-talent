@@ -50,7 +50,8 @@ async def test_demo_flow_links_the_fsp_id_confirmed_by_the_provider(redis):
     q = _query(started.authorize_url)
     assert started.authorize_url.startswith(identity.DEMO_AUTHORIZE_PATH)
     assert q["code_challenge_method"] == "S256" and q["response_type"] == "code" and "password" not in q
-    code = await provider.issue_code("FSP2005", q["client_id"], q["redirect_uri"], q["code_challenge"])
+    code = await provider.issue_code(
+        "FSP2005", q["client_id"], q["redirect_uri"], q["code_challenge"], nonce=q["nonce"])
     assert await identity.finish(person, code, q["state"], provider) == "FSP2005"
 
 
@@ -58,7 +59,8 @@ async def test_code_and_state_work_once(redis):
     person = uuid.uuid4()
     provider = identity.MockFspIdProvider()
     q = _query((await identity.start(person, provider)).authorize_url)
-    code = await provider.issue_code("FSP2005", q["client_id"], q["redirect_uri"], q["code_challenge"])
+    code = await provider.issue_code(
+        "FSP2005", q["client_id"], q["redirect_uri"], q["code_challenge"], nonce=q["nonce"])
     await identity.finish(person, code, q["state"], provider)
     with pytest.raises(identity.FspIdError):
         await identity.finish(person, code, q["state"], provider)
@@ -155,6 +157,31 @@ async def test_keycloak_rejects_a_token_signed_by_another_key(monkeypatch):
     provider, _ = _keycloak(monkeypatch, _claims(), sign_with=other_pem)
     with pytest.raises(identity.FspIdError):
         await provider.exchange("the-code", "the-verifier")
+
+
+async def test_nonce_binds_the_id_token_to_this_login_request(redis, monkeypatch):
+    person = uuid.uuid4()
+    provider, _ = _keycloak(monkeypatch, _claims(nonce="right-nonce"))
+    url = provider.authorize_url("st", "ch", nonce="right-nonce")
+    assert _query(url)["nonce"] == "right-nonce"
+    assert await provider.exchange("the-code", "the-verifier", nonce="right-nonce") == "FSP4321"
+    with pytest.raises(identity.FspIdError):
+        await provider.exchange("the-code", "the-verifier", nonce="other-nonce")
+    no_nonce, _ = _keycloak(monkeypatch, _claims())
+    with pytest.raises(identity.FspIdError):
+        await no_nonce.exchange("the-code", "the-verifier", nonce="right-nonce")
+    demo = identity.MockFspIdProvider()
+    started = await identity.start(person, demo)
+    q = _query(started.authorize_url)
+    assert len(q["nonce"]) >= 16
+    wrong = await demo.issue_code("FSP2005", q["client_id"], q["redirect_uri"], q["code_challenge"], nonce="other")
+    with pytest.raises(identity.FspIdError):
+        await identity.finish(person, wrong, q["state"], demo)
+    bare = await identity.start(person, demo)
+    bq = _query(bare.authorize_url)
+    omitted = await demo.issue_code("FSP2005", bq["client_id"], bq["redirect_uri"], bq["code_challenge"])
+    with pytest.raises(identity.FspIdError):
+        await identity.finish(person, omitted, bq["state"], demo)
 
 
 # --- registry client of the proposed contract ------------------------------------------------------------

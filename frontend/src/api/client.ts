@@ -302,7 +302,8 @@ export const publicJuryFree = () => api.get<{ email: string }>('/public/jury-fre
 export const guestLogin = (role: Role, consents: string[]) =>
   api.post<{ access_token: string; role: Role; guest_until: string }>('/auth/guest', { role, consents })
 export const registerParticipant = (data: {
-  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; birth_date?: string; consents: string[]
+  email: string; password: string; display_name?: string; is_adult: boolean; age_15_17?: boolean; birth_date?: string
+  synthetic_ack?: boolean; consents: string[]
 }) => api.post('/auth/participant/register', data)
 export const registerEmployer = (data: object) => api.post('/auth/employer/register', data)
 export const verifyEmail = (data: { email?: string; code?: string; token?: string; role?: Role }) =>
@@ -340,6 +341,11 @@ export const setExclusions = (industries: string[]) => api.put('/candidates/me/e
 export const blockCompany = (offer_id: string) => api.post('/candidates/me/blocks', { offer_id })
 export const unblockCompany = (employerId: string) => api.delete(`/candidates/me/blocks/${employerId}`)
 export const getMySalaryMarket = () => api.get('/candidates/me/salary-market')
+export const getMyDemand = () => api.get<{
+  days: number
+  companies: number
+  invites: { role: string; grade: string; n: number; median_from: number; median_to: number } | null
+}>('/candidates/me/demand')
 export const getMyGrowth = () => api.get('/candidates/me/growth')
 export const updateMyProfile = (data: object) => api.put('/candidates/me/profile', data)
 export const listNotifications = () => api.get('/notifications')
@@ -358,9 +364,39 @@ export const importProtocols = (file: File) => {
   body.append('file', file)
   return api.post<{ added: number; read: number; grade_unchanged: boolean }>('/candidates/me/protocols', body)
 }
+export const previewProtocols = (file: File) => {
+  const body = new FormData()
+  body.append('file', file)
+  return api.post<{
+    rows: { discipline: string; place: number; total: number; date: string; name: string }[]
+    can_bind: boolean
+    grade_unchanged: boolean
+  }>('/candidates/me/protocols/preview', body)
+}
+export const submitQaProbe = (cases: { given: string; expected: string }[]) =>
+  api.post<{ accepted: number; rejected: number; killed: string[]; mutants: number; grade_unchanged: boolean }>(
+    '/candidates/me/qa-probe', { cases })
+export const designProbe = (seed: string, choice?: string) =>
+  api.post<{
+    seed: string
+    lines?: string[]
+    choices?: string[]
+    matched?: boolean
+    grade_unchanged: boolean
+  }>('/candidates/me/design-probe', { seed, choice: choice ?? null })
+export const industryCase = (answers?: { first: string; follow: string }) =>
+  api.post<{
+    label?: string
+    title?: string
+    plot?: string
+    ask?: string
+    follow?: string
+    rubric?: string
+    grade_unchanged: boolean
+  }>('/candidates/me/industry-case', answers ?? {})
 export const getMyOffers = () => api.get('/candidates/me/offers', { params: { limit: 50 } })
-export const respondToOffer = (offerId: string, action: 'accept' | 'reject', reason?: string) =>
-  api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null })
+export const respondToOffer = (offerId: string, action: 'accept' | 'reject' | 'yes_if', reason?: string, note?: string) =>
+  api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null, note: note || null })
 export const fileComplaint = (offerId: string, reason: string) =>
   api.post('/candidates/me/complaints', { offer_id: offerId, reason })
 export const updateVisibility = (is_visible: boolean) =>
@@ -549,6 +585,21 @@ export const restoreNeed = (id: string, version: number) => api.post(`/needs/${i
 export const archiveNeed = (id: string) => api.delete(`/needs/${id}`)
 export const needMatches = (id: string, showHidden = false) =>
   api.get(`/needs/${id}/matches`, { params: { limit: 50, show_hidden: showHidden } })
+export const createGuestReview = (id: string) =>
+  api.post<{ url: string; expires_at: string; seats: number }>(`/needs/${id}/guest-review`)
+export const getGuestMarks = (id: string) =>
+  api.get<{ active: boolean; expires_at?: string; marks: { candidate_id: string; mark: 'yes' | 'no' | 'later' }[] }>(`/needs/${id}/guest-review`)
+export interface GuestSeat {
+  seat: number; role: string | null; grade: string | null; grade_source: string | null; region: string | null
+  stack: string[]; matched_skills: string[]; missing_skills: string[]; why: string[]
+}
+export interface GuestReviewView {
+  title: string; expires_at: string; seats: GuestSeat[]; marks: Record<string, string>
+}
+export const getGuestReview = (token: string) => api.get<GuestReviewView>(`/public/reviews/${token}`)
+export const markGuestReview = (token: string, seat: number, mark: 'yes' | 'no' | 'later') =>
+  api.post(`/public/reviews/${token}`, { seat, mark })
+export const acceptCounter = (offerId: string) => api.post(`/offers/${offerId}/accept-counter`)
 export const hideCandidate = (id: string, candidateId: string) => api.put(`/needs/${id}/hidden/${candidateId}`)
 export const unhideCandidate = (id: string, candidateId: string) => api.delete(`/needs/${id}/hidden/${candidateId}`)
 export const needShortlist = (id: string, status?: string) =>

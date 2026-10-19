@@ -43,6 +43,22 @@ class NeedShortlist(Base):
     added_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
 
+class GuestReview(Base):
+    """A time-limited link to an anonymized shortlist. The token itself is not stored."""
+
+    __tablename__ = "guest_reviews"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employer_id = Column(UUID(as_uuid=True), ForeignKey("employers.id", ondelete="CASCADE"), nullable=False)
+    need_id = Column(UUID(as_uuid=True), ForeignKey("needs.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    title = Column(String(200), nullable=False)
+    seats = Column(JSONB, nullable=False)
+    seat_ids = Column(JSONB, nullable=False)
+    marks = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class NeedHidden(Base):
     """A card this company hid from one need. The row stays when the need gets a new version."""
     __tablename__ = "need_hidden"

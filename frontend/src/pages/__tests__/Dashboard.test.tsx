@@ -4,7 +4,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import Dashboard from '../candidate/Dashboard'
 
-const override = vi.hoisted(() => ({ profile: {} as Record<string, unknown> }))
+const override = vi.hoisted(() => ({
+  profile: {} as Record<string, unknown>,
+  career: null as Record<string, unknown> | null,
+}))
 
 vi.mock('../../api/client', () => ({
   apiError: () => 'ошибка',
@@ -12,8 +15,11 @@ vi.mock('../../api/client', () => ({
   weeklyTask: () => Promise.resolve({ data: null }),
   tasksForMe: () => Promise.resolve({ data: [] }),
   getMySalaryMarket: () => Promise.resolve({ data: { role: 'backend', grade: 'middle', cell: null, band: null } }),
+  getMyDemand: () => Promise.resolve({ data: { days: 90, companies: 4, invites: null } }),
   getMyGrowth: () => Promise.resolve({ data: { role: 'backend', grade: 'middle', next_grade: null, people: null, gaps: [], next_market: null } }),
-  myCareer: () => Promise.resolve({ data: { skill: 'PostgreSQL', gained: 2, vacancies: 4 } }),
+  myCareer: () => Promise.resolve({
+    data: override.career ?? { skill: 'PostgreSQL', gained: 2, vacancies: 4 },
+  }),
   getMyProfile: () => Promise.resolve({
     data: {
       display_name: 'Аня Тестова', email_verified: true, survey_done: true, grade_source: 'declared',
@@ -34,6 +40,7 @@ vi.mock('../../api/client', () => ({
 
 describe('готовность профиля', () => {
   it('показывает процент и ссылки на недостающее', async () => {
+    override.career = null
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
@@ -47,11 +54,14 @@ describe('готовность профиля', () => {
     expect(screen.getByRole('link', { name: 'Грейд подтверждён тестом' })).toHaveAttribute('href', '/candidate/assessment')
     expect(screen.getByText(/ФСП ID не привязан/)).toBeInTheDocument()
     expect(await screen.findByText(/подойдут ещё 2 открытые вакансии\./)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Спрос на профиль' })).toBeInTheDocument()
+    expect(screen.getByText(/4 компании открывали карточку за 90 дней/)).toBeInTheDocument()
   })
 })
 
 describe('первый экран кабинета', () => {
   function show() {
+    override.career = null
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<QueryClientProvider client={client}><MemoryRouter><Dashboard /></MemoryRouter></QueryClientProvider>)
   }
@@ -67,5 +77,19 @@ describe('первый экран кабинета', () => {
     show()
     expect(await screen.findByText(/Грейд не выбран\. До опроса карточка стоит в выдаче как/)).toBeInTheDocument()
     expect(screen.queryByText('джуниор', { exact: true })).not.toBeInTheDocument()
+  })
+
+  it('держит подсказку закрытой, пока компаний меньше трёх', async () => {
+    override.career = { skill: null, gained: 0, vacancies: 4, open: false, need_companies: 3 }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText(/появится после интереса 3 разных компаний/)).toBeInTheDocument()
+    expect(screen.queryByText(/подойдут ещё/)).not.toBeInTheDocument()
   })
 })

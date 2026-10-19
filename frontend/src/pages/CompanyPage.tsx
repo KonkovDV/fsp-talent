@@ -35,7 +35,9 @@ export default function CompanyPage() {
         </p>
         {company.rating && (
           <p className="text-sm text-ink-2">
-            Балл компании {company.rating.score} из 10, {company.rating.label}. {company.rating.note}
+            {company.rating.score == null
+              ? company.rating.note
+              : <>Балл компании {company.rating.score} из 10, {company.rating.label}. {company.rating.note}</>}
           </p>
         )}
         <Responsiveness fact={company.reputation?.applications} className="text-sm text-ink-2" />

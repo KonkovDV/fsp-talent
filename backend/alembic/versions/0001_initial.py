@@ -322,6 +322,25 @@ CREATE POLICY candidate_resumes_owner ON public.candidate_resumes USING (((curre
 
 CREATE POLICY candidate_resumes_search ON public.candidate_resumes FOR SELECT USING ((current_setting('app.employer_id'::text, true) <> ''::text));
 
+CREATE TABLE public.survey_history (
+    id uuid NOT NULL,
+    participant_id uuid NOT NULL,
+    specialization character varying(30) NOT NULL,
+    industry character varying(40),
+    work_goal character varying(40),
+    declared_grade character varying(20) NOT NULL,
+    experience_years integer,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT survey_history_pkey PRIMARY KEY (id),
+    CONSTRAINT survey_history_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE
+);
+
+ALTER TABLE ONLY public.survey_history FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.survey_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY survey_history_owner ON public.survey_history USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((participant_id)::text = current_setting('app.participant_id'::text, true))));
+
 CREATE POLICY employer_favorites_actor ON public.employer_favorites USING (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true)))) WITH CHECK (((current_setting('app.bypass_rls'::text, true) = 'on'::text) OR ((employer_id)::text = current_setting('app.employer_id'::text, true))));
 
 CREATE TABLE public.candidate_interests (
@@ -504,6 +523,23 @@ CREATE TABLE public.needs (
 
 ALTER TABLE ONLY public.needs FORCE ROW LEVEL SECURITY;
 
+CREATE TABLE public.guest_reviews (
+    id uuid NOT NULL,
+    employer_id uuid NOT NULL,
+    need_id uuid NOT NULL,
+    token_hash character varying(64) NOT NULL,
+    title character varying(200) NOT NULL,
+    seats jsonb NOT NULL,
+    seat_ids jsonb NOT NULL,
+    marks jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT guest_reviews_pkey PRIMARY KEY (id),
+    CONSTRAINT guest_reviews_token_hash_key UNIQUE (token_hash),
+    CONSTRAINT guest_reviews_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE,
+    CONSTRAINT guest_reviews_need_id_fkey FOREIGN KEY (need_id) REFERENCES public.needs(id) ON DELETE CASCADE
+);
+
 
 
 CREATE TABLE public.notifications (
@@ -555,6 +591,8 @@ CREATE TABLE public.offers (
     decline_reason character varying(20),
     contacts_revoked_at timestamp with time zone,
     responded_at timestamp with time zone,
+    counter_note text,
+    counter_at timestamp with time zone,
     CONSTRAINT ck_offer_decline_reason CHECK (((decline_reason IS NULL) OR ((decline_reason)::text = ANY ((ARRAY['salary'::character varying, 'format'::character varying, 'stack'::character varying, 'not_looking'::character varying, 'other'::character varying])::text[]))))
 );
 
@@ -573,6 +611,7 @@ CREATE TABLE public.participants (
     phone text,
     birth_date date,
     region character varying(100),
+    relocation boolean DEFAULT false NOT NULL,
     show_city boolean DEFAULT true NOT NULL,
     show_stack boolean DEFAULT true NOT NULL,
     show_fsp boolean DEFAULT true NOT NULL,
@@ -590,6 +629,7 @@ CREATE TABLE public.participants (
     minor_consent_given boolean DEFAULT false NOT NULL,
     guardian_email text,
     guardian_consent_at timestamp with time zone,
+    guardian_link_generation integer DEFAULT 0 NOT NULL,
     job_search character varying(20) DEFAULT 'open'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone,
@@ -709,7 +749,10 @@ CREATE TABLE public.skills (
     trust_level character varying(20) DEFAULT 'self_reported'::character varying NOT NULL,
     confirmed boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    confirmed_at timestamp with time zone
+    confirmed_at timestamp with time zone,
+    test_share double precision,
+    test_items integer,
+    tested_at timestamp with time zone
 );
 
 
@@ -1130,6 +1173,10 @@ CREATE INDEX ix_offers_candidate_id ON public.offers USING btree (candidate_id);
 
 
 CREATE INDEX ix_offers_employer_id ON public.offers USING btree (employer_id);
+
+CREATE INDEX ix_guest_reviews_need_id ON public.guest_reviews USING btree (need_id);
+
+CREATE INDEX ix_survey_history_participant ON public.survey_history USING btree (participant_id, created_at DESC);
 
 
 

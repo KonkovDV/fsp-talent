@@ -1,6 +1,16 @@
 """The company figure is a labelled demo score and stays inside 0..10."""
+import pytest
+
+from app.core.config import settings
 from app.services.employer_rating import EmployerTrustSignals, compute_trust_score
 from app.services.employer_score import company_score
+
+pytestmark = pytest.mark.usefixtures("_demo_company_scores")
+
+
+@pytest.fixture
+def _demo_company_scores(monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
 
 
 def test_the_open_signals_stay_on_a_zero_to_ten_scale():
@@ -23,3 +33,10 @@ def test_a_known_name_is_stable_and_labelled_as_demo():
 def test_an_unknown_name_does_not_leave_the_scale():
     row = company_score("Несуществующая контора 42")
     assert 0 <= row["score"] <= 10 and row["demo"] is True
+
+
+def test_a_live_stand_does_not_invent_a_company_score(monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MODE", False)
+    row = company_score("Несуществующая контора 42")
+    assert row["score"] is None and row["demo"] is False
+    assert "не показывается" in row["note"]

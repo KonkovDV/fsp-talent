@@ -1,5 +1,5 @@
 """
-FSP Talent Scoring Engine v3 (deterministic, versioned).
+FSP Talent Scoring Engine v4.2.0 (deterministic, versioned).
 
 ФСП (Q&A): every competition counts the same; ranking "чемпионат России выше хакатона" is not advised.
 What matters is how many competitions a candidate took part in and how well: winner and prize-winner
@@ -26,11 +26,14 @@ search, the empty subset is the baseline):
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
   lcb   = max over subsets (mu - sigma)            ranking key (conservative)
 
-Monotonicity (v4.0.0, audit 2026-10): adding any event never lowers lcb, and no history at all is
-the floor (LCB0). The v3 rule took the five strongest events by q·w including zeros, so a plain
-participation could push the bound below an empty history. That broke the stated goal (sport must
-help or at least not hurt) and was replaced. Team results reduce evidence weight (wider sigma)
-instead of lowering the level; the team contribution is not separated (Q&A).
+Monotonicity (v4.2.0, audit 2026-10-14): adding any event never lowers lcb, and no history at all is
+the floor (LCB0). The monthly cap and the long-history limit are constraints on the chosen subset,
+not a pre-filter that drops a heavy result because a lighter one has a higher class. v4.1.0 sorted
+each month by quality first and could replace a prize in a large field with a win in a tiny one,
+so a new honest result lowered the bound. The v3 rule took the five strongest events by q·w
+including zeros, so a plain participation could push the bound below an empty history. Team results
+reduce evidence weight (wider sigma) instead of lowering the level; the team contribution is not
+separated (Q&A).
 The rank is not computed here: it is a registry fact stored beside the score and does not enter it.
 The reference date must be the same for everyone compared: callers pass it explicitly
 (services.profile.scoring_reference_date); the date.today() default is kept for old callers only.
@@ -43,15 +46,15 @@ from datetime import date
 from itertools import combinations
 from typing import TypedDict
 
-VERSION = "v4.1.0"
+VERSION = "v4.2.0"
 HALF_LIFE_MONTHS = 18.0
 PRIOR_STRENGTH = 2.0      # K: prior counts as two full-weight events
 PRIOR_MEAN = 0.30
 PRIOR_VAR = 0.04
 # How many events a subset may contain. The rest stay on the profile. The bound uses the best subset.
 EVENT_CAP = 5
-# Exhaustive search over result events (q > 0). C(16, ≤5) = 6 884 subsets, a few milliseconds.
-# Past this many result events in one discipline the pool is the strongest ones by q·w (documented limit).
+# Size at which the greedy subset matches the exhaustive one in tests. The product search is
+# best_subset_month_capped and does not cut the pool down to this size.
 EXACT_SUBSET_LIMIT = 16
 
 # Result class -> quality. Monotone in the result; the same for every competition status.
@@ -67,7 +70,8 @@ MIN_FIELD_FOR_PRIZE = 6
 # Evidence from a field of N people weighs 1 − e^(−N/FIELD_SCALE): a place among 6 is about a fifth
 # of a place among 200. Combined with EVENT_CAP this bounds what any number of small fields can add.
 FIELD_SCALE = 30.0
-# At most this many result events per calendar month and discipline enter the pool (the strongest by q, then w).
+# A chosen subset holds at most this many results from one calendar month.
+# The search still sees every result that month. Cutting to the highest classes first is not monotone.
 PER_MONTH_CAP = 2
 
 # Strongest rank first. Youth ranks stay separate. The product does not invent МСМК: the sport's
@@ -156,6 +160,53 @@ def _lcb(chosen: list[tuple[float, float, EventInput]]) -> float:
     return posterior([(q, w) for q, w, _ in chosen])[2]
 
 
+def _month_key(event: EventInput) -> tuple[int, int]:
+    when = event["event_date"]
+    return when.year, when.month
+
+
+def best_subset_month_capped(weighted: list[tuple[float, float, EventInput]]) -> list[tuple[float, float, EventInput]]:
+    """Best subset of at most EVENT_CAP events, with at most PER_MONTH_CAP from one calendar month.
+
+    The search sees every result event. A cap that first throws events away by quality is not monotone:
+    a new high class with a tiny weight can evict a heavier result and lower the bound.
+    """
+    best: list[tuple[float, float, EventInput]] = []
+    best_lcb = _lcb(best)
+    by_month: dict[tuple[int, int], list[tuple[float, float, EventInput]]] = {}
+    for item in weighted:
+        by_month.setdefault(_month_key(item[2]), []).append(item)
+    options: list[list[list[tuple[float, float, EventInput]]]] = []
+    for items in by_month.values():
+        choices: list[list[tuple[float, float, EventInput]]] = [[]]
+        choices.extend([item] for item in items)
+        if PER_MONTH_CAP >= 2:
+            choices.extend(list(pair) for pair in combinations(items, 2))
+        options.append(choices)
+
+    def walk(month: int, chosen: list[tuple[float, float, EventInput]]) -> None:
+        nonlocal best, best_lcb
+        if month == len(options):
+            lcb = _lcb(chosen)
+            if lcb > best_lcb + 1e-12:
+                best, best_lcb = list(chosen), lcb
+            return
+        room = EVENT_CAP - len(chosen)
+        for choice in options[month]:
+            if len(choice) > room:
+                continue
+            if not choice:
+                walk(month + 1, chosen)
+                continue
+            chosen.extend(choice)
+            walk(month + 1, chosen)
+            del chosen[-len(choice):]
+
+    if options:
+        walk(0, [])
+    return best
+
+
 def best_subset_exact(weighted: list[tuple[float, float, EventInput]]) -> list[tuple[float, float, EventInput]]:
     """Every subset of size at most EVENT_CAP. The empty subset is the baseline."""
     best: list[tuple[float, float, EventInput]] = []
@@ -232,20 +283,13 @@ def _result_pool(events: list[EventInput], ref: date) -> list[tuple[float, float
         if q <= 0:
             continue
         pool.append((q, event_weight(e["event_date"], e["team_size"], ref, e["total_participants"]), e))
-    by_month: dict[tuple[int, int], list] = {}
-    for item in pool:
-        by_month.setdefault((item[2]["event_date"].year, item[2]["event_date"].month), []).append(item)
-    pool = [item for items in by_month.values()
-            for item in sorted(items, key=lambda t: (t[0], t[1]), reverse=True)[:PER_MONTH_CAP]]
-    if len(pool) > EXACT_SUBSET_LIMIT:
-        pool = sorted(pool, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:EXACT_SUBSET_LIMIT]
     return pool
 
 
 def compute_discipline_score(events: list[EventInput], reference_date: date | None = None) -> DisciplineResult:
     """Best-subset lower bound over result events. Monotone: an added event never lowers lcb."""
     ref = reference_date or date.today()
-    chosen = best_subset_exact(_result_pool(events, ref))
+    chosen = best_subset_month_capped(_result_pool(events, ref))
     mu, sigma, lcb = posterior([(q, w) for q, w, _ in chosen])
     n_eff = sum(w for _, w, _ in chosen)
     top = sorted(chosen, key=lambda t: (t[0] * t[1], t[1]), reverse=True)[:3]

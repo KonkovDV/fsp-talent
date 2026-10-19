@@ -64,6 +64,7 @@ from app.services.assessment import (
     session_items,
     start_session,
 )
+from app.services.clipboard_twin import copy_text
 from app.services.matching import wilson_lower
 from app.services.practice import (
     answer_practice,
@@ -135,6 +136,8 @@ class ItemOut(BaseModel):
     draft_version: int = 0
     draft_index: int | None = None
     draft_text: str | None = None
+    # Shown only if the browser copies the task. One number differs from the screen.
+    copy_text: str | None = None
 
 
 class SkillOut(BaseModel):
@@ -219,6 +222,7 @@ def _item_out(session_id: uuid.UUID, it: TestSessionItem) -> ItemOut:
         topic_label=TOPIC_LABELS.get(it.topic, it.topic), family_title=family_title(it.family_id), kind=it.kind,
         time_limit_s=it.time_limit_s, served_at=it.served_at.isoformat(),
         draft_version=int(it.draft_version or 0), draft_index=it.draft_index, draft_text=it.draft_text,
+        copy_text=copy_text(it.stem, it.code, str(it.id), str(it.options[it.correct_index])),
     )
 
 
@@ -230,10 +234,15 @@ def _review_notes(flags: dict) -> list[str]:
         notes.append(level)
     if flags.get("pace_review"):
         notes.append("Быстрые верные ответы по одному семейству. Грейд не изменён.")
+    gap = flags.get("form_gap") or {}
+    if gap.get("review"):
+        notes.append("Задания с фиксированной формулировкой решены лучше свежих чисел. Грейд не изменён.")
     if flags.get("variant_review"):
         notes.append("Ответ совпал с ключом другого варианта того же семейства. Грейд не изменён.")
     if flags.get("integrity_review"):
         notes.append("Подпись задания не сошлась с ответом. Грейд не изменён.")
+    if flags.get("twin_review"):
+        notes.append("Ответ совпал с числом из копии условия. На экране этого числа не было. Грейд не изменён.")
     if int(flags.get("tab_leaves") or 0) > 0:
         notes.append("Вкладка теста скрывалась. Грейд не изменён.")
     if int(flags.get("copies") or 0) > 0:

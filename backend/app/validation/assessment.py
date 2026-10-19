@@ -641,7 +641,7 @@ def _collision_rates(rng: random.Random, pairs: int = 4) -> dict[str, float]:
     for fam in FAMILIES.values():
         if fam.kind != "code":
             continue
-        spec = next(iter(fam.specs))
+        spec = sorted(fam.specs)[0]
         same = total = 0
         for level in fam.levels:
             if not fam.available(spec, level):

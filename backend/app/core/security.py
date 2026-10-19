@@ -73,11 +73,12 @@ def create_access_token(subject: str, role: str, epoch: int = 0) -> str:
     )
 
 
-def create_refresh_token(subject: str, role: str, epoch: int = 0, nonce: int = 0) -> str:
-    return create_token(
-        {"sub": subject, "role": role, "type": "refresh", "ep": int(epoch), "rn": int(nonce)},
-        settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60,
-    )
+def create_refresh_token(subject: str, role: str, epoch: int = 0, nonce: int = 0,
+                          family: str | None = None) -> str:
+    payload = {"sub": subject, "role": role, "type": "refresh", "ep": int(epoch), "rn": int(nonce)}
+    if family:
+        payload["fid"] = family
+    return create_token(payload, settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60)
 
 
 def next_refresh_nonce(token_nonce: int | None, account_nonce: int) -> int | None:

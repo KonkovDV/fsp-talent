@@ -152,4 +152,15 @@ describe('карточка кандидата', () => {
     expect(screen.queryByText(/Algorithms/)).not.toBeInTheDocument()
   })
 
+  it('показывает, чем место выше следующего', () => {
+    render(<CandidateCard card={{
+      ...card,
+      match: {
+        ...card.match!,
+        ahead_of_next: { key: 'test', label: 'Тест', points: 0.04, text: 'Выше следующего места по фактору «Тест»' },
+      },
+    }} />)
+    expect(screen.getByTestId('ahead-of-next')).toHaveTextContent('Выше следующего места по фактору «Тест»')
+  })
+
 })

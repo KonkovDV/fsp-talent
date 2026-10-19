@@ -29,11 +29,23 @@ def verify_dump(path: Path) -> list[str]:
     return errors
 
 
+def verify_key_dir(path: Path) -> list[str]:
+    """The signing key must sit next to a dump before anyone calls the copy a restore set."""
+    if not path.is_dir():
+        return ["каталога ключей нет"]
+    pem = path / "vc_ed25519.pem"
+    if not pem.is_file() or pem.stat().st_size < 32:
+        return ["в копии нет ключа подписи"]
+    return []
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("Нужен один путь к файлу .dump", file=sys.stderr)
+    if len(argv) not in (2, 3):
+        print("Нужен путь к .dump и, если ключи копировались, путь к каталогу ключей", file=sys.stderr)
         return 2
     errors = verify_dump(Path(argv[1]))
+    if len(argv) == 3:
+        errors.extend(verify_key_dir(Path(argv[2])))
     if errors:
         print("Дамп не прошёл проверку:", file=sys.stderr)
         for line in errors:

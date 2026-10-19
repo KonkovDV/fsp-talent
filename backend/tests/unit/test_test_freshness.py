@@ -12,16 +12,16 @@ def _facts(when: datetime | None) -> CandidateFacts:
     )
 
 
-def test_no_date_leaves_the_test_factor_alone():
+def test_no_date_leaves_the_level_alone():
     now = datetime.now(UTC)
-    assert freshness_of(None, now) == (1.0, None)
-    assert freshness_of(now - timedelta(days=200), now)[0] == 0.85
+    assert freshness_of(None, now) == (0.0, None)
+    assert freshness_of(now - timedelta(days=200), now)[0] == 0.15
     assert score(NEED, _facts(None)).score == score(NEED, _facts(now - timedelta(days=10))).score
 
 
-def test_an_old_confirmation_lowers_the_score_and_says_why():
+def test_an_old_confirmation_keeps_the_score_and_says_the_error_is_wider():
     now = datetime.now(UTC)
     fresh = score(NEED, _facts(now - timedelta(days=10)))
     old = score(NEED, _facts(now - timedelta(days=400)))
-    assert old.score < fresh.score
-    assert any(reason.code == "TEST_FRESH" and "больше года" in reason.text for reason in old.reasons)
+    assert old.score == fresh.score
+    assert any(reason.code == "TEST_FRESH" and "погрешность шире" in reason.text for reason in old.reasons)

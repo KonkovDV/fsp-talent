@@ -6,8 +6,9 @@ from app.services import matching as matching_mod
 from app.services.matching import (
     CandidateFacts,
     NeedSpec,
-    _harmonic,
+    _skill_credit,
     anonymous_compare,
+    expanded_skills,
     reason_source,
     recommended_categories,
     score,
@@ -116,6 +117,17 @@ def test_inapplicable_factors_are_reweighted():
     perfect = score(only_skills, _cand(skills={"Python": "test_confirmed"}, test_p=1.0, grade_source="assessed"))
     assert perfect.score > 0.95
     assert {f.key for f in perfect.factors if f.value is None} >= {"grade", "role", "text", "industry"}
+
+
+def test_a_specific_tool_covers_the_general_skill_more_than_the_reverse():
+    forward = _skill_credit("SQL", {"PostgreSQL": "test_confirmed"})
+    backward = _skill_credit("PostgreSQL", {"SQL": "test_confirmed"})
+    assert forward[0] > backward[0]
+    assert forward[1] == "related:PostgreSQL"
+    assert _skill_credit("Python", {"FastAPI": "test_confirmed"})[0] > 0
+    assert _skill_credit("FastAPI", {"Python": "test_confirmed"}) == (0.0, "missing")
+    assert "FastAPI" in expanded_skills({"Python"})
+    assert "Python" not in expanded_skills({"FastAPI"})
 
 
 def test_missing_skill_is_a_minus_and_related_tech_gets_partial_credit():
@@ -328,7 +340,8 @@ def test_salary_changes_rank_only_when_both_sides_named_a_band():
     short = score(NeedSpec(role="backend", grade="middle", skills=("Python", "PostgreSQL"),
                            salary_from=100_000, salary_to=140_000),
                   _cand(salary_from=200_000, salary_to=280_000))
-    assert short.score < plain.score
+    assert short.score == plain.score
+    assert short.accept is not None and short.accept < 1
     assert any(r.code == "PAY_GAP" for r in short.reasons)
 
 
@@ -359,6 +372,36 @@ def test_reply_outlook_is_shown_apart_from_the_score():
     ranked = score(need, keen).score
     reply_outlook(need, keen)
     assert score(need, keen).score == ranked
+
+
+def test_reply_outlook_uses_past_refusals_without_moving_the_score():
+    """Pay and format refusals change the shown chance of a reply. The list order stays put."""
+    from app.services.matching import reply_outlook
+    need = NeedSpec(role="backend", salary_from=200_000, salary_to=280_000, work_format="office")
+    shared = dict(salary_from=220_000, salary_to=260_000, work_formats=("office",), job_search="active")
+    calm = reply_outlook(need, _cand(**shared))
+    paid = reply_outlook(need, _cand(**shared, salary_refusals=2))
+    formatted = reply_outlook(need, _cand(**shared, format_refusals=2))
+    assert calm is not None and paid is not None and formatted is not None
+    assert calm["p"] > paid["p"]
+    assert calm["p"] > formatted["p"]
+    assert score(need, _cand(**shared)).score == score(need, _cand(**shared, format_refusals=2)).score
+    assert score(need, _cand(**shared)).score == score(need, _cand(**shared, salary_refusals=2)).score
+
+
+def test_reply_outlook_puts_relocation_between_the_same_city_and_a_refusal():
+    """The invite chance uses the same city credit as the score. The list order stays put."""
+    from app.services.matching import reply_outlook
+    need = NeedSpec(role="backend", salary_from=200_000, salary_to=280_000, city="Москва")
+    shared = dict(salary_from=220_000, salary_to=260_000, job_search="active")
+    same = reply_outlook(need, _cand(**shared, city="Москва"))
+    moving = reply_outlook(need, _cand(**shared, city="Казань", relocation=True))
+    staying = reply_outlook(need, _cand(**shared, city="Казань", relocation=False))
+    assert same is not None and moving is not None and staying is not None
+    assert same["p"] > moving["p"] > staying["p"]
+    before = score(need, _cand(**shared, city="Казань", relocation=True)).score
+    reply_outlook(need, _cand(**shared, city="Казань", relocation=True))
+    assert score(need, _cand(**shared, city="Казань", relocation=True)).score == before
 
 
 def test_pay_counterfactual_starts_at_five_named_wishes():
@@ -409,7 +452,8 @@ def test_a_past_pay_refusal_lowers_acceptance_only_together_with_a_named_band():
                     salary_from=180_000, salary_to=260_000)
     calm = score(band, _cand(salary_from=200_000))
     refused = score(band, _cand(salary_from=200_000, salary_refusals=1))
-    assert refused.score < calm.score
+    assert refused.score == calm.score
+    assert refused.accept is not None and calm.accept is not None and refused.accept < calm.accept
     assert any(r.code == "SALARY_HISTORY" for r in refused.reasons)
     assert score(NEED, _cand(salary_refusals=2)).score == score(NEED, _cand()).score
 
@@ -419,6 +463,18 @@ def test_skill_counterfactual_names_the_only_missing_skill():
     hint = skill_counterfactual(NEED, people)
     assert hint is not None and hint["skill"] == "PostgreSQL" and hint["gained"] == 5
     assert skill_counterfactual(NEED, people[:4]) is None
+
+
+def test_skill_counterfactual_counts_an_implying_tool_and_not_a_flat_neighbour():
+    """FastAPI meets Python. MySQL does not meet PostgreSQL: that edge is symmetric and partial."""
+    covered = [_cand(skills={"FastAPI": "self_reported", "PostgreSQL": "self_reported"}) for _ in range(5)]
+    assert skill_counterfactual(NEED, covered) is None
+    only_tool = [_cand(skills={"FastAPI": "self_reported"}) for _ in range(5)]
+    hint = skill_counterfactual(NEED, only_tool)
+    assert hint is not None and hint["skill"] == "PostgreSQL" and hint["gained"] == 5
+    neighbour = [_cand(skills={"Python": "self_reported", "MySQL": "self_reported"}) for _ in range(5)]
+    mysql = skill_counterfactual(NEED, neighbour)
+    assert mysql is not None and mysql["skill"] == "PostgreSQL" and mysql["gained"] == 5
 
 
 def test_an_untested_candidate_takes_the_last_seat_of_a_close_block():
@@ -461,7 +517,8 @@ def test_open_to_offers_lowers_the_chance_of_accepting():
     person = dict(salary_from=200_000, salary_to=280_000)
     active = score(band, _cand(job_search="active", **person))
     opened = score(band, _cand(job_search="open", **person))
-    assert opened.score < active.score
+    assert opened.score == active.score
+    assert opened.accept is not None and active.accept is not None and opened.accept < active.accept
     assert any(r.code == "JOB_SEARCH_ACTIVE" for r in active.reasons)
     assert any(r.code == "JOB_SEARCH_OPEN" for r in opened.reasons)
     assert any(r.code == "PAY_FIT" for r in opened.reasons)
@@ -634,8 +691,7 @@ def test_contributions_sum_to_the_employer_score():
         result = score(need, facts)
         parts = [f.contrib for f in result.factors if f.contrib is not None]
         assert abs(sum(parts) - result.employer) < 1e-9
-        combined = result.employer if result.accept is None else _harmonic(result.employer, result.accept)
-        expected = max(0.0, combined - result.congestion)
+        expected = max(0.0, result.employer - result.congestion)
         assert abs(round(expected, 4) - result.score) < 1e-9
 
 
@@ -711,6 +767,17 @@ def test_city_and_format_raise_the_score_only_when_the_need_names_them():
     assert any(line.startswith("Город совпадает") for line in same.plus)
     assert any("Другой город" in line for line in other.minus)
     assert any("не штрафуется" in line for line in unnamed.info)
+
+
+def test_relocation_sits_between_the_same_city_and_a_refusal_to_move():
+    named = NeedSpec(role="backend", grade="middle", skills=("Python",), city="Москва", work_format="remote")
+    person = dict(grade_source="assessed", skills={"Python": "test_confirmed"}, work_formats=("remote",))
+    same = score(named, _cand(**person, city="Москва"))
+    moving = score(named, _cand(**person, city="Казань", relocation=True))
+    staying = score(named, _cand(**person, city="Казань"))
+    assert same.score > moving.score > staying.score
+    assert any("готов к переезду" in line for line in moving.info)
+    assert any("Другой город" in line for line in staying.minus)
 
 
 def test_fsp_history_never_lowers_a_tested_candidate_regression_h2():

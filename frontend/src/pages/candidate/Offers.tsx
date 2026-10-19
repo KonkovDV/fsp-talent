@@ -19,9 +19,10 @@ interface Offer {
   company_profile?: { industry: string | null; website: string | null; about: string | null; inn_given: boolean
     trust_level?: number; trust_label?: string
     reputation?: { reply: { shown: boolean; lower?: number; n: number }; complaints: { shown: boolean; count?: number; n: number }; applications?: ResponsivenessFact }
-    rating?: { score: number; label: string; demo: boolean; note: string } }
+    rating?: { score: number | null; label: string; demo: boolean; note: string } }
   contacts_revoked_at?: string | null; unread_messages?: number
   why_you?: WhyLine[]
+  counter_note?: string | null
 }
 interface WhyLine { code: string; text: string }
 // Signals the test, the FSP protocols or the survey confirmed: shown with a mark, the rest as plain notes.
@@ -54,6 +55,7 @@ export default function CandidateOffers() {
   const qc = useQueryClient()
   const { data: offers = [], isLoading, isError, error } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const [reasons, setReasons] = useState<Record<string, string>>({})
+  const [conditions, setConditions] = useState<Record<string, string>>({})
   const [hideFor, setHideFor] = useState<string | null>(null)
   const [hidden, setHidden] = useState(false)
   const [hideError, setHideError] = useState('')
@@ -62,8 +64,10 @@ export default function CandidateOffers() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
   })
   const respond = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' }) =>
-      respondToOffer(id, action, action === 'reject' ? reasons[id] : undefined),
+    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' | 'yes_if' }) =>
+      action === 'yes_if'
+        ? respondToOffer(id, action, undefined, conditions[id])
+        : respondToOffer(id, action, action === 'reject' ? reasons[id] : undefined),
     onSuccess: (res, vars) => {
       setRespondError('')
       qc.invalidateQueries({ queryKey: ['myOffers'] })
@@ -134,7 +138,7 @@ export default function CandidateOffers() {
                   )}
                   <Responsiveness fact={o.company_profile?.reputation?.applications} />
                   {o.company_profile?.rating && (
-                    <p className="mt-1 text-xs text-ink-2">Балл компании {o.company_profile.rating.score} из 10, {o.company_profile.rating.label}. {o.company_profile.rating.note}</p>
+                    <p className="mt-1 text-xs text-ink-2">{o.company_profile.rating.score == null ? o.company_profile.rating.note : <>Балл компании {o.company_profile.rating.score} из 10, {o.company_profile.rating.label}. {o.company_profile.rating.note}</>}</p>
                   )}
                   <h2 className="mt-0.5 font-display text-lg font-bold tracking-[-0.01em] text-ink">{o.role}</h2>
                   {o.practice_stage && <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}. Грейд от этого не меняется.</p>}
@@ -233,14 +237,29 @@ export default function CandidateOffers() {
                 </div>
               )}
               {o.status === 'pending' && (
-                <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-                  <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
-                  <label className="text-sm text-ink-2">Причина отказа
-                    <select value={reasons[o.id] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [o.id]: e.target.value }))} className="select ml-2" aria-label="Причина отказа">
-                      {REASONS.map(([value, label]) => <option key={value || 'none'} value={value} disabled={value === ''}>{label}</option>)}
-                    </select>
-                  </label>
-                  <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending || !reasons[o.id]} className="btn-secondary">Отклонить</button>
+                <div className="mt-5 space-y-3 border-t border-line pt-4">
+                  {o.counter_note && <p className="text-sm text-ink-2">Условие отправлено: {o.counter_note}. Контакты закрыты, место в подборке не меняется.</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
+                    <label className="text-sm text-ink-2">Причина отказа
+                      <select value={reasons[o.id] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [o.id]: e.target.value }))} className="select ml-2" aria-label="Причина отказа">
+                        {REASONS.map(([value, label]) => <option key={value || 'none'} value={value} disabled={value === ''}>{label}</option>)}
+                      </select>
+                    </label>
+                    <button onClick={() => respond.mutate({ id: o.id, action: 'reject' })} disabled={respond.isPending || !reasons[o.id]} className="btn-secondary">Отклонить</button>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="block flex-1 text-sm text-ink-2">Да, если…
+                      <input value={conditions[o.id] ?? ''} onChange={e => setConditions(prev => ({ ...prev, [o.id]: e.target.value }))}
+                        maxLength={280} className="input mt-1" aria-label="Условие"
+                        placeholder="Например: вилка от 280 тысяч" />
+                    </label>
+                    <button type="button" onClick={() => respond.mutate({ id: o.id, action: 'yes_if' })}
+                      disabled={respond.isPending || (conditions[o.id] ?? '').trim().length < 8} className="btn-secondary">
+                      Отправить условие
+                    </button>
+                  </div>
+                  <p className="text-xs text-ink-3">Условие не открывает контакты и не двигает место в подборке.</p>
                 </div>
               )}
             </li>

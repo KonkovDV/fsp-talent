@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # When set, the API, worker and beat log in as fsp_app. Empty keeps the superuser login.
     APP_DB_PASSWORD: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
+    # Empty uses REDIS_URL. Production points the task broker at its own Redis.
+    CELERY_BROKER_URL: str = ""
+    # Production compose turns this on so a forgotten http stand cannot keep the mock registry.
+    FSP_STRICT: bool = False
     DEBUG: bool = False
     # The six-item jury trial is offered only when this is on. The demo compose turns it on.
     DEMO_MODE: bool = False
@@ -134,9 +138,28 @@ class Settings(BaseSettings):
     def _mocks_need_the_demo(self):
         if self.FSP_ID_MODE == "mock" and not self.DEMO_MODE:
             raise RuntimeError("FSP_ID_MODE=mock is only allowed when DEMO_MODE is on")
+        mode = (self.FSP_MODE or "").strip()
+        if mode not in {"mock", "real"}:
+            raise RuntimeError(f"FSP_MODE must be mock or real, not {mode!r}")
         if self.MAIL_MODE == "console" and not self.DEMO_MODE:
             logger.warning("MAIL_MODE=console while DEMO_MODE is off: letters are not delivered")
         return self
+
+
+def registry_mode_error(s: Settings | None = None) -> str | None:
+    """Why this process must not serve a synthetic registry, or None when the mode is allowed.
+
+    A laptop and the test job stay on mock. A stand that presents HTTPS or a Secure cookie is treated
+    as production: mock is then allowed only while DEMO_MODE is on. A typo is refused earlier, in Settings.
+    """
+    current = s or settings
+    mode = (current.FSP_MODE or "").strip()
+    production = (
+        bool(current.COOKIE_SECURE) or current.PUBLIC_BASE_URL.startswith("https://") or current.FSP_STRICT
+    )
+    if mode != "real" and not current.DEMO_MODE and production:
+        return "FSP_MODE=mock is only allowed when DEMO_MODE is on"
+    return None
 
 
 def _read_key(path: Path) -> str:

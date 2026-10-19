@@ -16,7 +16,7 @@ from app.models.identity import Consent, EmailVerification
 from app.models.interview import InterviewCode, InterviewSlot
 from app.models.item_draft import ItemDraft
 from app.models.methodist import MethodistLog
-from app.models.need import Need, NeedHidden, NeedShortlist, NeedVersion
+from app.models.need import GuestReview, Need, NeedHidden, NeedShortlist, NeedVersion
 from app.models.notification import Notification
 from app.models.offer import Offer, OfferFlag, OfferMessage
 from app.models.participant import Participant, Qualification, Result, Skill
@@ -51,6 +51,7 @@ __all__ = [
     "ItemDraft",
     "MethodistLog",
     "ItemStat",
+    "GuestReview",
     "Need",
     "NeedHidden",
     "NeedShortlist",

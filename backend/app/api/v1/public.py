@@ -2,6 +2,7 @@ import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.errors import ApiError
 from app.core.config import settings
@@ -20,6 +22,7 @@ from app.models import (
     ConsentLog,
     Employer,
     GradeConfirmation,
+    GuestReview,
     Participant,
     Result,
     Skill,
@@ -34,6 +37,7 @@ from app.services.field_cipher import blind_index, participant_from_ref, public_
 from app.services.formula_sheet import formula_sheet
 from app.services.fsp.mock import STATUS_LABELS
 from app.services.guardian import token_participant, token_valid
+from app.services.guest_review import MARKS, apply_mark, token_hash
 from app.services.matching import GRADES
 from app.services.passport import is_passport
 from app.services.pdf_profile import profile_lines, render_profile_pdf
@@ -43,7 +47,7 @@ from app.services.search.pipeline import BANK_MIN, _bucket, visible_in_search
 from app.services.skills import skill_line
 from app.services.survey import SPECIALIZATIONS
 from app.services.telegram_digest import achievement_digest, clean_fsp_id, vacancy_digest
-from app.services.vc.issuer import issuer_document, verify_credential
+from app.services.vc.issuer import issuer_document, sd_jwt_jti, sd_jwt_status, verify_credential
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -277,7 +281,7 @@ async def verify_stored(credential_id: uuid.UUID, db: AsyncSession = Depends(get
     signed = verify_credential(vc.credential_json)
     revoked = vc.revoked_at is not None
     return {"valid": signed and not revoked, "signature": signed, "revoked": revoked,
-            "credential": vc.credential_json}
+            "credential": _without_subject_id(vc.credential_json)}
 
 
 def credential_uuid(document: dict) -> uuid.UUID | None:
@@ -420,6 +424,30 @@ async def verify_posted(request: Request, db: AsyncSession = Depends(get_db)):
         stored = await db.get(VerifiableCredential, credential_id)
         revoked = stored is not None and stored.revoked_at is not None
     return {"valid": signed and not revoked, "signature": signed, "revoked": revoked}
+
+
+class SdJwtBody(BaseModel):
+    sd_jwt: str = Field(min_length=20, max_length=_MAX_VERIFY_BYTES)
+
+
+@router.post("/credentials/verify-sd-jwt")
+async def verify_posted_sd_jwt(body: SdJwtBody, db: AsyncSession = Depends(get_db)):
+    """Verify an SD-JWT presentation and the stored revocation row for its `jti`.
+
+    The signature check itself does not read the database. This route does, when `jti`
+    is the id of a credential we issued. A presentation we did not store stays signature-only.
+    """
+    jti = sd_jwt_jti(body.sd_jwt)
+    revoked = False
+    if jti:
+        try:
+            credential_id = uuid.UUID(jti)
+        except ValueError:
+            credential_id = None
+        if credential_id is not None:
+            stored = await db.get(VerifiableCredential, credential_id)
+            revoked = stored is not None and stored.revoked_at is not None
+    return sd_jwt_status(body.sd_jwt, revoked=revoked)
 
 
 @router.get("/credentials/{ref}")
@@ -790,13 +818,57 @@ async def guardian_consent(body: GuardianConsentIn, db: AsyncSession = Depends(g
     """The legal representative confirms by the signed link from the letter. Only then the card enters search."""
     pid = token_participant(body.token)
     p = await db.get(Participant, pid) if pid else None
-    if p is None or p.deleted_at is not None or not token_valid(body.token, p.id, p.guardian_email):
+    if p is None or p.deleted_at is not None or not token_valid(
+            body.token, p.id, p.guardian_email, int(p.guardian_link_generation or 0)):
         raise HTTPException(404, "Ссылка недействительна или устарела")
     if not p.minor_consent_given:
         p.minor_consent_given = True
         p.guardian_consent_at = datetime.now(UTC)
+        # The letter is spent. A later click, or the same link after the email is unchanged, does not confirm again.
+        p.guardian_link_generation = int(p.guardian_link_generation or 0) + 1
         db.add(ConsentLog(participant_id=p.id, event_type="guardian_consent", actor_id=p.id,
-                          meta={"by": "guardian", "guardian_email": p.guardian_email}))
+                          meta={"by": "guardian", "generation": int(p.guardian_link_generation)}))
         await db.commit()
         await bump_bank_epoch()
     return {"ok": True, "display_name": p.display_name}
+
+
+class GuestMarkIn(BaseModel):
+    seat: int = Field(ge=1, le=10)
+    mark: Literal["yes", "no", "later"]
+
+
+async def _guest_row(db: AsyncSession, token: str):
+    if not 16 <= len(token) <= 80:
+        raise ApiError(404, "not_found", "Ссылка недействительна")
+    row = await db.scalar(select(GuestReview).where(GuestReview.token_hash == token_hash(token)))
+    if row is None or row.expires_at <= datetime.now(UTC):
+        raise ApiError(404, "not_found", "Ссылка недействительна")
+    return row
+
+
+@router.get("/reviews/{token}")
+async def read_public_review(token: str, db: AsyncSession = Depends(get_db)):
+    """Anonymized snapshot. No account, no candidate id, no contacts."""
+    row = await _guest_row(db, token)
+    return {
+        "title": row.title,
+        "expires_at": row.expires_at.isoformat(),
+        "seats": row.seats,
+        "marks": {key: value for key, value in (row.marks or {}).items() if value in MARKS},
+    }
+
+
+@router.post("/reviews/{token}")
+async def mark_public_review(token: str, body: GuestMarkIn, db: AsyncSession = Depends(get_db)):
+    """A mark on one seat. It does not open contacts and does not move the shortlist."""
+    if await too_many(f"guest-review:{token_hash(token)}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    row = await _guest_row(db, token)
+    try:
+        row.marks = apply_mark(dict(row.marks or {}), len(row.seats or []), body.seat, body.mark)
+    except ValueError as exc:
+        raise ApiError(422, "validation_error", "Такого места в подборке нет") from exc
+    flag_modified(row, "marks")
+    await db.commit()
+    return {"seat": body.seat, "mark": body.mark}

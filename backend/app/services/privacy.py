@@ -2,8 +2,9 @@
 
 Contacts go to an employer only while the candidate's consent to processing (pd_candidate) is in force.
 Withdrawing it hides the card at once; 30 days later the identifying fields are erased (part 5 of article 21).
-Deleting the account erases them immediately. Sport results stay as anonymous rows: they belong to the
-federation's protocol, and without name, e-mail, phone, FSP id and birth date they no longer identify anyone.
+Deleting the account erases them immediately. Sport rows stay for the federation aggregate, but the
+registry event id, the event title, the protocol link and the raw payload are cleared: those fields
+are direct links back to a named protocol. Place, date and discipline can still be quasi-identifiers.
 The consent and access logs stay: they are the proof that processing was lawful.
 """
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import Integer, String, cast, delete, extract, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -26,14 +27,33 @@ from app.models import (
     Participant,
     ProfileEmbedding,
     ProfileSearchIndex,
+    Result,
     Skill,
     SurveyHistory,
     TaskSubmission,
+    VerifiableCredential,
 )
 from app.services.identity import active_consent
 from app.services.search.cache import bump_bank_epoch
 
 RETENTION_AFTER_WITHDRAWAL = timedelta(days=30)
+
+
+def _without_stored_identity(document: object) -> dict:
+    """Drop the subject id and the event title from a stored credential. The signature no longer matches,
+    and the row is revoked in the same step."""
+    if not isinstance(document, dict):
+        return {}
+    subject = document.get("credentialSubject")
+    if not isinstance(subject, dict):
+        return {k: v for k, v in document.items() if k != "credentialSubject"}
+    cleaned = {k: v for k, v in subject.items() if k != "id"}
+    achievement = cleaned.get("achievement")
+    if isinstance(achievement, dict):
+        cleaned["achievement"] = {
+            k: v for k, v in achievement.items() if k not in {"eventName", "eventId", "name"}
+        }
+    return {**document, "credentialSubject": cleaned}
 
 
 async def contacts_allowed(db: AsyncSession, participant: Participant) -> bool:
@@ -48,10 +68,12 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
     now = datetime.now(UTC)
     if participant.deleted_at is None:
         participant.deleted_at = now
-    for field in ("display_name", "email", "password_hash", "email_verified_at", "telegram", "phone",
-                  "birth_date", "fsp_id", "fsp_linked_at", "region", "industry",
-                  "guardian_email", "guardian_consent_at"):
+    for field in ("display_name", "email", "email_bindex", "password_hash", "email_verified_at",
+                  "telegram", "phone", "github", "birth_date", "fsp_id", "fsp_linked_at", "region",
+                  "industry", "guardian_email", "guardian_consent_at"):
         setattr(participant, field, None)
+    participant.guardian_link_generation = int(participant.guardian_link_generation or 0) + 1
+    participant.relocation = False
     participant.is_visible = False
     participant.public_profile = False
     participant.token_epoch = (participant.token_epoch or 0) + 1
@@ -79,6 +101,17 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
     participant.employer_task_title = None
     participant.employer_task_passed = None
     participant.employer_task_at = None
+    await db.execute(update(Result).where(Result.participant_id == pid).values(
+        event_id=cast(Result.id, String),
+        event_name="Обезличенный протокол",
+        protocol_url=None,
+        raw_data={},
+        regions_count=None,
+        event_date=func.make_date(cast(extract("year", Result.event_date), Integer), 1, 1),
+    ))
+    for vc in await db.scalars(select(VerifiableCredential).where(VerifiableCredential.participant_id == pid)):
+        vc.revoked_at = vc.revoked_at or now
+        vc.credential_json = _without_stored_identity(vc.credential_json)
     db.add(ConsentLog(participant_id=pid, event_type="erased", actor_id=pid, meta={"reason": reason}))
     await db.flush()
     await bump_bank_epoch()

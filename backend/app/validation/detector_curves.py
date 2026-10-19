@@ -12,7 +12,9 @@ the threshold the product uses. Signals only ask for a human look; none of them 
 * risk points — `integrity_level` points; flag at points ≥ T (product: moderate, T = 2);
 * fast right answers — `note_pace` count of unlikely fast right answers; flag at count ≥ T (product: 2);
 * person fit lz* — `person_fit` at the EAP θ̂ of the session; flag at lz* < T (product: −1.645);
-* family CUSUM — max over families of `note_family_cusum` statistics; flag at ≥ T (product: 1.6).
+* family CUSUM — max over families of `note_family_cusum` statistics; flag at ≥ T (product: 1.6);
+* form gap — concept residual minus code residual (`form_gap`); flag at ≥ T (product: 0.40). A leaked
+  wording helps only on concept items: code items are fresh numbers each time.
 
 This is a model check: real response times are not known yet.
 """
@@ -22,9 +24,11 @@ import argparse
 import math
 import random
 import statistics
+from types import SimpleNamespace
 
 from app.services import cat
 from app.services.assessment import FAMILY_CUSUM_H, note_family_cusum, note_pace
+from app.services.form_gap import FORM_GAP, form_gap
 from app.services.person_fit import LZ_FLAG, person_fit
 from app.services.session_marks import integrity_level
 
@@ -35,6 +39,7 @@ SIGNALS = {
     "Быстрые маловероятные верные ответы": ((1, 2, 3, 4, 5), 2, lambda s, t: s >= t),
     "Согласованность ответов lz*": ((-1.0, -1.282, -1.645, -2.0, -2.326), LZ_FLAG, lambda s, t: s < t),
     "CUSUM по семействам": ((1.0, 1.3, 1.6, 2.0, 2.5), FAMILY_CUSUM_H, lambda s, t: s >= t),
+    "Разрыв форм (понимание минус код)": ((0.2, 0.3, FORM_GAP, 0.5, 0.6), FORM_GAP, lambda s, t: s >= t),
 }
 
 
@@ -54,13 +59,19 @@ def session(rng: random.Random, leak: bool, leak_share: float) -> dict[str, floa
     flags: dict = {}
     cusum: dict = {}
     responses = []
+    served = []
     for i in range(N_ITEMS):
         kind = "code" if rng.random() < 0.4 else "concept"
         limit = 180.0 if kind == "code" else 75.0
         a, b, c = rng.uniform(0.8, 2.0), rng.gauss(0, 1), (0.2 if rng.random() < 0.6 else 0.0)
         p_ref = cat.p3(theta + rng.gauss(0, 0.4), a, b, c)
+        # A leaked key on a concept item is the same wording. On a code item the numbers are new:
+        # a copied key matches in about one variant in eleven (construction_check).
         if leak and rng.random() < leak_share:
-            correct = rng.random() < 0.95
+            if kind == "concept":
+                correct = rng.random() < 0.95
+            else:
+                correct = rng.random() < 0.092 or rng.random() < cat.p3(theta, a, b, c)
             elapsed = math.exp(math.log(0.08 * limit) + rng.gauss(0, 0.4))
         else:
             correct = rng.random() < cat.p3(theta, a, b, c)
@@ -70,10 +81,12 @@ def session(rng: random.Random, leak: bool, leak_share: float) -> dict[str, floa
                           expected_p=p_ref, time_limit=limit)
         cusum = note_family_cusum(cusum, family, correct=correct, elapsed=elapsed, kind=kind, expected_p=p_ref)
         responses.append(cat.Response(a, b, c, correct))
+        served.append(SimpleNamespace(kind=kind, is_correct=correct, a=a, b=b, c=c))
     flags["tab_leaves"] = _poisson(rng, 0.3)
     flags["copies"] = 1 if rng.random() < 0.05 else 0
     theta_hat = cat.posterior(responses).theta
     _, lz_star = person_fit(responses, theta_hat)
+    gap = form_gap(served, theta_hat)
     cells = (cusum.get("family_pace") or {}).values()
     top = max((max(c["share_cusum"], c["time_cusum"], c["residual_cusum"]) for c in cells), default=0.0)
     return {
@@ -81,6 +94,7 @@ def session(rng: random.Random, leak: bool, leak_share: float) -> dict[str, floa
         "Быстрые маловероятные верные ответы": int(flags.get("fast_correct") or 0),
         "Согласованность ответов lz*": lz_star,
         "CUSUM по семействам": top,
+        "Разрыв форм (понимание минус код)": float(gap["gap"]) if gap else -1.0,
     }
 
 

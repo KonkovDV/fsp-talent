@@ -45,6 +45,29 @@ def test_eight_starts_a_phone_and_a_title_is_not_a_name():
     assert fields["phone"]["value"] == "+79001112233"
     assert fields["experience_years"] is None
     assert fields["grade"] is None and fields["role"] is None
+    assert fields["relocation"] is None
+
+
+def test_relocation_quote_distinguishes_readiness_from_a_refusal():
+    ready = extract_resume_fields("Казань, готов к переезду в Москву")
+    assert ready["relocation"] == {"value": True, "quote": "Казань, готов к переезду в Москву"}
+    refusal = extract_resume_fields("Казань, не готова к переезду")
+    assert refusal["relocation"] == {"value": False, "quote": "Казань, не готова к переезду"}
+
+
+def test_a_free_text_introduction_is_not_left_for_the_model():
+    raw = (
+        "О себе: меня зовут Иван Иванов.\n"
+        "Связь: +44 7700 900123\n"
+        "Профиль: https://github.com/example-person\n"
+        "Навыки: Python SQL\n"
+    )
+    cleaned = for_model(raw)
+    assert "Иван" not in cleaned and "7700" not in cleaned and "github.com" not in cleaned
+    assert "Python" in cleaned and "SQL" in cleaned
+    assert assistant.has_identity(raw)
+    shown = asyncio.run(parse_resume(raw, allow_llm=False))
+    assert shown["model_text"] == cleaned
 
 
 def test_the_model_does_not_see_the_name_or_contacts():

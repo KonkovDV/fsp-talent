@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_any_auth
 from app.api.errors import ApiError
-from app.core.config import settings
+from app.core.config import registry_mode_error, settings
 from app.core.csrf import CSRF_COOKIE, attach_csrf, check_csrf, clear_csrf
 from app.core.database import get_db
 from app.core.demo_guard import is_protected, reject_protected, reject_reserved
@@ -103,18 +103,48 @@ class VerificationSent(BaseModel):
     demo_code: str | None = None
 
 
-def _tokens(subject: str, role: str, epoch: int = 0, nonce: int = 0) -> TokenOut:
+def _tokens(subject: str, role: str, epoch: int = 0, nonce: int = 0, family: str | None = None) -> TokenOut:
     return TokenOut(
         access_token=create_access_token(subject, role, epoch),
-        refresh_token=create_refresh_token(subject, role, epoch, nonce),
+        refresh_token=create_refresh_token(subject, role, epoch, nonce, family),
         role=role,
     )
 
 
-def _account_tokens(account, role: str) -> TokenOut:
-    return _tokens(
-        str(account.id), role, int(account.token_epoch or 0), int(account.refresh_nonce or 0),
-    )
+def _family_key(family: str) -> str:
+    return f"refresh:fam:{family}"
+
+
+async def _remember_family(family: str, nonce: int) -> None:
+    redis = await get_redis()
+    await redis.set(_family_key(family), str(nonce), ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+
+
+async def _family_nonce(family: str) -> int | None:
+    redis = await get_redis()
+    raw = await redis.get(_family_key(family))
+    if raw is None:
+        return None
+    return int(raw)
+
+
+async def _drop_family(family: str) -> None:
+    redis = await get_redis()
+    await redis.delete(_family_key(family))
+
+
+async def _account_tokens(account, role: str) -> TokenOut:
+    """One refresh family per sign-in. A second device does not rotate the first device's nonce."""
+    family = str(uuid.uuid4())
+    try:
+        await _remember_family(family, 0)
+    except Exception:
+        if registry_mode_error():
+            raise ApiError(503, "unavailable", "Сервис входа временно недоступен")
+        return _tokens(
+            str(account.id), role, int(account.token_epoch or 0), int(account.refresh_nonce or 0),
+        )
+    return _tokens(str(account.id), role, int(account.token_epoch or 0), 0, family)
 
 
 REFRESH_COOKIE = "fsp_refresh"
@@ -243,12 +273,16 @@ class ParticipantRegister(BaseModel):
     # Search shows a person only with a birth date on file (a checkbox is not an age). Asked here so a
     # new adult is not silently hidden until they find the profile field. Still optional for API clients.
     birth_date: date | None = Field(None, ge=date(1900, 1, 1))   # SEC3-05
+    # Required on the demo stand: the warning text alone does not stop a real resume.
+    synthetic_ack: bool = False
 
 
 @router.post("/participant/register", response_model=VerificationSent, status_code=202)
 async def register_participant(body: ParticipantRegister, request: Request, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
     reject_reserved(email)
+    if settings.DEMO_MODE and not body.synthetic_ack:
+        raise ApiError(422, "validation_error", "На демо-стенде можно указать только вымышленные данные")
     if not body.is_adult and not body.age_15_17:
         raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
     if body.birth_date is not None:
@@ -297,12 +331,15 @@ class EmployerRegister(BaseModel):
     inn: str | None = Field(None, pattern=r"^\d{10}(\d{2})?$")
     website: str | None = Field(None, max_length=200)
     consents: list[str] = Field(default_factory=list, max_length=10)
+    synthetic_ack: bool = False
 
 
 @router.post("/employer/register", response_model=VerificationSent, status_code=202)
 async def register_employer(body: EmployerRegister, request: Request, db: AsyncSession = Depends(get_db)):
     email = normalize_email(body.email)
     reject_reserved(email)
+    if settings.DEMO_MODE and not body.synthetic_ack:
+        raise ApiError(422, "validation_error", "На демо-стенде можно указать только вымышленные данные")
     check_required_consents("employer", body.consents)
     await _charge_registration(request, email, "employer")
     employer = await _account(db, "employer", email)
@@ -365,7 +402,7 @@ async def verify_email(body: VerifyIn, response: Response, db: AsyncSession = De
             # Only confirmed accounts enter the employer search index.
             await rebuild_profile(db, account)
     await db.commit()
-    return deliver(response, _account_tokens(account, row.subject_type))
+    return deliver(response, await _account_tokens(account, row.subject_type))
 
 
 class ResendIn(BaseModel):
@@ -433,7 +470,7 @@ async def _login(db: AsyncSession, role: str, form: OAuth2PasswordRequestForm,
         raise ApiError(403, "account_suspended")
     if role == "participant":
         account.last_login_at = datetime.now(UTC)
-    return _account_tokens(account, role)
+    return await _account_tokens(account, role)
 
 
 @router.post("/participant/token", response_model=TokenOut)
@@ -469,7 +506,7 @@ async def guest_login(body: GuestIn, request: Request, response: Response, db: A
     if body.role == "participant":
         account.last_login_at = datetime.now(UTC)
     await db.commit()
-    tokens = _account_tokens(account, body.role)
+    tokens = await _account_tokens(account, body.role)
     tokens.guest_until = account.guest_until.isoformat()
     return deliver(response, tokens)
 
@@ -514,7 +551,7 @@ async def reset_password(body: ResetIn, response: Response, db: AsyncSession = D
     account.password_hash = _password_hash(body.new_password)
     account.token_epoch = int(account.token_epoch or 0) + 1
     await db.commit()
-    return deliver(response, _account_tokens(account, body.role))
+    return deliver(response, await _account_tokens(account, body.role))
 
 
 class PasswordChangeIn(BaseModel):
@@ -549,7 +586,7 @@ async def change_password(body: PasswordChangeIn, response: Response,
     account.token_epoch = int(account.token_epoch or 0) + 1
     account.refresh_nonce = int(account.refresh_nonce or 0) + 1
     await db.commit()
-    return deliver(response, _account_tokens(account, role))
+    return deliver(response, await _account_tokens(account, role))
 
 
 # ── tokens ──────────────────────────────────────────────────────────────────
@@ -613,6 +650,36 @@ async def refresh(response: Response, request: Request, body: RefreshIn | None =
             account = None
     if not account_can_refresh(account) or not epochs_match(payload.get("ep"), account.token_epoch):
         raise ApiError(401, "unauthorized")
+    family = payload.get("fid")
+    if isinstance(family, str) and family:
+        try:
+            current_family = await _family_nonce(family)
+        except Exception as exc:
+            raise ApiError(401, "unauthorized") from exc
+        if current_family is None:
+            raise ApiError(401, "unauthorized")
+        nxt_family = next_refresh_nonce(payload.get("rn"), current_family)
+        if nxt_family is None:
+            presented = payload.get("rn")
+            if (
+                presented is not None
+                and int(presented) == current_family - 1
+                and await refresh_grace_open(f"fam:{family}", family)
+            ):
+                raise ApiError(401, "refresh_superseded")
+            if presented is not None and int(presented) < current_family:
+                try:
+                    await _drop_family(family)
+                except Exception:
+                    pass
+            raise ApiError(401, "unauthorized")
+        try:
+            await _remember_family(family, nxt_family)
+            await remember_refresh(f"fam:{family}", family)
+        except Exception as exc:
+            raise ApiError(401, "unauthorized") from exc
+        return deliver(response, _tokens(
+            payload["sub"], role, int(account.token_epoch or 0), nxt_family, family))
     current = int(account.refresh_nonce or 0)
     nxt = next_refresh_nonce(payload.get("rn"), current)
     if nxt is None:
@@ -655,7 +722,14 @@ async def logout(response: Response, request: Request, db: AsyncSession = Depend
                 account = await db.get(model, uuid.UUID(payload["sub"]))
             except ValueError:
                 account = None
-            if (
+            family = payload.get("fid") if payload else None
+            if isinstance(family, str) and family and account is not None and epochs_match(
+                    payload.get("ep"), account.token_epoch):
+                try:
+                    await _drop_family(family)
+                except Exception:
+                    pass
+            elif (
                 account is not None
                 and epochs_match(payload.get("ep"), account.token_epoch)
                 and next_refresh_nonce(payload.get("rn"), int(account.refresh_nonce or 0)) is not None
@@ -788,7 +862,7 @@ async def fsp_signin_callback(body: FspSignInCallback, request: Request, respons
         raise ApiError(400, "fsp_invalid", "Вход через ФСП ID не подтверждён, начните вход заново") from e
     account = await _linked(db, fsp_id)
     if account is not None:
-        tokens = deliver(response, _account_tokens(account, "participant"))
+        tokens = deliver(response, await _account_tokens(account, "participant"))
         return {"status": "signed_in", **tokens.model_dump()}
     data = await _registry(fsp_id)
     # The registry data is shown so the person sees whose account is about to be created; nothing is stored yet.
@@ -824,4 +898,4 @@ async def fsp_signin_signup(body: FspSignUpIn, request: Request, response: Respo
             await give_consent(db, "participant", account.id, kind, request)
         await rebuild_profile(db, account)
         await db.commit()
-    return deliver(response, _account_tokens(account, "participant"))
+    return deliver(response, await _account_tokens(account, "participant"))

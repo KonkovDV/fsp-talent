@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus } from 'lucide-react'
 import {
-  apiError, compareNeed, needExam, createNeed, draftNeed, draftNeedFromUrl, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
+  apiError, compareNeed, needExam, createGuestReview, createNeed, draftNeed, draftNeedFromUrl, getGuestMarks, getNeed, hideCandidate, listNeeds, needMatches, needShortlist, removeShortlist, restoreNeed, setShortlist, surveyOptions, unhideCandidate, updateNeed,
 } from '../../api/client'
 import { shortlistBreakdown } from '../../shortlistBreakdown'
 import { NEED_EXAMPLES } from '../../needExamples'
@@ -53,11 +53,12 @@ export default function EmployerNeeds() {
   const [picked, setPicked] = useState<string[]>([])
   const [showHidden, setShowHidden] = useState(false)
   const [sent, setSent] = useState(false)
+  const [guestUrl, setGuestUrl] = useState('')
 
   const { data: opts } = useQuery({ queryKey: ['surveyOptions'], queryFn: () => surveyOptions().then(r => r.data) })
   const { data: needs = [], isLoading: needsLoading, isError: needsError, error: needsLoadError } = useQuery<Need[]>({ queryKey: ['needs'], queryFn: () => listNeeds().then(r => r.data) })
   useEffect(() => { if (!selected && needs.length) setSelected(needs[0].id) }, [needs, selected])
-  useEffect(() => { setPicked([]); setSent(false); setShowHidden(false); setShortStatus('') }, [selected])
+  useEffect(() => { setPicked([]); setSent(false); setShowHidden(false); setShortStatus(''); setGuestUrl('') }, [selected])
   const current = needs.find(n => n.id === selected) ?? null
   const matches = useQuery({ queryKey: ['needMatches', selected, current?.version, showHidden], enabled: !!selected,
     queryFn: () => needMatches(selected!, showHidden).then(r => r.data) })
@@ -83,6 +84,20 @@ export default function EmployerNeeds() {
   const shortlist = useQuery({ queryKey: ['needShortlist', selected, shortStatus], enabled: !!selected,
     queryFn: () => needShortlist(selected!, shortStatus || undefined).then(r => r.data) })
 
+  const guestMarks = useQuery({
+    queryKey: ['guestMarks', selected],
+    enabled: !!selected,
+    queryFn: () => getGuestMarks(selected!).then(r => r.data),
+  })
+  const guestLink = useMutation({
+    mutationFn: () => createGuestReview(selected!),
+    onSuccess: (res) => {
+      setError('')
+      setGuestUrl(res.data.url)
+      qc.invalidateQueries({ queryKey: ['guestMarks', selected] })
+    },
+    onError: (e: unknown) => setError(apiError(e, 'Ссылку собрать не удалось')),
+  })
   const detail = useQuery({ queryKey: ['need', selected], enabled: !!selected,
     queryFn: () => getNeed(selected!).then(r => r.data as Need & { versions: { version: number; params: NeedParams }[] }) })
   const body = () => ({
@@ -299,6 +314,7 @@ export default function EmployerNeeds() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn-secondary btn-sm" disabled={guestLink.isPending} onClick={() => guestLink.mutate()}>Ссылка руководителю</button>
                   <button onClick={() => edit(current)} className="btn-secondary btn-sm"><Pencil size={14} aria-hidden />Изменить</button>
                 </div>
               </div>
@@ -403,13 +419,20 @@ export default function EmployerNeeds() {
                   {matches.data && (matches.data.total ?? 0) > (matches.data.items ?? []).length && (
                     <p className="text-sm text-ink-2">На экране первые {(matches.data.items ?? []).length} из {matches.data.total}.</p>
                   )}
-                  {selectionView?.summary && (
+                  {guestUrl && (
+                <p className="rounded-lg bg-panel px-3 py-2 text-sm text-ink" role="status">
+                  Ссылка для руководителя, семь дней, без имён и контактов: <a className="text-accent" href={guestUrl}>{guestUrl}</a>
+                </p>
+              )}
+              {selectionView?.summary && (
                     <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent" role="status">
                       С прошлого просмотра: {selectionView.summary}
                     </p>
                   )}
                   {(matches.data?.items ?? []).map((card: CandidateCardData, i: number) => {
                     const marker = selectionView?.markers[card.candidate_id]
+                    const guestMark = guestMarks.data?.marks.find(row => row.candidate_id === card.candidate_id)?.mark
+                    const guestLabel = guestMark === 'yes' ? 'руководитель: да' : guestMark === 'no' ? 'руководитель: нет' : guestMark === 'later' ? 'руководитель: позже' : null
                     const markerLabel = marker === 'new' ? 'новый' : marker === 'up' ? 'выше' : marker === 'down' ? 'ниже' : null
                     return (
                       <div key={card.candidate_id} className="relative">
@@ -420,6 +443,9 @@ export default function EmployerNeeds() {
                           >
                             {marker === 'up' ? '↑ ' : marker === 'down' ? '↓ ' : ''}{markerLabel}
                           </span>
+                        )}
+                        {guestLabel && (
+                          <span className="absolute left-3 top-3 z-10 badge-brand">{guestLabel}</span>
                         )}
                         <CandidateCard card={card} place={i + 1} onOffer={setOfferFor} onTask={setTaskFor}
                           aiNote={matches.data?.ai_note ? { needId: selected! } : undefined}

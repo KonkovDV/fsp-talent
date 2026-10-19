@@ -48,6 +48,9 @@ from app.models.assessment import (
 )
 from app.models.participant import Participant, Skill
 from app.services import cat
+from app.services.clipboard_twin import twin_hit
+from app.services.form_gap import form_gap
+from app.services.fsp_skills import FSP_SKILLS
 from app.services.item_monitor import KeyStats, leave_family_out
 from app.services.person_fit import LZ_FLAG, person_fit
 from app.services.skills import normalize_skill
@@ -598,6 +601,12 @@ async def answer_item(db: AsyncSession, session_id: uuid.UUID, participant_id: u
         expected_p = cat.p3(float(session.irt_theta), current.a, current.b, current.c)
     flags = note_pace(flags, current.family_id, correct=bool(current.is_correct), elapsed=elapsed, kind=current.kind,
                       expected_p=expected_p, time_limit=float(current.time_limit_s))
+    submitted = current.answer_text if current.typed else ""
+    if not current.typed and current.answer_index is not None:
+        submitted = current.options[current.answer_index]
+    if twin_hit(current.stem, current.code, str(current.id), submitted or "",
+                str(current.options[current.correct_index])):
+        flags["twin_review"] = True
     if current.typed and current.answer_text and foreign_variant(
             current.family_id, session.specialization, current.level,
             str(current.options[current.correct_index]), current.answer_text):
@@ -688,6 +697,10 @@ async def finalize(db: AsyncSession, session: TestSession, items: list[TestSessi
         lz, lz_star = person_fit(
             [cat.Response(it.a, it.b, it.c, bool(it.is_correct)) for it in answered], outcome.theta)
         flags["person_fit"] = {"lz": round(lz, 3), "lz_star": round(lz_star, 3), "review": lz_star < LZ_FLAG}
+        if outcome.theta is not None:
+            gap = form_gap(answered, outcome.theta, prior_mean=cat.CUTS[session.target_grade])
+            if gap:
+                flags["form_gap"] = gap
     recommend = recommended_grade(decision.assessed_grade, outcome, session.target_grade, vacancy_test)
     if recommend:
         flags["recommended_grade"] = recommend
@@ -797,7 +810,8 @@ async def _confirm_skills(db: AsyncSession, session: TestSession, answered: list
 
     F24b: every skill of the profile that had items in this session also keeps the share and the item
     count of this attempt, passed or not, so the card can say "checked by the test, not confirmed".
-    A skill outside the profile gets no row from a failed check.
+    A failed check of a catalog skill that a prize could confirm is stored as a declaration with the
+    item count, so the prize cannot replace the miss. Any other skill outside the profile gets no row.
     """
     rows = [(tuple(it.skills), bool(it.is_correct)) for it in answered]
     tallies = cat.skill_tallies(rows)
@@ -812,6 +826,13 @@ async def _confirm_skills(db: AsyncSession, session: TestSession, answered: list
         if row is not None:
             row.test_share, row.test_items, row.tested_at = round(share, 4), items, now
         if raw not in scores or scores[raw] < SKILL_CONFIRM_SHARE:
+            catalog = {skill for names in FSP_SKILLS.values() for skill in names}
+            if row is None and name in catalog and items >= 3:
+                db.add(Skill(
+                    participant_id=session.participant_id, name=name, raw_name=raw, source_quote=None,
+                    trust_level="self_reported", confirmed=True, test_share=round(share, 4),
+                    test_items=items, tested_at=now,
+                ))
             continue
         confirmed.append((name, share))
         quote = f"Тест {now:%d.%m.%Y}: {round(share * 100)}% верных ответов"

@@ -128,6 +128,7 @@ def _person(**extra):
         phone=None, telegram=None, fsp_id=None, specialization="backend",
         declared_grade="middle", assessed_grade=None, experience_years=3,
         salary_from_gross=180_000, salary_to_gross=240_000, is_visible=True, show_city=True,
+        relocation=False,
         show_stack=False, show_fsp=False, show_experience=False, github=None, soft_skills=[],
         category_opened_at=None,
         job_search="active", birth_date=None, minor_consent_given=False,
@@ -620,6 +621,65 @@ async def test_offer_create_and_contact_reveal(quiet):
     assert revealed["email"] == person.email
 
 
+async def test_withdrawn_consent_keeps_contacts_out_of_accept(quiet, monkeypatch):
+    sent = []
+
+    async def grab(_db, _employer, event_type, payload):
+        sent.append((event_type, payload))
+        return 0
+
+    async def no_send(*_args, **_kwargs):
+        return 0
+
+    async def withdrawn(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr("app.services.webhooks.enqueue", grab)
+    monkeypatch.setattr("app.services.webhooks.deliver_due", no_send)
+    company = _company()
+    person = _person()
+    employer = _current("employer", company.id)
+    later = datetime(2027, 1, 1, tzinfo=UTC)
+    note = "Возьму, если вилка от 280 тысяч"
+    open_offer = _offer(company.id, person.id, expires_at=later, counter_note=note)
+    db = Bag()
+    db.gets = [open_offer, person, company]
+    opened = await offers.accept_counter_offer(open_offer.id, employer, db)
+    assert opened["status"] == "accepted"
+    assert sent[0][0] == "offer.accepted"
+    assert sent[0][1]["candidate"]["name"] == person.display_name
+    assert sent[0][1]["candidate"]["email"] == person.email
+
+    monkeypatch.setattr(offers, "contacts_allowed", withdrawn)
+    closed = _offer(company.id, person.id, expires_at=later, counter_note=note)
+    db.gets = [closed, person]
+    sent.clear()
+    with pytest.raises(ApiError) as denied:
+        await offers.accept_counter_offer(closed.id, employer, db)
+    assert denied.value.status_code == 403 and denied.value.code == "consent_withdrawn"
+    assert closed.status == "pending" and sent == []
+
+    monkeypatch.setattr(candidates, "contacts_allowed", withdrawn)
+    own = _offer(company.id, person.id, expires_at=later)
+    candidate = _current("participant", person.id)
+    db.gets = [own, person]
+    with pytest.raises(ApiError) as own_denied:
+        await candidates.respond_to_offer(own.id, candidates.RespondIn(action="accept"), candidate, db)
+    assert own_denied.value.status_code == 403 and own.status == "pending" and sent == []
+
+    async def allowed(*_args, **_kwargs):
+        return True
+
+    monkeypatch.setattr(candidates, "contacts_allowed", allowed)
+    fresh = _offer(company.id, person.id, expires_at=later)
+    db.gets = [fresh, person]
+    accepted = await candidates.respond_to_offer(
+        fresh.id, candidates.RespondIn(action="accept"), candidate, db)
+    assert accepted["status"] == "accepted" and accepted["suggest_hide"] is True
+    assert sent[-1][0] == "offer.accepted"
+    assert sent[-1][1]["candidate"]["email"] == person.email
+
+
 async def test_create_offer_replays_a_stored_body(quiet, monkeypatch):
     async def replay(*_args, **_kwargs):
         return {"status": 201, "body": {"status": "pending", "id": "stored"}}
@@ -815,7 +875,9 @@ async def test_application_webhook_carries_no_candidate_contacts(quiet, monkeypa
     assert (await vacancies.apply(vacancy.id, _current("participant", person.id), db))["status"] == "applied"
     (event, payload), = sent
     assert event == "application.created"
-    assert payload["candidate"]["ref"] == str(person.id)
+    from app.services.field_cipher import public_ref
+    assert payload["candidate"]["ref"] == public_ref(person.id)
+    assert payload["candidate"]["ref"] != str(person.id)
     assert payload["candidate"]["category"] == {"specialization": "backend", "grade": "middle"}
     blob = str(payload)
     for secret in ("Анна", "Смирнова", "anya.real@example.com", "+79991234567", "@anya_real"):
@@ -871,6 +933,7 @@ async def test_candidate_profile_market_and_growth(quiet):
     db.scalars_q = [[]]
     profile = await candidates.get_my_profile(current, db)
     assert profile["display_name"] == "Аня" and profile["discoverable"] is True
+    assert profile["relocation"] is False
     assert profile["completeness"]["total"] == 9
     assert "skills" in profile["completeness"]["missing"]
     assert "city" not in profile["completeness"]["missing"]

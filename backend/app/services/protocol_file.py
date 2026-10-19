@@ -75,6 +75,21 @@ def certificate_grade(text: str) -> str | None:
     return _CERT_GRADE[match.group(1).upper()]
 
 
+def can_bind_protocol(fsp_id: str | None) -> bool:
+    """A confirmed line is attached to an FSP ID. A preview does not need one."""
+    return bool(fsp_id and str(fsp_id).strip())
+
+
+def preview_rows(rows: list[FSPResult]) -> list[dict]:
+    return [{
+        "discipline": row.discipline,
+        "place": row.place,
+        "total": row.total_participants,
+        "date": row.event_date.isoformat(),
+        "name": row.event_name,
+    } for row in rows]
+
+
 def parse_protocol_text(text: str) -> list[FSPResult]:
     found: list[FSPResult] = []
     seen: set[str] = set()

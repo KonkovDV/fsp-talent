@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from app.services.offer_flow import move_offer
+
 DECLINE_PAUSE = timedelta(days=30)
 
 
@@ -23,7 +25,7 @@ def expire_if_stale(offer, now: datetime | None = None) -> bool:
     expires = _aware(offer.expires_at)
     if expires is None or expires >= (now or datetime.now(UTC)):
         return False
-    offer.status = "expired"
+    move_offer(offer, "expired")
     return True
 
 

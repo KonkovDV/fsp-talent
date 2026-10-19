@@ -1,7 +1,12 @@
+import hashlib
+import hmac
+import json
 import logging
+import uuid
 from types import SimpleNamespace
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 
 from app.core.config import settings
 from app.services.vc import issuer
@@ -37,6 +42,38 @@ def test_sign_verify_and_tamper(signing_key):
     assert not issuer.verify_credential(tampered)
     forged = {**credential, "proof": {**credential["proof"], "proofValue": "z" + "1" * 20}}
     assert not issuer.verify_credential(forged)
+
+
+def test_two_audiences_do_not_share_a_holder_id(signing_key):
+    one = issuer.issue_audience_receipt(
+        "cred-a", "participant-secret", "company-a",
+        year=2024, status="всероссийское", bucket="топ-10%", discipline="Алгоритмическое",
+    )
+    other = issuer.issue_audience_receipt(
+        "cred-b", "participant-secret", "company-b",
+        year=2024, status="всероссийское", bucket="топ-10%", discipline="Алгоритмическое",
+    )
+    again = issuer.issue_audience_receipt(
+        "cred-a", "participant-secret", "company-a",
+        year=2024, status="всероссийское", bucket="топ-10%", discipline="Алгоритмическое",
+    )
+    stranger = issuer.issue_audience_receipt(
+        "cred-c", "other-person", "company-a",
+        year=2024, status="всероссийское", bucket="топ-10%", discipline="Алгоритмическое",
+    )
+    assert issuer.verify_credential(one) and issuer.verify_credential(other)
+    left = one["credentialSubject"]["id"]
+    right = other["credentialSubject"]["id"]
+    assert left.startswith("urn:receipt:") and left != right
+    assert left == again["credentialSubject"]["id"]
+    assert left != stranger["credentialSubject"]["id"]
+    blob = json.dumps(one) + json.dumps(other)
+    assert "participant-secret" not in blob and "other-person" not in blob
+    public = issuer._private_key().public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    forged = hmac.new(
+        public, b"receipt\nparticipant-secret\ncompany-a", hashlib.sha256).hexdigest()
+    assert forged != left.removeprefix("urn:receipt:")
 
 
 def test_derived_credential_omits_the_event_title(signing_key):
@@ -115,3 +152,78 @@ def test_sd_jwt_hides_the_event_title_until_it_is_disclosed(signing_key):
     opened = issuer.present_sd_jwt(token, disclosures, {"year", "bucket", "eventName"})
     assert issuer.verify_sd_jwt(opened)["eventName"] == "Чемпионат России"
     assert issuer.verify_sd_jwt(shown + "tamper") is None
+
+
+def test_a_public_credential_copy_drops_the_subject_id():
+    from app.api.v1.public import _without_subject_id
+
+    shown = _without_subject_id({
+        "id": "urn:uuid:credential",
+        "credentialSubject": {"id": "urn:uuid:person", "achievement": {"name": "Победа"}},
+    })
+    assert shown["id"] == "urn:uuid:credential"
+    assert "id" not in shown["credentialSubject"]
+    assert shown["credentialSubject"]["achievement"]["name"] == "Победа"
+
+
+def test_sd_jwt_carries_the_stored_credential_id_outside_the_disclosed_claims(signing_key):
+    token, disclosures = issuer.issue_sd_jwt("person-1", {"skill": "Python"}, jti="cred-1")
+    shown = issuer.present_sd_jwt(token, disclosures, {"skill"})
+    assert issuer.sd_jwt_jti(shown) == "cred-1"
+    assert issuer.verify_sd_jwt(shown) == {"skill": "Python"}
+    assert "person-1" not in shown
+    token, disclosures = issuer.issue_sd_jwt("person-1", {"skill": "Python"})
+    shown = issuer.present_sd_jwt(token, disclosures, {"skill"})
+    payload = json.loads(issuer._b64url_decode(shown.split("~", 1)[0].split(".")[1]))
+    assert "person-1" not in shown and payload["sub"] != "urn:uuid:person-1"
+    assert issuer.verify_sd_jwt(shown) == {"skill": "Python"}
+
+
+def test_an_expired_sd_jwt_is_refused(signing_key):
+    token, disclosures = issuer.issue_sd_jwt("person-1", {"skill": "Python"})
+    header_b64, payload_b64, _signature = token.split(".")
+    payload = json.loads(issuer._b64url_decode(payload_b64))
+    payload["iat"] = 1
+    payload["exp"] = 2
+    header = json.loads(issuer._b64url_decode(header_b64))
+    signing = f"{issuer._b64url(issuer._jcs(header))}.{issuer._b64url(issuer._jcs(payload))}".encode()
+    signed = signing.decode() + "." + issuer._b64url(issuer._private_key().sign(signing))
+    shown = issuer.present_sd_jwt(signed, disclosures, {"skill"})
+    assert issuer.verify_sd_jwt(shown) is None
+
+
+def test_a_revoked_sd_jwt_keeps_its_signature_and_loses_validity(signing_key):
+    credential_id = str(uuid.uuid4())
+    token, disclosures = issuer.issue_sd_jwt("person-1", {"skill": "Python"}, jti=credential_id)
+    shown = issuer.present_sd_jwt(token, disclosures, {"skill"})
+    assert issuer.sd_jwt_status(shown, revoked=False) == {
+        "valid": True, "signature": True, "revoked": False,
+    }
+    assert issuer.sd_jwt_status(shown, revoked=True) == {
+        "valid": False, "signature": True, "revoked": True,
+    }
+    assert issuer.sd_jwt_status(shown + "tamper", revoked=True)["signature"] is False
+    assert issuer.sd_jwt_status(shown + "tamper", revoked=True)["revoked"] is False
+
+
+@pytest.mark.asyncio
+async def test_public_sd_jwt_check_reads_the_revocation_row(signing_key):
+    from app.api.v1.public import SdJwtBody, verify_posted_sd_jwt
+
+    credential_id = uuid.uuid4()
+    token, disclosures = issuer.issue_sd_jwt("person-1", {"skill": "Python"}, jti=str(credential_id))
+    shown = issuer.present_sd_jwt(token, disclosures, {"skill"})
+
+    class Db:
+        def __init__(self, row):
+            self.row = row
+
+        async def get(self, model, ident=None, **kwargs):
+            return self.row if ident == credential_id else None
+
+    fresh = await verify_posted_sd_jwt(SdJwtBody(sd_jwt=shown), Db(SimpleNamespace(revoked_at=None)))
+    assert fresh == {"valid": True, "signature": True, "revoked": False}
+    stopped = await verify_posted_sd_jwt(SdJwtBody(sd_jwt=shown), Db(SimpleNamespace(revoked_at=object())))
+    assert stopped == {"valid": False, "signature": True, "revoked": True}
+    unknown = await verify_posted_sd_jwt(SdJwtBody(sd_jwt=shown), Db(None))
+    assert unknown == {"valid": True, "signature": True, "revoked": False}

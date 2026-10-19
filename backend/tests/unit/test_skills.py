@@ -57,6 +57,13 @@ def test_saving_the_profile_keeps_skill_evidence():
     assert by_name["Docker"].trust_level == "self_reported" and by_name["Docker"].source_quote is None
     assert by_name["Redis"].trust_level == "self_reported" and by_name["Redis"].confirmed_at is None
     assert by_name["Redis"].created_at == now
+    checked = SkillDraft(
+        "Algorithms", "Algorithms", None, "self_reported", True, earlier, None, 0.0, 3, earlier)
+    kept = plan_skill_replacement([checked], [("Python", "Python", None)], now)
+    assert {row.name for row in kept} == {"Python", "Algorithms"}
+    assert next(row for row in kept if row.name == "Algorithms").test_items == 3
+    proven_only = plan_skill_replacement(existing, [], now)
+    assert {row.name for row in proven_only} == {"Python"}
     token = sign_resume_evidence("user-1", [("Docker", "Docker")])
     proven = plan_skill_replacement(existing, [("Docker", "Docker", "Docker")], now,
                                     read_resume_evidence(token, "user-1"))

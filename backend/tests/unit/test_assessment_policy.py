@@ -57,6 +57,18 @@ def test_information_peaks_slightly_above_difficulty_with_guessing():
     assert 0.0 < best < 0.5
 
 
+def test_typed_cut_keeps_more_information_than_four_options():
+    """At θ = b the closed form matches info3. Typed c = 0.02 is 1.60 times four options, not 1.67."""
+    from app.items import CHOICE_C, TYPED_C
+    for guess in (0.0, TYPED_C, CHOICE_C):
+        assert cat.cut_information(guess) == pytest.approx(cat.info3(0.0, 1.0, 0.0, guess))
+    typed = cat.cut_information(TYPED_C)
+    choice = cat.cut_information(CHOICE_C)
+    assert choice == pytest.approx(0.15)
+    assert typed == pytest.approx(0.240196, abs=1e-4)
+    assert typed / choice == pytest.approx(1.6013, abs=1e-3)
+
+
 def test_posterior_moves_with_answers_and_narrows():
     items = [cat.Response(1.4, b, 0.25, True) for b in (-1, 0, 1)]
     up = cat.posterior(items)

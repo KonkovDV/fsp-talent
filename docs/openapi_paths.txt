@@ -42,12 +42,15 @@
 /api/v1/candidates/me/certificate
 /api/v1/candidates/me/complaints
 /api/v1/candidates/me/credentials/{credential_id}/revoke
+/api/v1/candidates/me/demand
 /api/v1/candidates/me/demo/reset
+/api/v1/candidates/me/design-probe
 /api/v1/candidates/me/exclusions
 /api/v1/candidates/me/fsp/authorize
 /api/v1/candidates/me/fsp/callback
 /api/v1/candidates/me/growth
 /api/v1/candidates/me/guardian
+/api/v1/candidates/me/industry-case
 /api/v1/candidates/me/interests/{employer_id}
 /api/v1/candidates/me/offers
 /api/v1/candidates/me/offers/{offer_id}/respond
@@ -56,6 +59,8 @@
 /api/v1/candidates/me/profile
 /api/v1/candidates/me/profile.pdf
 /api/v1/candidates/me/protocols
+/api/v1/candidates/me/protocols/preview
+/api/v1/candidates/me/qa-probe
 /api/v1/candidates/me/results
 /api/v1/candidates/me/results/{result_id}/presentation
 /api/v1/candidates/me/resume
@@ -115,6 +120,7 @@
 /api/v1/needs/{need_id}/candidates/{candidate_id}/ai-note
 /api/v1/needs/{need_id}/compare
 /api/v1/needs/{need_id}/exam
+/api/v1/needs/{need_id}/guest-review
 /api/v1/needs/{need_id}/hidden/{candidate_id}
 /api/v1/needs/{need_id}/matches
 /api/v1/needs/{need_id}/shortlist
@@ -126,6 +132,7 @@
 /api/v1/offers/
 /api/v1/offers/market
 /api/v1/offers/preview
+/api/v1/offers/{offer_id}/accept-counter
 /api/v1/offers/{offer_id}/code
 /api/v1/offers/{offer_id}/code/dispute
 /api/v1/offers/{offer_id}/contacts
@@ -146,6 +153,7 @@
 /api/v1/public/categories/{role}/{grade}/ranking
 /api/v1/public/companies/{employer_id}
 /api/v1/public/credentials/verify
+/api/v1/public/credentials/verify-sd-jwt
 /api/v1/public/credentials/verify/{credential_id}
 /api/v1/public/credentials/{credential_id}/status
 /api/v1/public/credentials/{ref}
@@ -160,6 +168,7 @@
 /api/v1/public/limits
 /api/v1/public/method/weights
 /api/v1/public/passport/{passport_id}
+/api/v1/public/reviews/{token}
 /api/v1/public/stats
 /api/v1/public/telegram/achievements
 /api/v1/public/telegram/vacancies

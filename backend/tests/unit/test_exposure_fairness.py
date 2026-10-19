@@ -1,4 +1,4 @@
-from app.services.exposure_fairness import impact_report, mark_top
+from app.services.exposure_fairness import funnel_report, impact_report, mark_top
 
 
 def test_the_same_scores_in_two_regions_clear_four_fifths():
@@ -28,6 +28,18 @@ def test_rates_half_and_thirty_five_hundredths_give_ratio_seven_tenths():
     assert report["clears"] is False
     small = [g for g in report["groups"] if g["region"] == "c"][0]
     assert small["n"] == 4 and "ratio" not in small
+
+
+def test_funnel_compares_shortlist_invites_and_acceptances():
+    even = [("запад", True, True, True)] * 5 + [("восток", True, True, True)] * 5
+    assert funnel_report(even)["clears"] is True
+    assert funnel_report(even)["ratios"] == {"shortlist": 1.0, "invited": 1.0, "accepted": 1.0}
+    uneven = [("запад", True, True, True)] * 5 + [("восток", True, False, False)] * 5
+    report = funnel_report(uneven)
+    assert report["clears"] is False
+    assert report["ratios"]["shortlist"] == 1.0
+    assert report["ratios"]["invited"] == 0.0
+    assert "в балл не входит" in report["note"]
 
 
 def test_skew_is_zero_when_top_mirrors_pool_and_negative_when_underrepresented():

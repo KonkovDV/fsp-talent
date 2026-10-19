@@ -29,6 +29,9 @@ class Offer(Base):
     status = Column(String(20), nullable=False, default="pending")
     # Optional, set when the candidate declines: salary, format, stack, not_looking, other.
     decline_reason = Column(String(20))
+    # "Yes, if": the invitation stays pending, contacts stay closed, search order does not read this.
+    counter_note = Column(Text)
+    counter_at = Column(DateTime(timezone=True))
     # When the candidate accepted or declined (migration 0002). A decline pauses new invitations for 30 days.
     responded_at = Column(DateTime(timezone=True))
     contacts_revealed_at = Column(DateTime(timezone=True))

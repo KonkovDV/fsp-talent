@@ -5,7 +5,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -23,6 +23,7 @@ from app.models import (
     CategoryAssignment,
     Employer,
     GradeConfirmation,
+    GuestReview,
     InterviewSlot,
     Need,
     NeedHidden,
@@ -33,7 +34,9 @@ from app.models import (
 )
 from app.services.ai import providers, second_opinion
 from app.services.cities import CITIES
+from app.services.demand import note_card_views
 from app.services.exclusions import shared_scope
+from app.services.guest_review import fresh_token, marks_for_owner, public_seats
 from app.services.hiring_practice import sees_senior
 from app.services.matching import NeedSpec, anonymous_compare
 from app.services.need_draft import draft_need
@@ -406,9 +409,53 @@ async def matches(need_id: uuid.UUID, limit: int = Query(20, ge=1, le=50),
             continue
     offers = await _company_offers(db, need.employer_id, ids)
     shortlist_cache.apply_company_marks(result["items"], listed, offers)
+    await note_card_views(db, need.employer_id, ids)
     return {**result, "need": _out(need, await _params(db, need)),
             "base_total": await searchable_count(db),
             "hidden_count": len(hidden), "ai_note": await providers.refresh(db) is not None}
+
+
+@router.post("/{need_id}/guest-review", status_code=201)
+async def create_guest_review(need_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                              db: AsyncSession = Depends(get_db)):
+    """Freeze the first ten visible cards into a link. The link has no names and no contacts."""
+    if await too_many(f"search:candidates:{current['sub']}", limit=30, window_seconds=60):
+        raise ApiError(429, "rate_limited")
+    need = await _own(db, need_id, current)
+    params = NeedParams(**(await _params(db, need)).params)
+    ranked = await _matches_cached(db, need, params, shortlist_cache.WINDOW, 0)
+    hidden = {str(pid) for pid in await db.scalars(
+        select(NeedHidden.participant_id).where(NeedHidden.need_id == need.id))}
+    page_items, _total = visible_page(ranked.get("items") or [], hidden, 0, 10, show=False)
+    result = await _hydrate(db, {**ranked, "items": page_items}, full_card=False)
+    seats, ids = public_seats(result.get("items") or [])
+    if not seats:
+        raise ApiError(422, "validation_error", "В подборке пока некого показать")
+    token, digest = fresh_token()
+    await db.execute(delete(GuestReview).where(GuestReview.need_id == need.id))
+    now = datetime.now(UTC)
+    db.add(GuestReview(
+        employer_id=need.employer_id, need_id=need.id, token_hash=digest, title=need.title[:200],
+        seats=seats, seat_ids=ids, marks={}, created_at=now, expires_at=now + timedelta(days=7),
+    ))
+    await db.commit()
+    return {"url": f"/review/{token}", "expires_at": (now + timedelta(days=7)).isoformat(), "seats": len(seats)}
+
+
+@router.get("/{need_id}/guest-review")
+async def read_guest_review(need_id: uuid.UUID, current: dict = Depends(get_current_employer),
+                            db: AsyncSession = Depends(get_db)):
+    """Marks from the current link, keyed by candidate id. The token is not returned again."""
+    need = await _own(db, need_id, current)
+    row = await db.scalar(select(GuestReview).where(GuestReview.need_id == need.id)
+                          .order_by(GuestReview.created_at.desc()))
+    if row is None or row.expires_at <= datetime.now(UTC):
+        return {"active": False, "marks": []}
+    return {
+        "active": True,
+        "expires_at": row.expires_at.isoformat(),
+        "marks": marks_for_owner(list(row.seat_ids or []), dict(row.marks or {})),
+    }
 
 
 @router.put("/{need_id}/hidden/{candidate_id}")

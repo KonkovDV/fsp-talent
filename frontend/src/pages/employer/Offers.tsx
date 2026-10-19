@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { advancePractice, apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
+import { acceptCounter, advancePractice, apiError, getMyEmployerOffers, getOfferContacts, offerMarket, withdrawOffer } from '../../api/client'
 import CodeInterview from '../../components/CodeInterview'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
@@ -16,6 +16,7 @@ interface Offer {
   contacts_revealed_at: string | null; created_at: string
   expires_at: string | null; practice_stage?: string | null; returned_interest?: boolean; candidate: { role: string | null; grade: string | null; grade_source: string | null; label?: string | null } | null
   contacts_revoked_at?: string | null; unread_messages?: number
+  counter_note?: string | null
 }
 interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; github?: string | null; region: string | null }
 
@@ -37,7 +38,9 @@ export default function EmployerOffers() {
   const { data: offers = [], isLoading, isError, error: loadError } = useQuery<Offer[]>({ queryKey: ['employerOffers'], queryFn: () => getMyEmployerOffers().then(r => r.data) })
   const market = useQuery({ queryKey: ['offerMarket'], queryFn: () => offerMarket().then(r => r.data as {
     reasons: { n: number; shares: Record<string, number> } | null
+    own: { n: number; counts: Record<string, number> } | null
     salaries: { role: string; grade: string; p25: number; median: number; p75: number; n: number }[]
+    reply: { n: number; median_hours: number } | null
   }) })
   const [contacts, setContacts] = useState<Record<string, Contacts>>({})
   const [error, setError] = useState('')
@@ -60,6 +63,11 @@ export default function EmployerOffers() {
     onSuccess: () => { setError(''); qc.invalidateQueries({ queryKey: ['employerOffers'] }) },
     onError: (e: unknown) => setError(apiError(e, 'Этап не сдвинулся')),
   })
+  const agree = useMutation({
+    mutationFn: acceptCounter,
+    onSuccess: () => { setError(''); qc.invalidateQueries({ queryKey: ['employerOffers'] }) },
+    onError: (e: unknown) => setError(apiError(e, 'Условие не принято')),
+  })
   const withdraw = useMutation({
     mutationFn: withdrawOffer,
     onSuccess: () => { setError(''); qc.invalidateQueries({ queryKey: ['employerOffers'] }) },
@@ -77,11 +85,17 @@ export default function EmployerOffers() {
   return (
     <div>
       <PageHeader title="Приглашения" lead="Статус каждого приглашения. Контакты открываются после согласия кандидата, каждое открытие записывается в журнал." />
-      {(market.data?.reasons || market.data?.salaries?.length) ? (
+      {(market.data?.reasons || market.data?.own || market.data?.salaries?.length || market.data?.reply) ? (
         <section className="panel-quiet mb-6 text-sm" aria-label="Рынок">
           <p className="text-ink-2">Обратная связь рынка. Цифры появляются, когда в ячейке не меньше пяти человек.</p>
+          {market.data.own && (
+            <p className="mt-2 text-ink">Ваши отказы ({market.data.own.n}): {Object.entries(market.data.own.counts).map(([k, v]) => `${REASON_RU[k] ?? k} ${v}`).join(', ')}. Подборку это не меняет.</p>
+          )}
+          {market.data.reply && (
+            <p className="mt-2 text-ink">Время ответа на ваши приглашения: медиана {market.data.reply.median_hours} ч по {market.data.reply.n} ответам. Подборку это не меняет.</p>
+          )}
           {market.data.reasons && (
-            <p className="mt-2 text-ink">Отказы ({market.data.reasons.n}): {Object.entries(market.data.reasons.shares).map(([k, v]) => `${REASON_RU[k] ?? k} ${Math.round(v * 100)} %`).join(', ')}</p>
+            <p className="mt-2 text-ink">Отказы по всему рынку ({market.data.reasons.n}): {Object.entries(market.data.reasons.shares).map(([k, v]) => `${REASON_RU[k] ?? k} ${Math.round(v * 100)} %`).join(', ')}</p>
           )}
           {!!market.data.salaries.length && (
             <ul className="mt-2 space-y-1">
@@ -119,6 +133,8 @@ export default function EmployerOffers() {
                 </div>
                 <p className="text-sm text-ink">{o.role}</p>
                 {o.returned_interest && <p className="text-sm text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
+                {o.counter_note && o.status === 'pending' && <p className="text-sm text-ink-2">Ответ «да, если»: {o.counter_note}. Контакты закрыты, место в подборке не меняется.</p>}
+                {o.counter_note && o.status === 'accepted' && <p className="text-sm text-ink-2">Условие принято: {o.counter_note}</p>}
                 {o.practice_stage && (
                   <p className="text-sm text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}
                     {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" data-testid="practice-advance" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}
@@ -130,6 +146,7 @@ export default function EmployerOffers() {
                 {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}</p>}
                 <div className="flex flex-wrap gap-2">
                   {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
+                  {o.status === 'pending' && o.counter_note && <button type="button" className="btn-primary btn-sm" disabled={agree.isPending} onClick={() => agree.mutate(o.id)}>Принять условие</button>}
                   {o.status === 'accepted' && <button onClick={() => setMeeting(meeting === o.id ? null : o.id)} aria-expanded={meeting === o.id} className="btn-ghost btn-sm">Собеседование</button>}
                   {o.status === 'accepted' && (
                     <button onClick={() => toggleThread(o.id)} aria-expanded={thread === o.id} className="btn-ghost btn-sm">
@@ -160,6 +177,8 @@ export default function EmployerOffers() {
                       {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}</div>}</td>
                     <td className="text-ink">{o.role}
                       {o.returned_interest && <p className="text-xs text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
+                      {o.counter_note && o.status === 'pending' && <p className="text-xs text-ink-2">Ответ «да, если»: {o.counter_note}. Контакты закрыты, место в подборке не меняется.</p>}
+                      {o.counter_note && o.status === 'accepted' && <p className="text-xs text-ink-2">Условие принято: {o.counter_note}</p>}
                       {o.practice_stage && (
                         <p className="text-xs text-ink-2">Практика: {PRACTICE[o.practice_stage] ?? o.practice_stage}
                           {PRACTICE_NEXT[o.practice_stage] && <button type="button" className="btn-ghost btn-sm ml-2" data-testid="practice-advance" disabled={practice.isPending} onClick={() => practice.mutate({ id: o.id, stage: PRACTICE_NEXT[o.practice_stage!] })}>Дальше</button>}
@@ -181,6 +200,7 @@ export default function EmployerOffers() {
                           {(o.unread_messages ?? 0) > 0 && <span className="count ml-1" aria-label={`непрочитанных: ${o.unread_messages}`}>{o.unread_messages}</span>}
                         </button>
                       )}
+                      {o.status === 'pending' && o.counter_note && <button type="button" className="btn-primary btn-sm" disabled={agree.isPending} onClick={() => agree.mutate(o.id)}>Принять условие</button>}
                       {o.status === 'pending' && <button onClick={() => { if (window.confirm('Отозвать приглашение? Отменить это нельзя, кандидат получит уведомление.')) withdraw.mutate(o.id) }} className="btn-ghost btn-sm">Отозвать</button>}
                     </td>
                   </tr>

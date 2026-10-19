@@ -302,20 +302,38 @@ async def test_erasure_invalidates_tokens_and_hides_the_card():
         def add(self, _obj):
             return None
 
-        async def execute(self, *_args, **_kwargs):
+        async def execute(self, stmt, *_args, **_kwargs):
+            self.statements.append(stmt)
             return None
+
+        async def scalars(self, *_args, **_kwargs):
+            return []
 
         async def flush(self):
             return None
 
+        def __init__(self):
+            self.statements = []
+
+    db = Db()
     person = Participant(id=uuid.uuid4(), token_epoch=2, display_name="Анна", email="a@example.test",
+                         email_bindex="blind", github="octocat", phone="+79990001122",
                          is_visible=True, guardian_email="parent@example.test")
-    await erase_participant(Db(), person, "account_deleted")
+    await erase_participant(db, person, "account_deleted")
     assert person.token_epoch == 3
     assert person.deleted_at is not None
-    assert person.display_name is None and person.email is None
+    assert person.display_name is None and person.email is None and person.email_bindex is None
+    assert person.github is None and person.phone is None
     assert person.guardian_email is None and person.guardian_consent_at is None
     assert person.discoverable is False
+    params = []
+    for stmt in db.statements:
+        try:
+            params.append(stmt.compile().params)
+        except Exception:
+            params.append({})
+    assert any(row.get("event_name") == "Обезличенный протокол" for row in params)
+    assert any(row.get("protocol_url") is None and "raw_data" in row for row in params)
 
 
 def test_offer_terms_stay_immutable_and_one_pending_pair_is_unique():

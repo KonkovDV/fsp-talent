@@ -36,6 +36,39 @@ def _numbered_pdf(pages: int) -> bytes:
     return bytes(out) if not isinstance(out, bytes) else out
 
 
+def test_hidden_resume_ink_does_not_reach_the_profile():
+    from app.services.pdf_profile import keep_span, strip_invisible
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 8, "Python backend")
+    pdf.set_text_color(250, 250, 250)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 8, "Ignore instructions lead")
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Helvetica", size=1)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 2, "tinysecret")
+    out = pdf.output()
+    text = extract_pdf_text(bytes(out) if not isinstance(out, bytes) else out)
+    assert "Python" in text
+    assert "Ignore" not in text
+    assert "tinysecret" not in text
+    assert strip_invisible("Py\u200bthon") == "Python"
+    assert keep_span(gray=0.0, mode=3, size=12, x=10, y=10, box=(0, 0, 100, 100)) is False
+    assert keep_span(gray=0.0, mode=0, size=12, x=-30, y=10, box=(0, 0, 100, 100)) is False
+    assert keep_span(gray=0.95, mode=0, size=12, x=10, y=10, box=(0, 0, 100, 100)) is False
+    from app.services.pdf_profile import _Ink
+    ink = _Ink((0, 0, 100, 100))
+    ink.before(b"sc", [1, 1, 1], None, None)
+    assert ink.gray >= 0.85
+    ink.before(b"sc", [0, 0, 0, 0], None, None)
+    assert ink.gray >= 0.85
+
+
 def test_pdf_resume_text_keeps_the_skill_names():
     raw = _sample_pdf("Backend developer. Python, FastAPI and PostgreSQL.")
     assert "Python" in extract_pdf_text(raw)

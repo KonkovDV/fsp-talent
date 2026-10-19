@@ -1,15 +1,16 @@
 """Leak monitoring by drift of the solve rate.
 
 For every item key we accumulate, over completed sessions, the observed number of right answers and the
-number the model expects given the candidate's final ability estimate:
+number the model expects. The ability in that expectation is estimated without the item's own family
+(`leave_family_out`): a leaked family must not lift θ̂ and hide its own residual.
 
-    expected = Σ P(θ̂_session),   variance = Σ P (1 − P),   z = (observed − expected) / sqrt(variance)
+    expected = Σ P(θ̂_without_family),   variance = Σ P (1 − P)
+    z = (observed − expected) / sqrt(variance)
+    S = max(0, S + (u − P − CUSUM_K))
 
-A leaked item (or a published solver for a family) is answered right far more often than the ability of the
-people answering predicts, so z grows with every session. A key with at least MIN_N answers and z ≥ Z_ALARM
-is quarantined: it is no longer served and its answers are dropped when sessions are scored. Ability is
-estimated from the whole session, so one leaked key moves θ̂ only a little and the residual stays visible.
-A key can be returned to service after review (status back to active, counters reset).
+A key with at least MIN_N answers is quarantined when z ≥ Z_ALARM or S ≥ CUSUM_H. It is no longer
+served and its answers are dropped when sessions are scored. A key can be returned to service after
+review (status back to active, counters reset).
 """
 from __future__ import annotations
 

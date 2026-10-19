@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CalendarClock, Check, Circle, ClipboardList } from 'lucide-react'
-import { apiError, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, myCareer, tasksForMe, weeklyTask } from '../../api/client'
+import { apiError, getMyDemand, getMyGrowth, getMyOffers, getMyProfile, getMySalaryMarket, myCareer, tasksForMe, weeklyTask } from '../../api/client'
 import { TaskResult } from './Tasks'
 import SurveyCard from '../../components/SurveyCard'
 import OtherCategories from '../../components/OtherCategories'
@@ -36,6 +36,7 @@ export default function CandidateDashboard() {
   const career = useQuery({ queryKey: ['myCareer'], queryFn: () => myCareer().then(r => r.data) })
   const { data: tasks = [], isError: tasksError, error: tasksLoadError } = useQuery({ queryKey: ['tasksForMe'], queryFn: () => tasksForMe().then(r => r.data) })
   const market = useQuery<SalaryMarket>({ queryKey: ['salaryMarket'], queryFn: () => getMySalaryMarket().then(r => r.data) })
+  const demand = useQuery({ queryKey: ['myDemand'], queryFn: () => getMyDemand().then(r => r.data) })
   const growth = useQuery<Growth>({ queryKey: ['growth'], queryFn: () => getMyGrowth().then(r => r.data) })
   const p = profile.data
   const offers = offersQ.data ?? []
@@ -124,6 +125,11 @@ export default function CandidateDashboard() {
               </li>
             ))}
           </ul>
+          {career.data?.open === false && (
+            <p className="mt-4 text-sm text-ink-2">
+              Подсказка, какой навык откроет больше вакансий, появится после интереса {career.data.need_companies} разных компаний.
+            </p>
+          )}
           {(career.data?.gained ?? 0) > 0 && (
             <p className="mt-4 text-sm text-ink-2">Если подтвердить «{career.data?.skill}» тестом, {plural(career.data?.gained ?? 0, ['подойдёт', 'подойдут', 'подойдут'])} ещё {career.data?.gained} {plural(career.data?.gained ?? 0, ['открытая вакансия', 'открытые вакансии', 'открытых вакансий'])}. Грейд от этого сам не вырастет.</p>
           )}
@@ -236,6 +242,22 @@ export default function CandidateDashboard() {
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.4fr_1fr]">
+      {demand.data && (
+        <section className="card" aria-labelledby="demand-title">
+          <h2 id="demand-title" className="section-title">Спрос на профиль</h2>
+          <p className="mt-1 text-sm text-ink-2">Имена компаний не показываются. Цифра не двигает место в подборке.</p>
+          <p className="mt-3 text-ink">
+            {demand.data.companies} {plural(demand.data.companies, ['компания', 'компании', 'компаний'])} открывали карточку за {demand.data.days} дней.
+          </p>
+          {demand.data.invites ? (
+            <p className="mt-2 text-sm text-ink-2">
+              Середина вилок приглашений в категории — {rub(demand.data.invites.median_from)}–{rub(demand.data.invites.median_to)}, по {demand.data.invites.n} {plural(demand.data.invites.n, ['приглашению', 'приглашениям', 'приглашениям'])}.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-ink-2">Медиана вилок приглашений скрыта: в категории меньше пяти приглашений с вилкой.</p>
+          )}
+        </section>
+      )}
       {market.data?.role && market.data.grade && (
         <section className="card" aria-labelledby="market-title">
           <h2 id="market-title" className="section-title">Ожидания в вашей категории</h2>

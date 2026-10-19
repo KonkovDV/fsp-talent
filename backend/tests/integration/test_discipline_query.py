@@ -9,6 +9,7 @@ from app.models import Skill
 from app.models.profile import DisciplineScore
 from app.services.matching import NeedSpec
 from app.services.profile import rebuild_profile
+from app.services.scoring.engine import VERSION
 from app.services.search.pipeline import search_candidates
 from tests.integration.conftest import stamp, wipe_people
 from tests.integration.test_search_order import _person
@@ -17,7 +18,7 @@ from tests.integration.test_search_order import _person
 def _score(person_id, discipline: str, lcb: float) -> DisciplineScore:
     return DisciplineScore(
         participant_id=person_id, discipline=discipline, score=lcb + 0.1, sigma=0.1, lcb=lcb,
-        confidence=0.8, events_count=2, team_events_count=0, top_event_ids=[], scoring_version="v3.2.0",
+        confidence=0.8, events_count=2, team_events_count=0, top_event_ids=[], scoring_version=VERSION,
     )
 
 

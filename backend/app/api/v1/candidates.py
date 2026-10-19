@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -43,6 +43,7 @@ from app.services.ai.assistant import parse_resume
 from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
+from app.services.demand import VIEW_DAYS, invite_band
 from app.services.demo_reset import JURY_BIRTH, clear_jury, is_jury, restore_consents
 from app.services.employer_score import company_score
 from app.services.field_cipher import public_ref
@@ -50,16 +51,18 @@ from app.services.fsp import identity as fsp_identity
 from app.services.fsp.mock import STATUS_LABELS, get_fsp_adapter
 from app.services.fsp.registry import FSPRegistryError
 from app.services.growth import growth_gaps, next_grade, skill_reach
-from app.services.guardian import consent_link, demo_consent_link, guardian_token
+from app.services.guardian import consent_link, demo_consent_link, guardian_token, same_person_mailbox
 from app.services.identity import active_consent
 from app.services.inn import published_inn
+from app.services.interest_signal import can_mark
 from app.services.mail import send_mail
 from app.services.market import market_flag, quartiles, role_median, salary_band
 from app.services.notify import Outbox, category_label, notify
+from app.services.offer_flow import move_offer
 from app.services.offer_why import why_invited
 from app.services.offers import expire_if_stale, expire_stale
 from app.services.pdf_profile import MAX_PDF_BYTES, extract_pdf_text, profile_lines, render_profile_pdf
-from app.services.privacy import erase_participant
+from app.services.privacy import contacts_allowed, erase_participant
 from app.services.profile import ingest_from_fsp, rebuild_profile
 from app.services.profile_completeness import profile_completeness
 from app.services.reputation import for_employer as company_reputation
@@ -77,7 +80,7 @@ from app.services.survey import INDUSTRIES, SPECIALIZATIONS, WORK_GOALS
 from app.services.trust import refresh_hold
 from app.services.trust_level import LABELS
 from app.services.trust_level import trust_level as company_trust
-from app.services.vc.issuer import issue_derived_credential, issue_sd_jwt, present_sd_jwt
+from app.services.vc.issuer import issue_audience_receipt, issue_sd_jwt, present_sd_jwt
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -126,7 +129,7 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
     return {
         "id": str(p.id), "fsp_id": p.fsp_id, "has_fsp": p.fsp_id is not None,
         "fsp_linked_at": p.fsp_linked_at.isoformat() if p.fsp_linked_at else None,
-        "display_name": p.display_name, "region": p.region,
+        "display_name": p.display_name, "region": p.region, "relocation": bool(p.relocation),
         "birth_date": p.birth_date.isoformat() if p.birth_date else None,
         # An adult without a birth date is not shown in search; the cabinet says so.
         "search_blocker": "birth_date_missing" if p.birth_date is None and not getattr(p, "is_minor", False) else None,
@@ -156,7 +159,8 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
         "job_search": p.job_search,
         "is_minor": p.minor_now(), "minor_consent_given": p.minor_consent_given, "guardian_email": p.guardian_email,
         "guardian_demo_link": (
-            demo_consent_link(p.id, p.guardian_email) if p.minor_now() and not p.minor_consent_given else None
+            demo_consent_link(p.id, p.guardian_email, int(p.guardian_link_generation or 0))
+            if p.minor_now() and not p.minor_consent_given else None
         ),
         "profile_version": p.profile_version,
         "salary_from": p.salary_from_gross, "salary_to": p.salary_to_gross,
@@ -186,12 +190,20 @@ async def get_my_profile(current: dict = Depends(get_current_participant), db: A
 
 @router.get("/me/career")
 async def my_career(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
-    """One confirmed skill that would close the most open vacancies. The grade does not move."""
+    """One confirmed skill that would close the most open vacancies. The grade does not move.
+
+    The skill name stays hidden until three different companies have opened the card in 90 days.
+    """
     from app.models import Employer
-    from app.services.career_gap import career_gap
+    from app.services.career_gap import career_hint
+    from app.services.demand import VIEW_DAYS
     from app.services.skills import extract_skills, normalize_skill
 
     pid = _pid(current)
+    since = datetime.now(UTC) - timedelta(days=VIEW_DAYS)
+    companies = await db.scalar(select(func.count(func.distinct(AccessLog.employer_id))).where(
+        AccessLog.participant_id == pid, AccessLog.access_type == "card_view",
+        AccessLog.timestamp >= since))
     have = {name for name in await db.scalars(select(Skill.name).where(
         Skill.participant_id == pid, Skill.confirmed.is_(True)))}
     found = (await db.execute(
@@ -205,8 +217,7 @@ async def my_career(current: dict = Depends(get_current_participant), db: AsyncS
         names |= {item.skill for item in extract_skills(f"{vacancy.title}\n{vacancy.description or ''}")}
         if names:
             vacancies.append(names)
-    hint = career_gap(have, vacancies)
-    return hint or {"skill": None, "gained": 0, "vacancies": len(vacancies)}
+    return career_hint(have, vacancies, int(companies or 0))
 
 
 @router.get("/me/salary-market")
@@ -231,6 +242,36 @@ async def my_salary_market(current: dict = Depends(get_current_participant), db:
                Participant.is_visible.is_(True))))
     cell = quartiles([int(amount) for amount in amounts if amount])
     return {"role": role, "grade": grade, "cell": cell, "band": salary_band(p.salary_from_gross, cell)}
+
+
+@router.get("/me/demand")
+async def my_demand(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """Companies that opened the card, and the median invitation band in this category.
+
+    Names are not returned. The band stays hidden below five invitations. Neither number
+    changes the shortlist.
+    """
+    p = await db.get(Participant, _pid(current))
+    if not p or p.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    since = datetime.now(UTC) - timedelta(days=VIEW_DAYS)
+    companies = await db.scalar(select(func.count(func.distinct(AccessLog.employer_id))).where(
+        AccessLog.participant_id == p.id, AccessLog.access_type == "card_view",
+        AccessLog.timestamp >= since))
+    cat = await db.scalar(select(CategoryAssignment).where(CategoryAssignment.participant_id == p.id))
+    role = cat.primary_role if cat else None
+    grade = cat.grade if cat else None
+    invites = None
+    if role and grade:
+        rows = (await db.execute(
+            select(Offer.salary_from_gross, Offer.salary_to_gross)
+            .join(CategoryAssignment, CategoryAssignment.participant_id == Offer.candidate_id)
+            .where(CategoryAssignment.primary_role == role, CategoryAssignment.grade == grade,
+                   Offer.salary_from_gross.is_not(None), Offer.salary_to_gross.is_not(None)))).all()
+        band = invite_band([(int(low), int(high)) for low, high in rows if low and high])
+        if band:
+            invites = {"role": role, "grade": grade, **band}
+    return {"days": VIEW_DAYS, "companies": int(companies or 0), "invites": invites}
 
 
 @router.get("/me/growth")
@@ -324,6 +365,7 @@ class ProfileUpdate(BaseModel):
     # The login email is not editable here: it is the confirmed contact an employer receives.
     display_name: str | None = Field(None, min_length=1, max_length=200)
     region: str | None = Field(None, max_length=100)
+    relocation: bool | None = None
     telegram: str | None = Field(None, max_length=64)
     phone: str | None = Field(None, max_length=20)
     github: str | None = Field(None, max_length=40)
@@ -400,6 +442,8 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
             raise ApiError(422, "validation_error", str(exc)) from exc
     if data.get("display_name"):
         p.display_name = data["display_name"].strip()
+    if "relocation" in data:
+        p.relocation = bool(data["relocation"])
     if "region" in data and p.fsp_id is None:
         # With FSP linked, the region comes from the protocols.
         p.region = (data["region"] or "").strip() or None
@@ -445,14 +489,16 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
             allowed |= read_resume_evidence(token, str(p.id))
         drafts = plan_skill_replacement(
             [SkillDraft(s.name, s.raw_name, s.source_quote, s.trust_level, s.confirmed,
-                        s.created_at, s.confirmed_at) for s in existing],
+                        s.created_at, s.confirmed_at, s.test_share, s.test_items, s.tested_at)
+             for s in existing],
             incoming, datetime.now(UTC), allowed)
         await db.execute(delete(Skill).where(Skill.participant_id == p.id))
         await db.flush()
         db.add_all([
             Skill(participant_id=p.id, name=d.name, raw_name=d.raw_name, source_quote=d.source_quote,
                   trust_level=d.trust_level, confirmed=d.confirmed, created_at=d.created_at,
-                  confirmed_at=d.confirmed_at)
+                  confirmed_at=d.confirmed_at, test_share=d.test_share, test_items=d.test_items,
+                  tested_at=d.tested_at)
             for d in drafts
         ])
     try:
@@ -605,33 +651,124 @@ async def import_certificate(file: UploadFile = File(...), current: dict = Depen
     return {"skills": kept, "grade_unchanged": person.assessed_grade == grade_before}
 
 
-@router.post("/me/protocols")
-async def import_protocols(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
-                           db: AsyncSession = Depends(get_db)):
-    """A protocol file when the registry is silent. The grade and the match score stay put."""
-    from app.services.profile import rebuild_profile
-    from app.services.protocol_file import certificate_grade, parse_protocol_text, text_of_pdf, text_of_xlsx
+async def _protocol_upload_text(file: UploadFile) -> str:
+    from app.services.protocol_file import text_of_pdf, text_of_xlsx
 
-    if await too_many(f"protocols:{_pid(current)}", limit=10, window_seconds=3600):
-        raise ApiError(429, "rate_limited", "Слишком много файлов. Подождите час.")
-    person = await db.get(Participant, _pid(current))
-    if person is None or person.deleted_at is not None:
-        raise HTTPException(404, "Профиль не найден")
     raw = await file.read()
     if len(raw) > 2_000_000:
         raise ApiError(413, "payload_too_large", "Файл больше 2 МБ")
     name = (file.filename or "").lower()
     try:
         if name.endswith(".pdf"):
-            text = text_of_pdf(raw)
-        elif name.endswith(".xlsx"):
-            text = text_of_xlsx(raw)
-        else:
-            text = raw.decode("utf-8", errors="replace")
+            return text_of_pdf(raw)
+        if name.endswith(".xlsx"):
+            return text_of_xlsx(raw)
+        return raw.decode("utf-8", errors="replace")
+    except ApiError:
+        raise
     except Exception as exc:
         raise ApiError(422, "validation_error", "Файл не читается") from exc
+
+
+class QaCaseIn(BaseModel):
+    given: str = Field(min_length=1, max_length=12)
+    expected: str = Field(min_length=1, max_length=12)
+
+
+class QaProbeIn(BaseModel):
+    cases: list[QaCaseIn] = Field(min_length=1, max_length=5)
+
+
+class DesignProbeIn(BaseModel):
+    seed: str = Field(min_length=4, max_length=32)
+    choice: str | None = Field(None, max_length=80)
+
+
+class IndustryCaseIn(BaseModel):
+    first: str | None = Field(None, max_length=12)
+    follow: str | None = Field(None, max_length=12)
+
+
+@router.post("/me/qa-probe")
+async def qa_probe(body: QaProbeIn, current: dict = Depends(get_current_participant)):
+    """Cases against one correct program and four defective copies. The grade does not move."""
+    from app.services.qa_probe import judge_cases
+
+    if await too_many(f"qa-probe:{_pid(current)}", limit=30, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много проверок. Подождите час.")
+    return judge_cases([(row.given, row.expected) for row in body.cases])
+
+
+@router.post("/me/design-probe")
+async def design_probe(body: DesignProbeIn, current: dict = Depends(get_current_participant)):
+    """A layout with a computed defect. The grade does not move."""
+    from app.services.design_probe import CHOICES, judge, puzzle
+
+    if body.choice is None:
+        return puzzle(body.seed)
+    if body.choice not in CHOICES:
+        raise ApiError(422, "validation_error", "Выберите одну из четырёх пометок макета")
+    if await too_many(f"design-probe:{_pid(current)}", limit=30, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много проверок. Подождите час.")
+    return judge(body.seed, body.choice)
+
+
+@router.post("/me/industry-case")
+async def industry_case(body: IndustryCaseIn, current: dict = Depends(get_current_participant),
+                        db: AsyncSession = Depends(get_db)):
+    """A case and a follow-up for this person's industry. The grade does not move."""
+    from app.services.industry_case import judge as judge_case
+    from app.services.industry_case import present
+
+    person = await db.get(Participant, _pid(current))
+    if person is None or person.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    industry = person.industry or "any"
+    if body.first is None and body.follow is None:
+        return present(industry)
+    if not body.first or not body.follow:
+        raise ApiError(422, "validation_error", "Нужны оба ответа: кейс и уточняющий вопрос")
+    if await too_many(f"industry-case:{person.id}", limit=30, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много проверок. Подождите час.")
+    return judge_case(industry, body.first, body.follow)
+
+
+@router.post("/me/protocols/preview")
+async def preview_protocols(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
+                            db: AsyncSession = Depends(get_db)):
+    """Show the lines a file would add. Nothing is written."""
+    from app.services.protocol_file import can_bind_protocol, parse_protocol_text, preview_rows
+
+    if await too_many(f"protocols-preview:{_pid(current)}", limit=10, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много файлов. Подождите час.")
+    person = await db.get(Participant, _pid(current))
+    if person is None or person.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    text = await _protocol_upload_text(file)
+    rows = parse_protocol_text(text)
+    if not rows:
+        raise ApiError(422, "validation_error", "В файле нет строк протокола: дисциплина, дата, место, всего")
+    return {"rows": preview_rows(rows), "can_bind": can_bind_protocol(person.fsp_id), "grade_unchanged": True}
+
+
+@router.post("/me/protocols")
+async def import_protocols(file: UploadFile = File(...), current: dict = Depends(get_current_participant),
+                           db: AsyncSession = Depends(get_db)):
+    """A protocol file when the registry is silent. The grade and the match score stay put."""
+    from app.services.profile import rebuild_profile
+    from app.services.protocol_file import can_bind_protocol, certificate_grade, parse_protocol_text
+
+    if await too_many(f"protocols:{_pid(current)}", limit=10, window_seconds=3600):
+        raise ApiError(429, "rate_limited", "Слишком много файлов. Подождите час.")
+    person = await db.get(Participant, _pid(current))
+    if person is None or person.deleted_at is not None:
+        raise HTTPException(404, "Профиль не найден")
+    text = await _protocol_upload_text(file)
     parsed = parse_protocol_text(text)
     named = certificate_grade(text)
+    if parsed and not can_bind_protocol(person.fsp_id):
+        raise ApiError(409, "fsp_required",
+                       "Строка крепится к ФСП ID. Сначала привяжите его в профиле.")
     if named:
         person.certificate_grade = named
     if not parsed and not named:
@@ -670,17 +807,25 @@ async def present_result(result_id: uuid.UUID, current: dict = Depends(get_curre
     status = STATUS_LABELS.get(result.competition_status, result.competition_status)
     bucket = _bucket(result.place, result.total_participants)
     discipline = DISCIPLINE_LABELS.get(result.discipline, result.discipline)
-    credential = issue_derived_credential(
-        str(uuid.uuid4()), str(pid),
+    credential_id = uuid.uuid4()
+    # The audience is this issuance. A second file for another company does not reuse the subject.
+    credential = issue_audience_receipt(
+        str(credential_id), str(pid), str(credential_id),
         year=year, status=status, bucket=bucket, discipline=discipline,
     )
     token, disclosures = issue_sd_jwt(str(pid), {
         "year": year, "competitionStatus": status, "bucket": bucket, "discipline": discipline,
         "eventName": result.event_name,
-    })
+    }, jti=str(credential_id))
     shown = present_sd_jwt(token, disclosures, {"year", "competitionStatus", "bucket", "discipline"})
+    proof = str((credential.get("proof") or {}).get("proofValue") or "")
+    db.add(VerifiableCredential(
+        id=credential_id, participant_id=pid, result_id=result.id,
+        credential_json=credential, proof_value=proof[:200],
+    ))
     db.add(ConsentLog(participant_id=pid, event_type="derived_claim_issued", actor_id=pid,
-                      meta={"result_id": str(result.id), "fields": ["year", "status", "bucket", "discipline"]}))
+                      meta={"result_id": str(result.id), "credential_id": str(credential_id),
+                            "fields": ["year", "status", "bucket", "discipline"]}))
     await db.commit()
     return {"credential": credential, "sd_jwt": shown}
 
@@ -765,6 +910,8 @@ async def get_my_offers(
         "practice_stage": o.practice_stage,
         "company_interest": o.employer_id in marked,
         "status": o.status, "created_at": o.created_at.isoformat(),
+        "counter_note": getattr(o, "counter_note", None),
+        "counter_at": o.counter_at.isoformat() if getattr(o, "counter_at", None) else None,
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "unread_messages": unread.get(o.id, 0),
@@ -783,6 +930,10 @@ async def mark_company_interest(employer_id: uuid.UUID, current: dict = Depends(
     existing = await db.scalar(select(CandidateInterest.id).where(
         CandidateInterest.participant_id == pid, CandidateInterest.employer_id == employer_id))
     if existing is None:
+        stamps = list(await db.scalars(select(CandidateInterest.created_at).where(
+            CandidateInterest.participant_id == pid)))
+        if not can_mark(stamps, datetime.now(UTC)):
+            raise ApiError(429, "rate_limited", "За 30 дней можно отметить две компании. Подождите или оставьте уже выбранные.")
         db.add(CandidateInterest(participant_id=pid, employer_id=employer_id, created_at=datetime.now(UTC)))
         try:
             await db.commit()
@@ -848,8 +999,10 @@ async def file_complaint(body: ComplaintIn, current: dict = Depends(get_current_
 
 
 class RespondIn(BaseModel):
-    action: Literal["accept", "reject"]
+    action: Literal["accept", "reject", "yes_if"]
     reason: Literal["salary", "format", "stack", "not_looking", "other"] | None = None
+    # The condition for "yes, if". Contacts stay closed and the search order does not read it.
+    note: str | None = Field(None, max_length=280)
 
 
 @router.post("/me/offers/{offer_id}/respond")
@@ -863,15 +1016,51 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
     if expire_if_stale(offer):
         await db.commit()
         raise HTTPException(409, "Срок оффера истёк")
+    if body.action == "yes_if":
+        from app.services.offer_flow import IllegalOfferMove, record_counter
+        try:
+            note = record_counter(offer, body.note or "")
+        except IllegalOfferMove as exc:
+            raise HTTPException(409, "Оффер уже обработан") from exc
+        except ValueError as exc:
+            raise HTTPException(422, "Напишите условие хотя бы в нескольких словах") from exc
+        cat = await db.scalar(select(CategoryAssignment).where(
+            CategoryAssignment.participant_id == offer.candidate_id))
+        who = category_label(cat.primary_role if cat else None, cat.grade if cat else None)
+        outbox = Outbox()
+        await notify(db, outbox, "employer", offer.employer_id, "offer_counter",
+                     f"Кандидат ответил «да, если…» на «{offer.role}»",
+                     f"Кандидат ({who}) готов рассмотреть приглашение при условии: {note}. "
+                     "Контакты закрыты, место в подборке не меняется.",
+                     "/employer/offers")
+        from app.services.webhooks import deliver_due, enqueue
+        await enqueue(db, offer.employer_id, "offer.counter", {
+            "created_at": datetime.now(UTC).isoformat(), "employer_id": str(offer.employer_id),
+            "offer": {"id": str(offer.id), "role": offer.role},
+            "candidate": {"ref": public_ref(offer.candidate_id)},
+            "note": note,
+        })
+        await db.commit()
+        await outbox.deliver()
+        try:
+            await deliver_due(db, offer.employer_id)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+        return {"status": "pending", "counter_note": note, "suggest_hide": False}
+    person = None
     if body.action == "accept":
-        offer.status = "accepted"
+        person = await db.get(Participant, offer.candidate_id)
+        if person is None or not await contacts_allowed(db, person):
+            raise ApiError(403, "consent_withdrawn")
+        move_offer(offer, "accepted")
         offer.contacts_revealed_at = offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
                           actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
     else:
         if body.reason is None:
             raise HTTPException(422, "Укажите причину отказа")
-        offer.status = "rejected"
+        move_offer(offer, "rejected")
         offer.decline_reason = body.reason
         offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="offer_rejected",
@@ -890,12 +1079,13 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                      f"Кандидат отклонил приглашение «{offer.role}»",
                      f"Кандидат ({who}) отклонил приглашение. Подборка по потребности обновляется сама.",
                      "/employer/offers")
-    person = await db.get(Participant, offer.candidate_id)
+    if person is None:
+        person = await db.get(Participant, offer.candidate_id)
     event = {
         "created_at": datetime.now(UTC).isoformat(), "employer_id": str(offer.employer_id),
         "offer": {"id": str(offer.id), "role": offer.role, "salary_from": offer.salary_from_gross,
                   "salary_to": offer.salary_to_gross, "work_format": offer.work_format},
-        "candidate": {"ref": str(offer.candidate_id),
+        "candidate": {"ref": public_ref(offer.candidate_id),
                       "category": {"specialization": cat.primary_role if cat else None,
                                    "grade": cat.grade if cat else None,
                                    "grade_source": cat.grade_source if cat else None}},
@@ -918,10 +1108,7 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         await db.commit()
     except Exception:
         await db.rollback()
-    suggest_hide = False
-    if offer.status == "accepted":
-        person = await db.get(Participant, offer.candidate_id)
-        suggest_hide = person is not None and person.job_search != "not_looking"
+    suggest_hide = offer.status == "accepted" and person is not None and person.job_search != "not_looking"
     return {"status": offer.status, "suggest_hide": suggest_hide}
 
 
@@ -961,7 +1148,7 @@ async def revoke_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
     from app.services.webhooks import deliver_due, enqueue
     await enqueue(db, offer.employer_id, "contacts.revoked", {
         "created_at": now.isoformat(), "employer_id": str(offer.employer_id),
-        "candidate": {"ref": str(pid), "delete": True},
+        "candidate": {"ref": public_ref(pid), "delete": True},
     })
     await db.commit()
     await outbox.deliver()
@@ -1091,16 +1278,18 @@ async def ask_guardian(body: GuardianIn, current: dict = Depends(get_current_par
     if not p.minor_now() or p.minor_consent_given:
         raise ApiError(409, "conflict", "Согласие представителя не требуется")
     email = str(body.guardian_email).strip().lower()
-    if email == (p.email or "").lower():
+    if same_person_mailbox(p.email, email):
         raise ApiError(422, "validation_error", "Укажите адрес родителя или другого законного представителя")
     if await too_many(f"guardian:{p.id}", limit=3, window_seconds=86_400):
         raise ApiError(429, "rate_limited", "Не больше трёх писем представителю в сутки")
     p.guardian_email = email
-    db.add(ConsentLog(participant_id=p.id, event_type="guardian_requested", actor_id=p.id, meta={}))
+    p.guardian_link_generation = int(p.guardian_link_generation or 0) + 1
+    db.add(ConsentLog(participant_id=p.id, event_type="guardian_requested", actor_id=p.id,
+                      meta={"generation": int(p.guardian_link_generation)}))
     await db.commit()
-    token = guardian_token(p.id, email)
+    token = guardian_token(p.id, email, int(p.guardian_link_generation))
     link = consent_link(settings.PUBLIC_BASE_URL, token)
-    shown = demo_consent_link(p.id, email)
+    shown = demo_consent_link(p.id, email, int(p.guardian_link_generation))
     await send_mail(email, "Согласие законного представителя — ФСП Талант",
                     f"{p.display_name or 'Ваш ребёнок'} зарегистрировался на платформе подбора ФСП Талант.\n"
                     "Работодатели увидят анонимную карточку кандидата только после вашего согласия на обработку "

@@ -1,4 +1,4 @@
-from app.services.protocol_file import certificate_grade, parse_protocol_text
+from app.services.protocol_file import can_bind_protocol, certificate_grade, parse_protocol_text, preview_rows
 
 
 def test_a_protocol_line_is_kept_and_does_not_set_a_grade():
@@ -24,6 +24,16 @@ def test_a_certificate_letter_does_not_become_the_grade():
     assessed = "junior"
     named = certificate_grade("20240115-1-S-001")
     assert named == "senior" and assessed == "junior"
+
+
+def test_a_preview_lists_the_line_and_binding_needs_an_fsp_id():
+    rows = parse_protocol_text("алгоритмическое;2024-06-01;3;120;региональные;Открытый кубок\n")
+    shown = preview_rows(rows)
+    assert shown[0]["place"] == 3 and shown[0]["total"] == 120
+    assert "participant" not in shown[0]
+    assert can_bind_protocol("FSP001") is True
+    assert can_bind_protocol(None) is False
+    assert can_bind_protocol("  ") is False
 
 
 def test_the_same_line_twice_is_one_event():

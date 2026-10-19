@@ -202,6 +202,20 @@
         "title": "Body_login_participant_api_v1_auth_participant_token_post",
         "type": "object"
       },
+      "Body_preview_protocols_api_v1_candidates_me_protocols_preview_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_protocols_api_v1_candidates_me_protocols_preview_post",
+        "type": "object"
+      },
       "Body_upload_resume_api_v1_candidates_me_resume_post": {
         "properties": {
           "file": {
@@ -352,6 +366,19 @@
             "title": "Fsp Id",
             "type": "string"
           },
+          "nonce": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nonce"
+          },
           "password": {
             "maxLength": 200,
             "minLength": 1,
@@ -380,6 +407,33 @@
           "code_challenge_method"
         ],
         "title": "DemoLoginIn",
+        "type": "object"
+      },
+      "DesignProbeIn": {
+        "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choice"
+          },
+          "seed": {
+            "maxLength": 32,
+            "minLength": 4,
+            "title": "Seed",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seed"
+        ],
+        "title": "DesignProbeIn",
         "type": "object"
       },
       "DraftOut": {
@@ -628,6 +682,11 @@
             "minLength": 8,
             "title": "Password",
             "type": "string"
+          },
+          "synthetic_ack": {
+            "default": false,
+            "title": "Synthetic Ack",
+            "type": "boolean"
           },
           "website": {
             "anyOf": [
@@ -901,6 +960,31 @@
         "title": "GuestIn",
         "type": "object"
       },
+      "GuestMarkIn": {
+        "properties": {
+          "mark": {
+            "enum": [
+              "yes",
+              "no",
+              "later"
+            ],
+            "title": "Mark",
+            "type": "string"
+          },
+          "seat": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Seat",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seat",
+          "mark"
+        ],
+        "title": "GuestMarkIn",
+        "type": "object"
+      },
       "GuideIn": {
         "properties": {
           "question": {
@@ -942,6 +1026,36 @@
         "title": "HiringPracticeIn",
         "type": "object"
       },
+      "IndustryCaseIn": {
+        "properties": {
+          "first": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "follow": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow"
+          }
+        },
+        "title": "IndustryCaseIn",
+        "type": "object"
+      },
       "InterestIn": {
         "properties": {
           "interest": {
@@ -980,6 +1094,17 @@
               }
             ],
             "title": "Code"
+          },
+          "copy_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copy Text"
           },
           "draft_index": {
             "anyOf": [
@@ -1525,6 +1650,11 @@
             "minLength": 8,
             "title": "Password",
             "type": "string"
+          },
+          "synthetic_ack": {
+            "default": false,
+            "title": "Synthetic Ack",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1801,6 +1931,17 @@
             ],
             "title": "Region"
           },
+          "relocation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relocation"
+          },
           "resume_tokens": {
             "items": {
               "maxLength": 24000,
@@ -2057,6 +2198,46 @@
         "title": "PublicGuideIn",
         "type": "object"
       },
+      "QaCaseIn": {
+        "properties": {
+          "expected": {
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Expected",
+            "type": "string"
+          },
+          "given": {
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Given",
+            "type": "string"
+          }
+        },
+        "required": [
+          "given",
+          "expected"
+        ],
+        "title": "QaCaseIn",
+        "type": "object"
+      },
+      "QaProbeIn": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/QaCaseIn"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Cases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cases"
+        ],
+        "title": "QaProbeIn",
+        "type": "object"
+      },
       "QueryIn": {
         "properties": {
           "q": {
@@ -2168,10 +2349,23 @@
           "action": {
             "enum": [
               "accept",
-              "reject"
+              "reject",
+              "yes_if"
             ],
             "title": "Action",
             "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 280,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "reason": {
             "anyOf": [
@@ -2441,6 +2635,21 @@
           "salary_to_gross"
         ],
         "title": "SalaryPreview",
+        "type": "object"
+      },
+      "SdJwtBody": {
+        "properties": {
+          "sd_jwt": {
+            "maxLength": 65536,
+            "minLength": 20,
+            "title": "Sd Jwt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sd_jwt"
+        ],
+        "title": "SdJwtBody",
         "type": "object"
       },
       "SessionOut": {
@@ -7744,7 +7953,7 @@
     },
     "/api/v1/candidates/me/career": {
       "get": {
-        "description": "One confirmed skill that would close the most open vacancies. The grade does not move.",
+        "description": "One confirmed skill that would close the most open vacancies. The grade does not move.\n\nThe skill name stays hidden until three different companies have opened the card in 90 days.",
         "operationId": "my_career_api_v1_candidates_me_career_get",
         "responses": {
           "200": {
@@ -8146,6 +8355,99 @@
         ]
       }
     },
+    "/api/v1/candidates/me/demand": {
+      "get": {
+        "description": "Companies that opened the card, and the median invitation band in this category.\n\nNames are not returned. The band stays hidden below five invitations. Neither number\nchanges the shortlist.",
+        "operationId": "my_demand_api_v1_candidates_me_demand_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Demand",
+        "tags": [
+          "candidates"
+        ]
+      }
+    },
     "/api/v1/candidates/me/demo/reset": {
       "post": {
         "description": "Demo stand only, jury1..jury10 only: start over. Survey, test sessions, grade confirmations,\ncategory, skills, invitations and the grade cooldown are cleared. The password stays.\nRepeating the call is harmless. Q&A §6: the jury takes the test itself.",
@@ -8227,6 +8529,109 @@
           }
         ],
         "summary": "Reset My Demo",
+        "tags": [
+          "candidates"
+        ]
+      }
+    },
+    "/api/v1/candidates/me/design-probe": {
+      "post": {
+        "description": "A layout with a computed defect. The grade does not move.",
+        "operationId": "design_probe_api_v1_candidates_me_design_probe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignProbeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Design Probe",
         "tags": [
           "candidates"
         ]
@@ -8811,6 +9216,109 @@
           }
         ],
         "summary": "Ask Guardian",
+        "tags": [
+          "candidates"
+        ]
+      }
+    },
+    "/api/v1/candidates/me/industry-case": {
+      "post": {
+        "description": "A case and a follow-up for this person's industry. The grade does not move.",
+        "operationId": "industry_case_api_v1_candidates_me_industry_case_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndustryCaseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Industry Case",
         "tags": [
           "candidates"
         ]
@@ -9836,6 +10344,212 @@
           }
         ],
         "summary": "Import Protocols",
+        "tags": [
+          "candidates"
+        ]
+      }
+    },
+    "/api/v1/candidates/me/protocols/preview": {
+      "post": {
+        "description": "Show the lines a file would add. Nothing is written.",
+        "operationId": "preview_protocols_api_v1_candidates_me_protocols_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_protocols_api_v1_candidates_me_protocols_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Preview Protocols",
+        "tags": [
+          "candidates"
+        ]
+      }
+    },
+    "/api/v1/candidates/me/qa-probe": {
+      "post": {
+        "description": "Cases against one correct program and four defective copies. The grade does not move.",
+        "operationId": "qa_probe_api_v1_candidates_me_qa_probe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QaProbeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Qa Probe",
         "tags": [
           "candidates"
         ]
@@ -17204,6 +17918,214 @@
         ]
       }
     },
+    "/api/v1/needs/{need_id}/guest-review": {
+      "get": {
+        "description": "Marks from the current link, keyed by candidate id. The token is not returned again.",
+        "operationId": "read_guest_review_api_v1_needs__need_id__guest_review_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "need_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Need Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read Guest Review",
+        "tags": [
+          "needs"
+        ]
+      },
+      "post": {
+        "description": "Freeze the first ten visible cards into a link. The link has no names and no contacts.",
+        "operationId": "create_guest_review_api_v1_needs__need_id__guest_review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "need_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Need Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Guest Review",
+        "tags": [
+          "needs"
+        ]
+      }
+    },
     "/api/v1/needs/{need_id}/hidden/{candidate_id}": {
       "delete": {
         "operationId": "unhide_candidate_api_v1_needs__need_id__hidden__candidate_id__delete",
@@ -18750,6 +19672,111 @@
           }
         ],
         "summary": "Preview Offer",
+        "tags": [
+          "offers"
+        ]
+      }
+    },
+    "/api/v1/offers/{offer_id}/accept-counter": {
+      "post": {
+        "description": "Agree to the candidate's condition. Contacts open. The search order does not change.",
+        "operationId": "accept_counter_offer_api_v1_offers__offer_id__accept_counter_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Accept Counter Offer",
         "tags": [
           "offers"
         ]
@@ -21335,6 +22362,104 @@
         ]
       }
     },
+    "/api/v1/public/credentials/verify-sd-jwt": {
+      "post": {
+        "description": "Verify an SD-JWT presentation and the stored revocation row for its `jti`.\n\nThe signature check itself does not read the database. This route does, when `jti`\nis the id of a credential we issued. A presentation we did not store stays signature-only.",
+        "operationId": "verify_posted_sd_jwt_api_v1_public_credentials_verify_sd_jwt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SdJwtBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Verify Posted Sd Jwt",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/api/v1/public/credentials/verify/{credential_id}": {
       "get": {
         "operationId": "verify_stored_api_v1_public_credentials_verify__credential_id__get",
@@ -22657,6 +23782,212 @@
         "summary": "Public Passport",
         "tags": [
           "passport"
+        ]
+      }
+    },
+    "/api/v1/public/reviews/{token}": {
+      "get": {
+        "description": "Anonymized snapshot. No account, no candidate id, no contacts.",
+        "operationId": "read_public_review_api_v1_public_reviews__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read Public Review",
+        "tags": [
+          "public"
+        ]
+      },
+      "post": {
+        "description": "A mark on one seat. It does not open contacts and does not move the shortlist.",
+        "operationId": "mark_public_review_api_v1_public_reviews__token__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestMarkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет или неверный токен (unauthorized, invalid_credentials)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Нет прав или email не подтверждён (forbidden, email_not_verified)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Не найдено (not_found, need_not_found, consent_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Конфликт состояния (conflict, email_taken, session_closed, item_token_invalid, ...)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Ошибка валидации (validation_error, consent_required, survey_required)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Лимит запросов или попыток (rate_limited, retake_cooldown, grade_locked), есть Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Через сколько секунд повторить (RFC 9110 §10.2.3)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark Public Review",
+        "tags": [
+          "public"
         ]
       }
     },

@@ -22,7 +22,9 @@ interface ResumeFound {
   full_name: Quoted | null; email: Quoted | null; phone: Quoted | null; telegram: Quoted | null
   experience_years: { value: number; quote: string } | null
   grade: Quoted | null; role: Quoted | null
+  relocation?: { value: boolean; quote: string } | null
   soft_skills: { name: string; quote: string }[]
+  model_text?: string
 }
 
 export default function CandidateProfile() {
@@ -176,6 +178,11 @@ export default function CandidateProfile() {
               </button>
             )
           })}
+          <button type="button" aria-pressed={Boolean(profile.relocation)} disabled={cardFields.isPending}
+            onClick={() => cardFields.mutate({ relocation: !profile.relocation })}
+            className={profile.relocation ? 'btn-primary' : 'btn-secondary'}>
+            {profile.relocation ? 'Готов к переезду: другой город учитывается' : 'Переезд не предлагаю'}
+          </button>
         </div>
       </section>
 
@@ -257,6 +264,7 @@ export default function CandidateProfile() {
               {found && <ResumeFields found={found} onName={value => { setDisplayName(value); setNote('Имя подставлено в контакты. Сохраните изменения.') }}
                 onPhone={value => { setPhone(value); setNote('Телефон подставлен. Сохраните изменения.') }}
                 onTelegram={value => { setTelegram(value); setNote('Telegram подставлен. Сохраните изменения.') }}
+                onRelocation={value => cardFields.mutate({ relocation: value })}
                 onSurvey={applySurvey} />}
             </div>
           </section>
@@ -366,11 +374,12 @@ function Exclusions() {
   )
 }
 
-function ResumeFields({ found, onName, onPhone, onTelegram, onSurvey }: {
+function ResumeFields({ found, onName, onPhone, onTelegram, onRelocation, onSurvey }: {
   found: ResumeFound
   onName: (value: string) => void
   onPhone: (value: string) => void
   onTelegram: (value: string) => void
+  onRelocation: (value: boolean) => void
   onSurvey: (patch: Omit<SurveyHint, 'nonce'>, message: string) => void
 }) {
   const row = (label: string, value: string, quote: string, onApply?: () => void) => (
@@ -381,7 +390,7 @@ function ResumeFields({ found, onName, onPhone, onTelegram, onSurvey }: {
     </div>
   )
   const empty = !found.full_name && !found.email && !found.phone && !found.telegram
-    && !found.experience_years && !found.grade && !found.role && found.soft_skills.length === 0
+    && !found.experience_years && !found.grade && !found.role && !found.relocation && found.soft_skills.length === 0
   return (
     <div className="space-y-3 rounded-xl border border-line bg-sunken/40 p-3">
       <p className="field-label">Нашлось в резюме</p>
@@ -397,6 +406,14 @@ function ResumeFields({ found, onName, onPhone, onTelegram, onSurvey }: {
         () => onSurvey({ declared_grade: found.grade!.value }, 'Заявленный грейд подставлен в опрос. Сохраните опрос. Грейд, подтверждённый тестом, резюме не меняет.'))}
       {found.experience_years && row('Опыт, лет', String(found.experience_years.value), found.experience_years.quote,
         () => onSurvey({ experience_years: found.experience_years!.value }, 'Стаж подставлен в опрос. Сохраните опрос.'))}
+      {found.relocation && row('Переезд', found.relocation.value ? 'готов к переезду' : 'переезд не предлагать', found.relocation.quote,
+        () => onRelocation(found.relocation!.value))}
+      {found.model_text != null && (
+        <details>
+          <summary className="cursor-pointer text-sm text-ink-2">Текст, который уходит в модель</summary>
+          <pre className="mt-2 whitespace-pre-wrap text-xs text-ink-3">{found.model_text || 'Имя, почта, телефон и ссылки из этого текста вырезаны. Если узнаёте себя — поправьте резюме и разберите снова.'}</pre>
+        </details>
+      )}
       {found.soft_skills.length > 0 && (
         <div className="text-sm text-ink">
           <p className="text-ink-2">Мягкие навыки, в поиск не входят</p>

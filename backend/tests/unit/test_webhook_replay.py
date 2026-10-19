@@ -28,8 +28,8 @@ def test_same_id_is_rejected_the_second_time(monkeypatch):
     assert all(ex == 2 * webhooks.SKEW_SECONDS for _, ex in fake.keys.values())
 
 
-def test_redis_down_does_not_block(monkeypatch):
+def test_redis_down_rejects_the_delivery(monkeypatch):
     async def broken():
         raise ConnectionError("down")
     monkeypatch.setattr(rc, "get_redis", broken)
-    assert asyncio.run(webhooks.first_delivery("ep1", "msg_x"))
+    assert not asyncio.run(webhooks.first_delivery("ep1", "msg_x"))

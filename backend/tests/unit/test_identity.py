@@ -52,7 +52,9 @@ def test_every_raised_code_is_registered_and_documented():
     used = _codes_used_in_app()
     assert used, "no ApiError calls found"
     assert used <= set(ERROR_CODES), used - set(ERROR_CODES)
-    documented = set(re.findall(r"^\| `([a-z_0-9]+)` \|", (ROOT.parent / "docs/API_ERRORS.md").read_text(), re.M))
+    documented = set(re.findall(
+        r"^\| `([a-z_0-9]+)` \|",
+        (ROOT.parent / "docs/API_ERRORS.md").read_text(encoding="utf-8"), re.M))
     assert set(ERROR_CODES) == documented, set(ERROR_CODES) ^ documented
 
 

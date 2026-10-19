@@ -17,13 +17,14 @@ export default function FspIdDemoPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const request = Object.fromEntries(PARAMS.map(k => [k, params.get(k) ?? '']))
+  const nonce = params.get('nonce')
   const valid = PARAMS.every(k => request[k]) && params.get('response_type') === 'code'
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(''); setBusy(true)
     try {
-      const { data } = await fspDemoLogin({ ...request, fsp_id: fspId, password })
+      const { data } = await fspDemoLogin({ ...request, ...(nonce ? { nonce } : {}), fsp_id: fspId, password })
       window.location.assign(data.redirect_to)
     } catch (err) {
       setError(apiError(err, 'Вход не выполнен'))

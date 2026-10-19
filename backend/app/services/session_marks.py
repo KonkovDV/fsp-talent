@@ -5,12 +5,13 @@ TAB_LEAVE_CAP = 30
 INTEGRITY_FACTOR = 0.85
 INTEGRITY_LINE = (
     "На тесте несколько сигналов нечестного прохождения (уровень риска «умеренный» или выше). "
-    "Место умножено на 0,85. Грейд не изменён."
+    "Место и оценка соответствия не изменены: сигнал сам по себе не доказательство. Грейд не изменён."
 )
 COPY_CAP = 30
 PASTE_CAP = 30
 # Integrity risk level (W6): points from independent signals, one signal alone is not a violation
-# (Codility Integrity Risk, HackerRank). The place factor applies from "moderate" up; the grade never moves.
+# (Codility Integrity Risk, HackerRank). From "moderate" up the card carries a note. The note does
+# not change the grade or the match score until a reviewed field study says the signal is fair.
 LEVELS = ((4, "high"), (2, "moderate"), (1, "low"), (0, "none"))
 LEVEL_LABELS = {"none": "нет", "low": "низкий", "moderate": "умеренный", "high": "высокий"}
 PENALISED_LEVELS = ("moderate", "high")
@@ -20,6 +21,7 @@ SIGNAL_LABELS = {
     "pastes": "в поле ответа вставляли текст",
     "fast_correct": "быстрые верные ответы на трудные задания",
     "similarity": "ответ совпал с ключом другого варианта или подпись задания не сошлась",
+    "twin": "ответ совпал с числом из копии условия, которого не было на экране",
 }
 DISPUTE_TEXT = (
     "Решение принято автоматически по правилам теста. "
@@ -65,6 +67,7 @@ def integrity_level(flags: dict | None) -> dict:
         "pastes": 1 if int(flags.get("pastes") or 0) > 0 else 0,
         "fast_correct": 2 if int(flags.get("fast_correct") or 0) >= 2 or flags.get("pace_review") else 0,
         "similarity": 2 if flags.get("variant_review") or flags.get("integrity_review") else 0,
+        "twin": 2 if flags.get("twin_review") else 0,
     }
     total = sum(points.values())
     level = next(name for floor, name in LEVELS if total >= floor)
@@ -77,7 +80,7 @@ def integrity_line(flags: dict | None) -> str | None:
     if info["level"] == "none":
         return None
     signals = "; ".join(SIGNAL_LABELS[s] for s in info["signals"])
-    tail = " Место умножено на 0,85." if info["level"] in PENALISED_LEVELS else " Место не меняется."
+    tail = " Место и оценка соответствия не меняются." if info["level"] in PENALISED_LEVELS else " Место не меняется."
     return f"Уровень риска честности: {LEVEL_LABELS[info['level']]} ({signals}).{tail} Грейд не изменён."
 
 
@@ -124,8 +127,17 @@ def integrity_flagged(flags: dict | None) -> bool:
     return integrity_level(flags)["level"] in PENALISED_LEVELS
 
 
+# Browser signals stay a note until a reviewed field study turns this on deliberately.
+APPLY_INTEGRITY_FACTOR = False
+
+
 def penalised(score: float, flags: dict | None) -> tuple[float, str | None]:
-    if not integrity_flagged(flags):
+    """Employer ranking. While the factor is off, browser signals do not change the score or the card text.
+
+    The candidate still reads integrity_line on their own result. A visible risk label in search would
+    punish the person before anyone has reviewed the signal.
+    """
+    if not APPLY_INTEGRITY_FACTOR or not integrity_flagged(flags):
         return score, None
     return round(score * INTEGRITY_FACTOR, 4), integrity_line(flags) or INTEGRITY_LINE
 

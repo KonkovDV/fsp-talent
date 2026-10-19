@@ -27,3 +27,12 @@ def test_a_text_file_and_a_dump_missing_a_table_fail(tmp_path):
     missed = verify_backup.verify_dump(partial)
     assert any("offers" in line for line in missed)
     assert not any("не дамп" in line for line in missed)
+
+
+def test_a_restore_set_needs_the_signing_key(tmp_path):
+    empty = tmp_path / "keys"
+    empty.mkdir()
+    assert any("ключа" in line for line in verify_backup.verify_key_dir(empty))
+    pem = empty / "vc_ed25519.pem"
+    pem.write_bytes(b"not-a-real-key-but-long-enough-for-the-check")
+    assert verify_backup.verify_key_dir(empty) == []

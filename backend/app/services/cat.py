@@ -84,6 +84,17 @@ def info3(theta: float, a: float, b: float, c: float) -> float:
     return a * a * ((p - c) ** 2) / ((1.0 - c) ** 2) * (1.0 - p) / p
 
 
+def cut_information(c: float, a: float = 1.0) -> float:
+    """Fisher information of a 3PL item exactly at its own difficulty.
+
+    At θ = b the success probability is (1 + c) / 2, and the information collapses to
+    a² · (1/4) · (1 − c) / (1 + c). A typed integer uses c = 0.02; four options use c = 0.25.
+    """
+    if not 0.0 <= c < 1.0 or a <= 0.0:
+        return 0.0
+    return a * a * 0.25 * (1.0 - c) / (1.0 + c)
+
+
 @dataclass(frozen=True)
 class Response:
     a: float

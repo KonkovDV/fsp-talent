@@ -87,6 +87,8 @@ class FSPParticipant:
     gender: str | None = None   # used only to generate demo names; the registry contract does not ask for it
     results: list[FSPResult] = field(default_factory=list)
     ranks: list[RegistryRank] = field(default_factory=list)
+    # True only when `results` is the full current snapshot, including an intentional empty list.
+    complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -237,12 +239,15 @@ for _person in DEMO.values():
 
 class MockFSPAdapter:
     async def fetch_participant(self, fsp_id: str) -> FSPParticipant | None:
-        if fsp_id in DEMO:
-            return DEMO[fsp_id]
-        number = int(fsp_id[3:]) if fsp_id.startswith("FSP") and fsp_id[3:].isdigit() else -1
-        if number in GENERATED_RANGE or number in UNCLAIMED_RANGE:
-            return _generate(fsp_id)
-        return None
+        person = DEMO.get(fsp_id)
+        if person is None:
+            number = int(fsp_id[3:]) if fsp_id.startswith("FSP") and fsp_id[3:].isdigit() else -1
+            if number in GENERATED_RANGE or number in UNCLAIMED_RANGE:
+                person = _generate(fsp_id)
+        if person is None:
+            return None
+        person.complete = True
+        return person
 
     async def changes_since(self, since: datetime) -> FSPChanges:
         """Ids whose latest protocol line is on or after `since`. Demo data only."""
@@ -262,7 +267,12 @@ class MockFSPAdapter:
 
 
 def get_fsp_adapter() -> FSPAdapter:
+    from app.core.config import registry_mode_error
+    if message := registry_mode_error():
+        raise RuntimeError(message)
     if settings.FSP_MODE == "real":
         from app.services.fsp.registry import HttpFSPAdapter
         return HttpFSPAdapter()
+    if settings.FSP_MODE != "mock":
+        raise RuntimeError(f"FSP_MODE must be mock or real, not {settings.FSP_MODE!r}")
     return MockFSPAdapter()

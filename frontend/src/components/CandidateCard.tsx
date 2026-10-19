@@ -58,6 +58,7 @@ export interface CandidateCardData {
     info: string[]
     reasons?: { code: string; text: string; tone: string; source?: string | null; points?: number | null }[]
     factors: { key: string; label: string; weight: number; value: number | null; contrib?: number | null }[]
+    ahead_of_next?: { key: string; label: string; points: number; text: string } | null
   }
   disciplines: {
     label: string
@@ -87,6 +88,7 @@ const REASON_RU: Record<string, string> = {
   FSP_NEUTRAL: 'Без истории ФСП',
   FSP_RELEVANT: 'Профильная дисциплина',
   FSP_OTHER: 'Другая дисциплина',
+  FSP_SKILL: 'Навык подтверждён ФСП',
   RELATED_ROLE: 'Смежная специализация',
   RELATED_SKILL: 'Близкая технология',
   SKILL_COVERAGE: 'Навыки',
@@ -107,6 +109,7 @@ const REASON_RU: Record<string, string> = {
   FIT_TIER: 'Ярус соответствия',
   PLACE_MATCH: 'Город совпадает',
   PLACE_OTHER: 'Другой город',
+  PLACE_RELOCATE: 'Готов к переезду',
   PLACE_OPEN: 'Город не указан',
   FORMAT_MATCH: 'Формат подходит',
   FORMAT_PART: 'Формат частично',
@@ -147,6 +150,7 @@ function skillChip(name: string, evidence?: Record<string, string>): string {
   const label = skillRu(name)
   const trust = evidence?.[name]
   if (trust === 'test_confirmed') return `${label}, подтверждён`
+  if (trust === 'fsp_confirmed') return `${label}, подтверждено ФСП`
   if (trust === 'resume_confirmed') return `${label}, по цитате`
   if (trust === 'self_reported') return `${label}, заявлен`
   return label
@@ -340,6 +344,11 @@ export default function CandidateCard({ card, place, onOffer, onTask, onShortlis
         {score !== null && (
           <div className="col-span-2 flex items-center gap-3 sm:col-span-1 sm:flex-col sm:items-end sm:gap-1 sm:text-right">
             <ScoreRing value={score} />
+            {card.match?.ahead_of_next?.text && (
+              <span className="max-w-36 text-xs text-ink-2 sm:text-right" data-testid="ahead-of-next">
+                {card.match.ahead_of_next.text}
+              </span>
+            )}
             <span className="whitespace-nowrap text-xs text-ink-3"
               title={card.match?.basis === 'evidence' ? 'Критериев нет: порядок задают тест и результаты ФСП' : 'Насколько кандидат подходит под критерии'}>
               {card.match?.basis === 'evidence' ? 'сила профиля из 100' : 'совпадение из 100'}
