@@ -1,7 +1,7 @@
 # HTTPS without buying a domain: <ip-with-dashes>.sslip.io resolves to that IP, Caddy gets a Let's Encrypt
 # certificate for it automatically. Set SITE_ADDRESS in deploy/.env, e.g. 203-0-113-10.sslip.io
 # This file lives in a directory mount. A file mount keeps the old inode after git replaces it.
-{$SITE_ADDRESS}, v1081358.hosted-by-vdsina.com {
+{$SITE_ADDRESS} {
 	encode zstd gzip
 
 	header {

@@ -174,7 +174,7 @@
 |---|---|---|---|
 | 3.1 Обычная машина или недорогой сервер | ✅ | 9 контейнеров, около 1,5 ГБ памяти ([INSTALL.md](INSTALL.md)) |н/п (документ) |
 | 3.2 ML и NLP для резюме, категоризации и подбора — преимущество | ✅ | Разбор резюме с цитатами, IRT-модель теста, ранжирование, GigaChat и смысловой поиск (эмбеддинги) по флагу |`test_resumes.py`, `test_skills.py` |
-| 3.3 Ссылка на стенд или видео и инструкция локального запуска | ✅ | https://89-124-65-102.sslip.io, [INSTALL.md](INSTALL.md), [deploy/README.md](../deploy/README.md) |н/п (документ) |
+| 3.3 Ссылка на стенд или видео и инструкция локального запуска | ✅ | [видео](../submission/05-additional/fsp-talent-demo.mp4), [INSTALL.md](INSTALL.md), [deploy/README.md](../deploy/README.md) |н/п (документ) |
 | 3.3 Сквозной сценарий и объяснение механик | ✅ | [Руководство пользователя: полный сценарий](USER_GUIDE.md#полный-сценарий-из-тз-33), [README: 5 минут](../README.md#для-жюри-5-минут) |н/п (документ) |
 | Одна команда приёмки по таблице требований | ✅ сверх ТЗ | `make accept`, [requirements_trace.md](requirements_trace.md); `python -m app.validation.accept` | `test_accept.py`, `test_validation.py` |
 | Проверка дампа базы и восстановление только с явным подтверждением | ✅ сверх ТЗ | [deploy/README.md](../deploy/README.md); `deploy/verify_backup.py`, `deploy/restore_db.sh` | `test_backup_check.py` |
