@@ -1,6 +1,6 @@
 """Validation of the adaptive test by simulation: `python -m app.validation.assessment [--n 3000] [--md out.md]`.
 
-There is no labelled data in the hackathon (TZ section 2), so this is a parameter-recovery study run through
+There is no labelled hiring data, so this is a parameter-recovery study run through
 the production selector and decision code (app.services.cat). Simulated candidates have a known ability
 θ ~ N(0.3, 1) and a declared grade: 60 % declare their true grade, 30 % one level higher, 10 % one lower.
 

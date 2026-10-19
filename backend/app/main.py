@@ -38,8 +38,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ФСП Талант API",
-    description=("ЛЦТ 2026, кейс Федерации спортивного программирования: подбор ИТ-специалистов "
-                 "по подтверждённому результату. Коды ошибок: docs/API_ERRORS.md."),
+    description=("Самостоятельный проект: подбор ИТ-специалистов по подтверждённому результату. "
+                 "Лицензия MIT. Коды ошибок: docs/API_ERRORS.md."),
     version=settings.VERSION,
     lifespan=lifespan,
     docs_url=None,     # served by app.api.docs without a CDN, so the site CSP allows it

@@ -27,7 +27,8 @@ export default function IndustryCase() {
     setError('')
     try {
       const { data } = await industryCase()
-      setShown(data)
+      if (!data.label || !data.title || !data.plot || !data.ask || !data.follow) return
+      setShown({ label: data.label, title: data.title, plot: data.plot, ask: data.ask, follow: data.follow })
       setMark(null)
     } catch (err) {
       setError(apiError(err, 'Кейс не открылся'))
@@ -39,7 +40,8 @@ export default function IndustryCase() {
     setError('')
     try {
       const { data } = await industryCase({ first: first.trim(), follow: follow.trim() })
-      setMark(data)
+      if (!data.rubric) return
+      setMark({ rubric: data.rubric, grade_unchanged: data.grade_unchanged })
     } catch (err) {
       setError(apiError(err, 'Ответ не проверился'))
     }

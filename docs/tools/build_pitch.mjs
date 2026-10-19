@@ -1,4 +1,4 @@
-// Slides that follow the mandatory LCT template slides 7–11.
+// Slides 7–11 of the presentation template, then the product slides.
 // HTML is the source for the full-bleed images; build_pitch_template.py inserts them into the template.
 // Every number carries the command that reproduces it.
 //   node docs/tools/build_pitch.mjs && python docs/tools/build_pitch_template.py

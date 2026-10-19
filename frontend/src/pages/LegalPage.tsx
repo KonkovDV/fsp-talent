@@ -70,7 +70,7 @@ export default function LegalPage() {
         </>
       )}
       <div className="card mt-4 space-y-2 text-sm text-ink-2">
-        <p><span className="font-medium text-ink">Оператор.</span> Демонстрационный стенд: команда-участник хакатона «Лидеры цифровой трансформации — 2026». В промышленном контуре оператор — ФСП или владелец платформы; наименование, ОГРН/ИНН и адрес публикуются до запуска. Подробно — в <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>
+        <p><span className="font-medium text-ink">Оператор.</span> Демонстрационный стенд: команда проекта «ФСП Талант». Проект самостоятельный, лицензия MIT. В промышленном контуре оператор — ФСП или владелец платформы; наименование, ОГРН/ИНН и адрес публикуются до запуска. Подробно — в <Link to="/privacy" className="text-accent underline">политике обработки персональных данных</Link>.</p>
         <p data-testid="processor"><span className="font-medium text-ink">Помощник на основе модели.</span>{' '}
           {processor?.enabled
             ? `Сейчас обработчик — ${processor.label}; серверы в Российской Федерации, резюме передаётся без имени и контактов.`

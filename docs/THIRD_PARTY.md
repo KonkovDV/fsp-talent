@@ -96,7 +96,7 @@ fpdf2 распространяется по LGPL-3.0. Решение не мен
 | Mermaid | 11.17.2 | MIT | Схемы в PDF документации |
 | Matplotlib | 3.11.2 | Matplotlib License (на основе PSF) | Рисунки проверки (`docs/tools/make_figures.py`) |
 | PptxGenJS | 4.0.1 | MIT | Слайды презентации |
-| python-pptx | 1.0.2 | MIT | Сборка презентации по шаблону ЛЦТ |
+| python-pptx | 1.0.2 | MIT | Сборка презентации |
 
 ## Модели и внешние сервисы
 

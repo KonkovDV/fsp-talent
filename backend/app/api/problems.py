@@ -58,6 +58,7 @@ CODE_CLASS: dict[str, str] = {
     "bad_request": "E05",
     "delete_confirm": "E05",
     "survey_required": "E05",
+    "fsp_required": "E05",
     "too_young": "E05",
     "reserved_email": "E05",
     "nul_byte": "E05",

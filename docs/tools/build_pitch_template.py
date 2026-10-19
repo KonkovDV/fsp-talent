@@ -1,10 +1,10 @@
-"""Assemble docs/pitch.pptx: LCT template slides 7–11, then the rendered pitch images.
+"""Assemble docs/pitch.pptx: template slides 7–11, then the rendered pitch images.
 
 Needs python-pptx 1.0 (pip install python-pptx==1.0.2). It is not a backend dependency.
 
-The template is not stored in the repository. Pass LCT_PITCH_TEMPLATE or keep the file
-in the owner's materials folder. Personal fields stay «заполнит владелец» until the owner
-fills them. The PDF is exported from this file in PowerPoint, not by this script.
+The template is not stored in the repository. Pass PITCH_TEMPLATE. Personal fields stay
+«заполнит владелец» until the owner fills them. The PDF is exported from this file in
+PowerPoint, not by this script.
 """
 from __future__ import annotations
 
@@ -53,16 +53,13 @@ MARKET = [
 
 
 def template_path() -> Path:
-    env = os.environ.get("LCT_PITCH_TEMPLATE")
+    env = os.environ.get("PITCH_TEMPLATE")
     if env:
         path = Path(env)
         if not path.is_file():
-            raise SystemExit("LCT_PITCH_TEMPLATE не указывает на файл шаблона")
+            raise SystemExit("PITCH_TEMPLATE не указывает на файл шаблона")
         return path
-    desktop = Path.home() / "Desktop" / "Талант" / "ЛЦТ_2026_Шаблон презентации ФСП.pptx"
-    if desktop.is_file():
-        return desktop
-    raise SystemExit("Нет шаблона ЛЦТ. Задайте переменную LCT_PITCH_TEMPLATE.")
+    raise SystemExit("Нет файла шаблона. Задайте переменную PITCH_TEMPLATE.")
 
 
 def delete_slide(prs: Presentation, index: int) -> None:
@@ -229,7 +226,7 @@ def stamp(prs: Presentation) -> None:
     props.author = "Konkov Dmitrij"
     props.last_modified_by = "Konkov Dmitrij"
     props.title = "ФСП Талант — обратный найм"
-    props.subject = "ЛЦТ 2026, трек Федерации спортивного программирования"
+    props.subject = "ФСП Талант"
     props.category = ""
     props.keywords = ""
     html = (DOCS / "pitch.html").read_bytes().replace(b"\r\n", b"\n")

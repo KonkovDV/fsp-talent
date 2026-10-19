@@ -159,7 +159,7 @@ describe('карточка кандидата', () => {
         ...card.match!,
         ahead_of_next: { key: 'test', label: 'Тест', points: 0.04, text: 'Выше следующего места по фактору «Тест»' },
       },
-    }} />)
+    }} onOffer={() => undefined} />)
     expect(screen.getByTestId('ahead-of-next')).toHaveTextContent('Выше следующего места по фактору «Тест»')
   })
 

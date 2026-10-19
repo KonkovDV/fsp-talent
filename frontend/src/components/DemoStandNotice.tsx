@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { TriangleAlert } from 'lucide-react'
 import { publicDemo } from '../api/client'
 
-/** Is this the hackathon demo stand? The server answers /public/demo from DEMO_MODE; on error we assume not. */
+/** Is this the demo stand? The server answers /public/demo from DEMO_MODE; on error we assume not. */
 export function useDemoStand(): boolean {
   const { data } = useQuery({
     queryKey: ['public-demo'], retry: false, staleTime: 5 * 60_000,
@@ -24,7 +24,7 @@ export default function DemoStandNotice({ className = '', withPolicyLink = false
       className={`notice border-warn/40 border-l-warn bg-warn-soft ${className}`}>
       <TriangleAlert size={18} className="mt-0.5 shrink-0 text-warn" aria-hidden />
       <div className="space-y-1">
-        <p className="font-semibold">Это демо-стенд хакатона, и сервер стоит за пределами России</p>
+        <p className="font-semibold">Это демонстрационный стенд, и сервер стоит за пределами России</p>
         <p className="text-ink-2">
           Настоящие персональные данные сюда не вводите: ни своё имя, ни почту, ни телефон. Войдите демо-аккаунтом
           (жюри — jury1…jury10) или гостем и придумайте данные для пробы.

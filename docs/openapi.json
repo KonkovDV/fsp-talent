@@ -3823,7 +3823,7 @@
     }
   },
   "info": {
-    "description": "ЛЦТ 2026, кейс Федерации спортивного программирования: подбор ИТ-специалистов по подтверждённому результату. Коды ошибок: docs/API_ERRORS.md.",
+    "description": "Самостоятельный проект: подбор ИТ-специалистов по подтверждённому результату. Лицензия MIT. Коды ошибок: docs/API_ERRORS.md.",
     "title": "ФСП Талант API",
     "version": "1.1.0"
   },
@@ -19679,7 +19679,7 @@
     },
     "/api/v1/offers/{offer_id}/accept-counter": {
       "post": {
-        "description": "Agree to the candidate's condition. Contacts open. The search order does not change.",
+        "description": "Agree to the candidate's condition. Contacts open while processing consent still holds.",
         "operationId": "accept_counter_offer_api_v1_offers__offer_id__accept_counter_post",
         "parameters": [
           {

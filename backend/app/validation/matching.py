@@ -1,6 +1,6 @@
 """Offline evaluation of candidate ranking: `python -m app.validation.matching [--needs 80] [--export f.json]`.
 
-Labelled employer–candidate pairs do not exist for the hackathon, so the benchmark is synthetic and says so.
+Labelled employer–candidate pairs do not exist yet, so the benchmark is synthetic and says so.
 Each candidate has a hidden truth (real skills, real level) and noisy observations the platform sees:
 declared skills miss 25 % of the real ones and add 15 % false ones; the declared grade is one level too high
 for 30 % of people; a test (taken by 45 %) confirms real skills and measures the level, and a failed attempt is

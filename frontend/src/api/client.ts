@@ -335,7 +335,13 @@ export const fspCallback = (code: string, state: string) => api.post('/candidate
 export const fspDemoLogin = (body: Record<string, string>) => api.post('/fsp-id-demo/login', body)
 
 export const getMyProfile = () => api.get('/candidates/me')
-export const myCareer = () => api.get<{ skill: string | null; gained: number; vacancies: number }>('/candidates/me/career')
+export const myCareer = () => api.get<{
+  skill: string | null
+  gained: number
+  vacancies: number
+  open?: boolean
+  need_companies?: number
+}>('/candidates/me/career')
 export const myExclusions = () => api.get<{ industries: string[]; companies: { id: string; name: string }[] }>('/candidates/me/exclusions')
 export const setExclusions = (industries: string[]) => api.put('/candidates/me/exclusions', { industries })
 export const blockCompany = (offer_id: string) => api.post('/candidates/me/blocks', { offer_id })

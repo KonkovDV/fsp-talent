@@ -18,7 +18,7 @@ vi.mock('../../api/client', async () => {
 const policy = {
   kind: 'privacy_policy', title: 'Политика обработки персональных данных', version: '1.0', required: false,
   consent: false, roles: ['participant', 'employer'], sha256: 'c'.repeat(64),
-  body_md: '# Политика обработки персональных данных\n\n**1. Оператор.** На демонстрационном стенде оператор — команда-участник хакатона.\n\n**8. Сроки хранения.** До отзыва согласия.',
+  body_md: '# Политика обработки персональных данных\n\n**1. Оператор.** На демонстрационном стенде оператор — команда проекта «ФСП Талант».\n\n**8. Сроки хранения.** До отзыва согласия.',
 }
 
 function show(path: string) {
@@ -71,7 +71,7 @@ describe('страница /privacy', () => {
   it('открывается и показывает текст политики из публичного эндпоинта согласий', async () => {
     publicDemo.mockResolvedValue({ data: { demo_mode: true } })
     show('/privacy')
-    expect(await screen.findByTestId('privacy-policy')).toHaveTextContent('команда-участник хакатона')
+    expect(await screen.findByTestId('privacy-policy')).toHaveTextContent('команда проекта «ФСП Талант»')
     expect(screen.getByText('1. Оператор.').tagName).toBe('STRONG')
     expect(screen.getByRole('heading', { level: 1, name: 'Политика обработки персональных данных' })).toBeInTheDocument()
     expect(legalDocument).toHaveBeenCalledWith('privacy_policy')

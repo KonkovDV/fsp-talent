@@ -933,7 +933,10 @@ async def mark_company_interest(employer_id: uuid.UUID, current: dict = Depends(
         stamps = list(await db.scalars(select(CandidateInterest.created_at).where(
             CandidateInterest.participant_id == pid)))
         if not can_mark(stamps, datetime.now(UTC)):
-            raise ApiError(429, "rate_limited", "За 30 дней можно отметить две компании. Подождите или оставьте уже выбранные.")
+            raise ApiError(
+                429, "rate_limited",
+                "За 30 дней можно отметить две компании. Подождите или оставьте уже выбранные.",
+            )
         db.add(CandidateInterest(participant_id=pid, employer_id=employer_id, created_at=datetime.now(UTC)))
         try:
             await db.commit()

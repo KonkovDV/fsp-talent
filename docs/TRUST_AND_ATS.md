@@ -89,7 +89,7 @@
 
 ### Статусы найма (ATS → платформа)
 
-Итог собеседования уже приходит в платформу: `POST /api/v1/offers/{offer_id}/interview/outcome` со значением `passed`, `failed` или `no_show` (`backend/app/api/v1/interviews.py:166`). Следующий шаг интеграции — приёмник этапов ATS `POST /api/v1/ats/stages` с `candidate_ref` и этапом `screening`, `interview`, `offer`, `hired`, `rejected`: платформа покажет этапы в воронке работодателя и накопит размеченные пары «потребность — кандидат — итог». Это и есть данные для калибровки подбора: сейчас валидация идёт на синтетике, потому что меток найма у хакатона нет (`docs/VALIDATION_MATCHING.md`). Скрипт `python -m app.validation.matching --import pairs.json` уже принимает такие пары.
+Итог собеседования уже приходит в платформу: `POST /api/v1/offers/{offer_id}/interview/outcome` со значением `passed`, `failed` или `no_show` (`backend/app/api/v1/interviews.py:166`). Следующий шаг интеграции — приёмник этапов ATS `POST /api/v1/ats/stages` с `candidate_ref` и этапом `screening`, `interview`, `offer`, `hired`, `rejected`: платформа покажет этапы в воронке работодателя и накопит размеченные пары «потребность — кандидат — итог». Это и есть данные для калибровки подбора: сейчас валидация идёт на синтетике, потому что меток найма ещё нет (`docs/VALIDATION_MATCHING.md`). Скрипт `python -m app.validation.matching --import pairs.json` уже принимает такие пары.
 
 ### Пример: Хантфлоу
 

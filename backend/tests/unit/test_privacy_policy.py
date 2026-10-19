@@ -34,7 +34,8 @@ def test_policy_cannot_be_accepted_or_sent_as_a_consent():
 
 def test_policy_names_the_operator_without_invented_requisites():
     body = _policy().body_md
-    assert "команда-участник хакатона «Лидеры цифровой трансформации — 2026», демонстрационный стенд" in body
+    assert "команда проекта «ФСП Талант», демонстрационный стенд" in body
+    assert "лицензии MIT" in body
     assert "В промышленном контуре оператором выступает ФСП или владелец платформы" in body
     assert not re.search(r"\b\d{10}(\d{2})?\b", body), "ИНН/ОГРН не выдумываем"
     assert not re.search(r"[\w.+-]+@[\w-]+\.\w+", body), "адрес почты оператора вписывает владелец"

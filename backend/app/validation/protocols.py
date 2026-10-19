@@ -1,7 +1,7 @@
 """Matching under two published graded protocols: `python -m app.validation.protocols --protocol a|b`.
 
 Same synthetic world and the same product order as `app.validation.matching`; only the relevance rubric over the
-hidden truth, the need filter and the metric definitions follow two methods published by other hackathon teams.
+hidden truth, the need filter and the metric definitions follow two published methods.
 The product scorer and its weights are not changed and nothing is fitted on these seeds.
 
 Protocol A (graded 0..3, rubric by role, grade distance, coverage of required skills, position inside the grade):
