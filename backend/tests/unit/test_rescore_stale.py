@@ -1,4 +1,4 @@
-"""Stored scores of an older method are recomputed on start (PR #243 follow-up)."""
+"""Stored scores of an older method are recomputed on start."""
 from pathlib import Path
 
 from app.core import rescore_stale

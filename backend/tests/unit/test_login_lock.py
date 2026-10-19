@@ -1,4 +1,4 @@
-"""Stand audit I-01: wrong passwords from one address must not lock the account for everyone."""
+"""Wrong passwords from one address must not lock the account for everyone."""
 import asyncio
 from datetime import UTC, datetime, timedelta
 

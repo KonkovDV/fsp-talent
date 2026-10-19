@@ -279,7 +279,7 @@ async def searchable_count(db: AsyncSession) -> int:
 
 
 def visible_in_search():
-    """The one "visible to an employer" rule as of now (audit-3 P1-1): search, favorites, the salary market
+    """The one "visible to an employer" rule: search, favorites, the salary market
     and the public category ranking all use it, so an aggregate never counts someone the search would hide."""
     return _in_search(age_confirmed_adult())
 
@@ -867,7 +867,7 @@ async def score_pool(db: AsyncSession, ids: list[uuid.UUID], need: NeedSpec, tex
             role=role_name, grade=grade_name,
             grade_source=grade_source,
             skills=apply_fsp_skills(skills.get(pid, {}), granted, tested),
-            # A legacy confirmation without a probability counts as a bare pass, not as certainty (audit-4 F-2).
+            # A legacy confirmation without a probability counts as a bare pass, not as certainty.
             test_p=conf.p_pass if conf and conf.p_pass is not None else (PASS_P if conf else None),
             test_spec=conf.specialization if conf else None,
             fsp_lcb=fsp_lcb, fsp_kind=fsp_kind, fsp_discipline=fsp_discipline,

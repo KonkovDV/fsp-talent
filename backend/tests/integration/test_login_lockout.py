@@ -1,4 +1,4 @@
-"""Stand audit I-01: a stranger's wrong passwords do not lock the owner out (per account × address)."""
+"""A stranger's wrong passwords do not lock the owner out (per account and address)."""
 from __future__ import annotations
 
 import httpx

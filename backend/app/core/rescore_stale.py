@@ -1,4 +1,4 @@
-"""Recompute FSP scores stored by an older scoring version (audit 2026-10, PR #243).
+"""Recompute FSP scores stored by an older scoring version.
 
 `DisciplineScore` rows keep `scoring_version`. The method in this tree is v4.2.0. A row stamped
 with anything else, including v3.2.0, keeps the old number until each such profile is rebuilt.
@@ -19,7 +19,7 @@ async def stale_participant_ids(db, max_age_hours: float | None = None) -> list:
     """Old scoring version, or (nightly) computed more than max_age_hours ago.
 
     Decay runs from the date of the computation, so a score left alone for a month compares
-    candidates against different reference dates (audit 2026-10, item 5). The nightly pass fixes that.
+    candidates against different reference dates. The nightly pass fixes that.
     """
     from datetime import UTC, datetime, timedelta
 

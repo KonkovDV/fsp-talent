@@ -23511,7 +23511,7 @@
     },
     "/api/v1/public/limits": {
       "get": {
-        "description": "Limits the forms check before sending (audit-3 P1-2): one source, the backend settings.",
+        "description": "Limits the forms check before sending: one source, the backend settings.",
         "operationId": "limits_api_v1_public_limits_get",
         "responses": {
           "200": {

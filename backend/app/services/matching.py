@@ -210,7 +210,7 @@ def category_band(role: str | None, grade: str | None,
 
 
 FSP_FULL_LCB = 0.6     # LCB at which the FSP factor saturates
-# "boost" (shipped since the 2026-10 audit): a history can only raise the evidence above the test,
+# "boost": a history can only raise the evidence above the test,
 # so taking part in FSP competitions never moves a candidate down. "mean" is the old average of the
 # two factors: a weak FSP line pulled a good test down. Kept only so the holdout prints before/after.
 FSP_LIFT = "boost"

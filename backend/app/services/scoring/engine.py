@@ -26,7 +26,7 @@ search, the empty subset is the baseline):
   sigma = sqrt(PRIOR_VAR / (n_eff + K))
   lcb   = max over subsets (mu - sigma)            ranking key (conservative)
 
-Monotonicity (v4.2.0, audit 2026-10-14): adding any event never lowers lcb, and no history at all is
+Monotonicity (v4.2.0): adding any event never lowers lcb, and no history at all is
 the floor (LCB0). The monthly cap and the long-history limit are constraints on the chosen subset,
 not a pre-filter that drops a heavy result because a lighter one has a higher class. v4.1.0 sorted
 each month by quality first and could replace a prize in a large field with a win in a tiny one,

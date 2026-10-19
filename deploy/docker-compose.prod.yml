@@ -38,7 +38,7 @@ services:
     group_add: ["10001"]
     build:
       context: ../backend
-      # /health reports this commit (audit-4 F-7). The deploy passes GIT_SHA=$(git rev-parse HEAD).
+      # /health reports this commit. The deploy passes GIT_SHA=$(git rev-parse HEAD).
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
@@ -86,7 +86,7 @@ services:
   worker:
     build:
       context: ../backend
-      # /health reports this commit (audit-4 F-7). The deploy passes GIT_SHA=$(git rev-parse HEAD).
+      # /health reports this commit. The deploy passes GIT_SHA=$(git rev-parse HEAD).
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env
@@ -120,7 +120,7 @@ services:
   beat:
     build:
       context: ../backend
-      # /health reports this commit (audit-4 F-7). The deploy passes GIT_SHA=$(git rev-parse HEAD).
+      # /health reports this commit. The deploy passes GIT_SHA=$(git rev-parse HEAD).
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
     env_file: .env

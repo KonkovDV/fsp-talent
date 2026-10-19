@@ -1,4 +1,4 @@
-"""Stand audit S4: a saved birth date cannot be moved by the user, so a minor cannot become an adult."""
+"""A saved birth date cannot be moved by the user, so a minor cannot become an adult."""
 from __future__ import annotations
 
 from datetime import date

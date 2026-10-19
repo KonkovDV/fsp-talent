@@ -654,7 +654,7 @@ export interface ThreadMessage { id: string; mine: boolean; author: 'participant
 export const listMessages = (offerId: string) => api.get<{ can_post: boolean; messages: ThreadMessage[] }>(`/offers/${offerId}/messages`)
 export const postMessage = (offerId: string, body: string) => api.post<ThreadMessage>(`/offers/${offerId}/messages`, { body })
 
-/** Form limits served by the backend (audit-3 P1-2), so the salary floor lives in one place. */
+/** Form limits served by the backend, so the salary floor lives in one place. */
 export const getLimits = () => api.get<{ min_monthly_gross: number }>('/public/limits').then(r => r.data)
 export interface SimulatedStep {
   n: number; family: string; topic: string; level: number; difficulty: number; correct: boolean

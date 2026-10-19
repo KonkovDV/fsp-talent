@@ -112,7 +112,7 @@ async def public_did():
 
 @router.get("/limits")
 async def limits():
-    """Limits the forms check before sending (audit-3 P1-2): one source, the backend settings."""
+    """Limits the forms check before sending: one source, the backend settings."""
     return {"min_monthly_gross": int(settings.MIN_MONTHLY_GROSS)}
 
 

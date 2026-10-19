@@ -461,7 +461,7 @@ async def update_profile(body: ProfileUpdate, current: dict = Depends(get_curren
         if age_on(born, date.today()) < 15:
             raise ApiError(422, "too_young", "Регистрация открыта с 15 лет")
         if p.birth_date is not None and p.birth_date != born:
-            # Stand audit S4: a minor could move the date and skip the guardian's consent. Once saved,
+            # A minor could move the date and skip the guardian's consent. Once saved,
             # the date changes only through support, with the guardian when the person is a minor.
             raise ApiError(409, "birth_date_locked",
                            "Дата рождения уже сохранена. Исправить её можно только через поддержку.")

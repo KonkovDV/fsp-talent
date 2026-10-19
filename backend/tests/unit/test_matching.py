@@ -624,7 +624,7 @@ def test_a_lower_tier_cannot_overtake_with_a_test():
 
 
 def test_fsp_never_lowers_score():
-    """Shipped since the 2026-10 audit: an FSP history only raises the evidence, never lowers the score."""
+    """An FSP history only raises the evidence, never lowers the score."""
     assert matching_mod.FSP_LIFT == "boost"
     rng = random.Random(3001)
     previous_lift = matching_mod.FSP_LIFT
