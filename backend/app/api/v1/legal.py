@@ -113,6 +113,9 @@ async def withdraw(kind: str, request: Request, current: dict = Depends(get_any_
         if p is not None and kind == "pd_candidate":
             p.is_visible = False
             effect_items.extend(item for item in planned_effects(role, kind) if item["code"] != "public_page_off")
+            if consent is not None:
+                from app.services.privacy import tell_contact_holders
+                await tell_contact_holders(db, subject_id, "consent_withdrawn")
     elif consent is not None:
         effect_items = planned_effects(role, kind)
     if consent is not None and not effect_items and kind == "terms":

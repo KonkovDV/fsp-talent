@@ -2,7 +2,8 @@
 
 The key is `fspk_<prefix>_<secret>`. Only its SHA-256 is stored, so a database dump does not
 hand out working keys. The full key is returned once, at creation. A key reads the company's own
-export and nothing else; it never signs in, never writes.
+export and nothing else; it never signs in, never writes. Every new key has a term of at most a year:
+a key forgotten in an old ATS config stops working by itself.
 """
 from __future__ import annotations
 
@@ -10,9 +11,20 @@ import hashlib
 import hmac
 import re
 import secrets
+from datetime import datetime
 
 KEY_RE = re.compile(r"^fspk_([A-Za-z0-9]{8})_([A-Za-z0-9_-]{32,64})$")
 MAX_ACTIVE = 3
+TERM_DAYS = 90
+MAX_TERM_DAYS = 365
+
+
+def usable(row, now: datetime) -> bool:
+    """Not revoked and not past its term. A key without a term predates terms and stays usable."""
+    if getattr(row, "revoked_at", None) is not None:
+        return False
+    expires = getattr(row, "expires_at", None)
+    return expires is None or expires > now
 
 
 def new_key() -> tuple[str, str, str]:

@@ -44,3 +44,5 @@ class EmployerApiKey(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     last_used_at = Column(DateTime(timezone=True))
     revoked_at = Column(DateTime(timezone=True))
+    # A new key always has a term (app/services/api_keys.py, TERM_DAYS). Null only on keys made before it.
+    expires_at = Column(DateTime(timezone=True))

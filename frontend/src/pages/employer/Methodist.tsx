@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError, itemPsychometrics } from '../../api/client'
+import DisputeDesk from './DisputeDesk'
 import ItemDrafts from './ItemDrafts'
 import { Empty, PageHeader, Skeleton } from '../../components/ui'
 
@@ -35,7 +36,8 @@ export default function Methodist() {
 
   return (
     <div>
-      <PageHeader title="Методист" lead="Черновики заданий, карантин ключей и пороги. Работодатель этого не видит: в вакансии остаются только доли тем и примеры без ответов." />
+      <PageHeader title="Методист" lead="Обращения кандидатов по тесту, черновики заданий, карантин ключей и пороги. Работодатель этого не видит: в вакансии остаются только доли тем и примеры без ответов." />
+      <DisputeDesk />
       <ItemDrafts />
       <h2 className="mb-3 mt-8 font-display text-xl font-bold text-ink">Карантин</h2>
       {held.data && held.data.length === 0 && <Empty title="Карантина нет">Ключ попадает сюда, когда доля верных ответов выше модели.</Empty>}

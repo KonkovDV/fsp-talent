@@ -6,15 +6,16 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CandidateOffers from '../candidate/Offers'
 
-const { getMyOffers, respondToOffer, revokeContacts } = vi.hoisted(() => ({
+const { getMyOffers, respondToOffer, revokeContacts, changeSharedContacts } = vi.hoisted(() => ({
   getMyOffers: vi.fn(),
   respondToOffer: vi.fn(),
   revokeContacts: vi.fn(),
+  changeSharedContacts: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
-  return { ...actual, getMyOffers, respondToOffer, revokeContacts, fileComplaint: vi.fn(), updateMyProfile: vi.fn() }
+  return { ...actual, getMyOffers, respondToOffer, revokeContacts, changeSharedContacts, fileComplaint: vi.fn(), updateMyProfile: vi.fn() }
 })
 vi.mock('../../components/InterviewSlots', () => ({ default: () => <div /> }))
 vi.mock('../../components/CodeInterview', () => ({ default: () => <div /> }))
@@ -38,8 +39,9 @@ function renderPage(ui: ReactNode, path = '/') {
 }
 
 beforeEach(() => {
-  respondToOffer.mockResolvedValue({ data: {} })
+  respondToOffer.mockReset().mockResolvedValue({ data: {} })
   revokeContacts.mockResolvedValue({ data: {} })
+  changeSharedContacts.mockReset().mockResolvedValue({ data: { shared_contacts: ['email'] } })
 })
 
 describe('приглашения кандидата', () => {
@@ -121,6 +123,47 @@ describe('приглашения кандидата', () => {
     renderPage(<CandidateOffers />)
     expect(await screen.findByText('Приглашений пока нет')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Принять и открыть контакты' })).not.toBeInTheDocument()
+  })
+})
+
+describe('какие контакты открыть', () => {
+  const withChannels = { ...pending, contact_channels: ['email', 'telegram', 'phone'] }
+
+  it('по умолчанию открывает все заполненные, но можно снять лишнее', async () => {
+    getMyOffers.mockResolvedValue({ data: [withChannels] })
+    renderPage(<CandidateOffers />)
+    const phone = await screen.findByRole('checkbox', { name: 'Телефон' })
+    expect(phone).toBeChecked()
+    expect(screen.queryByRole('checkbox', { name: 'GitHub' })).not.toBeInTheDocument()
+    await userEvent.click(phone)
+    await userEvent.click(screen.getByRole('button', { name: 'Принять и открыть контакты' }))
+    expect(respondToOffer).toHaveBeenCalledWith('offer-1', 'accept', undefined, undefined, ['email', 'telegram'])
+  })
+
+  it('не принимает, если не выбран ни один способ связи', async () => {
+    getMyOffers.mockResolvedValue({ data: [withChannels] })
+    renderPage(<CandidateOffers />)
+    for (const name of ['Почта', 'Telegram', 'Телефон']) await userEvent.click(await screen.findByRole('checkbox', { name }))
+    expect(screen.getByRole('button', { name: 'Принять и открыть контакты' })).toBeDisabled()
+  })
+
+  it('условие «да, если…» уносит тот же выбор', async () => {
+    getMyOffers.mockResolvedValue({ data: [withChannels] })
+    renderPage(<CandidateOffers />)
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Telegram' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Условие' }), 'вилка от 280 тысяч')
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить условие' }))
+    expect(respondToOffer).toHaveBeenCalledWith('offer-1', 'yes_if', undefined, 'вилка от 280 тысяч', ['email', 'phone'])
+  })
+
+  it('после согласия показывает открытое и даёт сузить набор', async () => {
+    getMyOffers.mockResolvedValue({ data: [{ ...accepted, contact_channels: ['email', 'phone'], shared_contacts: ['email', 'phone'] }] })
+    renderPage(<CandidateOffers />)
+    expect(await screen.findByText(/Компании открыты: имя, почта, телефон/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Изменить' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Телефон' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(changeSharedContacts).toHaveBeenCalledWith('offer-2', ['email'])
   })
 })
 

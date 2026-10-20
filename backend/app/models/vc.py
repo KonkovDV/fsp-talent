@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.database import Base
@@ -12,8 +12,11 @@ class VerifiableCredential(Base):
 
     proof_value stores the base58-multibase signature string from the DataIntegrityProof
     block (proof.proofValue), mirroring the W3C VC Data Model 2.0 naming.
+    status_index is the position of this credential in the W3C Bitstring Status List
+    (app/services/vc/status_list.py); a credential without a status entry has none.
     """
     __tablename__ = "verifiable_credentials"
+    __table_args__ = (UniqueConstraint("status_index", name="uq_vc_status_index"),)
     id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     participant_id = Column(UUID(as_uuid=True), ForeignKey("participants.id"), nullable=False, index=True)
     result_id      = Column(UUID(as_uuid=True), ForeignKey("results.id"), nullable=True)
@@ -21,3 +24,4 @@ class VerifiableCredential(Base):
     proof_value    = Column(String(200), nullable=False)
     issued_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     revoked_at     = Column(DateTime(timezone=True), nullable=True)
+    status_index   = Column(Integer, nullable=True)

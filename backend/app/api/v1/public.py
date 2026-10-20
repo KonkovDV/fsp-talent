@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -485,6 +485,18 @@ def _without_subject_id(credential: dict) -> dict:
     if not isinstance(subject, dict) or "id" not in subject:
         return credential
     return {**credential, "credentialSubject": {k: v for k, v in subject.items() if k != "id"}}
+
+
+@router.get("/status-lists/{list_id}")
+async def status_list(list_id: int, db: AsyncSession = Depends(get_db)):
+    """W3C Bitstring Status List v1.0: one signed list, a set bit means revoked. No personal data."""
+    from app.services.vc.status_list import LIST_ID, list_credential
+
+    if list_id != LIST_ID:
+        raise ApiError(404, "not_found", "Список статусов не найден")
+    revoked = list(await db.scalars(select(VerifiableCredential.status_index).where(
+        VerifiableCredential.status_index.is_not(None), VerifiableCredential.revoked_at.is_not(None))))
+    return JSONResponse(list_credential(revoked), headers={"Cache-Control": "public, max-age=300"})
 
 
 @router.get("/credentials/{credential_id}/status")

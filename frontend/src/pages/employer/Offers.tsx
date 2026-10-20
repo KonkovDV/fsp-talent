@@ -18,7 +18,11 @@ interface Offer {
   contacts_revoked_at?: string | null; unread_messages?: number
   counter_note?: string | null
 }
-interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; github?: string | null; region: string | null }
+interface Contacts { display_name: string; email: string | null; telegram: string | null; phone: string | null; github?: string | null; region: string | null; shared_contacts?: string[] }
+const CHANNEL_RU: Record<string, string> = { email: 'почта', telegram: 'Telegram', phone: 'телефон', github: 'GitHub' }
+const opened = (c: Contacts) => c.shared_contacts && c.shared_contacts.length < 4
+  ? <span className="block text-xs text-ink-3">Кандидат открыл: {c.shared_contacts.map(ch => CHANNEL_RU[ch] ?? ch).join(', ')}</span>
+  : null
 
 const REASON_RU: Record<string, string> = {
   salary: 'зарплата', format: 'формат', stack: 'стек', not_looking: 'не ищет', other: 'другое',
@@ -143,7 +147,7 @@ export default function EmployerOffers() {
                 <p className="num text-sm text-ink">{rub(o.salary_from)} – {rub(o.salary_to)} <span className="text-xs text-ink-3">до вычета НДФЛ</span></p>
                 <p className="text-xs text-ink-3">{netLine(o.salary_from, o.salary_to)}</p>
                 <p className="text-xs text-ink-3">{date(o.created_at)}{o.contacts_revoked_at ? ' · контакты закрыты кандидатом' : ''}</p>
-                {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}</p>}
+                {c && <p className="text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}{opened(c)}</p>}
                 <div className="flex flex-wrap gap-2">
                   {o.contacts_available && !c && <button onClick={() => reveal.mutate(o.id)} className="btn-secondary btn-sm">Открыть контакты</button>}
                   {o.status === 'pending' && o.counter_note && <button type="button" className="btn-primary btn-sm" disabled={agree.isPending} onClick={() => agree.mutate(o.id)}>Принять условие</button>}
@@ -174,7 +178,7 @@ export default function EmployerOffers() {
                   <Fragment key={o.id}>
                   <tr data-offer-id={o.id}>
                     <td>{o.candidate?.role ? <CategoryPlate role={o.candidate.role} grade={o.candidate.grade ?? ''} source={o.candidate.grade_source ?? ''} /> : (o.candidate?.label ?? '—')}
-                      {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}</div>}</td>
+                      {c && <div className="mt-2 text-sm text-ink"><b>{c.display_name}</b><br />{[c.email, c.telegram, c.phone, c.github].filter(Boolean).join(', ')}{opened(c)}</div>}</td>
                     <td className="text-ink">{o.role}
                       {o.returned_interest && <p className="text-xs text-ink-2">Специалист отметил интерес к компании. Имени нет.</p>}
                       {o.counter_note && o.status === 'pending' && <p className="text-xs text-ink-2">Ответ «да, если»: {o.counter_note}. Контакты закрыты, место в подборке не меняется.</p>}

@@ -63,11 +63,35 @@ async def contacts_allowed(db: AsyncSession, participant: Participant) -> bool:
     return await active_consent(db, "participant", participant.id, "pd_candidate") is not None
 
 
+async def tell_contact_holders(db: AsyncSession, participant_id: uuid.UUID, reason: str) -> int:
+    """Every company that received the contacts gets `contacts.revoked` with `delete: true`.
+
+    Part 3 of article 21: once consent is withdrawn or the account is erased, the data has to be deleted
+    by whoever it was passed to as well. A company counts when an accepted invitation still has open
+    contacts. A repeat event is harmless: deleting twice leaves the same state. The caller commits.
+    """
+    from app.services.field_cipher import public_ref
+    from app.services.webhooks import enqueue
+
+    holders = sorted(set(await db.scalars(select(Offer.employer_id).where(
+        Offer.candidate_id == participant_id, Offer.status == "accepted",
+        Offer.contacts_revoked_at.is_(None)).distinct())), key=str)
+    now = datetime.now(UTC).isoformat()
+    for employer_id in holders:
+        await enqueue(db, employer_id, "contacts.revoked", {
+            "created_at": now, "employer_id": str(employer_id),
+            "candidate": {"ref": public_ref(participant_id), "delete": True},
+            "reason": reason,
+        })
+    return len(holders)
+
+
 async def erase_participant(db: AsyncSession, participant: Participant, reason: str) -> None:
     """Remove everything that identifies the person. Idempotent."""
     now = datetime.now(UTC)
     if participant.deleted_at is None:
         participant.deleted_at = now
+    await tell_contact_holders(db, participant.id, reason)
     for field in ("display_name", "email", "email_bindex", "password_hash", "email_verified_at",
                   "telegram", "phone", "github", "birth_date", "fsp_id", "fsp_linked_at", "region",
                   "industry", "guardian_email", "guardian_consent_at"):

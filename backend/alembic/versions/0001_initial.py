@@ -421,6 +421,7 @@ CREATE TABLE public.employer_api_keys (
     created_at timestamp with time zone NOT NULL,
     last_used_at timestamp with time zone,
     revoked_at timestamp with time zone,
+    expires_at timestamp with time zone,
     CONSTRAINT employer_api_keys_pkey PRIMARY KEY (id),
     CONSTRAINT employer_api_keys_key_hash_key UNIQUE (key_hash),
     CONSTRAINT employer_api_keys_employer_id_fkey FOREIGN KEY (employer_id) REFERENCES public.employers(id) ON DELETE CASCADE
@@ -593,6 +594,7 @@ CREATE TABLE public.offers (
     responded_at timestamp with time zone,
     counter_note text,
     counter_at timestamp with time zone,
+    shared_contacts jsonb,
     CONSTRAINT ck_offer_decline_reason CHECK (((decline_reason IS NULL) OR ((decline_reason)::text = ANY ((ARRAY['salary'::character varying, 'format'::character varying, 'stack'::character varying, 'not_looking'::character varying, 'other'::character varying])::text[]))))
 );
 
@@ -869,7 +871,9 @@ CREATE TABLE public.verifiable_credentials (
     credential_json jsonb NOT NULL,
     proof_value character varying(200) NOT NULL,
     issued_at timestamp with time zone DEFAULT now(),
-    revoked_at timestamp with time zone
+    revoked_at timestamp with time zone,
+    status_index integer,
+    CONSTRAINT uq_vc_status_index UNIQUE (status_index)
 );
 
 
@@ -1531,10 +1535,17 @@ CREATE TABLE public.grade_disputes (
     participant_id uuid NOT NULL,
     session_id uuid NOT NULL,
     created_at timestamp with time zone NOT NULL,
+    reason text,
+    status character varying(20) DEFAULT 'open'::character varying NOT NULL,
+    decision_note text,
+    decided_at timestamp with time zone,
+    decided_by uuid,
     CONSTRAINT grade_disputes_pkey PRIMARY KEY (id),
     CONSTRAINT uq_grade_dispute_session UNIQUE (session_id),
+    CONSTRAINT ck_grade_dispute_status CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'upheld'::character varying, 'voided'::character varying])::text[]))),
     CONSTRAINT grade_disputes_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participants(id) ON DELETE CASCADE,
-    CONSTRAINT grade_disputes_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.test_sessions(id) ON DELETE CASCADE
+    CONSTRAINT grade_disputes_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.test_sessions(id) ON DELETE CASCADE,
+    CONSTRAINT grade_disputes_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES public.employers(id) ON DELETE SET NULL
 );
 
 

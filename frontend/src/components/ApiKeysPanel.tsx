@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiError } from '../api/client'
 
-export interface ApiKeyRow { id: string; prefix: string; label: string | null; created_at: string; last_used_at: string | null; revoked_at: string | null }
+export interface ApiKeyRow {
+  id: string; prefix: string; label: string | null; created_at: string; last_used_at: string | null; revoked_at: string | null
+  expires_at?: string | null; expired?: boolean
+}
+
+const TERMS: [number, string][] = [[30, '30 дней'], [90, '90 дней'], [180, '180 дней'], [365, 'год']]
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : '—')
 
@@ -29,11 +34,12 @@ function Copy({ text, label }: { text: string; label: string }) {
 export default function ApiKeysPanel() {
   const qc = useQueryClient()
   const [label, setLabel] = useState('')
+  const [days, setDays] = useState(90)
   const [fresh, setFresh] = useState('')
   const [error, setError] = useState('')
   const keys = useQuery({ queryKey: ['apiKeys'], queryFn: () => api.get<ApiKeyRow[]>('/employer/integrations/keys').then(r => r.data) })
   const create = useMutation({
-    mutationFn: () => api.post<ApiKeyRow & { key: string }>('/employer/integrations/keys', { label: label.trim() || null }).then(r => r.data),
+    mutationFn: () => api.post<ApiKeyRow & { key: string }>('/employer/integrations/keys', { label: label.trim() || null, days }).then(r => r.data),
     onSuccess: data => { setFresh(data.key); setLabel(''); setError(''); qc.invalidateQueries({ queryKey: ['apiKeys'] }) },
     onError: e => setError(apiError(e)),
   })
@@ -50,11 +56,15 @@ export default function ApiKeysPanel() {
       <h2 id="api-keys-h" className="font-display text-xl font-bold text-ink">API-ключи</h2>
       <p className="text-sm text-ink-2">
         Ключ только читает выгрузку согласившихся кандидатов вашей компании (JSON или CSV). Мы храним лишь его хеш SHA-256,
-        поэтому полный ключ показывается один раз. Активных ключей — не больше трёх.
+        поэтому полный ключ показывается один раз. Активных ключей — не больше трёх. У каждого нового ключа есть срок:
+        ключ, забытый в старой настройке ATS, перестаёт работать сам.
       </p>
       <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); create.mutate() }}>
         <label className="sr-only" htmlFor="key-label">Название ключа</label>
         <input id="key-label" className="input max-w-xs" maxLength={80} value={label} onChange={e => setLabel(e.target.value)} placeholder="Например, ATS отдела найма" />
+        <select className="select" aria-label="Срок действия ключа" value={days} onChange={e => setDays(Number(e.target.value))}>
+          {TERMS.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+        </select>
         <button className="btn-primary btn-sm" disabled={create.isPending}>Создать ключ</button>
       </form>
       {fresh && (
@@ -69,9 +79,10 @@ export default function ApiKeysPanel() {
           <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3 text-sm" data-testid="api-key-row">
             <span className="min-w-0">
               <code className="font-mono text-xs">{row.prefix}</code>{row.label ? ` · ${row.label}` : ''}
-              <span className="block text-xs text-ink-3">создан {day(row.created_at)}, использован {day(row.last_used_at)}{row.revoked_at ? `, отозван ${day(row.revoked_at)}` : ''}</span>
+              <span className="block text-xs text-ink-3">создан {day(row.created_at)}, использован {day(row.last_used_at)}
+                {row.revoked_at ? `, отозван ${day(row.revoked_at)}` : row.expired ? `, срок истёк ${day(row.expires_at ?? null)}` : row.expires_at ? `, действует до ${day(row.expires_at)}` : ', без срока'}</span>
             </span>
-            {!row.revoked_at && <button type="button" className="btn-ghost btn-sm" onClick={() => revoke.mutate(row.id)}>Отозвать</button>}
+            {!row.revoked_at && !row.expired && <button type="button" className="btn-ghost btn-sm" onClick={() => revoke.mutate(row.id)}>Отозвать</button>}
           </li>
         ))}
       </ul>

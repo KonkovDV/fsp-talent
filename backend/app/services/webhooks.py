@@ -16,11 +16,12 @@ import json
 import posixpath
 import secrets
 import uuid
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from urllib.parse import unquote, urlsplit
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.services.ai.providers import ProviderError, _public_only
 from app.services.field_cipher import open_seal, seal
@@ -148,20 +149,44 @@ def _read_secret(employer_id: uuid.UUID, stored: str) -> str:
     return open_seal(str(employer_id), "webhook_endpoints", "secret", stored)
 
 
+_BYPASS = text("SELECT set_config('app.bypass_rls', :value, true)")
+
+
+@asynccontextmanager
+async def _company_rows(db):
+    """Row-level security bypass for the statements inside, in the caller's transaction, then the old setting."""
+    previous = await db.scalar(text("SELECT current_setting('app.bypass_rls', true)"))
+    await db.execute(_BYPASS.bindparams(value="on"))
+    try:
+        yield
+    finally:
+        await db.execute(_BYPASS.bindparams(value=previous or ""))
+
+
 async def enqueue(db, employer_id: uuid.UUID, event_type: str, payload: dict) -> int:
-    """Write one delivery per active endpoint in the caller's transaction. Returns how many."""
+    """Write one delivery per active endpoint in the caller's transaction. Returns how many.
+
+    The caller is often the candidate (accept, decline, closed contacts, erasure), and row-level security hides
+    the company's endpoints from that scope. The request's own changes are flushed first under its own scope;
+    only the endpoint lookup and the delivery rows run with the bypass. The delivery still commits or rolls
+    back together with the change that caused it.
+    """
     from app.models.webhook import WebhookDelivery, WebhookEndpoint
 
-    endpoints = list(await db.scalars(select(WebhookEndpoint).where(
-        WebhookEndpoint.employer_id == employer_id, WebhookEndpoint.active.is_(True))))
-    now = datetime.now(UTC)
-    for endpoint in endpoints:
-        delivery_id = uuid.uuid4()
-        body = {**payload, "event_id": str(delivery_id), "type": event_type}
-        db.add(WebhookDelivery(
-            id=delivery_id, endpoint_id=endpoint.id, event_type=event_type,
-            payload=json.dumps(body, ensure_ascii=False, separators=(",", ":")),
-            attempt=0, status="pending", next_at=now, created_at=now))
+    await db.flush()
+    async with _company_rows(db):
+        endpoints = list(await db.scalars(select(WebhookEndpoint).where(
+            WebhookEndpoint.employer_id == employer_id, WebhookEndpoint.active.is_(True))))
+        now = datetime.now(UTC)
+        for endpoint in endpoints:
+            delivery_id = uuid.uuid4()
+            body = {**payload, "event_id": str(delivery_id), "type": event_type}
+            db.add(WebhookDelivery(
+                id=delivery_id, endpoint_id=endpoint.id, event_type=event_type,
+                payload=json.dumps(body, ensure_ascii=False, separators=(",", ":")),
+                attempt=0, status="pending", next_at=now, created_at=now))
+        if endpoints:
+            await db.flush()
     return len(endpoints)
 
 

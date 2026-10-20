@@ -9,13 +9,13 @@ import csv
 import io
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import _open_account, _require_role, _subject, get_current_employer
@@ -26,7 +26,8 @@ from app.core.ratelimit import too_many
 from app.core.rls import bypass_rls, reset_rls, set_rls
 from app.core.security import decode_token
 from app.models import Employer, EmployerApiKey, Offer, Participant, WebhookDelivery, WebhookEndpoint
-from app.services.api_keys import MAX_ACTIVE, key_hash, new_key, well_formed
+from app.services.api_keys import MAX_ACTIVE, MAX_TERM_DAYS, TERM_DAYS, key_hash, new_key, usable, well_formed
+from app.services.contact_scope import contacts, scope
 from app.services.csv_safe import safe_row
 from app.services.field_cipher import public_ref
 from app.services.privacy import contacts_allowed
@@ -69,7 +70,7 @@ async def _key_owner(full: str) -> uuid.UUID | None:
         async with AsyncSessionLocal() as session:
             row = await session.scalar(select(EmployerApiKey).where(
                 EmployerApiKey.key_hash == key_hash(full), EmployerApiKey.revoked_at.is_(None)))
-            if row is None:
+            if row is None or not usable(row, datetime.now(UTC)):
                 return None
             owner = await session.get(Employer, row.employer_id)
             if owner is None or getattr(owner, "deleted_at", None) is not None \
@@ -99,7 +100,7 @@ async def employer_or_api_key(token: str | None = Depends(_optional_bearer),
             raise ApiError(429, "rate_limited", "Слишком много запросов с этим ключом")
         owner = await _key_owner(x_api_key) if well_formed(x_api_key) else None
         if owner is None:
-            raise ApiError(401, "invalid_credentials", "Ключ не подошёл или отозван")
+            raise ApiError(401, "invalid_credentials", "Ключ не подошёл, истёк или отозван")
         set_rls(employer_id=str(owner))
         return {"sub": str(owner), "role": "employer", "via": "api_key"}
     raise ApiError(401, "invalid_credentials", "Требуется вход или ключ X-API-Key")
@@ -107,13 +108,17 @@ async def employer_or_api_key(token: str | None = Depends(_optional_bearer),
 
 class KeyIn(BaseModel):
     label: str | None = Field(None, max_length=80)
+    days: int = Field(TERM_DAYS, ge=1, le=MAX_TERM_DAYS, description="Срок действия ключа в днях")
 
 
 def _key_out(row: EmployerApiKey) -> dict:
+    expires = getattr(row, "expires_at", None)
     return {"id": str(row.id), "prefix": f"fspk_{row.prefix}_…", "label": row.label,
             "created_at": row.created_at.isoformat(),
             "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
-            "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None}
+            "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
+            "expires_at": expires.isoformat() if expires else None,
+            "expired": row.revoked_at is None and not usable(row, datetime.now(UTC))}
 
 
 @router.get("/keys")
@@ -127,13 +132,16 @@ async def list_keys(current: dict = Depends(get_current_employer), db: AsyncSess
 async def create_key(body: KeyIn, current: dict = Depends(get_current_employer), db: AsyncSession = Depends(get_db)):
     """The full key is in this answer only. The database keeps its SHA-256."""
     employer_id = _eid(current)
+    now = datetime.now(UTC)
     active = list(await db.scalars(select(EmployerApiKey.id).where(
-        EmployerApiKey.employer_id == employer_id, EmployerApiKey.revoked_at.is_(None))))
+        EmployerApiKey.employer_id == employer_id, EmployerApiKey.revoked_at.is_(None),
+        or_(EmployerApiKey.expires_at.is_(None), EmployerApiKey.expires_at > now))))
     if len(active) >= MAX_ACTIVE:
         raise ApiError(409, "conflict", f"Активных ключей уже {MAX_ACTIVE}: отзовите лишний")
     full, prefix, digest = new_key()
     row = EmployerApiKey(id=uuid.uuid4(), employer_id=employer_id, prefix=prefix, key_hash=digest,
-                         label=(body.label or "").strip() or None, created_at=datetime.now(UTC))
+                         label=(body.label or "").strip() or None, created_at=now,
+                         expires_at=now + timedelta(days=body.days))
     db.add(row)
     await db.commit()
     return {**_key_out(row), "key": full}
@@ -255,9 +263,10 @@ async def export(fmt: str = Query("json", pattern="^(json|csv)$"),
         person = await db.get(Participant, offer.candidate_id)
         if person is None or not await contacts_allowed(db, person):
             continue
+        shared = contacts(person, scope(offer))
         rows.append({
-            "ref": public_ref(person.id), "name": person.display_name, "email": person.email,
-            "phone": person.phone, "telegram": person.telegram, "source": "offer", "role": offer.role,
+            "ref": public_ref(person.id), "name": person.display_name, "email": shared["email"],
+            "phone": shared["phone"], "telegram": shared["telegram"], "source": "offer", "role": offer.role,
         })
     if fmt == "csv":
         buf = io.StringIO()

@@ -80,6 +80,10 @@ class Db:
             return Rows([v for v in self.vcs if v.revoked_at is None])
         return Rows(self.by_model[entity])
 
+    async def scalar(self, stmt):
+        """A free status-list position: no credential holds it yet."""
+        return None
+
     def add(self, obj):
         self.added.append(obj)
         if isinstance(obj, VerifiableCredential):

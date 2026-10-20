@@ -6,7 +6,8 @@ def planned_effects(role: str, kind: str) -> list[dict[str, str]]:
     if role == "participant" and kind == "pd_candidate":
         return [
             {"code": "hide_card", "text": "Карточка сразу пропадёт из поиска."},
-            {"code": "close_contacts", "text": "Компании перестанут видеть уже открытые контакты."},
+            {"code": "close_contacts",
+             "text": "Компании перестанут видеть уже открытые контакты, а их ATS получат требование удалить их."},
             {"code": "erase_in_30_days",
              "text": "Имя, контакты и навыки будут стёрты в течение 30 дней (ч. 5 ст. 21 152-ФЗ), "
                      "если закон не требует их хранить."},

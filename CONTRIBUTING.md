@@ -39,7 +39,7 @@
 - Значения со страницы методики (`frontend/src/methodFigures.ts`) должны стоять в той же таблице README.
 - Ссылки и якоря во всех `.md`, число ячеек в таблицах и закрытие блоков кода проверяют юнит-тесты `test_markdown_*.py`.
 - Новый код ошибки API добавляется в `ERROR_CODES`, в карту классов `backend/app/api/problems.py` и в [docs/API_ERRORS.md](docs/API_ERRORS.md).
-- После изменения маршрутов обновите снимок спецификации: `python -m app.tools.dump_openapi` в `backend/` пишет `docs/openapi.json`, тест `test_openapi_paths.py` сверяет его с приложением.
+- После изменения маршрутов или схем обновите снимки спецификации: `python -m app.tools.dump_openapi --write` в `backend/` переписывает `docs/openapi.json` и `docs/openapi_paths.txt`, тест `test_openapi_paths.py` сверяет их с приложением.
 
 ## База данных
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
@@ -109,3 +110,82 @@ def test_key_list_never_returns_the_key():
                          label="ATS", created_at=__import__("datetime").datetime.now(__import__("datetime").UTC))
     out = integrations._key_out(row)
     assert "key" not in out and "key_hash" not in out and out["prefix"] == "fspk_abcd1234_…"
+
+
+def test_a_key_past_its_term_is_not_usable_and_an_old_key_without_term_still_is():
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.api_keys import MAX_TERM_DAYS, TERM_DAYS, usable
+    now = datetime.now(UTC)
+    assert TERM_DAYS <= MAX_TERM_DAYS <= 365
+    assert usable(SimpleNamespace(revoked_at=None, expires_at=now + timedelta(days=1)), now)
+    assert not usable(SimpleNamespace(revoked_at=None, expires_at=now - timedelta(seconds=1)), now)
+    assert not usable(SimpleNamespace(revoked_at=now, expires_at=None), now)
+    assert usable(SimpleNamespace(revoked_at=None, expires_at=None), now)
+
+
+def test_the_term_is_bounded_and_listed():
+    from datetime import UTC, datetime, timedelta
+
+    from pydantic import ValidationError
+    assert integrations.KeyIn().days == 90
+    for bad in (0, 366):
+        with pytest.raises(ValidationError):
+            integrations.KeyIn(days=bad)
+    now = datetime.now(UTC)
+    row = EmployerApiKey(id=uuid.uuid4(), employer_id=uuid.uuid4(), prefix="abcd1234", key_hash="0" * 64,
+                         label=None, created_at=now - timedelta(days=100), expires_at=now - timedelta(days=10))
+    out = integrations._key_out(row)
+    assert out["expired"] is True and out["expires_at"].startswith(str((now - timedelta(days=10)).date()))
+
+
+async def test_create_key_sets_the_term_and_skips_expired_keys_in_the_limit(monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    class Db:
+        def __init__(self):
+            self.added, self.where = [], ""
+
+        async def scalars(self, stmt):
+            self.where = str(stmt.compile(compile_kwargs={"literal_binds": False}))
+            return []
+
+        def add(self, obj):
+            self.added.append(obj)
+
+        async def commit(self):
+            pass
+
+    db = Db()
+    out = await integrations.create_key(integrations.KeyIn(days=30), {"sub": str(uuid.uuid4()), "role": "employer"}, db)
+    [row] = db.added
+    assert "expires_at" in db.where
+    assert timedelta(days=29) < row.expires_at - datetime.now(UTC) <= timedelta(days=30)
+    assert out["key"].startswith("fspk_") and out["expired"] is False
+
+
+async def test_an_expired_key_does_not_sign_in(monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    full = new_key()[0]
+    row = SimpleNamespace(employer_id=uuid.uuid4(), revoked_at=None, expires_at=datetime.now(UTC) - timedelta(hours=1),
+                          last_used_at=None)
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def scalar(self, stmt):
+            return row
+
+        async def get(self, model, ident):
+            raise AssertionError("an expired key must not reach the owner lookup")
+
+        async def commit(self):
+            raise AssertionError("an expired key must not be marked as used")
+
+    monkeypatch.setattr(integrations, "AsyncSessionLocal", Session)
+    assert await integrations._key_owner(full) is None

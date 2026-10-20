@@ -8,7 +8,8 @@ PUT  /assessment/{id}/draft           - store the unsent answer; a stale version
 POST /assessment/{id}/answer          - answer the current item (item_token + option index)
 POST /assessment/{id}/abandon         - stop; counts as an attempt
 POST /assessment/{id}/leave           - the tab was hidden; a mark, the grade does not move
-POST /assessment/{id}/dispute         - ask for a manual look at a finished test
+POST /assessment/{id}/dispute         - ask for a manual look at a finished test (a methodist answers)
+GET  /assessment/disputes             - the candidate's own disputes and the answers
 GET  /assessment/{id}/review          - after the end: items with right answers and explanations
 GET  /assessment/cooldown             - retake / upgrade locks
 GET  /assessment/history              - past sessions
@@ -65,6 +66,7 @@ from app.services.assessment import (
     start_session,
 )
 from app.services.clipboard_twin import copy_text
+from app.services.disputes import DisputeError, candidate_view, clean_reason, due_at
 from app.services.matching import wilson_lower
 from app.services.practice import (
     answer_practice,
@@ -74,7 +76,14 @@ from app.services.practice import (
     weekly_task,
 )
 from app.services.profile import rebuild_profile
-from app.services.session_marks import DISPUTE_TEXT, dispute_error, integrity_line, note_copy, note_tab_leave
+from app.services.session_marks import (
+    DISPUTE_TEXT,
+    dispute_error,
+    integrity_line,
+    is_voided,
+    note_copy,
+    note_tab_leave,
+)
 from app.services.survey import SPECIALIZATIONS
 from app.services.vacancy_exam import form_exam
 
@@ -512,9 +521,19 @@ async def session_history(limit: int = Query(20, ge=1, le=100), offset: int = Qu
         "vacancy_test": bool((s.flags or {}).get("vacancy_id")),
         "trial": (s.flags or {}).get("mode") == "express",
         "recommended_grade": (s.flags or {}).get("recommended_grade"),
+        "voided": is_voided(s.flags),
         "started_at": s.started_at.isoformat(),
         "completed_at": s.completed_at.isoformat() if s.completed_at else None,
     } for s in rows], "limit": limit, "offset": offset}
+
+
+@router.get("/disputes")
+async def my_disputes(current: dict = Depends(get_current_participant), db: AsyncSession = Depends(get_db)):
+    """The candidate's disputes: status, the methodist's answer and the legal deadline (152-FZ art. 16)."""
+    rows = list(await db.scalars(
+        select(GradeDispute).where(GradeDispute.participant_id == uuid.UUID(current["sub"]))
+        .order_by(desc(GradeDispute.created_at)).limit(50)))
+    return [candidate_view(row) for row in rows]
 
 
 async def _own(db: AsyncSession, session_id: uuid.UUID, current: dict) -> TestSession:
@@ -654,10 +673,21 @@ async def copy_stem(session_id: uuid.UUID, current: dict = Depends(get_current_p
     return {"copies": int(session.flags["copies"])}
 
 
+class DisputeIn(BaseModel):
+    reason: str | None = Field(None, max_length=1000, description="Что пошло не так, своими словами, без контактов")
+
+
 @router.post("/{session_id}/dispute")
 async def dispute_grade(session_id: uuid.UUID, current: dict = Depends(get_current_participant),
-                        db: AsyncSession = Depends(get_db)):
-    """Ask for a manual look. The employer does not see the row, and the grade is not changed."""
+                        db: AsyncSession = Depends(get_db), body: DisputeIn | None = None):
+    """Ask for a manual look. A methodist answers within 30 days; the employer does not see the row,
+    and nobody changes the grade by hand. The only remedy is to void a failed attempt."""
+    try:
+        reason = clean_reason(body.reason if body else None)
+    except DisputeError as exc:
+        if str(exc) == "identity":
+            raise ApiError(422, "validation_error", "Опишите проблему без имени, почты и телефона") from exc
+        raise ApiError(422, "validation_error", "Слишком длинное описание") from exc
     session = await db.get(TestSession, session_id)
     owned = (
         session is not None
@@ -676,14 +706,16 @@ async def dispute_grade(session_id: uuid.UUID, current: dict = Depends(get_curre
     if err == "already":
         raise ApiError(409, "conflict", "Этот результат уже отправлен на пересмотр")
     assert session is not None
+    created = datetime.now(UTC)
     db.add(GradeDispute(
-        participant_id=session.participant_id, session_id=session.id, created_at=datetime.now(UTC)))
+        participant_id=session.participant_id, session_id=session.id, created_at=created, reason=reason,
+        status="open"))
     try:
         await db.commit()
     except IntegrityError as e:
         await db.rollback()
         raise ApiError(409, "conflict", "Этот результат уже отправлен на пересмотр") from e
-    return {"text": DISPUTE_TEXT}
+    return {"text": DISPUTE_TEXT, "status": "open", "due_at": due_at(created).isoformat()}
 
 
 @router.post("/{session_id}/abandon", response_model=SessionOut)

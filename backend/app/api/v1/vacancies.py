@@ -27,6 +27,7 @@ from app.models import (
 )
 from app.models.participant import adult_confirmed
 from app.services.categorization import DISCIPLINE_LABELS, GRADES, ROLES
+from app.services.contact_scope import CHANNELS, contacts, scope
 from app.services.field_cipher import public_ref
 from app.services.notify import Outbox, category_label, notify
 from app.services.privacy import contacts_allowed
@@ -433,6 +434,8 @@ async def application_contacts(application_id: uuid.UUID, current: dict = Depend
         .order_by(Offer.created_at.desc()).limit(1))
     if latest is not None and latest.contacts_revoked_at is not None:
         raise ApiError(403, "contacts_revoked")
+    # The channels the candidate opened on that invitation hold for the company's applications too.
+    channels = scope(latest) if latest is not None else list(CHANNELS)
     db.add(AccessLog(employer_id=vacancy.employer_id, participant_id=candidate.id, access_type="application_contacts"))
     if getattr(application, "viewed_at", None) is None:
         try:
@@ -440,8 +443,9 @@ async def application_contacts(application_id: uuid.UUID, current: dict = Depend
         except AttributeError:
             pass
     await db.commit()
+    shared = contacts(candidate, channels)
     return {
         "candidate_id": str(candidate.id), "display_name": candidate.display_name,
-        "email": candidate.email, "telegram": candidate.telegram, "phone": candidate.phone,
-        "region": candidate.region,
+        "email": shared["email"], "telegram": shared["telegram"], "phone": shared["phone"],
+        "region": candidate.region, "shared_contacts": channels,
     }

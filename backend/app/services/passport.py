@@ -39,14 +39,14 @@ def passport_claims(confirmations: Iterable, skills: Iterable, results: Iterable
     return {"grades": grades, "testedSkills": tested, "fspResults": fsp}
 
 
-def issue_passport(passport_id: uuid.UUID, claims: dict) -> dict:
+def issue_passport(passport_id: uuid.UUID, claims: dict, status_index: int | None = None) -> dict:
     return issue_achievement_credential(str(passport_id), str(passport_id), {
         "type": PASSPORT_TYPE,
         "name": "Паспорт навыков ФСП",
         **claims,
         "criteria": {"narrative": "Грейды и навыки подтверждены тестом платформы, результаты взяты из "
                                   "протоколов ФСП. Имени, контактов и названий соревнований в паспорте нет."},
-    })
+    }, status_index=status_index)
 
 
 def is_passport(credential: dict) -> bool:

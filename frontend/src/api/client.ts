@@ -401,8 +401,11 @@ export const industryCase = (answers?: { first: string; follow: string }) =>
     grade_unchanged: boolean
   }>('/candidates/me/industry-case', answers ?? {})
 export const getMyOffers = () => api.get('/candidates/me/offers', { params: { limit: 50 } })
-export const respondToOffer = (offerId: string, action: 'accept' | 'reject' | 'yes_if', reason?: string, note?: string) =>
-  api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null, note: note || null })
+export type ContactChannel = 'email' | 'telegram' | 'phone' | 'github'
+export const respondToOffer = (offerId: string, action: 'accept' | 'reject' | 'yes_if', reason?: string, note?: string, share?: ContactChannel[]) =>
+  api.post(`/candidates/me/offers/${offerId}/respond`, { action, reason: reason || null, note: note || null, ...(share ? { share } : {}) })
+export const changeSharedContacts = (offerId: string, share: ContactChannel[]) =>
+  api.put<{ shared_contacts: ContactChannel[] }>(`/candidates/me/offers/${offerId}/contacts`, { share })
 export const fileComplaint = (offerId: string, reason: string) =>
   api.post('/candidates/me/complaints', { offer_id: offerId, reason })
 export const updateVisibility = (is_visible: boolean) =>
@@ -491,8 +494,32 @@ export const abandonAssessment = (sessionId: string) => api.post(`/assessment/${
 export const acceptLowerGrade = (sessionId: string) => api.post(`/assessment/${sessionId}/accept-lower`)
 export const leaveAssessment = (sessionId: string) => api.post(`/assessment/${sessionId}/leave`)
 export const noteAssessmentCopy = (sessionId: string) => api.post(`/assessment/${sessionId}/copy`)
-export const disputeGrade = (sessionId: string) =>
-  api.post<{ text: string }>(`/assessment/${sessionId}/dispute`)
+export const disputeGrade = (sessionId: string, reason?: string) =>
+  api.post<{ text: string; status: string; due_at: string }>(`/assessment/${sessionId}/dispute`,
+    reason && reason.trim() ? { reason: reason.trim() } : {})
+export interface GradeDisputeView {
+  id: string; session_id: string; status: 'open' | 'upheld' | 'voided'; status_label: string
+  reason: string | null; decision_note: string | null; created_at: string; due_at: string; decided_at: string | null
+}
+export const myDisputes = () => api.get<GradeDisputeView[]>('/assessment/disputes')
+export interface DisputeAttempt {
+  session_id: string; specialization: string | null; target_grade: string; status: string; outcome: string | null
+  items_count: number | null; p_pass: number | null; theta_se: number | null; stop_reason: string | null
+  started_at: string | null; completed_at: string | null; duration_s: number | null
+  integrity_level: string; integrity_signals: string[]; person_fit_review: boolean; voidable: boolean; voided: boolean
+}
+export interface DeskDispute extends GradeDisputeView { overdue: boolean; attempt: DisputeAttempt | null }
+export interface DisputeItem {
+  seq: number; family_id: string; level: number; kind: string; topic: string; stem: string; code: string | null
+  language: string | null; given: string | null; right: string | null; correct: boolean | null; timed_out: boolean
+  excluded: boolean; time_limit_s: number; spent_s: number | null
+}
+export const deskDisputes = (state: 'open' | 'closed' | 'all' = 'open') =>
+  api.get<DeskDispute[]>('/methodist/disputes', { params: { state } })
+export const deskDispute = (id: string) =>
+  api.get<DeskDispute & { items: DisputeItem[] }>(`/methodist/disputes/${id}`)
+export const decideDispute = (id: string, action: 'uphold' | 'void', note: string) =>
+  api.post<DeskDispute>(`/methodist/disputes/${id}/decision`, { action, note })
 export const reviewAssessment = (sessionId: string) => api.get(`/assessment/${sessionId}/review`)
 export const assessmentCooldown = (specialization?: string) =>
   api.get('/assessment/cooldown', { params: specialization ? { specialization } : {} })
@@ -559,7 +586,6 @@ export interface EvaluateReport {
 }
 export const evaluatePairs = (text: string) =>
   api.post<EvaluateReport>('/public/evaluate', text, { headers: { 'Content-Type': 'text/plain' } })
-export const credentialStatus = (id: string) => api.get(`/public/credentials/${id}/status`)
 export const presentResult = (id: string) => api.post(`/candidates/me/results/${id}/presentation`)
 
 export interface ResumeRow {

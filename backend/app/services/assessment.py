@@ -333,11 +333,13 @@ async def check_retake_interval(db: AsyncSession, participant_id: uuid.UUID, tar
     since = now - timedelta(days=RETAKE_INTERVAL_DAYS)
     kind = TestSession.flags.has_key("vacancy_id")
     not_trial = or_(TestSession.flags["mode"].astext.is_(None), TestSession.flags["mode"].astext != "express")
+    # A methodist voided this attempt after a dispute (app/services/disputes.py): it does not lock a retake.
+    not_voided = ~TestSession.flags.has_key("voided")
     query = select(TestSession.target_grade, TestSession.completed_at, TestSession.status,
                    TestSession.grade_assigned).where(
         TestSession.participant_id == participant_id,
         TestSession.status.in_(("completed", "abandoned", "expired")), TestSession.completed_at > since,
-        kind if vacancy_test else ~kind, not_trial)
+        kind if vacancy_test else ~kind, not_trial, not_voided)
     if spec:
         query = query.where(TestSession.specialization == spec)
     attempts = [Attempt(target, done, status == "completed" and not passed_target(assigned, target))

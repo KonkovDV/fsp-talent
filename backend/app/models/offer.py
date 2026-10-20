@@ -37,6 +37,8 @@ class Offer(Base):
     contacts_revealed_at = Column(DateTime(timezone=True))
     # The candidate closed the contacts for this company after accepting. Other companies are not affected.
     contacts_revoked_at = Column(DateTime(timezone=True))
+    # Channels the candidate opened to this company (app/services/contact_scope.py). Null opens every channel.
+    shared_contacts = Column(JSONB)
     employer_viewed_at = Column(DateTime(timezone=True))
     # TZ 2.2 п.3: "просмотрено" — first time the candidate opened the list with this pending offer.
     candidate_viewed_at = Column(DateTime(timezone=True))

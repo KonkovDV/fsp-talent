@@ -8,7 +8,6 @@ import BadgePage from '../BadgePage'
 const verifyCredential = vi.fn()
 vi.mock('../../api/client', () => ({
   verifyCredential: (c: unknown) => verifyCredential(c),
-  credentialStatus: () => Promise.reject(new Error('нет')),
   issuerDid: () => Promise.resolve({ data: { id: 'did:web:example' } }),
 }))
 vi.mock('../../components/PublicShell', () => ({ default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }))
@@ -46,5 +45,34 @@ describe('проверка удостоверения', () => {
     await userEvent.type(box, ' ')
     expect(screen.queryByText('2019')).not.toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('отозванное удостоверение не выдаёт за поддельное и не показывает его данные', async () => {
+    verifyCredential.mockResolvedValue({ data: { valid: false, signature: true, revoked: true } })
+    renderPage()
+    await userEvent.click(screen.getByLabelText('JSON удостоверения'))
+    await userEvent.paste(card)
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(/владелец отозвал удостоверение/)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText('2019')).not.toBeInTheDocument()
+  })
+
+  it('понимает список записей статуса и называет открытый список W3C', async () => {
+    verifyCredential.mockResolvedValue({ data: { valid: true, signature: true, revoked: false } })
+    const listed = JSON.stringify({
+      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      credentialStatus: [
+        { id: 'https://x/api/v1/public/credentials/1/status', type: 'FSPCredentialStatus' },
+        { id: 'https://x/api/v1/public/status-lists/1#7', type: 'BitstringStatusListEntry' },
+      ],
+      credentialSubject: { achievement: { name: 'Чемпионат', year: 2019 } },
+    })
+    renderPage()
+    await userEvent.click(screen.getByLabelText('JSON удостоверения'))
+    await userEvent.paste(listed)
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить' }))
+    expect(await screen.findByText('2019')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/не отозвано.*W3C Bitstring Status List/)
   })
 })

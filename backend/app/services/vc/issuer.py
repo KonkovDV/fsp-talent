@@ -186,8 +186,9 @@ def blinded_subject(person_id: str, audience: str) -> str:
 
 
 def issue_audience_receipt(credential_id: str, person_id: str, audience: str, *, year: int,
-                           status: str, bucket: str, discipline: str) -> dict:
-    """A signed fact for one audience. Another audience gets another subject, so the files do not share an id."""
+                           status: str, bucket: str, discipline: str, status_index: int | None = None) -> dict:
+    """A signed fact for one audience. Another audience gets another subject, so the files do not share an id.
+    The status-list position is random per receipt, so it does not link two receipts either."""
     subject = blinded_subject(person_id, audience)
     return issue_achievement_credential(credential_id, subject, {
         "type": "DerivedFSPClaim",
@@ -198,12 +199,36 @@ def issue_audience_receipt(credential_id: str, person_id: str, audience: str, *,
         "discipline": discipline,
         "seal": subject[:16],
         "criteria": {"narrative": "Год, статус и корзина места. Имени и общего идентификатора держателя нет."},
-    }, status=False, subject_urn=f"urn:receipt:{subject}")
+    }, status=False, subject_urn=f"urn:receipt:{subject}", status_index=status_index)
+
+
+def _now() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def sign_document(document: dict, created: str | None = None) -> dict:
+    """Attach a Data Integrity proof (`eddsa-jcs-2022`) made with the issuer key."""
+    proof_config = {
+        "@context": document["@context"],
+        "type": "DataIntegrityProof",
+        "cryptosuite": CRYPTOSUITE,
+        "created": created or _now(),
+        "verificationMethod": f"{issuer_id()}#key-1",
+        "proofPurpose": "assertionMethod",
+    }
+    signature = _private_key().sign(_hash_data(document, proof_config))
+    return {**document, "proof": {**proof_config, "proofValue": "z" + _b58encode(signature)}}
 
 
 def issue_achievement_credential(credential_id: str, subject_id: str, achievement: dict, *,
-                                  status: bool = True, subject_urn: str | None = None) -> dict:
-    now = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                                  status: bool = True, subject_urn: str | None = None,
+                                  status_index: int | None = None) -> dict:
+    """A signed achievement.
+
+    status adds the per-credential status URL. status_index adds a W3C Bitstring Status List entry: a verifier
+    fetches the whole public list, so the issuer does not learn which credential is checked.
+    """
+    now = _now()
     achievement = _open_badge(achievement)
     document = {
         "@context": [
@@ -220,21 +245,18 @@ def issue_achievement_credential(credential_id: str, subject_id: str, achievemen
             "achievement": achievement,
         },
     }
+    entries = []
     if status:
-        document["credentialStatus"] = {
+        entries.append({
             "id": f"{settings.PUBLIC_BASE_URL}/api/v1/public/credentials/{credential_id}/status",
             "type": "FSPCredentialStatus",
-        }
-    proof_config = {
-        "@context": document["@context"],
-        "type": "DataIntegrityProof",
-        "cryptosuite": CRYPTOSUITE,
-        "created": now,
-        "verificationMethod": f"{issuer_id()}#key-1",
-        "proofPurpose": "assertionMethod",
-    }
-    signature = _private_key().sign(_hash_data(document, proof_config))
-    return {**document, "proof": {**proof_config, "proofValue": "z" + _b58encode(signature)}}
+        })
+    if status_index is not None:
+        from app.services.vc.status_list import status_entry
+        entries.append(status_entry(status_index))
+    if entries:
+        document["credentialStatus"] = entries[0] if len(entries) == 1 else entries
+    return sign_document(document, now)
 
 
 def verify_credential(credential: dict) -> bool:

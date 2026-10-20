@@ -4,6 +4,7 @@
 /api/v1/assessment/active
 /api/v1/assessment/blueprint
 /api/v1/assessment/cooldown
+/api/v1/assessment/disputes
 /api/v1/assessment/history
 /api/v1/assessment/practice/start
 /api/v1/assessment/practice/weekly
@@ -53,6 +54,7 @@
 /api/v1/candidates/me/industry-case
 /api/v1/candidates/me/interests/{employer_id}
 /api/v1/candidates/me/offers
+/api/v1/candidates/me/offers/{offer_id}/contacts
 /api/v1/candidates/me/offers/{offer_id}/respond
 /api/v1/candidates/me/offers/{offer_id}/revoke-contacts
 /api/v1/candidates/me/passport
@@ -95,6 +97,9 @@
 /api/v1/me/consents
 /api/v1/me/consents/{kind}
 /api/v1/methodist
+/api/v1/methodist/disputes
+/api/v1/methodist/disputes/{dispute_id}
+/api/v1/methodist/disputes/{dispute_id}/decision
 /api/v1/methodist/items/{item_key}/release
 /api/v1/methodist/log
 /api/v1/methodist/quarantine
@@ -170,6 +175,7 @@
 /api/v1/public/passport/{passport_id}
 /api/v1/public/reviews/{token}
 /api/v1/public/stats
+/api/v1/public/status-lists/{list_id}
 /api/v1/public/telegram/achievements
 /api/v1/public/telegram/vacancies
 /api/v1/public/vacancy-preview

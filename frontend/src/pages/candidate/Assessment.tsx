@@ -5,9 +5,11 @@ import { CheckCircle2, ClipboardCheck, Clock, Info, Lock, XCircle } from 'lucide
 import {
   abandonAssessment, acceptLowerGrade, activeAssessment, answerAssessment, apiError, assessmentBlueprint, assessmentHistory,
   saveAssessmentDraft,
-  disputeGrade, getMyProfile, leaveAssessment, noteAssessmentCopy, reviewAssessment, startAssessment,
+  getMyProfile, leaveAssessment, noteAssessmentCopy, reviewAssessment, startAssessment,
 } from '../../api/client'
 import DesignProbe from '../../components/DesignProbe'
+import DisputeBox from '../../components/DisputeBox'
+import MyDisputes from '../../components/MyDisputes'
 import IndustryCase from '../../components/IndustryCase'
 import QaProbe from '../../components/QaProbe'
 import SurveyCard from '../../components/SurveyCard'
@@ -50,7 +52,7 @@ interface SessionState {
 interface HistoryItem {
   session_id: string; status: string; specialization: string | null; target_grade: string
   grade_assigned: string | null; p_pass: number | null; items_count: number | null; started_at: string
-  vacancy_test?: boolean; trial?: boolean
+  vacancy_test?: boolean; trial?: boolean; voided?: boolean
 }
 
 const OUTCOME_TEXT: Record<string, string> = {
@@ -100,7 +102,6 @@ export default function CandidateAssessment() {
   const levelTouched = useRef(false)
   const [lang, setLang] = useState('python')
   const [state, setState] = useState<SessionState | null>(null)
-  const [disputeText, setDisputeText] = useState('')
   const [markNote, setMarkNote] = useState<string | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   const draftVersion = useRef(0)
@@ -201,11 +202,6 @@ export default function CandidateAssessment() {
     mutationFn: () => acceptLowerGrade(state!.session_id).then(r => r.data),
     onSuccess: (data: SessionState) => { setState(data); setError(''); refresh() },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось принять грейд')),
-  })
-  const dispute = useMutation({
-    mutationFn: () => disputeGrade(state!.session_id),
-    onSuccess: (r) => setDisputeText(r.data.text),
-    onError: (e: unknown) => setDisputeText(apiError(e, 'Оспорить не удалось')),
   })
   useEffect(() => {
     if (!state || state.status !== 'in_progress' || state.result) return
@@ -416,14 +412,7 @@ export default function CandidateAssessment() {
           {(result.review_notes ?? []).map(note => (
             <p key={note} className="notice" role="status">{note}</p>
           ))}
-          {!result.trial && (
-            <div className="space-y-2">
-              <p className="text-sm text-ink-2">Решение принято автоматически по правилам теста. Пересмотр — вручную в течение 5 рабочих дней. Пересдача доступна по обычным правилам. Грейд этой кнопкой не меняется.</p>
-              <button type="button" onClick={() => dispute.mutate()} disabled={dispute.isPending || dispute.isSuccess}
-                className="btn-secondary btn-sm">Оспорить результат</button>
-              {disputeText && <p className="text-sm text-ink" role="status">{disputeText}</p>}
-            </div>
-          )}
+          {!result.trial && <DisputeBox sessionId={state.session_id} />}
           {result.trial ? (
             <div className="flex items-start gap-3" data-testid="trial-verdict">
               <Info className="shrink-0 text-accent" aria-hidden />
@@ -547,6 +536,8 @@ export default function CandidateAssessment() {
       {!item && <DesignProbe />}
       {!item && <IndustryCase />}
 
+      {!item && <MyDisputes />}
+
       {(history?.items ?? []).length > 0 && (
         <div className="card">
           <p className="font-semibold mb-2 text-sm">История</p>
@@ -555,7 +546,7 @@ export default function CandidateAssessment() {
               <li key={h.session_id} className="py-2 flex justify-between gap-2">
                 <span>{new Date(h.started_at).toLocaleDateString('ru-RU')}, {h.specialization ? (ROLE_RU[h.specialization] ?? h.specialization) : '—'}, {gradeRu(h.target_grade)}{h.vacancy_test ? ', по вакансии' : ''}{h.trial ? ', пробный' : ''}</span>
                 <span className="text-ink-3">{h.status === 'completed' ? (h.trial ? 'без решения о грейде' : h.grade_assigned ? `подтверждён: ${gradeRu(h.grade_assigned)}` : 'не подтверждён') : (SESSION_STATUS_RU[h.status] ?? h.status)}
-                  {h.p_pass != null && `, ${pct(h.p_pass)}`}</span>
+                  {h.p_pass != null && `, ${pct(h.p_pass)}`}{h.voided ? ', аннулирована по обращению' : ''}</span>
               </li>
             ))}
           </ul>

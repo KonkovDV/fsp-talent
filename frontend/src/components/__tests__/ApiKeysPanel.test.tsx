@@ -33,6 +33,17 @@ describe('API-ключи', () => {
     expect(screen.getByTestId('example-json')).toHaveTextContent('X-API-Key: fspk_ffff0000_secretsecret')
   })
 
+  it('создаёт ключ с выбранным сроком и показывает истёкший', async () => {
+    get.mockResolvedValue({ data: [{ id: '1', prefix: 'fspk_abcd1234_…', label: null, created_at: '2026-01-11T10:00:00Z', last_used_at: null, revoked_at: null, expires_at: '2026-04-11T10:00:00Z', expired: true }] })
+    post.mockResolvedValue({ data: { id: '2', prefix: 'fspk_ffff0000_…', label: null, created_at: '2026-10-11T10:00:00Z', last_used_at: null, revoked_at: null, key: 'fspk_ffff0000_secretsecret' } })
+    wrap()
+    expect(await screen.findByText(/срок истёк/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отозвать' })).toBeNull()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Срок действия ключа' }), { target: { value: '30' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать ключ' }))
+    await vi.waitFor(() => expect(post).toHaveBeenCalledWith('/employer/integrations/keys', { label: null, days: 30 }))
+  })
+
   it('отзывает ключ', async () => {
     get.mockResolvedValue({ data: [{ id: '1', prefix: 'fspk_abcd1234_…', label: null, created_at: '2026-10-11T10:00:00Z', last_used_at: null, revoked_at: null }] })
     del.mockResolvedValue({ data: { revoked: true } })

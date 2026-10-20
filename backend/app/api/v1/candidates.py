@@ -43,6 +43,7 @@ from app.services.ai.assistant import parse_resume
 from app.services.assessment import calibration_open, calibration_until, sync_assessed_grade
 from app.services.categorization import DISCIPLINE_LABELS, GRADES
 from app.services.cities import CITIES
+from app.services.contact_scope import EmptyScope, available, clean_share, contacts, describe, scope
 from app.services.demand import VIEW_DAYS, invite_band
 from app.services.demo_reset import JURY_BIRTH, clear_jury, is_jury, restore_consents
 from app.services.employer_score import company_score
@@ -808,10 +809,12 @@ async def present_result(result_id: uuid.UUID, current: dict = Depends(get_curre
     bucket = _bucket(result.place, result.total_participants)
     discipline = DISCIPLINE_LABELS.get(result.discipline, result.discipline)
     credential_id = uuid.uuid4()
+    from app.services.vc.status_list import allocate_index
+    status_index = await allocate_index(db)
     # The audience is this issuance. A second file for another company does not reuse the subject.
     credential = issue_audience_receipt(
         str(credential_id), str(pid), str(credential_id),
-        year=year, status=status, bucket=bucket, discipline=discipline,
+        year=year, status=status, bucket=bucket, discipline=discipline, status_index=status_index,
     )
     token, disclosures = issue_sd_jwt(str(pid), {
         "year": year, "competitionStatus": status, "bucket": bucket, "discipline": discipline,
@@ -821,7 +824,7 @@ async def present_result(result_id: uuid.UUID, current: dict = Depends(get_curre
     proof = str((credential.get("proof") or {}).get("proofValue") or "")
     db.add(VerifiableCredential(
         id=credential_id, participant_id=pid, result_id=result.id,
-        credential_json=credential, proof_value=proof[:200],
+        credential_json=credential, proof_value=proof[:200], status_index=status_index,
     ))
     db.add(ConsentLog(participant_id=pid, event_type="derived_claim_issued", actor_id=pid,
                       meta={"result_id": str(result.id), "credential_id": str(credential_id),
@@ -881,6 +884,7 @@ async def get_my_offers(
         CandidateInterest.participant_id == _pid(current))))
     # «Почему вас пригласили»: only the candidate's own signals, the same ones the search reads.
     me = await db.get(Participant, _pid(current))
+    channels_filled = available(me) if me is not None else []
     fsp_scores = {disc: float(lcb) for disc, lcb in (await db.execute(
         select(DisciplineScore.discipline, DisciplineScore.lcb).where(
             DisciplineScore.participant_id == _pid(current)))).all()}
@@ -914,6 +918,8 @@ async def get_my_offers(
         "counter_at": o.counter_at.isoformat() if getattr(o, "counter_at", None) else None,
         "expires_at": o.expires_at.isoformat() if o.expires_at else None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
+        "shared_contacts": scope(o) if o.status == "accepted" or getattr(o, "shared_contacts", None) else None,
+        "contact_channels": channels_filled,
         "unread_messages": unread.get(o.id, 0),
         "why_you": why(o),
     } for o in rows]
@@ -1001,11 +1007,21 @@ async def file_complaint(body: ComplaintIn, current: dict = Depends(get_current_
     return {"id": str(row.id), "paused": paused}
 
 
+Channel = Literal["email", "telegram", "phone", "github"]
+SCOPE_EMPTY = "Оставьте хотя бы один заполненный способ связи"
+
+
 class RespondIn(BaseModel):
     action: Literal["accept", "reject", "yes_if"]
     reason: Literal["salary", "format", "stack", "not_looking", "other"] | None = None
     # The condition for "yes, if". Contacts stay closed and the search order does not read it.
     note: str | None = Field(None, max_length=280)
+    # Channels the company will see after acceptance (also when it agrees to "yes, if"). None opens all.
+    share: list[Channel] | None = Field(None, max_length=4)
+
+
+class ShareIn(BaseModel):
+    share: list[Channel] = Field(min_length=1, max_length=4)
 
 
 @router.post("/me/offers/{offer_id}/respond")
@@ -1021,6 +1037,12 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         raise HTTPException(409, "Срок оффера истёк")
     if body.action == "yes_if":
         from app.services.offer_flow import IllegalOfferMove, record_counter
+        if body.share is not None:
+            owner = await db.get(Participant, offer.candidate_id)
+            try:
+                offer.shared_contacts = clean_share(body.share, owner)
+            except EmptyScope as exc:
+                raise ApiError(422, "validation_error", SCOPE_EMPTY) from exc
         try:
             note = record_counter(offer, body.note or "")
         except IllegalOfferMove as exc:
@@ -1056,10 +1078,16 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         person = await db.get(Participant, offer.candidate_id)
         if person is None or not await contacts_allowed(db, person):
             raise ApiError(403, "consent_withdrawn")
+        if body.share is not None:
+            try:
+                offer.shared_contacts = clean_share(body.share, person)
+            except EmptyScope as exc:
+                raise ApiError(422, "validation_error", SCOPE_EMPTY) from exc
         move_offer(offer, "accepted")
         offer.contacts_revealed_at = offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
-                          actor_id=offer.candidate_id, meta={"offer_id": str(offer.id)}))
+                          actor_id=offer.candidate_id,
+                          meta={"offer_id": str(offer.id), "channels": scope(offer)}))
     else:
         if body.reason is None:
             raise HTTPException(422, "Укажите причину отказа")
@@ -1075,7 +1103,8 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
     if offer.status == "accepted":
         await notify(db, outbox, "employer", offer.employer_id, "offer_accepted",
                      f"Кандидат принял приглашение «{offer.role}»",
-                     f"Кандидат ({who}) принял приглашение. Контакты открыты в разделе «Приглашения».",
+                     f"Кандидат ({who}) принял приглашение. Открыты: {describe(scope(offer))}. "
+                     "Контакты — в разделе «Приглашения».",
                      "/employer/offers")
     else:
         await notify(db, outbox, "employer", offer.employer_id, "offer_rejected",
@@ -1094,8 +1123,8 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                                    "grade_source": cat.grade_source if cat else None}},
     }
     if offer.status == "accepted" and person is not None:
-        event["candidate"].update(name=person.display_name, email=person.email,
-                                  phone=person.phone, telegram=person.telegram)
+        event["candidate"].update(name=person.display_name, shared=scope(offer),
+                                  **contacts(person, scope(offer)))
         event_type = "offer.accepted"
     else:
         event["reason"] = offer.decline_reason
@@ -1113,6 +1142,64 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         await db.rollback()
     suggest_hide = offer.status == "accepted" and person is not None and person.job_search != "not_looking"
     return {"status": offer.status, "suggest_hide": suggest_hide}
+
+
+@router.put("/me/offers/{offer_id}/contacts")
+async def change_shared_contacts(offer_id: uuid.UUID, body: ShareIn,
+                                 current: dict = Depends(get_current_participant),
+                                 db: AsyncSession = Depends(get_db)):
+    """Change which contacts one company sees after acceptance. Closing all of them is revoke-contacts.
+
+    A channel taken away reaches the company's ATS as `contacts.updated` with the channel in `removed`:
+    the company must delete it (art. 21 of 152-FZ), the same rule as for `contacts.revoked`.
+    """
+    pid = _pid(current)
+    offer = await db.get(Offer, offer_id, with_for_update=True)
+    if not offer or offer.candidate_id != pid:
+        raise HTTPException(404, "Оффер не найден")
+    if offer.status != "accepted" or offer.contacts_revoked_at is not None:
+        raise ApiError(409, "conflict",
+                       "Набор контактов меняется только по принятому приглашению с открытыми контактами")
+    person = await db.get(Participant, pid)
+    if person is None or not await contacts_allowed(db, person):
+        raise ApiError(403, "consent_withdrawn")
+    try:
+        channels = clean_share(body.share, person)
+    except EmptyScope as exc:
+        raise ApiError(422, "validation_error", SCOPE_EMPTY) from exc
+    if getattr(offer, "shared_contacts", None) == channels:
+        return {"shared_contacts": channels}
+    filled = available(person)
+    before = [ch for ch in scope(offer) if ch in filled]
+    removed = [ch for ch in before if ch not in channels]
+    # The explicit list is kept even when the company sees the same: a channel filled in later stays closed.
+    offer.shared_contacts = channels
+    now = datetime.now(UTC)
+    db.add(ConsentLog(participant_id=pid, event_type="contacts_scope_changed", actor_id=pid,
+                      meta={"offer_id": str(offer.id), "channels": channels, "removed": removed}))
+    if channels == before:
+        await db.commit()
+        return {"shared_contacts": channels}
+    outbox = Outbox()
+    gone = f" Удалите у себя: {describe(removed)}." if removed else ""
+    await notify(db, outbox, "employer", offer.employer_id, "offer_contacts_changed",
+                 f"Кандидат изменил контакты по приглашению «{offer.role}»",
+                 f"Теперь открыты: {describe(channels)}.{gone}", "/employer/offers")
+    from app.services.webhooks import deliver_due, enqueue
+    await enqueue(db, offer.employer_id, "contacts.updated", {
+        "created_at": now.isoformat(), "employer_id": str(offer.employer_id),
+        "offer": {"id": str(offer.id), "role": offer.role},
+        "candidate": {"ref": public_ref(pid), "shared": channels, "removed": removed,
+                      **contacts(person, channels)},
+    })
+    await db.commit()
+    await outbox.deliver()
+    try:
+        await deliver_due(db, offer.employer_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+    return {"shared_contacts": channels}
 
 
 @router.post("/me/offers/{offer_id}/revoke-contacts")

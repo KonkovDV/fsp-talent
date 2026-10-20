@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { credentialStatus, issuerDid, verifyCredential } from '../api/client'
+import { issuerDid, verifyCredential } from '../api/client'
 import PublicShell from '../components/PublicShell'
 import QrCode from '../components/QrCode'
 import { PageHeader } from '../components/ui'
@@ -15,27 +15,27 @@ interface Achievement {
   place?: number
   totalParticipants?: number
 }
+interface StatusEntry {
+  id?: string
+  type?: string
+}
 interface Credential {
   type?: string[]
-  credentialStatus?: { id?: string; type?: string }
+  credentialStatus?: StatusEntry | StatusEntry[]
   credentialSubject?: { achievement?: Achievement }
+}
+interface Checked {
+  valid?: boolean
+  signature?: boolean
+  revoked?: boolean
 }
 
 const STORED = 'fsp-badge'
 
-function statusId(credential: Credential): string | null {
-  const id = credential.credentialStatus?.id
-  if (!id) return null
-  try {
-    const url = new URL(id, window.location.origin)
-    if (url.origin !== window.location.origin) return null
-    const marker = '/api/v1/public/credentials/'
-    const at = url.pathname.indexOf(marker)
-    if (at < 0 || !url.pathname.endsWith('/status')) return null
-    return url.pathname.slice(at + '/api/v1'.length)
-  } catch {
-    return null
-  }
+/** VC 2.0 allows one status entry or a list: a full credential carries its own link and a W3C status-list entry. */
+function statusEntries(credential: Credential): StatusEntry[] {
+  const status = credential.credentialStatus
+  return Array.isArray(status) ? status : status ? [status] : []
 }
 
 /** Paste a credential or open the short card a candidate just asked for. */
@@ -49,18 +49,19 @@ export default function BadgePage() {
   const check = useMutation({
     mutationFn: async (raw: string) => {
       const credential = JSON.parse(raw) as Credential
-      const signed = await verifyCredential(credential).then(r => r.data as { valid: boolean })
-      const path = statusId(credential)
-      const status = path ? await credentialStatus(path.split('/').at(-2) || '').then(r => r.data as { revoked: boolean }).catch(() => null) : null
-      return { credential, signed: signed.valid, status }
+      const checked = await verifyCredential(credential).then(r => r.data as Checked)
+      // The server reads the revocation row itself: a revoked credential still has a valid signature.
+      const signed = checked.signature ?? Boolean(checked.valid)
+      return { credential, signed, revoked: Boolean(checked.revoked), entries: statusEntries(credential) }
     },
-    onSuccess: ({ credential, signed, status }) => {
+    onSuccess: ({ credential, signed, revoked, entries }) => {
       setFailed(!signed)
-      setClaims(signed ? credential.credentialSubject?.achievement ?? null : null)
+      setClaims(signed && !revoked ? credential.credentialSubject?.achievement ?? null : null)
       const kind = credential.type?.includes('OpenBadgeCredential') ? 'OpenBadgeCredential, ' : ''
+      const listed = entries.some(e => e.type === 'BitstringStatusListEntry')
       if (!signed) setNote(`${kind}подпись не сходится: документ изменён или выдан не этой платформой. Данные из него не показываем.`.replace(/^, /, ''))
-      else if (status?.revoked) setNote(`${kind}подпись сходится, удостоверение отозвано`)
-      else if (status) setNote(`${kind}подпись сходится, удостоверение не отозвано`)
+      else if (revoked) setNote(`${kind}подпись сходится, но владелец отозвал удостоверение. Данные из него не показываем.`)
+      else if (entries.length) setNote(`${kind}подпись сходится, удостоверение не отозвано.${listed ? ' Статус опубликован и в открытом списке W3C Bitstring Status List.' : ''}`)
       else setNote(`${kind}подпись сходится. Это краткая карточка: названия события в ней нет, отдельной записи отзыва тоже.`)
     },
     onError: () => { setClaims(null); setFailed(true); setNote('Это не удостоверение: нужен JSON, который выдала платформа.') },

@@ -91,3 +91,62 @@ async def test_delivery_to_a_private_answer_is_refused(monkeypatch):
     monkeypatch.setattr(page_draft, "public_ip", private)
     with pytest.raises(ValueError):
         await webhooks.post_delivery("https://rebind.example/hook", "whsec_x", "d-1", "{}")
+
+
+class Scoped:
+    """A session under row-level security: the company's endpoints are visible only with the bypass on."""
+
+    def __init__(self, endpoints, fail=False):
+        import uuid as _uuid
+        self.endpoints = endpoints
+        self.fail = fail
+        self.bypass = ""
+        self.added = []
+        self.trace = []
+        self._uuid = _uuid
+
+    async def flush(self):
+        self.trace.append(("flush", self.bypass, len(self.added)))
+
+    async def scalar(self, stmt):
+        return self.bypass
+
+    async def execute(self, stmt):
+        if "set_config('app.bypass_rls'" in str(stmt):
+            self.bypass = stmt.compile().params.get("value", "")
+        self.trace.append(("set", self.bypass))
+
+    async def scalars(self, stmt):
+        self.trace.append(("select", self.bypass))
+        if self.fail:
+            raise RuntimeError("database went away")
+        return list(self.endpoints) if self.bypass == "on" else []
+
+    def add(self, obj):
+        self.added.append(obj)
+
+
+async def test_a_candidate_request_still_queues_the_company_event():
+    import uuid
+    from types import SimpleNamespace
+
+    from app.services.webhooks import enqueue
+
+    db = Scoped([SimpleNamespace(id=uuid.uuid4())])
+    queued = await enqueue(db, uuid.uuid4(), "contacts.revoked", {"candidate": {"ref": "c_1", "delete": True}})
+    assert queued == 1 and len(db.added) == 1
+    assert db.trace[0] == ("flush", "", 0), "the request's own changes are written under its own scope"
+    assert ("select", "on") in db.trace
+    assert ("flush", "on", 1) in db.trace, "the delivery is written while the bypass is on"
+    assert db.bypass == "", "the request scope is back after the event"
+
+
+async def test_the_scope_is_restored_when_the_lookup_fails():
+    import uuid
+
+    from app.services.webhooks import enqueue
+
+    db = Scoped([], fail=True)
+    with pytest.raises(RuntimeError):
+        await enqueue(db, uuid.uuid4(), "offer.accepted", {})
+    assert db.bypass == "" and db.added == []

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { apiError, blockCompany, fileComplaint, getMyOffers, markCompanyInterest, respondToOffer, revokeContacts, updateMyProfile } from '../../api/client'
+import { apiError, blockCompany, changeSharedContacts, fileComplaint, getMyOffers, markCompanyInterest, respondToOffer, revokeContacts, updateMyProfile, type ContactChannel } from '../../api/client'
 import CodeInterview from '../../components/CodeInterview'
 import InterviewSlots from '../../components/InterviewSlots'
 import MessageThread from '../../components/MessageThread'
@@ -23,6 +23,8 @@ interface Offer {
   contacts_revoked_at?: string | null; unread_messages?: number
   why_you?: WhyLine[]
   counter_note?: string | null
+  shared_contacts?: ContactChannel[] | null
+  contact_channels?: ContactChannel[]
 }
 interface WhyLine { code: string; text: string }
 // Signals the test, the FSP protocols or the survey confirmed: shown with a mark, the rest as plain notes.
@@ -43,6 +45,32 @@ const REASONS: [string, string][] = [
   ['not_looking', 'Сейчас не ищу'],
   ['other', 'Другое'],
 ]
+const CHANNELS: [ContactChannel, string][] = [
+  ['email', 'Почта'], ['telegram', 'Telegram'], ['phone', 'Телефон'], ['github', 'GitHub'],
+]
+const INLINE: Record<ContactChannel, string> = { email: 'почта', telegram: 'Telegram', phone: 'телефон', github: 'GitHub' }
+const channelList = (list: ContactChannel[]) => CHANNELS.filter(([ch]) => list.includes(ch)).map(([ch]) => INLINE[ch]).join(', ')
+
+/** Checkboxes for the channels the candidate has filled in. The name is shown to the company in any case. */
+function ChannelPicker({ id, channels, picked, onChange }: {
+  id: string; channels: ContactChannel[]; picked: ContactChannel[]; onChange: (next: ContactChannel[]) => void
+}) {
+  return (
+    <fieldset className="text-sm text-ink-2">
+      <legend className="font-medium text-ink">Какие контакты открыть компании</legend>
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {CHANNELS.filter(([ch]) => channels.includes(ch)).map(([ch, label]) => (
+          <label key={ch} className="inline-flex items-center gap-1.5">
+            <input type="checkbox" id={`${id}-${ch}`} checked={picked.includes(ch)}
+              onChange={e => onChange(e.target.checked ? [...picked, ch] : picked.filter(x => x !== ch))} />
+            {label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
 const COMPLAINTS: [string, string][] = [
   ['не_вакансия', 'Это не вакансия'],
   ['сбор_данных', 'Собирают данные'],
@@ -56,6 +84,13 @@ export default function CandidateOffers() {
   const { data: offers = [], isLoading, isError, error } = useQuery<Offer[]>({ queryKey: ['myOffers'], queryFn: () => getMyOffers().then(r => r.data) })
   const [reasons, setReasons] = useState<Record<string, string>>({})
   const [conditions, setConditions] = useState<Record<string, string>>({})
+  const [shares, setShares] = useState<Record<string, ContactChannel[]>>({})
+  const [editShare, setEditShare] = useState<string | null>(null)
+  const [shareError, setShareError] = useState('')
+  // Old acceptances allow every channel: only the ones filled in the profile are shown and sent.
+  const picked = (o: Offer): ContactChannel[] =>
+    (shares[o.id] ?? o.shared_contacts ?? o.contact_channels ?? []).filter(ch => (o.contact_channels ?? []).includes(ch))
+  const pick = (id: string, next: ContactChannel[]) => setShares(prev => ({ ...prev, [id]: next }))
   const [hideFor, setHideFor] = useState<string | null>(null)
   const [hidden, setHidden] = useState(false)
   const [hideError, setHideError] = useState('')
@@ -64,10 +99,12 @@ export default function CandidateOffers() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myOffers'] }),
   })
   const respond = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'accept' | 'reject' | 'yes_if' }) =>
-      action === 'yes_if'
-        ? respondToOffer(id, action, undefined, conditions[id])
-        : respondToOffer(id, action, action === 'reject' ? reasons[id] : undefined),
+    mutationFn: ({ id, action, share }: { id: string; action: 'accept' | 'reject' | 'yes_if'; share?: ContactChannel[] }) => {
+      if (action === 'reject') return respondToOffer(id, action, reasons[id])
+      const note = action === 'yes_if' ? conditions[id] : undefined
+      return share ? respondToOffer(id, action, undefined, note, share)
+        : action === 'yes_if' ? respondToOffer(id, action, undefined, note) : respondToOffer(id, action, undefined)
+    },
     onSuccess: (res, vars) => {
       setRespondError('')
       qc.invalidateQueries({ queryKey: ['myOffers'] })
@@ -104,6 +141,11 @@ export default function CandidateOffers() {
       setComplaintFor(null)
     },
     onError: e => setComplaintNote(apiError(e, 'Не удалось отправить жалобу')),
+  })
+  const reshare = useMutation({
+    mutationFn: ({ id, share }: { id: string; share: ContactChannel[] }) => changeSharedContacts(id, share),
+    onSuccess: () => { setEditShare(null); setShareError(''); qc.invalidateQueries({ queryKey: ['myOffers'] }) },
+    onError: e => setShareError(apiError(e, 'Не удалось изменить контакты')),
   })
   const revoke = useMutation({
     mutationFn: (id: string) => revokeContacts(id),
@@ -199,7 +241,21 @@ export default function CandidateOffers() {
                 <div className="mt-5 border-t border-line pt-4">
                   {o.contacts_revoked_at
                     ? <p className="text-sm text-ink-2">Контакты для этой компании закрыты {date(o.contacts_revoked_at)}. Другие компании это не затрагивает.</p>
-                    : <p className="text-sm text-ink-2">Компании открыты ваши контакты.</p>}
+                    : <p className="text-sm text-ink-2">{picked(o).length ? `Компании открыты: имя, ${channelList(picked(o))}.` : 'Компании открыты ваши контакты.'}
+                        {editShare !== o.id && (o.contact_channels ?? []).length > 0 && (
+                          <button type="button" className="btn-ghost btn-sm ml-2" onClick={() => { setEditShare(o.id); setShareError('') }}>Изменить</button>
+                        )}</p>}
+                  {editShare === o.id && !o.contacts_revoked_at && (
+                    <form className="mt-3 space-y-2" onSubmit={e => { e.preventDefault(); reshare.mutate({ id: o.id, share: picked(o) }) }}>
+                      <ChannelPicker id={`share-${o.id}`} channels={o.contact_channels ?? []} picked={picked(o)} onChange={next => pick(o.id, next)} />
+                      <p className="text-xs text-ink-3">Если убрать способ связи, компания получит просьбу удалить его у себя.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="submit" className="btn-primary btn-sm" disabled={reshare.isPending || picked(o).length === 0}>Сохранить</button>
+                        <button type="button" className="btn-secondary btn-sm" onClick={() => { setEditShare(null); setShares(prev => { const next = { ...prev }; delete next[o.id]; return next }) }}>Отмена</button>
+                      </div>
+                      {shareError && <p className="notice-error" role="alert">{shareError}</p>}
+                    </form>
+                  )}
                   {hidden && <p className="mt-2 text-sm text-ink-2">Карточка скрыта из поиска. Вернуть её можно в профиле.</p>}
                   {hideFor === o.id && (
                     <div className="notice-info mt-3 flex-col">
@@ -239,8 +295,15 @@ export default function CandidateOffers() {
               {o.status === 'pending' && (
                 <div className="mt-5 space-y-3 border-t border-line pt-4">
                   {o.counter_note && <p className="text-sm text-ink-2">Условие отправлено: {o.counter_note}. Контакты закрыты, место в подборке не меняется.</p>}
+                  {(o.contact_channels ?? []).length > 0 && (
+                    <div>
+                      <ChannelPicker id={`pick-${o.id}`} channels={o.contact_channels ?? []} picked={picked(o)} onChange={next => pick(o.id, next)} />
+                      <p className="mt-1 text-xs text-ink-3">Имя компания увидит в любом случае. Эти же контакты откроются, если компания примет ваше условие «да, если…».</p>
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-3">
-                    <button onClick={() => respond.mutate({ id: o.id, action: 'accept' })} disabled={respond.isPending} className="btn-primary">Принять и открыть контакты</button>
+                    <button onClick={() => respond.mutate({ id: o.id, action: 'accept', share: o.contact_channels?.length ? picked(o) : undefined })}
+                      disabled={respond.isPending || ((o.contact_channels ?? []).length > 0 && picked(o).length === 0)} className="btn-primary">Принять и открыть контакты</button>
                     <label className="text-sm text-ink-2">Причина отказа
                       <select value={reasons[o.id] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [o.id]: e.target.value }))} className="select ml-2" aria-label="Причина отказа">
                         {REASONS.map(([value, label]) => <option key={value || 'none'} value={value} disabled={value === ''}>{label}</option>)}
@@ -254,8 +317,8 @@ export default function CandidateOffers() {
                         maxLength={280} className="input mt-1" aria-label="Условие"
                         placeholder="Например: вилка от 280 тысяч" />
                     </label>
-                    <button type="button" onClick={() => respond.mutate({ id: o.id, action: 'yes_if' })}
-                      disabled={respond.isPending || (conditions[o.id] ?? '').trim().length < 8} className="btn-secondary">
+                    <button type="button" onClick={() => respond.mutate({ id: o.id, action: 'yes_if', share: o.contact_channels?.length ? picked(o) : undefined })}
+                      disabled={respond.isPending || (conditions[o.id] ?? '').trim().length < 8 || ((o.contact_channels ?? []).length > 0 && picked(o).length === 0)} className="btn-secondary">
                       Отправить условие
                     </button>
                   </div>

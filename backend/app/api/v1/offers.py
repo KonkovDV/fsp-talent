@@ -34,6 +34,7 @@ from app.models import (
     Participant,
 )
 from app.services.contact import contact_ok
+from app.services.contact_scope import contacts, describe, scope
 from app.services.field_cipher import public_ref
 from app.services.interest_signal import show_mark
 from app.services.market import (
@@ -107,6 +108,7 @@ def _offer_out(o: Offer) -> dict:
         "contacts_available": o.status == "accepted" and o.contacts_revoked_at is None,
         "contacts_revoked_at": o.contacts_revoked_at.isoformat() if o.contacts_revoked_at else None,
         "contacts_revealed_at": o.contacts_revealed_at.isoformat() if o.contacts_revealed_at else None,
+        "shared_contacts": scope(o) if o.status == "accepted" else None,
         "decline_reason": o.decline_reason,
         "counter_note": getattr(o, "counter_note", None),
         "counter_at": o.counter_at.isoformat() if getattr(o, "counter_at", None) else None,
@@ -365,9 +367,10 @@ async def accept_counter_offer(offer_id: uuid.UUID, current: dict = Depends(get_
         raise HTTPException(409, "Принять условие можно только у ожидающего приглашения") from None
     except ValueError:
         raise HTTPException(422, "Кандидат ещё не написал условие") from None
+    channels = scope(offer)
     db.add(ConsentLog(
         participant_id=offer.candidate_id, event_type="contacts_revealed", actor_id=offer.employer_id,
-        meta={"offer_id": str(offer.id), "by": "counter"},
+        meta={"offer_id": str(offer.id), "by": "counter", "channels": channels},
     ))
     employer = await db.get(Employer, offer.employer_id)
     company = employer.company_name if employer is not None else "Компания"
@@ -376,7 +379,7 @@ async def accept_counter_offer(offer_id: uuid.UUID, current: dict = Depends(get_
     await notify(
         db, outbox, "participant", offer.candidate_id, "offer_accepted",
         f"«{company}» приняла условие",
-        f"Условие по роли «{offer.role}» принято. Контакты открыты компании.",
+        f"Условие по роли «{offer.role}» принято. Компании открыты: {describe(channels)}.",
         "/candidate/offers",
     )
     event = {
@@ -388,8 +391,7 @@ async def accept_counter_offer(offer_id: uuid.UUID, current: dict = Depends(get_
         "note": note,
     }
     if person is not None:
-        event["candidate"].update(
-            name=person.display_name, email=person.email, phone=person.phone, telegram=person.telegram)
+        event["candidate"].update(name=person.display_name, shared=channels, **contacts(person, channels))
     from app.services.webhooks import deliver_due, enqueue
     await enqueue(db, offer.employer_id, "offer.accepted", event)
     await db.commit()
@@ -427,9 +429,10 @@ async def reveal_contacts(offer_id: uuid.UUID, current: dict = Depends(get_curre
         offer.contacts_revealed_at = now
     db.add(AccessLog(employer_id=offer.employer_id, participant_id=candidate.id, access_type="contacts_view"))
     await db.commit()
+    channels = scope(offer)
     return {
         "candidate_id": str(candidate.id), "display_name": candidate.display_name,
-        "email": candidate.email, "telegram": candidate.telegram,
-        "phone": candidate.phone, "github": candidate.github, "region": candidate.region,
+        **contacts(candidate, channels), "region": candidate.region,
+        "shared_contacts": channels,
         "contacts_revealed_at": offer.contacts_revealed_at.isoformat(),
     }

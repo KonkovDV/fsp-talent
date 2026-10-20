@@ -24,9 +24,9 @@ SIGNAL_LABELS = {
     "twin": "ответ совпал с числом из копии условия, которого не было на экране",
 }
 DISPUTE_TEXT = (
-    "Решение принято автоматически по правилам теста. "
-    "Пересмотр — вручную в течение 5 рабочих дней. Пересдача доступна по обычным правилам. "
-    "Грейд этой кнопкой не меняется."
+    "Решение принято автоматически по правилам теста. Обращение рассмотрит методист и ответит здесь "
+    "не позднее чем через 30 дней (ч. 4 ст. 16 152-ФЗ). Если неудачную попытку аннулируют, она не помешает "
+    "пересдаче и не опустит грейд в подборке. Грейд этой кнопкой не меняется."
 )
 
 
@@ -84,18 +84,23 @@ def integrity_line(flags: dict | None) -> str | None:
     return f"Уровень риска честности: {LEVEL_LABELS[info['level']]} ({signals}).{tail} Грейд не изменён."
 
 
+def is_voided(flags: dict | None) -> bool:
+    """A methodist voided this attempt after a dispute (app/services/disputes.py)."""
+    return bool((flags or {}).get("voided"))
+
+
 def latest_grade_flags(rows: list[tuple]) -> dict:
     """Newest completed grade test per person. Rows are newest first.
 
     An express trial and a vacancy test are not grade tests, so they neither
-    apply the penalty nor hide an earlier grade test that should.
+    apply the penalty nor hide an earlier grade test that should. A voided attempt does not speak.
     """
     marks: dict = {}
     for pid, flags in rows:
         if pid in marks:
             continue
         flags = flags or {}
-        if flags.get("vacancy_id") or flags.get("mode") == "express":
+        if flags.get("vacancy_id") or flags.get("mode") == "express" or is_voided(flags):
             continue
         marks[pid] = flags
     return marks
@@ -106,13 +111,14 @@ def latest_failed_targets(rows: list[tuple]) -> dict:
 
     Rows are (participant_id, specialization, target_grade, flags), newest first. An express trial and
     a vacancy test are skipped like in latest_grade_flags. A newer passed or accepted-lower attempt
-    hides an older failure: only the newest grade test of the specialization speaks.
+    hides an older failure: only the newest grade test of the specialization speaks. A voided attempt
+    is skipped as if it had not happened.
     """
     seen: set = set()
     failed: dict = {}
     for pid, spec, target, flags in rows:
         flags = flags or {}
-        if flags.get("vacancy_id") or flags.get("mode") == "express" or not spec:
+        if flags.get("vacancy_id") or flags.get("mode") == "express" or not spec or is_voided(flags):
             continue
         if (pid, spec) in seen:
             continue

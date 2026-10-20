@@ -77,9 +77,12 @@ async def issue_my_passport(current: dict = Depends(get_current_participant), db
     for old in await _active(db, pid):
         old.revoked_at = now
     passport_id = uuid.uuid4()
-    credential = issue_passport(passport_id, claims)
+    from app.services.vc.status_list import allocate_index
+    status_index = await allocate_index(db)
+    credential = issue_passport(passport_id, claims, status_index=status_index)
     vc = VerifiableCredential(id=passport_id, participant_id=pid, credential_json=credential,
-                              proof_value=credential["proof"]["proofValue"], issued_at=now)
+                              proof_value=credential["proof"]["proofValue"], issued_at=now,
+                              status_index=status_index)
     db.add(vc)
     db.add(ConsentLog(participant_id=pid, event_type="passport_issued", actor_id=pid,
                       meta={"credential_id": str(passport_id)}))

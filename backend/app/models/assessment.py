@@ -88,9 +88,15 @@ GRADE_ORDER = ("intern", "junior", "middle", "senior", "lead")
 
 
 class GradeDispute(Base):
-    """A request to look at a finished test again. It does not change the grade."""
+    """A request to look at a finished test again. A methodist answers it; nobody sets a grade by hand.
+
+    status: open → upheld (the result stands) or voided (a failed attempt no longer counts).
+    """
     __tablename__ = "grade_disputes"
-    __table_args__ = (UniqueConstraint("session_id", name="uq_grade_dispute_session"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", name="uq_grade_dispute_session"),
+        CheckConstraint("status IN ('open', 'upheld', 'voided')", name="ck_grade_dispute_status"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     participant_id: Mapped[uuid.UUID] = mapped_column(
@@ -99,6 +105,12 @@ class GradeDispute(Base):
         UUID(as_uuid=True), ForeignKey("test_sessions.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", server_default="open")
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("employers.id", ondelete="SET NULL"), nullable=True)
 
 
 class TestSessionItem(Base):

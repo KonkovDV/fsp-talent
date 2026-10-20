@@ -62,6 +62,8 @@ async def ingest_from_fsp(
     p.is_minor = age_on(data.birth_date, date.today()) < 18
     p.fsp_linked_at = datetime.now(UTC)
     await db.flush()
+    from app.services.vc.status_list import allocate_index
+    taken: set[int] = set()
     for r in data.results:
         res = Result(
             participant_id=p.id, event_id=r.event_id, event_name=r.event_name, discipline=r.discipline,
@@ -73,6 +75,7 @@ async def ingest_from_fsp(
         db.add(res)
         await db.flush()
         vc_id = uuid.uuid4()
+        status_index = await allocate_index(db, taken)
         credential = issue_achievement_credential(str(vc_id), str(p.id), {
             "type": "FSPCompetitionResult",
             "source": "ФСП" if settings.FSP_MODE == "real" else "ФСП (тестовый мок)",
@@ -84,11 +87,12 @@ async def ingest_from_fsp(
             "totalParticipants": r.total_participants,
             "teamSize": r.team_size,
             "eventDate": r.event_date.isoformat(),
-        })
+        }, status_index=status_index)
         db.add(VerifiableCredential(
             id=vc_id, participant_id=p.id, result_id=res.id,
             credential_json=credential,
             proof_value=credential["proof"]["proofValue"],
+            status_index=status_index,
         ))
     return p
 
