@@ -230,7 +230,8 @@ def check_erasure(employer_token):
     status, _ = call("DELETE", "/me/consents/pd_candidate", token=token)
     assert status == 200
     status, closed = call("GET", f"/offers/{offer['id']}/contacts", token=employer_token)
-    assert status == 403 and closed["error"]["code"] == "consent_withdrawn", closed
+    # Withdrawal closes accepted invitations so a later re-consent does not reopen them.
+    assert status == 403 and closed["error"]["code"] == "contacts_revoked", closed
     status, wrong = call("DELETE", "/candidates/me", {"confirm": "да"}, token=token)
     assert status == 422 and wrong["error"]["code"] == "delete_confirm", wrong
     status, gone = call("DELETE", "/candidates/me", {"confirm": "удалить", "password": "smoke-pass-1"}, token=token)
