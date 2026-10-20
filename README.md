@@ -428,7 +428,7 @@ LCB = максимум по подмножествам S величины (μ �
 | Ферма из 40 онлайн-участий и две победы, LCB (0,16 = пустая история: участие добавляет ровно 0) | 0,16 и 0,54 | та же |
 | 40 пользователей одновременно: ошибок, p95 поиска | 0, 69 мс | `make load` |
 | Подборка на 10 000 профилях, 2 процесса API, p95 | 360 мс | `python tests/load_api.py --scenario shortlist --seconds 60 --reuse`, банк 10 000 |
-| Юнит-тесты (в CI, со всеми компиляторами) | 1802 | `python -m pytest tests/unit --collect-only -q` |
+| Юнит-тесты (в CI, со всеми компиляторами) | 1803 | `python -m pytest tests/unit --collect-only -q` |
 | Покрытие приложения, сервисы и API | 75,5 %, 78 % и 63 % (Python 3.12, допуск ±0,5 п. п.) | `python -m pytest tests/unit -q --cov=app --cov-report=json --cov-fail-under=65` и `python tests/coverage_lines.py` |
 | Покрытие вместе с интеграционными тестами | порог: приложение от 72 %, pipeline и assessment от 60 % | `python tests/integration_coverage.py` |
 | Тесты интерфейса | 220 | `npm test` в `frontend/` |
@@ -590,7 +590,7 @@ submission/  презентация, видео и PDF документации
 | Интерфейс | `npm test`, `npm run type-check` и `npx playwright test` в `frontend/` |
 | Числа документации против свежего прогона | `python tests/doc_numbers.py` в `backend/` |
 
-В CI собирается 1802 юнит-теста, покрытие приложения 75,5 %. Каждый пуш в `main` проходит задания `.github/workflows/ci.yml`:
+В CI собирается 1803 юнит-теста, покрытие приложения 75,5 %. Каждый пуш в `main` проходит задания `.github/workflows/ci.yml`:
 
 | Задание | Что проверяет |
 |---|---|
