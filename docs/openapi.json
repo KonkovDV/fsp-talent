@@ -9858,7 +9858,7 @@
     },
     "/api/v1/candidates/me/offers/{offer_id}/contacts": {
       "put": {
-        "description": "Change which contacts one company sees after acceptance. Closing all of them is revoke-contacts.\n\nA channel taken away reaches the company's ATS as `contacts.updated` with the channel in `removed`:\nthe company must delete it (art. 21 of 152-FZ), the same rule as for `contacts.revoked`.",
+        "description": "Change which contacts one company sees after acceptance. Closing all of them is revoke-contacts.\n\nThe new set applies to every accepted open invitation of that company, so export and reveal stay\nconsistent. A channel taken away reaches the company's ATS as `contacts.updated` with the channel\nin `removed`: a request to delete it, the same notice as for `contacts.revoked`.",
         "operationId": "change_shared_contacts_api_v1_candidates_me_offers__offer_id__contacts_put",
         "parameters": [
           {
