@@ -169,7 +169,8 @@ async def decide_dispute(dispute_id: uuid.UUID, body: DecisionIn, current: dict 
             skills = list(await desk.scalars(select(Skill).where(Skill.participant_id == row.participant_id)))
             clear_failed_checks(skills, session.completed_at)
             person = await desk.get(Participant, row.participant_id)
-            if person is not None:
+            # Erasure already wiped skills; rebuilding would resurrect rows for a deleted account.
+            if person is not None and getattr(person, "deleted_at", None) is None:
                 from app.services.profile import rebuild_profile
                 await rebuild_profile(desk, person)
         desk.add(MethodistLog(employer_id=employer.id, action=f"dispute_{status}", subject=f"dispute:{row.id}"[:80],

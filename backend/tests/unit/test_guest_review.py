@@ -43,3 +43,37 @@ def test_owner_sees_marks_by_id_and_the_token_is_only_a_hash():
     token, digest = fresh_token()
     assert digest == token_hash(token)
     assert token not in digest
+
+
+async def test_a_mark_locks_the_snapshot_so_a_parallel_mark_is_not_lost(monkeypatch):
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from app.api.v1 import public
+
+    async def calm(*_args, **_kwargs):
+        return False
+
+    row = SimpleNamespace(title="Backend", seats=[{"seat": 1}, {"seat": 2}], marks={"1": "yes"},
+                          expires_at=datetime.now(UTC) + timedelta(days=1))
+
+    class Db:
+        def __init__(self):
+            self.sql = []
+
+        async def scalar(self, stmt):
+            self.sql.append(str(stmt))
+            return row
+
+        async def commit(self):
+            pass
+
+    monkeypatch.setattr(public, "too_many", calm)
+    monkeypatch.setattr(public, "flag_modified", lambda *_args: None)
+    db = Db()
+    token, _ = fresh_token()
+    await public.mark_public_review(token, public.GuestMarkIn(seat=2, mark="later"), db)
+    assert "FOR UPDATE" in db.sql[0]
+    assert row.marks == {"1": "yes", "2": "later"}
+    await public.read_public_review(token, db)
+    assert "FOR UPDATE" not in db.sql[1]

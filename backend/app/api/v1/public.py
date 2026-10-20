@@ -850,10 +850,12 @@ class GuestMarkIn(BaseModel):
     mark: Literal["yes", "no", "later"]
 
 
-async def _guest_row(db: AsyncSession, token: str):
+async def _guest_row(db: AsyncSession, token: str, *, lock: bool = False):
     if not 16 <= len(token) <= 80:
         raise ApiError(404, "not_found", "Ссылка недействительна")
-    row = await db.scalar(select(GuestReview).where(GuestReview.token_hash == token_hash(token)))
+    query = select(GuestReview).where(GuestReview.token_hash == token_hash(token))
+    # Two reviewers on one link mark at the same time: the second waits instead of overwriting the first.
+    row = await db.scalar(query.with_for_update() if lock else query)
     if row is None or row.expires_at <= datetime.now(UTC):
         raise ApiError(404, "not_found", "Ссылка недействительна")
     return row
@@ -876,7 +878,7 @@ async def mark_public_review(token: str, body: GuestMarkIn, db: AsyncSession = D
     """A mark on one seat. It does not open contacts and does not move the shortlist."""
     if await too_many(f"guest-review:{token_hash(token)}", limit=30, window_seconds=60):
         raise ApiError(429, "rate_limited")
-    row = await _guest_row(db, token)
+    row = await _guest_row(db, token, lock=True)
     try:
         row.marks = apply_mark(dict(row.marks or {}), len(row.seats or []), body.seat, body.mark)
     except ValueError as exc:

@@ -1037,12 +1037,15 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
         raise HTTPException(409, "Срок оффера истёк")
     if body.action == "yes_if":
         from app.services.offer_flow import IllegalOfferMove, record_counter
+        owner = await db.get(Participant, offer.candidate_id)
         if body.share is not None:
-            owner = await db.get(Participant, offer.candidate_id)
             try:
                 offer.shared_contacts = clean_share(body.share, owner)
             except EmptyScope as exc:
                 raise ApiError(422, "validation_error", SCOPE_EMPTY) from exc
+        elif owner is not None:
+            # Freeze today's filled channels: a channel filled in later must stay closed.
+            offer.shared_contacts = available(owner)
         try:
             note = record_counter(offer, body.note or "")
         except IllegalOfferMove as exc:
@@ -1083,6 +1086,9 @@ async def respond_to_offer(offer_id: uuid.UUID, body: RespondIn, current: dict =
                 offer.shared_contacts = clean_share(body.share, person)
             except EmptyScope as exc:
                 raise ApiError(422, "validation_error", SCOPE_EMPTY) from exc
+        else:
+            # Freeze today's filled channels: a channel filled in later must stay closed.
+            offer.shared_contacts = available(person)
         move_offer(offer, "accepted")
         offer.contacts_revealed_at = offer.responded_at = datetime.now(UTC)
         db.add(ConsentLog(participant_id=offer.candidate_id, event_type="contacts_revealed",
@@ -1150,10 +1156,13 @@ async def change_shared_contacts(offer_id: uuid.UUID, body: ShareIn,
                                  db: AsyncSession = Depends(get_db)):
     """Change which contacts one company sees after acceptance. Closing all of them is revoke-contacts.
 
-    A channel taken away reaches the company's ATS as `contacts.updated` with the channel in `removed`:
-    the company must delete it (art. 21 of 152-FZ), the same rule as for `contacts.revoked`.
+    The new set applies to every accepted open invitation of that company, so export and reveal stay
+    consistent. A channel taken away reaches the company's ATS as `contacts.updated` with the channel
+    in `removed`: a request to delete it, the same notice as for `contacts.revoked`.
     """
     pid = _pid(current)
+    if await too_many(f"offer-contacts:{pid}:{offer_id}", limit=20, window_seconds=3600):
+        raise ApiError(429, "rate_limited")
     offer = await db.get(Offer, offer_id, with_for_update=True)
     if not offer or offer.candidate_id != pid:
         raise HTTPException(404, "Оффер не найден")
@@ -1167,16 +1176,25 @@ async def change_shared_contacts(offer_id: uuid.UUID, body: ShareIn,
         channels = clean_share(body.share, person)
     except EmptyScope as exc:
         raise ApiError(422, "validation_error", SCOPE_EMPTY) from exc
-    if getattr(offer, "shared_contacts", None) == channels:
+    same_company = list(await db.scalars(select(Offer).where(
+        Offer.employer_id == offer.employer_id, Offer.candidate_id == pid, Offer.status == "accepted",
+        Offer.contacts_revoked_at.is_(None)).with_for_update()))
+    by_id = {row.id: row for row in same_company}
+    by_id[offer.id] = offer
+    # Siblings must follow the same set; skip work only when every open invitation already matches.
+    if all(getattr(row, "shared_contacts", None) == channels for row in by_id.values()):
         return {"shared_contacts": channels}
     filled = available(person)
     before = [ch for ch in scope(offer) if ch in filled]
     removed = [ch for ch in before if ch not in channels]
     # The explicit list is kept even when the company sees the same: a channel filled in later stays closed.
-    offer.shared_contacts = channels
+    for row in by_id.values():
+        row.shared_contacts = channels
     now = datetime.now(UTC)
     db.add(ConsentLog(participant_id=pid, event_type="contacts_scope_changed", actor_id=pid,
-                      meta={"offer_id": str(offer.id), "channels": channels, "removed": removed}))
+                      meta={"offer_id": str(offer.id), "employer_id": str(offer.employer_id),
+                            "offers": [str(o.id) for o in by_id.values()],
+                            "channels": channels, "removed": removed}))
     if channels == before:
         await db.commit()
         return {"shared_contacts": channels}

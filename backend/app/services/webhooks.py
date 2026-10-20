@@ -29,6 +29,8 @@ from app.services.field_cipher import open_seal, seal
 DELAYS = (60, 300, 1800, 7200, 43200)
 SKEW_SECONDS = 300
 _OWN_PATH = "/api/v1/integrations/sandbox/"
+# Events whose payload may still carry contacts after the person closed them.
+_CONTACT_PAYLOAD_EVENTS = frozenset({"offer.accepted", "contacts.updated"})
 
 
 def classify(code: int, attempt: int) -> tuple[str, int | None]:
@@ -163,6 +165,38 @@ async def _company_rows(db):
         await db.execute(_BYPASS.bindparams(value=previous or ""))
 
 
+async def drop_stale_contact_deliveries(db, employer_id: uuid.UUID, candidate_ref: str) -> int:
+    """Mark pending offer.accepted / contacts.updated for this person as dead before contacts.revoked.
+
+    Retries can otherwise deliver contacts after the revoke event already asked the ATS to delete them.
+    """
+    from app.models.webhook import WebhookDelivery, WebhookEndpoint
+
+    if not candidate_ref:
+        return 0
+    await db.flush()
+    dropped = 0
+    async with _company_rows(db):
+        rows = list(await db.scalars(
+            select(WebhookDelivery)
+            .join(WebhookEndpoint, WebhookEndpoint.id == WebhookDelivery.endpoint_id)
+            .where(WebhookEndpoint.employer_id == employer_id,
+                   WebhookDelivery.status == "pending",
+                   WebhookDelivery.event_type.in_(_CONTACT_PAYLOAD_EVENTS))))
+        for row in rows:
+            try:
+                body = json.loads(row.payload)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            candidate = body.get("candidate") if isinstance(body, dict) else None
+            if isinstance(candidate, dict) and candidate.get("ref") == candidate_ref:
+                row.status, row.last_error = "dead", "superseded"
+                dropped += 1
+        if dropped:
+            await db.flush()
+    return dropped
+
+
 async def enqueue(db, employer_id: uuid.UUID, event_type: str, payload: dict) -> int:
     """Write one delivery per active endpoint in the caller's transaction. Returns how many.
 
@@ -227,12 +261,28 @@ async def deliver_due(db, employer_id: uuid.UUID | None = None, limit: int = 20)
     if employer_id is not None:
         query = query.join(WebhookEndpoint, WebhookEndpoint.id == WebhookDelivery.endpoint_id).where(
             WebhookEndpoint.employer_id == employer_id)
+    from app.models import Offer
+
     rows = list(await db.scalars(query))
     for row in rows:
         endpoint = await db.get(WebhookEndpoint, row.endpoint_id)
         if endpoint is None or not endpoint.active:
             row.status, row.last_error = "dead", "endpoint off"
             continue
+        if row.event_type in _CONTACT_PAYLOAD_EVENTS:
+            try:
+                body = json.loads(row.payload)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                body = None
+            offer_id = ((body or {}).get("offer") or {}).get("id") if isinstance(body, dict) else None
+            if offer_id:
+                try:
+                    offer = await db.get(Offer, uuid.UUID(str(offer_id)))
+                except (TypeError, ValueError):
+                    offer = None
+                if offer is None or offer.contacts_revoked_at is not None:
+                    row.status, row.last_error = "dead", "superseded"
+                    continue
         try:
             secret = _read_secret(endpoint.employer_id, endpoint.secret)
             check_url(endpoint.url)

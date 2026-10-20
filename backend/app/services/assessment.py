@@ -727,14 +727,17 @@ async def accept_lower(db: AsyncSession, session_id: uuid.UUID, participant_id: 
     """Confirm the grade one step below a failed target from the same answers (cat.lower_offer).
 
     The offer lapses once another primary test of this specialization has started: a later attempt
-    must not be a free look before choosing the older result.
+    must not be a free look before choosing the older result. A voided attempt has no offer left.
     """
+    from app.services.session_marks import is_voided
+
     session = await db.get(TestSession, session_id, with_for_update=True)
     if session is None or session.participant_id != participant_id:
         raise SessionError("not_found")
     flags = dict(session.flags or {})
     offer = flags.get("lower_offer")
-    if session.status != "completed" or not isinstance(offer, dict) or flags.get("lower_accepted"):
+    if (session.status != "completed" or not isinstance(offer, dict) or flags.get("lower_accepted")
+            or is_voided(flags)):
         raise SessionError("lower_offer_closed")
     later = await db.scalar(select(func.count()).select_from(TestSession).where(
         TestSession.participant_id == participant_id, TestSession.specialization == session.specialization,

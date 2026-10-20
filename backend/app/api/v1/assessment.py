@@ -282,7 +282,7 @@ def _result_from_session(session: TestSession, items: list[TestSessionItem], con
         outcome="trial" if trial else outcome, passed=passed, upgraded=outcome == "upgrade", trial=trial,
         vacancy_test=bool(flags.get("vacancy_id")), recommended_grade=flags.get("recommended_grade"),
         lower_offer=LowerOfferOut(**offer) if isinstance(offer := flags.get("lower_offer"), dict)
-        and not flags.get("lower_accepted") else None,
+        and not flags.get("lower_accepted") and not is_voided(flags) else None,
         lower_accepted=bool(flags.get("lower_accepted")),
         note="Пробный проход: грейд не подтверждается и в поиске не учитывается." if trial else None,
         earned_grade=None if trial else session.grade_assigned,

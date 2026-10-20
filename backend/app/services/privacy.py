@@ -16,6 +16,7 @@ from sqlalchemy import Integer, String, cast, delete, extract, func, select, upd
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    AccessLog,
     Application,
     CandidateResume,
     CategoryAssignment,
@@ -33,6 +34,7 @@ from app.models import (
     TaskSubmission,
     VerifiableCredential,
 )
+from app.models.assessment import GradeDispute
 from app.services.identity import active_consent
 from app.services.search.cache import bump_bank_epoch
 
@@ -66,21 +68,33 @@ async def contacts_allowed(db: AsyncSession, participant: Participant) -> bool:
 async def tell_contact_holders(db: AsyncSession, participant_id: uuid.UUID, reason: str) -> int:
     """Every company that received the contacts gets `contacts.revoked` with `delete: true`.
 
-    Part 3 of article 21: once consent is withdrawn or the account is erased, the data has to be deleted
-    by whoever it was passed to as well. A company counts when an accepted invitation still has open
-    contacts. A repeat event is harmless: deleting twice leaves the same state. The caller commits.
+    A company counts when an accepted invitation still has open contacts, or when it opened contacts
+    through a vacancy application or an accepted invitation (access log). Accepted invitations are
+    closed here so a later re-consent does not silently reopen the old shares. Pending ATS deliveries
+    that still carry contacts are marked superseded before the revoke event is queued. A repeat event
+    is harmless: deleting twice leaves the same state. The caller commits.
     """
     from app.services.field_cipher import public_ref
-    from app.services.webhooks import enqueue
+    from app.services.webhooks import drop_stale_contact_deliveries, enqueue
 
-    holders = sorted(set(await db.scalars(select(Offer.employer_id).where(
+    offer_holders = set(await db.scalars(select(Offer.employer_id).where(
         Offer.candidate_id == participant_id, Offer.status == "accepted",
-        Offer.contacts_revoked_at.is_(None)).distinct())), key=str)
-    now = datetime.now(UTC).isoformat()
+        Offer.contacts_revoked_at.is_(None)).distinct()))
+    log_holders = set(await db.scalars(select(AccessLog.employer_id).where(
+        AccessLog.participant_id == participant_id,
+        AccessLog.access_type.in_(("application_contacts", "contacts_view"))).distinct()))
+    holders = sorted(offer_holders | log_holders, key=str)
+    closed_at = datetime.now(UTC)
+    await db.execute(update(Offer).where(
+        Offer.candidate_id == participant_id, Offer.status == "accepted",
+        Offer.contacts_revoked_at.is_(None)).values(contacts_revoked_at=closed_at))
+    now = closed_at.isoformat()
+    ref = public_ref(participant_id)
     for employer_id in holders:
+        await drop_stale_contact_deliveries(db, employer_id, ref)
         await enqueue(db, employer_id, "contacts.revoked", {
             "created_at": now, "employer_id": str(employer_id),
-            "candidate": {"ref": public_ref(participant_id), "delete": True},
+            "candidate": {"ref": ref, "delete": True},
             "reason": reason,
         })
     return len(holders)
@@ -116,12 +130,17 @@ async def erase_participant(db: AsyncSession, participant: Participant, reason: 
                      .values(status="closed"))
     await db.execute(update(Consent).where(Consent.subject_type == "participant", Consent.subject_id == pid,
                                            Consent.withdrawn_at.is_(None)).values(withdrawn_at=now))
-    # Free text the person wrote can identify them: task answers and messages go, verdicts stay anonymous.
+    # Free text the person wrote can identify them: task answers, messages and dispute notes go.
     await db.execute(update(TaskSubmission).where(TaskSubmission.participant_id == pid)
                      .values(answer_text=None, comment=None))
     await db.execute(delete(OfferMessage).where(
         OfferMessage.author_role == "participant",
         OfferMessage.offer_id.in_(select(Offer.id).where(Offer.candidate_id == pid))))
+    await db.execute(update(GradeDispute).where(GradeDispute.participant_id == pid).values(
+        reason=None, decision_note=None))
+    await db.execute(update(GradeDispute).where(
+        GradeDispute.participant_id == pid, GradeDispute.status == "open").values(
+        status="upheld", decided_at=now, decision_note=None))
     participant.employer_task_title = None
     participant.employer_task_passed = None
     participant.employer_task_at = None

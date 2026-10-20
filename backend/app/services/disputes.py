@@ -78,6 +78,8 @@ def decide(dispute, session, action: str, note: str | None, staff_id, now: datet
             raise DisputeError("not_voidable")
         flags = dict(session.flags or {})
         flags["voided"] = {"at": now.isoformat(), "dispute": str(dispute.id)}
+        # A voided attempt must not leave a lower-grade offer that can still be accepted.
+        flags.pop("lower_offer", None)
         session.flags = flags
         dispute.status = "voided"
     else:

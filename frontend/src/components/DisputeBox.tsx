@@ -31,7 +31,7 @@ export default function DisputeBox({ sessionId }: { sessionId: string }) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-ink-2">
-        Решение принято автоматически по правилам теста. Если что-то пошло не так, обращение рассмотрит методист:
+        Результат теста влияет на подборку. Если что-то пошло не так, обращение рассмотрит методист:
         он видит попытку, но не ваше имя. Грейд вручную не ставится; неудачную попытку можно только аннулировать.
       </p>
       <label className="block text-sm" htmlFor={`dispute-${sessionId}`}>Что пошло не так (необязательно)</label>

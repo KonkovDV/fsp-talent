@@ -49,6 +49,9 @@ class Db:
     async def scalars(self, stmt):
         return Rows(self.rows)
 
+    async def execute(self, stmt):
+        return SimpleNamespace(rowcount=0)
+
     def add(self, obj):
         self.added.append(obj)
 
@@ -79,9 +82,14 @@ def wired(monkeypatch):
     async def note(_db, _outbox, role, _rid, kind, title, body, link):
         notes.append((role, kind, title, body))
 
+    async def under_limit(*_args, **_kwargs):
+        return False
+
     monkeypatch.setattr("app.services.webhooks.enqueue", grab)
     monkeypatch.setattr("app.services.webhooks.deliver_due", none)
+    monkeypatch.setattr("app.services.webhooks.drop_stale_contact_deliveries", none)
     monkeypatch.setattr("app.services.search.cache.publish_invite", none)
+    monkeypatch.setattr(candidates, "too_many", under_limit)
     for module in (candidates, offers, integrations, vacancies):
         monkeypatch.setattr(module, "contacts_allowed", yes)
     monkeypatch.setattr(candidates, "notify", note)
@@ -118,14 +126,15 @@ async def test_accepting_with_a_choice_opens_only_those_channels(wired):
     assert "Открыты: Telegram" in wired.notes[-1][3]
 
 
-async def test_accepting_without_a_choice_keeps_the_old_behaviour(wired):
+async def test_accepting_without_a_choice_freezes_filled_channels(wired):
     anya = person()
     row = offer(anya)
     db = Db({"Offer": row, "Participant": anya})
     await candidates.respond_to_offer(row.id, candidates.RespondIn(action="accept"), {"sub": str(anya.id)}, db)
-    assert row.shared_contacts is None
+    assert row.shared_contacts == ["email", "telegram", "phone"]
     payload = wired.sent[-1][1]
     assert payload["candidate"]["email"] == anya.email and payload["candidate"]["phone"] == anya.phone
+    assert payload["candidate"]["github"] is None and payload["candidate"]["shared"] == row.shared_contacts
 
 
 async def test_a_choice_of_empty_channels_is_refused_and_the_invitation_waits(wired):
@@ -194,12 +203,15 @@ async def test_vacancy_applications_follow_the_choice_on_the_accepted_invitation
 async def test_narrowing_the_choice_tells_the_company_what_to_delete(wired):
     anya = person()
     row = offer(anya, status="accepted", shared_contacts=["email", "phone"])
-    db = Db({"Offer": row, "Participant": anya})
+    sibling = offer(anya, employer_id=row.employer_id, status="accepted",
+                    shared_contacts=["email", "phone", "telegram"])
+    db = Db({"Offer": row, "Participant": anya}, scalars=[row, sibling])
     out = await candidates.change_shared_contacts(
         row.id, candidates.ShareIn(share=["email"]), {"sub": str(anya.id)}, db)
     assert out == {"shared_contacts": ["email"]} and row.shared_contacts == ["email"]
+    assert sibling.shared_contacts == ["email"]
     [log] = db.logs("contacts_scope_changed")
-    assert log.meta["removed"] == ["phone"]
+    assert log.meta["removed"] == ["phone"] and set(log.meta["offers"]) == {str(row.id), str(sibling.id)}
     event_type, payload = wired.sent[-1]
     assert event_type == "contacts.updated"
     assert payload["candidate"]["removed"] == ["phone"] and payload["candidate"]["phone"] is None

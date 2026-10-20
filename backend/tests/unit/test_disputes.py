@@ -119,11 +119,13 @@ def test_upholding_keeps_the_result_and_records_who_and_when():
 
 
 def test_voiding_marks_the_attempt_and_never_touches_a_grade():
-    session = _session(grade_assigned=None)
+    session = _session(grade_assigned=None, flags={"outcome": "not_passed",
+                                                   "lower_offer": {"grade": "middle", "p": 0.7}})
     dispute = _dispute(session)
     assert decide(dispute, session, "void", NOTE, uuid.uuid4(), NOW) == "voided"
     assert session.flags["voided"]["dispute"] == str(dispute.id)
     assert session.flags["outcome"] == "not_passed"
+    assert "lower_offer" not in session.flags
     assert session.grade_assigned is None
 
 
