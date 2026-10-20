@@ -1,0 +1,52 @@
+name: Ошибка
+description: Что-то работает не так, как описано в документации
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Об уязвимости сюда не пишите: используйте частное сообщение по [SECURITY.md](https://github.com/KonkovDV/fsp-talent/blob/main/SECURITY.md).
+        Не прикладывайте настоящие персональные данные.
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось
+      description: Что вы сделали, что ожидали увидеть и что увидели.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как воспроизвести
+      placeholder: |
+        1. docker compose up -d --build --wait
+        2. Войти как hr@sibcode.demo
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Коммит сборки
+      description: Поле `build` в ответе /health или `git rev-parse HEAD`.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Где
+      options:
+        - Тест на грейд
+        - Подбор и поиск
+        - Приглашения, контакты, согласия
+        - ФСП ID и реестр
+        - Интерфейс
+        - Развёртывание и Docker
+        - Документация
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Журналы
+      description: Например, `docker compose logs backend --tail 100`. Без паролей и токенов.
+      render: text

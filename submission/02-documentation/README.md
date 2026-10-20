@@ -1,21 +1,21 @@
 # Документация
 
-**Файл для формы:** [FSP_Talent_documentation.pdf](FSP_Talent_documentation.pdf) — вся документация одним PDF. Это копия [docs/FSP_Talent_documentation.pdf](https://github.com/KonkovDV/fsp-talent/blob/main/docs/FSP_Talent_documentation.pdf), собирается командой `make docs-pdf`.
+[FSP_Talent_documentation.pdf](FSP_Talent_documentation.pdf) — основные документы одним PDF. Это копия [docs/FSP_Talent_documentation.pdf](https://github.com/KonkovDV/fsp-talent/blob/main/docs/FSP_Talent_documentation.pdf), собирается командой `make docs-pdf`.
 
 С чего начать:
 
 - [SOLUTION.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/SOLUTION.md) — сопроводительная документация по восьми пунктам раздела 3.4 ТЗ: архитектура, механики, валидация, интеграция, API, библиотеки.
 - [INSTALL.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/INSTALL.md) — локальный запуск, развёртывание на сервере, обновление, откат, резервные копии, частые проблемы.
-- [USER_GUIDE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/USER_GUIDE.md) — руководство пользователя стенда: кандидат, работодатель, жюри, законный представитель.
+- [USER_GUIDE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/USER_GUIDE.md) — руководство пользователя: кандидат, работодатель, проверяющий, законный представитель.
 
 Остальные документы в `docs/`:
 
 | Документ | О чём |
 |---|---|
-| [REQUIREMENTS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/REQUIREMENTS.md) | Каждое требование ТЗ и ответы постановщика на Q&A: где увидеть и где в коде |
+| [REQUIREMENTS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/REQUIREMENTS.md) | Каждое исходное требование и уточнения к нему: где увидеть и где в коде |
 | [BEYOND_TZ.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/BEYOND_TZ.md) | Что сделано сверх ТЗ: психометрика, удостоверения W3C VC, безопасность, доступность, валидация |
-| [ORGANIZER_DECISIONS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/ORGANIZER_DECISIONS.md) | Решения организаторов из вопросов и ответов, у каждого — тест или файл, который это подтверждает |
-| [JURY_CRITERIA.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/JURY_CRITERIA.md) | Критерии оценки жюри и где каждый виден в решении |
+| [REQUIREMENTS_QA.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/REQUIREMENTS_QA.md) | Уточнения требований, у каждого — тест или файл, который это подтверждает |
+| [REVIEW_GUIDE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/REVIEW_GUIDE.md) | Как проверить каждое ключевое свойство: где нажать, какую команду запустить, что увидеть |
 | [MODEL_CARDS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/MODEL_CARDS.md) | Карточки моделей теста и подбора: назначение, данные, ограничения |
 | [DATASETS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/DATASETS.md) | Синтетические данные: как построены и чем не являются |
 | [ACCESSIBILITY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/ACCESSIBILITY.md) | Доступность: WCAG 2.2 AA, замеры axe и Lighthouse |
@@ -28,7 +28,7 @@
 | [FSP_INTEGRATION.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/FSP_INTEGRATION.md) | ФСП ID (OIDC, Keycloak) и контракт реестра ФСП |
 | [TRUST_AND_ATS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/TRUST_AND_ATS.md) | Защита от фиктивных вакансий и интеграция с ATS |
 | [COMPLIANCE.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/COMPLIANCE.md) | Персональные данные (152-ФЗ), честность решений, права |
-| Юридические тексты | Действующие версии, которые человек принимает на стенде: [согласие кандидата 1.4](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/pd_candidate.md), [согласие на распространение 1.1](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/pd_distribution.md), [согласие работодателя 1.3](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/pd_employer.md), [политика 1.1](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/privacy_policy.md), [пользовательское соглашение 1.1](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/terms.md), [правила рекомендательных технологий 1.0](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/recommendations.md) |
+| Юридические тексты | Действующие версии: [согласие кандидата 1.4](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/pd_candidate.md), [согласие на распространение 1.1](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/pd_distribution.md), [согласие работодателя 1.3](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/pd_employer.md), [политика 1.2](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/privacy_policy.md), [пользовательское соглашение 1.1](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/terms.md), [правила рекомендательных технологий 1.1](https://github.com/KonkovDV/fsp-talent/blob/main/backend/app/legal/docs/recommendations.md) |
 | [API_ERRORS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/API_ERRORS.md) | Коды ошибок API |
 | [BUSINESS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/BUSINESS.md) | Бизнес-модель: кто платит и за что, каналы найма и их ограничения |
 | [DESIGN.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/DESIGN.md) | Дизайн-система «Протокол» по брендбуку ФСП |

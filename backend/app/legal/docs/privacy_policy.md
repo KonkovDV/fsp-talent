@@ -1,6 +1,6 @@
 ---
 kind: privacy_policy
-version: "1.1"
+version: "1.2"
 title: Политика обработки персональных данных
 roles: participant,employer
 required: false

@@ -1,24 +1,22 @@
 # Репозиторий
 
-**Ссылка для формы:** https://github.com/KonkovDV/fsp-talent
-
-Репозиторий публичный, код открыт под лицензией [MIT](../../LICENSE).
+https://github.com/KonkovDV/fsp-talent — публичный репозиторий, код открыт под лицензией [MIT](../../LICENSE).
 
 ## Стек
 
-Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Celery, PostgreSQL 16, Redis 7.2, React 18, Vite 6, TypeScript, Tailwind CSS. Всё поднимается в Docker Compose: девять контейнеров, видеокарта не нужна. Схема сервисов — в [README](../../README.md#как-устроено), ключевые решения коротко — в [ARCHITECTURE.md](../../ARCHITECTURE.md).
+Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Celery, PostgreSQL 16 с pgvector, Redis 7.2, React 18, Vite 6, TypeScript, Tailwind CSS. Всё поднимается в Docker Compose: девять сервисов и разовый загрузчик демо-данных, видеокарта не нужна. Схема сервисов — в [README](../../README.md#как-устроено), ключевые решения коротко — в [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Запуск одной командой
 
-Нужны Docker 24+ с Compose 2.17+, 4 ГБ свободной памяти и свободные порты 80 и 8025.
+Нужны Docker 24+ с Compose 2.24+, 4 ГБ свободной памяти и свободные порты 80 и 8025.
 
 ```bash
 git clone https://github.com/KonkovDV/fsp-talent.git
 cd fsp-talent
-make demo
+docker compose up -d --build --wait
 ```
 
-`make demo` сам создаёт `.env`, собирает контейнеры, применяет миграции и загружает демо-данные. Первый запуск занимает 5–10 минут. Потом открываются http://localhost (сайт), http://localhost/docs (Swagger UI) и http://localhost:8025 (Mailpit, письма с кодами).
+Команда собирает контейнеры, применяет миграции и загружает демо-данные. Первый запуск занимает 5–10 минут. Потом открываются http://localhost (сайт), http://localhost/docs (Swagger UI) и http://localhost:8025 (Mailpit, письма с кодами). С `make` то же самое: `make demo`.
 
 На Windows без make: `powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1`. Подробности, развёртывание на сервере и частые проблемы — в [docs/INSTALL.md](../../docs/INSTALL.md).
 
@@ -27,7 +25,7 @@ make demo
 | Что | Где | Команда |
 |---|---|---|
 | Юнит-тесты backend | [backend/tests/unit](../../backend/tests/unit) | `make test` |
-| Требования ТЗ без базы | [docs/requirements_trace.md](../../docs/requirements_trace.md) | `make accept` |
+| Требования без базы | [docs/requirements_trace.md](../../docs/requirements_trace.md) | `make accept` |
 | Сквозной сценарий API на запущенном стенде | [backend/tests/smoke_api.py](../../backend/tests/smoke_api.py) | `make check` (печатает `SMOKE OK`) |
 | Самопроверка демо-данных | `backend/seed/demo_check.py` | `make demo-check` |
 | Тест и подбор на синтетике, с порогами | `backend/app/validation` | `make validate` |
@@ -35,9 +33,9 @@ make demo
 | Интерфейс | [frontend](../../frontend) | `npm test` и `npx playwright test` в `frontend/` |
 | Числа в документации против свежего прогона | [backend/tests/doc_numbers.py](../../backend/tests/doc_numbers.py) | `python tests/doc_numbers.py` в `backend/` |
 
-Тот же набор проверок идёт перед каждым слиянием в `main`, он записан в [.github/workflows/ci.yml](../../.github/workflows/ci.yml).
+Те же проверки идут в CI на каждый пуш в `main`, они записаны в [.github/workflows/ci.yml](../../.github/workflows/ci.yml). Как внести изменение — [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## Что мы измерили и где границы
 
-- Юнит-тестов 1737 (`python -m pytest tests/unit --collect-only -q`), тестов интерфейса 210, проверок Playwright 67. Цифры из корневого README, их сверяет `tests/doc_numbers.py`.
-- Платформа встаёт одной командой: тест, подбор, удостоверения. Реестр ФСП и ФСП ID уже говорят на боевом контракте, на стенде они играют вживую через демо-провайдер.
+- Юнит-тестов 1752 (`python -m pytest tests/unit --collect-only -q`), тестов интерфейса 210, проверок Playwright 67. Цифры из корневого README, их сверяет `tests/doc_numbers.py`.
+- Платформа встаёт одной командой: тест, подбор, удостоверения. Реестр ФСП и ФСП ID говорят на боевом контракте, на демо-стенде они работают через демо-провайдер.

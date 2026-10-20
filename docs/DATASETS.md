@@ -17,7 +17,7 @@
 
 | Файл | Что внутри | Строк | SHA-256 |
 |---|---|---|---|
-| `backend/app/validation/resources/jury_profiles.csv` | профили для пакета жюри | — | `ce284459c07b2a151047d1649f06ec404f9b92b10af0f2f40afbd623706e8e46` |
+| `backend/app/validation/resources/jury_profiles.csv` | профили набора для проверки (`jury_pack`) | — | `ce284459c07b2a151047d1649f06ec404f9b92b10af0f2f40afbd623706e8e46` |
 | `backend/app/validation/resources/jury_profiles.json` | те же профили в JSON | — | `a942715c3e92053ac24b45a21b099d14b0d2ec9daf7be0a435ff7c6d2ba3963e` |
 | `backend/app/validation/resources/nlp_vacancies_gold.json` | вакансии с эталонной разметкой навыков | — | `7a15ad26261e70b0434b5c15b4b296dfb0c7827cf8b43cf35f4dce42c8172878` |
 | `backend/app/validation/resources/nlp_vacancies_holdout.json` | отложенные вакансии для проверки разбора | — | `1f9a01121b430a012a836098c3f9fa1a4a9daea884bb35e54e3c9142fa012066` |

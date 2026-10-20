@@ -1,9 +1,9 @@
-"""Every test name and path cited in docs/ORGANIZER_DECISIONS.md must exist."""
+"""Every test name and path cited in docs/REQUIREMENTS_QA.md must exist."""
 import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-DOC = ROOT / "docs" / "ORGANIZER_DECISIONS.md"
+DOC = ROOT / "docs" / "REQUIREMENTS_QA.md"
 
 
 def _cited():

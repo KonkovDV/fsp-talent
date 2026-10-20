@@ -7,11 +7,11 @@
 | Проверка подбора | [VALIDATION_MATCHING.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_MATCHING.md) |
 | Риск нечестного прохождения теста | [VALIDATION_INTEGRITY.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_INTEGRITY.md) |
 | Разбор резюме и вакансий | [VALIDATION_NLP.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/VALIDATION_NLP.md) |
-| Решения организаторов → тесты | [ORGANIZER_DECISIONS.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/ORGANIZER_DECISIONS.md) |
-| Трассировка требований ТЗ к проверкам | [requirements_trace.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/requirements_trace.md), запуск — `make accept` |
-| Спецификация API (OpenAPI 3.1) | [openapi.json](https://github.com/KonkovDV/fsp-talent/blob/main/docs/openapi.json), живая версия — `/openapi.json` |
+| Уточнения требований → тесты | [REQUIREMENTS_QA.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/REQUIREMENTS_QA.md) |
+| Трассировка требований к проверкам | [requirements_trace.md](https://github.com/KonkovDV/fsp-talent/blob/main/docs/requirements_trace.md), запуск — `make accept` |
+| Спецификация API (OpenAPI 3.1) | [openapi.json](https://github.com/KonkovDV/fsp-talent/blob/main/docs/openapi.json); на запущенном стенде — `/openapi.json` |
 
-На видео (запись со стенда под `fsp001`): кабинет кандидата, подборка HR по потребности и страница «Как устроен тест». Кадры — в [video-frames/](video-frames/).
+На видео (запись 11.10.2026 под `fsp001`, интерфейс с тех пор менялся): кабинет кандидата, подборка HR по потребности и страница «Как устроен тест». Кадры — в [video-frames/](video-frames/).
 
 ## Что мы измерили и где границы
 

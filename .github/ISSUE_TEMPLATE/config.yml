@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Уязвимость
+    url: https://github.com/KonkovDV/fsp-talent/security/advisories/new
+    about: Частное сообщение владельцам репозитория. Детали не публикуются.
+  - name: Документация
+    url: https://github.com/KonkovDV/fsp-talent/blob/main/docs/README.md
+    about: Карта документов, установка и ответы на частые вопросы.

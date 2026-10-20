@@ -1,0 +1,29 @@
+name: Предложение
+description: Новая возможность или изменение поведения
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу это решает
+      description: Кто сталкивается с проблемой — кандидат, работодатель, оператор — и как сейчас её обходят.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Что предлагаете
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Правила продукта
+      description: Правила перечислены в CONTRIBUTING.md, раздел «Правила продукта».
+      options:
+        - label: Предложение не меняет грейд, балл или порядок подборки в обход теста, согласий и правил оси ФСП
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Как измерить пользу
+      description: Какая метрика или проверка покажет, что стало лучше.

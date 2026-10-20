@@ -6,7 +6,7 @@ Requirements (only for whoever rebuilds the PDF, not for running the platform):
     cd frontend && npm ci          # fonts of the brand book come from @fontsource
 
     python docs/tools/build_pdf.py
-    python docs/tools/build_pdf.py --pitch   # HTML-черновик слайдов решения; сдача — PDF из pitch.pptx в PowerPoint
+    python docs/tools/build_pdf.py --pitch   # HTML-черновик слайдов; основная презентация — PDF из PPTX в PowerPoint
 """
 from __future__ import annotations
 

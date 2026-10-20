@@ -1,6 +1,6 @@
 ---
 kind: recommendations
-version: "1.0"
+version: "1.1"
 title: Правила применения рекомендательных технологий
 roles: participant,employer
 required: false

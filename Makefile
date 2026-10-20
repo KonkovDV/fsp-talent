@@ -91,6 +91,7 @@ load-big:
 docs-pdf:
 	test -d docs/tools/node_modules/mermaid || npm install --prefix docs/tools --no-save mermaid@11
 	python3 docs/tools/build_pdf.py
+	cp docs/FSP_Talent_documentation.pdf submission/02-documentation/FSP_Talent_documentation.pdf
 
 docs-pitch:
 	node docs/tools/build_pitch.mjs
