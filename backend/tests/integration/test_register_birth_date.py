@@ -25,7 +25,7 @@ def quiet(monkeypatch):
 
 def _body(email, adult, born):
     return auth.ParticipantRegister(email=email, password="password-123", display_name="Тест",
-                                    is_adult=adult, age_15_17=not adult, birth_date=born)
+                                    is_adult=adult, age_15_17=not adult, birth_date=born, synthetic_ack=True)
 
 
 async def test_birth_date_is_stored_and_checked(db, quiet):

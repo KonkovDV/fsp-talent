@@ -123,10 +123,21 @@ def link_fsp(token, fsp_id, password="test"):
     return call("POST", "/candidates/me/fsp/callback", {"code": back["code"], "state": back["state"]}, token=token)
 
 
+def demo_stand() -> bool:
+    status, flags = call("GET", "/public/demo")
+    return status == 200 and bool(flags.get("demo_mode"))
+
+
 def check_registration():
     """TZ 2.2 п.4 and TZ 2.1: email registration with confirmation, a candidate without FSP history."""
     email = f"smoke-{int(time.time() * 1000)}@example.com"
-    body = {"email": email, "password": "smoke-pass-1", "display_name": "Смоук Тест", "is_adult": True}
+    body = {"email": email, "password": "smoke-pass-1", "display_name": "Смоук Тест", "is_adult": True,
+            "synthetic_ack": True}
+    if demo_stand():
+        # The demo stand takes only made-up data: without the mark nothing is stored.
+        status, unmarked = call("POST", "/auth/participant/register",
+                                {**body, "synthetic_ack": False, "consents": REQUIRED_CANDIDATE_CONSENTS})
+        assert status == 422 and unmarked["error"]["code"] == "validation_error", unmarked
     status, refused = call("POST", "/auth/participant/register", {**body, "consents": ["terms"]})
     assert status == 422 and refused["error"]["code"] == "consent_required", refused
     assert refused["error"]["details"]["missing"] == ["pd_candidate"], refused
@@ -188,7 +199,7 @@ def _new_candidate(tag: str) -> tuple[str, str, str]:
     email = f"{tag}-{int(time.time() * 1000)}@example.com"
     status, sent = call("POST", "/auth/participant/register", {
         "email": email, "password": "smoke-pass-1", "display_name": "Удаляемый Кандидат", "is_adult": True,
-        "consents": REQUIRED_CANDIDATE_CONSENTS})
+        "synthetic_ack": True, "consents": REQUIRED_CANDIDATE_CONSENTS})
     assert status == 202, sent
     status, tokens = call("POST", "/auth/verify-email", {"email": email, "code": last_letter(email)["code"]})
     assert status == 200, tokens
@@ -701,7 +712,7 @@ def check_minor():
     """Registration opens at 15; a 15–17-year-old enters search only after the guardian confirms by the link."""
     email = f"minor-{int(time.time() * 1000)}@example.com"
     body = {"email": email, "password": "smoke-pass-1", "display_name": "Юный Кандидат", "is_adult": False,
-            "consents": REQUIRED_CANDIDATE_CONSENTS}
+            "synthetic_ack": True, "consents": REQUIRED_CANDIDATE_CONSENTS}
     status, young = call("POST", "/auth/participant/register", body)
     assert status == 422 and young["error"]["code"] == "too_young", young
     status, sent = call("POST", "/auth/participant/register", {**body, "age_15_17": True})

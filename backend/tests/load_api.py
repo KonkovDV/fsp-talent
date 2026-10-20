@@ -33,10 +33,10 @@ async def _register(client: httpx.AsyncClient, role: str, tag: str) -> str:
     email = f"load-{role}-{tag}-{int(time.time() * 1000)}@example.com"
     if role == "participant":
         body = {"email": email, "password": PASSWORD, "display_name": "Нагрузка", "is_adult": True,
-                "consents": ["terms", "pd_candidate"]}
+                "synthetic_ack": True, "consents": ["terms", "pd_candidate"]}
     else:
         body = {"email": email, "password": PASSWORD, "company_name": f"Нагрузка {tag}",
-                "consents": ["terms", "pd_employer"]}
+                "synthetic_ack": True, "consents": ["terms", "pd_employer"]}
     while True:
         r = await client.post(f"/auth/{role}/register", json=body)
         if r.status_code != 429:   # the site allows 30 registrations a minute: wait for the next window
@@ -67,10 +67,10 @@ async def _token(client: httpx.AsyncClient, role: str, email: str, tag: str, reu
 async def _register_fixed(client: httpx.AsyncClient, role: str, email: str, tag: str) -> str:
     if role == "participant":
         body = {"email": email, "password": PASSWORD, "display_name": "Нагрузка", "is_adult": True,
-                "consents": ["terms", "pd_candidate"]}
+                "synthetic_ack": True, "consents": ["terms", "pd_candidate"]}
     else:
         body = {"email": email, "password": PASSWORD, "company_name": f"Нагрузка {tag}",
-                "consents": ["terms", "pd_employer"]}
+                "synthetic_ack": True, "consents": ["terms", "pd_employer"]}
     while True:
         r = await client.post(f"/auth/{role}/register", json=body)
         if r.status_code != 429:
