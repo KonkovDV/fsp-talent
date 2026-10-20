@@ -75,7 +75,7 @@ test('кандидат проходит регистрацию и пробный
   await page.locator('#display_name').fill(name)
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(PASSWORD)
-  await page.getByLabel('Дата рождения').fill('1995-05-05')
+  await page.getByLabel('Дата рождения', { exact: true }).fill('1995-05-05')
   await page.getByRole('checkbox', { name: /Мне исполнилось 18 лет/ }).check()
   await page.getByRole('checkbox', { name: /вымышлены/ }).check()
   for (const box of await page.getByTestId(/consent-/).all()) await box.check()
@@ -246,7 +246,7 @@ async function registerCandidate(page: Page, email: string, name: string) {
   await page.locator('#display_name').fill(name)
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(PASSWORD)
-  await page.getByLabel('Дата рождения').fill('1995-05-05')
+  await page.getByLabel('Дата рождения', { exact: true }).fill('1995-05-05')
   await page.getByRole('checkbox', { name: /Мне исполнилось 18 лет/ }).check()
   await page.getByRole('checkbox', { name: /вымышлены/ }).check()
   for (const box of await page.getByTestId(/consent-/).all()) await box.check()
@@ -315,7 +315,7 @@ test('вход через ФСП ID показывает результаты, �
 
   await page.goto('/candidate/results')
   await expect(page.getByRole('heading', { name: 'Результаты ФСП' })).toBeVisible()
-  await expect(page.getByText(/робототехника/).first()).toBeVisible()
+  await expect(page.getByText(/робототехника/).filter({ visible: true }).first()).toBeVisible()
 
   await page.goto('/candidate')
   await expect(page.getByText('работодатели увидят карточку только после согласия представителя')).toBeVisible()
