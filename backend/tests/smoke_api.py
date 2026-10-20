@@ -109,14 +109,20 @@ def last_letter(email, purpose="verify", timeout=10.0):
     raise AssertionError(f"no {purpose} letter for {email} in {MAIL_DIR}")
 
 
+def provider_fields(query):
+    """What the provider page sends back from the authorize address, nonce included when the login has one."""
+    keys = ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method", "nonce")
+    return {k: query[k] for k in keys if k in query}
+
+
 def link_fsp(token, fsp_id, password="test"):
     """FSP ID by OpenID Connect: start, log in on the (demo) provider page, return with code and state."""
     status, started = call("POST", "/candidates/me/fsp/authorize", token=token)
     assert status == 200 and started["provider"] == "mock", started
     query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(started["authorize_url"]).query).items()}
-    assert query["code_challenge_method"] == "S256", query
-    status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": password, **{
-        k: query[k] for k in ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method")}})
+    assert query["code_challenge_method"] == "S256" and query.get("nonce"), query
+    status, login = call("POST", "/fsp-id-demo/login",
+                         {"fsp_id": fsp_id, "password": password, **provider_fields(query)})
     if status != 200:
         return status, login
     back = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(login["redirect_to"]).query).items()}
@@ -431,9 +437,8 @@ def _fsp_signin(fsp_id):
     cookie = _SIGNIN_COOKIE
     assert cookie.startswith("fsp_signin="), cookie
     query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(started["authorize_url"]).query).items()}
-    assert query["redirect_uri"] == "/auth/fsp-callback", query
-    status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": "test", **{
-        k: query[k] for k in ("client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method")}})
+    assert query["redirect_uri"] == "/auth/fsp-callback" and query.get("nonce"), query
+    status, login = call("POST", "/fsp-id-demo/login", {"fsp_id": fsp_id, "password": "test", **provider_fields(query)})
     assert status == 200, login
     back = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(login["redirect_to"]).query).items()}
     status, out = call("POST", "/auth/fsp/callback", {"code": back["code"], "state": back["state"]}, cookie=cookie)
