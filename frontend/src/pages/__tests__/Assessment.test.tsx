@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CandidateAssessment from '../candidate/Assessment'
 
-const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, answerAssessment, noteAssessmentCopy, acceptLowerGrade } = vi.hoisted(() => ({
+const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, answerAssessment, noteAssessmentCopy, acceptLowerGrade, leaveAssessment } = vi.hoisted(() => ({
   acceptLowerGrade: vi.fn(),
   getMyProfile: vi.fn(),
   assessmentBlueprint: vi.fn(),
@@ -14,6 +14,7 @@ const { getMyProfile, assessmentBlueprint, assessmentHistory, activeAssessment, 
   activeAssessment: vi.fn(),
   answerAssessment: vi.fn(),
   noteAssessmentCopy: vi.fn(),
+  leaveAssessment: vi.fn(),
 }))
 
 vi.mock('../../api/client', async () => {
@@ -27,6 +28,7 @@ vi.mock('../../api/client', async () => {
     answerAssessment,
     noteAssessmentCopy,
     acceptLowerGrade,
+    leaveAssessment,
     saveAssessmentDraft: vi.fn(() => Promise.resolve({ data: { version: 1 } })),
     startAssessment: vi.fn(),
     abandonAssessment: vi.fn(),
@@ -96,6 +98,7 @@ beforeEach(() => {
   assessmentBlueprint.mockResolvedValue({ data: blueprint })
   assessmentHistory.mockResolvedValue({ data: { items: [] } })
   answerAssessment.mockResolvedValue({ data: session() })
+  leaveAssessment.mockResolvedValue({ data: { tab_leaves: 1 } })
 })
 
 describe('тест на грейд', () => {
@@ -226,6 +229,27 @@ describe('тест на грейд', () => {
     await vi.advanceTimersByTimeAsync(6_000) // осталось ~6 с → порог min(20, 20/3)≈6.67
     expect(timer.className).toMatch(/text-danger/)
     vi.useRealTimers()
+  })
+
+  it('записывает уход со вкладки до ответа на последнем задании', async () => {
+    let release: () => void = () => undefined
+    leaveAssessment.mockImplementation(() => new Promise(resolve => {
+      release = () => resolve({ data: { tab_leaves: 1 } })
+    }))
+    activeAssessment.mockResolvedValue({ data: session() })
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    renderPage(<CandidateAssessment />)
+    await screen.findByLabelText('Ответ — целое число')
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(leaveAssessment).toHaveBeenCalledWith('s1')
+    await userEvent.type(screen.getByLabelText('Ответ — целое число'), '42')
+    const pendingClick = userEvent.click(screen.getByRole('button', { name: 'Ответить' }))
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(answerAssessment).not.toHaveBeenCalled()
+    release()
+    await pendingClick
+    expect(answerAssessment).toHaveBeenCalledWith('s1', 'tok-1', { answer_text: '42' })
+    hidden.mockRestore()
   })
 
   it('подсказывает Enter по-русски', async () => {

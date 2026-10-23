@@ -186,10 +186,30 @@ export default function CandidateAssessment() {
     onSuccess: (data: SessionState) => { startKey.current = null; setState(data); setPicked(null); setTyped(''); setError(''); setShowReview(false) },
     onError: (e: unknown) => setError(apiError(e, 'Не удалось начать тест')),
   })
+  const pendingMarks = useRef<Promise<unknown>[]>([])
+  const trackMark = (pending: Promise<unknown>) => {
+    const settled = pending.catch(() => undefined)
+    pendingMarks.current = [...pendingMarks.current, settled]
+  }
+  const flushMarks = async (id: string) => {
+    // A hide on the last item must land before the answer: after the session ends the server ignores it.
+    if (document.visibilityState === 'hidden' && pendingMarks.current.length === 0) {
+      trackMark(leaveAssessment(id).then(() => {
+        setMarkNote('Уход со вкладки записан. Тест продолжается, грейд из-за этого не меняется.')
+      }))
+    }
+    const waiting = pendingMarks.current
+    pendingMarks.current = []
+    await Promise.all(waiting)
+  }
   const answer = useMutation({
-    mutationFn: () => answerAssessment(state!.session_id, state!.item!.token,
-      state!.item!.answer_mode === 'number' ? { answer_text: typed.replace(/\s/g, '') } : { answer_index: picked! },
-    ).then(r => r.data),
+    mutationFn: async () => {
+      const id = state!.session_id
+      await flushMarks(id)
+      const data = await answerAssessment(id, state!.item!.token,
+        state!.item!.answer_mode === 'number' ? { answer_text: typed.replace(/\s/g, '') } : { answer_index: picked! })
+      return data.data
+    },
     onSuccess: (data: SessionState) => { setState(data); setPicked(null); setTyped(''); if (data.result) refresh() },
     onError: (e: unknown) => { setError(apiError(e, 'Ответ не принят')); refresh() },
   })
@@ -208,9 +228,9 @@ export default function CandidateAssessment() {
     const id = state.session_id
     const onHide = () => {
       if (document.visibilityState !== 'hidden') return
-      void leaveAssessment(id).then(() => {
+      trackMark(leaveAssessment(id).then(() => {
         setMarkNote('Уход со вкладки записан. Тест продолжается, грейд из-за этого не меняется.')
-      }).catch(() => undefined)
+      }))
     }
     const onCopy = (event: ClipboardEvent) => {
       const twin = state.item?.copy_text
@@ -220,9 +240,9 @@ export default function CandidateAssessment() {
         event.preventDefault()
         event.clipboardData.setData('text/plain', twin)
       }
-      void noteAssessmentCopy(id).then(() => {
+      trackMark(noteAssessmentCopy(id).then(() => {
         setMarkNote('Копирование текста задания записано. Тест продолжается, грейд из-за этого не меняется.')
-      }).catch(() => undefined)
+      }))
     }
     document.addEventListener('visibilitychange', onHide)
     document.addEventListener('copy', onCopy)

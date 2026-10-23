@@ -150,3 +150,25 @@ async def test_the_scope_is_restored_when_the_lookup_fails():
     with pytest.raises(RuntimeError):
         await enqueue(db, uuid.uuid4(), "offer.accepted", {})
     assert db.bypass == "" and db.added == []
+
+
+def test_a_retry_drops_a_channel_the_candidate_closed_later():
+    from app.services.webhooks import without_closed_channels
+
+    body = {"type": "offer.accepted", "candidate": {
+        "ref": "abc", "shared": ["email", "phone"], "email": "a@b.c", "phone": "+7999",
+        "telegram": None, "github": None,
+    }}
+    rewritten = without_closed_channels(body, ["email"])
+    assert rewritten is not None
+    assert rewritten["candidate"]["phone"] is None and rewritten["candidate"]["email"] == "a@b.c"
+    assert rewritten["candidate"]["shared"] == ["email"] and rewritten["candidate"]["removed"] == ["phone"]
+    assert without_closed_channels(rewritten, ["email"]) is None
+
+
+def test_a_payload_already_inside_the_open_set_is_left_alone():
+    from app.services.webhooks import without_closed_channels
+
+    body = {"candidate": {"shared": ["telegram"], "telegram": "@a", "email": None, "phone": None, "github": None}}
+    assert without_closed_channels(body, ["telegram"]) is None
+    assert without_closed_channels({"candidate": "nope"}, ["email"]) is None

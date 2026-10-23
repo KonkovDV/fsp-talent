@@ -31,6 +31,35 @@ SKEW_SECONDS = 300
 _OWN_PATH = "/api/v1/integrations/sandbox/"
 # Events whose payload may still carry contacts after the person closed them.
 _CONTACT_PAYLOAD_EVENTS = frozenset({"offer.accepted", "contacts.updated"})
+_CONTACT_CHANNELS = ("email", "telegram", "phone", "github")
+
+
+def without_closed_channels(body: dict, allowed: list[str]) -> dict | None:
+    """Drop contact values the candidate has since closed. None means the payload is already inside the set.
+
+    A retry of `offer.accepted` must not put a channel back after `contacts.updated` asked the ATS to delete it.
+    """
+    candidate = body.get("candidate")
+    if not isinstance(candidate, dict):
+        return None
+    open_channels = set(allowed)
+    shared = candidate.get("shared")
+    leaked = [ch for ch in _CONTACT_CHANNELS if candidate.get(ch) and ch not in open_channels]
+    shared_extra = [ch for ch in shared if ch not in open_channels] if isinstance(shared, list) else []
+    if not leaked and not shared_extra:
+        return None
+    cleaned = dict(candidate)
+    for ch in _CONTACT_CHANNELS:
+        if ch not in open_channels:
+            cleaned[ch] = None
+    if isinstance(shared, list):
+        cleaned["shared"] = [ch for ch in _CONTACT_CHANNELS if ch in shared and ch in open_channels]
+    removed = [ch for ch in (candidate.get("removed") or []) if isinstance(ch, str)]
+    for ch in leaked + shared_extra:
+        if ch not in removed:
+            removed.append(ch)
+    cleaned["removed"] = removed
+    return {**body, "candidate": cleaned}
 
 
 def classify(code: int, attempt: int) -> tuple[str, int | None]:
@@ -283,6 +312,10 @@ async def deliver_due(db, employer_id: uuid.UUID | None = None, limit: int = 20)
                 if offer is None or offer.contacts_revoked_at is not None:
                     row.status, row.last_error = "dead", "superseded"
                     continue
+                from app.services.contact_scope import scope
+                rewritten = without_closed_channels(body, scope(offer))
+                if rewritten is not None:
+                    row.payload = json.dumps(rewritten, ensure_ascii=False, separators=(",", ":"))
         try:
             secret = _read_secret(endpoint.employer_id, endpoint.secret)
             check_url(endpoint.url)

@@ -37,5 +37,5 @@ docker compose up -d --build --wait
 
 ## Что мы измерили и где границы
 
-- Юнит-тестов 1803 (`python -m pytest tests/unit --collect-only -q`), тестов интерфейса 220, проверок Playwright 67. Цифры из корневого README, их сверяет `tests/doc_numbers.py`.
+- Юнит-тестов 1805 (`python -m pytest tests/unit --collect-only -q`), тестов интерфейса 221, проверок Playwright 67. Цифры из корневого README, их сверяет `tests/doc_numbers.py`.
 - Платформа встаёт одной командой: тест, подбор, удостоверения. Реестр ФСП и ФСП ID говорят на боевом контракте, на демо-стенде они работают через демо-провайдер.
