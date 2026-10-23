@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -243,12 +243,10 @@ describe('тест на грейд', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     expect(leaveAssessment).toHaveBeenCalledWith('s1')
     await userEvent.type(screen.getByLabelText('Ответ — целое число'), '42')
-    const pendingClick = userEvent.click(screen.getByRole('button', { name: 'Ответить' }))
-    await new Promise(resolve => setTimeout(resolve, 30))
+    fireEvent.click(screen.getByRole('button', { name: 'Ответить' }))
     expect(answerAssessment).not.toHaveBeenCalled()
     release()
-    await pendingClick
-    expect(answerAssessment).toHaveBeenCalledWith('s1', 'tok-1', { answer_text: '42' })
+    await vi.waitFor(() => expect(answerAssessment).toHaveBeenCalledWith('s1', 'tok-1', { answer_text: '42' }))
     hidden.mockRestore()
   })
 

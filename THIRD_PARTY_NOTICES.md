@@ -31,7 +31,7 @@
 | bcrypt | 5.0.0 | Apache Software License |
 | billiard | 4.3.1 | BSD License |
 | celery | 5.6.3 | BSD-3-Clause |
-| certifi | 2026.7.22 | Mozilla Public License 2.0 (MPL 2.0) |
+| certifi | 2026.10.19 | Mozilla Public License 2.0 (MPL 2.0) |
 | cffi | 2.1.1 | MIT-0 |
 | click | 8.5.0 | BSD-3-Clause |
 | click-didyoumean | 0.3.1 | MIT License |
@@ -61,17 +61,17 @@
 | markdown-it-py | 4.2.0 | MIT License |
 | markupsafe | 3.0.4 | BSD-3-Clause |
 | mdurl | 0.1.2 | MIT License |
-| opentelemetry-api | 1.45.0 | Apache-2.0 |
-| opentelemetry-exporter-http-transport | 0.66b0 | Apache-2.0 |
-| opentelemetry-exporter-otlp-common | 0.66b0 | Apache-2.0 |
-| opentelemetry-exporter-otlp-proto-common | 1.45.0 | Apache-2.0 |
-| opentelemetry-exporter-otlp-proto-http | 1.45.0 | Apache-2.0 |
-| opentelemetry-proto | 1.45.0 | Apache-2.0 |
-| opentelemetry-sdk | 1.45.0 | Apache-2.0 |
-| opentelemetry-semantic-conventions | 0.66b0 | Apache-2.0 |
+| opentelemetry-api | 1.45.1 | Apache-2.0 |
+| opentelemetry-exporter-http-transport | 0.66b1 | Apache-2.0 |
+| opentelemetry-exporter-otlp-common | 0.66b1 | Apache-2.0 |
+| opentelemetry-exporter-otlp-proto-common | 1.45.1 | Apache-2.0 |
+| opentelemetry-exporter-otlp-proto-http | 1.45.1 | Apache-2.0 |
+| opentelemetry-proto | 1.45.1 | Apache-2.0 |
+| opentelemetry-sdk | 1.45.1 | Apache-2.0 |
+| opentelemetry-semantic-conventions | 0.66b1 | Apache-2.0 |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | pgvector | 0.5.0 | MIT |
-| pillow | 12.3.0 | MIT-CMU |
+| pillow | 13.0.0 | MIT-CMU |
 | prompt-toolkit | 3.0.53 | BSD License |
 | protobuf | 7.36.2 | 3-Clause BSD License |
 | pycparser | 3.0 | BSD-3-Clause |
@@ -81,7 +81,7 @@
 | pydantic-settings | 2.15.0 | MIT |
 | pygments | 2.21.0 | BSD-2-Clause |
 | PyJWT | 2.15.1 | MIT |
-| pypdf | 6.19.0 | BSD-3-Clause |
+| pypdf | 6.21.1 | BSD-3-Clause |
 | python-dateutil | 2.9.0.post0 | BSD License; Apache Software License |
 | python-dotenv | 1.2.4 | BSD-3-Clause |
 | python-multipart | 0.0.32 | Apache-2.0 |
